@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -85,6 +85,43 @@ import {
   ChevronDown,
   ChevronUp,
   Hash,
+  Bell,
+  BellRing,
+  Volume2,
+  VolumeX,
+  MessageSquare,
+  Phone,
+  Download,
+  Printer,
+  ShieldCheck,
+  ShieldAlert,
+  Fingerprint,
+  QrCode,
+  Tablet,
+  MapPin,
+  LogOut,
+  FileText,
+  Wifi,
+  Database,
+  FileJson,
+  FileSpreadsheet,
+  HardDrive,
+  FileDown,
+  Calendar,
+  Timer,
+  Cookie,
+  Archive,
+  RotateCcw,
+  CloudUpload,
+  AlertCircle,
+  File,
+  Info,
+  Loader2,
+  X,
+  FolderOpen,
+  FolderDown,
+  Server,
+  BookOpen,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -98,6 +135,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
   Tooltip,
@@ -3378,6 +3416,2503 @@ function ApiKeysSettings() {
 }
 
 // ============================================================
+// Tab 10: Notification Preferences
+// ============================================================
+
+interface NotificationToggle {
+  id: string;
+  label: string;
+  description: string;
+  enabled: boolean;
+}
+
+interface NotificationChannel {
+  id: string;
+  label: string;
+  icon: React.ElementType;
+  enabled: boolean;
+  frequency?: string;
+  sound?: boolean;
+  premium?: boolean;
+}
+
+function NotificationPreferences() {
+  // Email notification preferences
+  const [emailToggles, setEmailToggles] = useState<NotificationToggle[]>([
+    { id: 'enrollment', label: 'New Enrollment Notifications', description: 'Get notified when a student enrolls in a course', enabled: true },
+    { id: 'completion', label: 'Course Completion Notifications', description: 'Receive alerts when students complete courses', enabled: true },
+    { id: 'payment', label: 'Payment & Receipt Notifications', description: 'Get notified about payments, refunds, and receipts', enabled: true },
+    { id: 'community', label: 'Community Activity', description: 'Mentions, replies, and comments on your posts', enabled: false },
+    { id: 'assessment', label: 'Assessment Submissions', description: 'Notifications when students submit assessments', enabled: true },
+    { id: 'cohort-15', label: 'Live Cohort Reminders (15 min)', description: 'Reminder 15 minutes before a live cohort starts', enabled: true },
+    { id: 'cohort-1h', label: 'Live Cohort Reminders (1 hour)', description: 'Reminder 1 hour before a live cohort starts', enabled: true },
+    { id: 'cohort-1d', label: 'Live Cohort Reminders (1 day)', description: 'Reminder 1 day before a live cohort starts', enabled: false },
+    { id: 'weekly-digest', label: 'Weekly Digest Email', description: 'A weekly summary of platform activity and metrics', enabled: true },
+    { id: 'monthly-analytics', label: 'Monthly Analytics Report', description: 'Monthly report on platform performance and growth', enabled: false },
+    { id: 'platform-updates', label: 'Platform Updates & Announcements', description: 'Stay informed about new features and maintenance', enabled: true },
+  ]);
+
+  // Push notification preferences
+  const [pushToggles, setPushToggles] = useState<NotificationToggle[]>([
+    { id: 'push-enrollment', label: 'Enrollment Alerts', description: 'Push notification for new enrollments', enabled: true },
+    { id: 'push-cohort', label: 'Cohort Starting Soon', description: 'Push notification when live cohorts are about to start', enabled: true },
+    { id: 'push-message', label: 'Direct Messages', description: 'Push notification for new direct messages', enabled: true },
+    { id: 'push-assessment', label: 'Assessment Deadlines', description: 'Push notification for upcoming assessment deadlines', enabled: false },
+    { id: 'push-payment', label: 'Payment Alerts', description: 'Push notification for new payments', enabled: true },
+  ]);
+
+  const [browserNotifPermission, setBrowserNotifPermission] = useState<'default' | 'granted' | 'denied'>('default');
+  const [mobileNotifEnabled, setMobileNotifEnabled] = useState(false);
+
+  // Notification schedule
+  const [quietHoursEnabled, setQuietHoursEnabled] = useState(false);
+  const [quietStart, setQuietStart] = useState('22:00');
+  const [quietEnd, setQuietEnd] = useState('07:00');
+  const [digestFrequency, setDigestFrequency] = useState('realtime');
+  const [digestTime, setDigestTime] = useState('09:00');
+
+  // Per-channel settings
+  const [channels, setChannels] = useState<NotificationChannel[]>([
+    { id: 'email', label: 'Email', icon: Mail, enabled: true, frequency: 'immediate' },
+    { id: 'in-app', label: 'In-App', icon: Bell, enabled: true, sound: true },
+    { id: 'push', label: 'Push', icon: BellRing, enabled: true, sound: true },
+    { id: 'sms', label: 'SMS', icon: Phone, enabled: false, premium: true },
+  ]);
+
+  const toggleEmail = (id: string) => {
+    setEmailToggles((prev) => prev.map((t) => (t.id === id ? { ...t, enabled: !t.enabled } : t)));
+  };
+
+  const togglePush = (id: string) => {
+    setPushToggles((prev) => prev.map((t) => (t.id === id ? { ...t, enabled: !t.enabled } : t)));
+  };
+
+  const toggleChannel = (id: string) => {
+    setChannels((prev) => prev.map((c) => (c.id === id ? { ...c, enabled: !c.enabled } : c)));
+  };
+
+  const updateChannelFrequency = (id: string, frequency: string) => {
+    setChannels((prev) => prev.map((c) => (c.id === id ? { ...c, frequency } : c)));
+  };
+
+  const updateChannelSound = (id: string) => {
+    setChannels((prev) => prev.map((c) => (c.id === id ? { ...c, sound: !c.sound } : c)));
+  };
+
+  const requestBrowserPermission = () => {
+    setBrowserNotifPermission('granted');
+    toast.success('Browser notifications enabled!', {
+      description: 'You will now receive push notifications in your browser.',
+    });
+  };
+
+  const handleSave = () => {
+    toast.success('Notification preferences saved!', {
+      description: 'Your notification settings have been updated.',
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Email Notification Preferences */}
+      <Card className="shadow-sm hover:shadow-md transition-shadow backdrop-blur-sm bg-card/80 border-border/50">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+              <Mail className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Email Notifications</CardTitle>
+              <CardDescription>Choose which email notifications you want to receive</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-1">
+          {/* Enrollment & Course Section */}
+          <div className="py-2">
+            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Enrollment & Courses</h4>
+            <div className="space-y-1">
+              {emailToggles.filter(t => ['enrollment', 'completion', 'assessment'].includes(t.id)).map((toggle) => (
+                <div key={toggle.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">{toggle.label}</Label>
+                    <p className="text-xs text-muted-foreground">{toggle.description}</p>
+                  </div>
+                  <Switch checked={toggle.enabled} onCheckedChange={() => toggleEmail(toggle.id)} />
+                </div>
+              ))}
+            </div>
+          </div>
+          <Separator />
+          {/* Payment & Community Section */}
+          <div className="py-2">
+            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Payments & Community</h4>
+            <div className="space-y-1">
+              {emailToggles.filter(t => ['payment', 'community'].includes(t.id)).map((toggle) => (
+                <div key={toggle.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">{toggle.label}</Label>
+                    <p className="text-xs text-muted-foreground">{toggle.description}</p>
+                  </div>
+                  <Switch checked={toggle.enabled} onCheckedChange={() => toggleEmail(toggle.id)} />
+                </div>
+              ))}
+            </div>
+          </div>
+          <Separator />
+          {/* Live Cohort Reminders Section */}
+          <div className="py-2">
+            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Live Cohort Reminders</h4>
+            <div className="space-y-1">
+              {emailToggles.filter(t => t.id.startsWith('cohort')).map((toggle) => (
+                <div key={toggle.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">{toggle.label}</Label>
+                    <p className="text-xs text-muted-foreground">{toggle.description}</p>
+                  </div>
+                  <Switch checked={toggle.enabled} onCheckedChange={() => toggleEmail(toggle.id)} />
+                </div>
+              ))}
+            </div>
+          </div>
+          <Separator />
+          {/* Reports & Updates Section */}
+          <div className="py-2">
+            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Reports & Updates</h4>
+            <div className="space-y-1">
+              {emailToggles.filter(t => ['weekly-digest', 'monthly-analytics', 'platform-updates'].includes(t.id)).map((toggle) => (
+                <div key={toggle.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">{toggle.label}</Label>
+                    <p className="text-xs text-muted-foreground">{toggle.description}</p>
+                  </div>
+                  <Switch checked={toggle.enabled} onCheckedChange={() => toggleEmail(toggle.id)} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Push Notification Preferences */}
+      <Card className="shadow-sm hover:shadow-md transition-shadow backdrop-blur-sm bg-card/80 border-border/50">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center">
+              <BellRing className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Push Notifications</CardTitle>
+              <CardDescription>Configure push notification preferences for your devices</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Browser Permission */}
+          <div className="p-4 rounded-lg border border-border/50 bg-muted/30 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">Browser Notifications</Label>
+                <p className="text-xs text-muted-foreground">Allow notifications in your browser</p>
+              </div>
+              {browserNotifPermission === 'granted' ? (
+                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                  <CheckCircle2 className="h-3 w-3 mr-1" /> Enabled
+                </Badge>
+              ) : browserNotifPermission === 'denied' ? (
+                <Badge variant="destructive">Blocked</Badge>
+              ) : (
+                <Button size="sm" variant="outline" onClick={requestBrowserPermission} className="gap-2">
+                  <Bell className="h-3.5 w-3.5" /> Enable
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Mobile Notification Toggle */}
+          <div className="p-4 rounded-lg border border-border/50 bg-muted/30 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">Mobile Notifications</Label>
+                <p className="text-xs text-muted-foreground">Receive push notifications on your mobile device</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">Requires Mobile App</Badge>
+                <Switch checked={mobileNotifEnabled} onCheckedChange={setMobileNotifEnabled} />
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Push toggles */}
+          <div className="space-y-1">
+            {pushToggles.map((toggle) => (
+              <div key={toggle.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-medium">{toggle.label}</Label>
+                  <p className="text-xs text-muted-foreground">{toggle.description}</p>
+                </div>
+                <Switch checked={toggle.enabled} onCheckedChange={() => togglePush(toggle.id)} />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Notification Schedule */}
+      <Card className="shadow-sm hover:shadow-md transition-shadow backdrop-blur-sm bg-card/80 border-border/50">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+              <Clock className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Notification Schedule</CardTitle>
+              <CardDescription>Control when and how often you receive notifications</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* Quiet Hours */}
+          <div className="p-4 rounded-lg border border-border/50 bg-muted/30 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">Quiet Hours (Do Not Disturb)</Label>
+                <p className="text-xs text-muted-foreground">Mute all notifications during specified hours</p>
+              </div>
+              <Switch checked={quietHoursEnabled} onCheckedChange={setQuietHoursEnabled} />
+            </div>
+            {quietHoursEnabled && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+              >
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">From</Label>
+                  <Input
+                    type="time"
+                    value={quietStart}
+                    onChange={(e) => setQuietStart(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">To</Label>
+                  <Input
+                    type="time"
+                    value={quietEnd}
+                    onChange={(e) => setQuietEnd(e.target.value)}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </div>
+
+          {/* Digest Frequency */}
+          <div className="p-4 rounded-lg border border-border/50 bg-muted/30 space-y-3">
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Digest Frequency</Label>
+              <p className="text-xs text-muted-foreground">How often you want to receive notification digests</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                { value: 'realtime', label: 'Real-time', desc: 'Instant delivery' },
+                { value: 'daily', label: 'Daily Digest', desc: 'Once per day' },
+                { value: 'weekly', label: 'Weekly Digest', desc: 'Once per week' },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setDigestFrequency(option.value)}
+                  className={`p-3 rounded-lg border text-left transition-all ${
+                    digestFrequency === option.value
+                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 ring-1 ring-emerald-500'
+                      : 'border-border/50 hover:border-border'
+                  }`}
+                >
+                  <p className="text-sm font-medium">{option.label}</p>
+                  <p className="text-xs text-muted-foreground">{option.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Preferred Digest Time */}
+          {digestFrequency !== 'realtime' && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="p-4 rounded-lg border border-border/50 bg-muted/30 space-y-3"
+            >
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">Preferred Digest Time</Label>
+                <p className="text-xs text-muted-foreground">When you want to receive your {digestFrequency} digest</p>
+              </div>
+              <Input
+                type="time"
+                value={digestTime}
+                onChange={(e) => setDigestTime(e.target.value)}
+                className="w-40"
+              />
+            </motion.div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Per-Channel Settings */}
+      <Card className="shadow-sm hover:shadow-md transition-shadow backdrop-blur-sm bg-card/80 border-border/50">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+              <MessageSquare className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Channel Settings</CardTitle>
+              <CardDescription>Fine-tune notification delivery per channel</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {channels.map((channel) => (
+            <div key={channel.id} className="p-4 rounded-lg border border-border/50 bg-muted/30">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <channel.icon className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-sm font-medium">{channel.label}</Label>
+                      {channel.premium && (
+                        <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0">
+                          <Crown className="h-2.5 w-2.5 mr-0.5" /> Premium
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <Switch checked={channel.enabled} onCheckedChange={() => toggleChannel(channel.id)} />
+              </div>
+              {channel.enabled && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="ml-8 space-y-3"
+                >
+                  {channel.frequency !== undefined && (
+                    <div className="flex items-center gap-3">
+                      <Label className="text-xs text-muted-foreground w-20">Frequency</Label>
+                      <Select value={channel.frequency} onValueChange={(val) => updateChannelFrequency(channel.id, val)}>
+                        <SelectTrigger className="w-40 h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="immediate">Immediate</SelectItem>
+                          <SelectItem value="hourly">Hourly</SelectItem>
+                          <SelectItem value="daily">Daily</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {channel.sound !== undefined && (
+                    <div className="flex items-center gap-3">
+                      <Label className="text-xs text-muted-foreground w-20">Sound</Label>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={channel.sound}
+                          onCheckedChange={() => updateChannelSound(channel.id)}
+                          className="scale-75"
+                        />
+                        {channel.sound ? (
+                          <Volume2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        ) : (
+                          <VolumeX className="h-3.5 w-3.5 text-muted-foreground" />
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={handleSave} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+          <Save className="h-4 w-4" />
+          Save Preferences
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Tab 11: Two-Factor Authentication & Security
+// ============================================================
+
+interface TrustedDevice {
+  id: string;
+  name: string;
+  type: 'desktop' | 'mobile' | 'tablet';
+  browser: string;
+  location: string;
+  lastActive: string;
+  isCurrent: boolean;
+}
+
+interface SessionInfo {
+  id: string;
+  device: string;
+  browser: string;
+  ip: string;
+  location: string;
+  lastActivity: string;
+  isCurrent: boolean;
+}
+
+interface SecurityLogEntry {
+  id: string;
+  timestamp: string;
+  eventType: string;
+  ip: string;
+  location: string;
+  status: 'success' | 'failed' | 'warning';
+  details: string;
+}
+
+function TwoFactorAuth() {
+  // 2FA State
+  const [twoFAEnabled, setTwoFAEnabled] = useState(false);
+  const [enabledDate, setEnabledDate] = useState('2024-11-15');
+  const [lastVerified, setLastVerified] = useState('2025-03-01');
+  const [setupStep, setSetupStep] = useState(0); // 0=not started, 1=choose method, 2=QR code, 3=verify, 4=recovery codes
+  const [selectedMethod, setSelectedMethod] = useState<'app' | 'sms' | 'email'>('app');
+  const [verificationCode, setVerificationCode] = useState(['', '', '', '', '', '']);
+  const [showRecoveryCodes, setShowRecoveryCodes] = useState(false);
+
+  // Recovery codes
+  const [recoveryCodes] = useState([
+    'ABCD-1234-EFGH', 'IJKL-5678-MNOP',
+    'QRST-9012-UVWX', 'YZAB-3456-CDEF',
+    'GHIJ-7890-KLMN', 'OPQR-1357-STUV',
+    'WXYZ-2468-ABCD', 'EFGH-3690-IJKL',
+  ]);
+
+  // Trusted devices
+  const [trustedDevices, setTrustedDevices] = useState<TrustedDevice[]>([
+    { id: '1', name: 'MacBook Pro 16"', type: 'desktop', browser: 'Chrome 122', location: 'San Francisco, US', lastActive: '2 minutes ago', isCurrent: true },
+    { id: '2', name: 'iPhone 15 Pro', type: 'mobile', browser: 'Safari Mobile', location: 'San Francisco, US', lastActive: '1 hour ago', isCurrent: false },
+    { id: '3', name: 'iPad Air', type: 'tablet', browser: 'Safari 17', location: 'New York, US', lastActive: '3 days ago', isCurrent: false },
+    { id: '4', name: 'Windows Desktop', type: 'desktop', browser: 'Firefox 123', location: 'Austin, US', lastActive: '1 week ago', isCurrent: false },
+  ]);
+
+  // Sessions
+  const [sessions, setSessions] = useState<SessionInfo[]>([
+    { id: '1', device: 'MacBook Pro 16"', browser: 'Chrome 122', ip: '192.168.1.105', location: 'San Francisco, US', lastActivity: 'Active now', isCurrent: true },
+    { id: '2', device: 'iPhone 15 Pro', browser: 'Safari Mobile', ip: '10.0.0.42', location: 'San Francisco, US', lastActivity: '1 hour ago', isCurrent: false },
+    { id: '3', device: 'Windows Desktop', browser: 'Firefox 123', ip: '172.16.0.88', location: 'Austin, US', lastActivity: '1 week ago', isCurrent: false },
+  ]);
+
+  // Security log
+  const [securityLog] = useState<SecurityLogEntry[]>([
+    { id: '1', timestamp: '2025-03-04 09:15:22', eventType: 'Login', ip: '192.168.1.105', location: 'San Francisco, US', status: 'success', details: 'Successful login via Chrome' },
+    { id: '2', timestamp: '2025-03-04 08:42:11', eventType: '2FA Verification', ip: '192.168.1.105', location: 'San Francisco, US', status: 'success', details: '2FA code verified for login' },
+    { id: '3', timestamp: '2025-03-03 22:18:05', eventType: 'Login Attempt', ip: '45.33.32.156', location: 'Unknown', status: 'failed', details: 'Invalid credentials from unknown IP' },
+    { id: '4', timestamp: '2025-03-03 18:30:44', eventType: 'Password Change', ip: '192.168.1.105', location: 'San Francisco, US', status: 'success', details: 'Password changed successfully' },
+    { id: '5', timestamp: '2025-03-02 14:22:33', eventType: '2FA Change', ip: '192.168.1.105', location: 'San Francisco, US', status: 'success', details: '2FA method updated to Authenticator App' },
+    { id: '6', timestamp: '2025-03-02 10:05:17', eventType: 'Login Attempt', ip: '89.160.20.112', location: 'London, UK', status: 'failed', details: 'Invalid 2FA code' },
+    { id: '7', timestamp: '2025-03-01 16:45:09', eventType: 'Login', ip: '10.0.0.42', location: 'San Francisco, US', status: 'success', details: 'Successful login via Safari Mobile' },
+    { id: '8', timestamp: '2025-03-01 09:12:55', eventType: 'Session Revoked', ip: '172.16.0.88', location: 'Austin, US', status: 'warning', details: 'Remote session terminated by user' },
+  ]);
+
+  const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const handleCodeChange = (index: number, value: string) => {
+    if (value.length > 1) return;
+    const newCode = [...verificationCode];
+    newCode[index] = value;
+    setVerificationCode(newCode);
+
+    // Auto-focus next input
+    if (value && index < 5) {
+      codeInputRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all filled
+    if (newCode.every((c) => c !== '') && newCode.join('').length === 6) {
+      setTimeout(() => {
+        setTwoFAEnabled(true);
+        setSetupStep(4);
+        toast.success('2FA enabled successfully!', {
+          description: 'Your account is now protected with two-factor authentication.',
+        });
+      }, 300);
+    }
+  };
+
+  const handleCodeKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !verificationCode[index] && index > 0) {
+      codeInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const revokeDevice = (id: string) => {
+    setTrustedDevices((prev) => prev.filter((d) => d.id !== id));
+    toast.success('Device revoked', {
+      description: 'The device has been removed from your trusted devices.',
+    });
+  };
+
+  const revokeAllDevices = () => {
+    setTrustedDevices((prev) => prev.filter((d) => d.isCurrent));
+    toast.success('All other devices revoked', {
+      description: 'All devices except your current one have been removed.',
+    });
+  };
+
+  const signOutOtherSessions = () => {
+    setSessions((prev) => prev.filter((s) => s.isCurrent));
+    toast.success('Other sessions signed out', {
+      description: 'All other sessions have been terminated.',
+    });
+  };
+
+  const copyRecoveryCode = (code: string) => {
+    navigator.clipboard?.writeText(code);
+    toast.success('Code copied!', { description: 'Recovery code copied to clipboard.' });
+  };
+
+  const copyAllRecoveryCodes = () => {
+    navigator.clipboard?.writeText(recoveryCodes.join('\n'));
+    toast.success('All codes copied!', { description: 'All recovery codes copied to clipboard.' });
+  };
+
+  const getDeviceIcon = (type: string) => {
+    switch (type) {
+      case 'mobile': return Smartphone;
+      case 'tablet': return Tablet;
+      default: return Monitor;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'success': return 'bg-emerald-500';
+      case 'failed': return 'bg-red-500';
+      case 'warning': return 'bg-amber-500';
+      default: return 'bg-gray-500';
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'success': return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"><CheckCircle2 className="h-3 w-3 mr-1" />Success</Badge>;
+      case 'failed': return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Failed</Badge>;
+      case 'warning': return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"><AlertTriangle className="h-3 w-3 mr-1" />Warning</Badge>;
+      default: return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* 2FA Status Card */}
+      <Card className="shadow-sm hover:shadow-md transition-all backdrop-blur-sm bg-card/80 border-border/50 overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" />
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <ShieldCheck className="h-6 w-6 text-white" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-lg">Two-Factor Authentication</CardTitle>
+              <CardDescription>Add an extra layer of security to your account</CardDescription>
+            </div>
+            {twoFAEnabled ? (
+              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-3 py-1 text-sm">
+                <span className="relative flex h-2 w-2 mr-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                Enabled
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-amber-600 border-amber-300 dark:text-amber-400 dark:border-amber-700">
+                <ShieldAlert className="h-3 w-3 mr-1" /> Disabled
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {twoFAEnabled ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg border border-border/50 bg-muted/30">
+                  <p className="text-xs text-muted-foreground mb-1">Enabled On</p>
+                  <p className="text-sm font-medium">{new Date(enabledDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                </div>
+                <div className="p-4 rounded-lg border border-border/50 bg-muted/30">
+                  <p className="text-xs text-muted-foreground mb-1">Last Verified</p>
+                  <p className="text-sm font-medium">{new Date(lastVerified).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setShowRecoveryCodes(true); }}
+                  className="gap-2"
+                >
+                  <Key className="h-3.5 w-3.5" /> View Recovery Codes
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20">
+                      <ShieldAlert className="h-3.5 w-3.5" /> Disable 2FA
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Disable Two-Factor Authentication?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will remove the extra layer of security from your account. We strongly recommend keeping 2FA enabled to protect your account from unauthorized access.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => {
+                          setTwoFAEnabled(false);
+                          setSetupStep(0);
+                          toast.info('2FA has been disabled', { description: 'Your account is less secure without 2FA.' });
+                        }}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        Disable 2FA
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-900/10">
+                <div className="flex items-start gap-3">
+                  <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Your account is not protected</p>
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                      Enable two-factor authentication to add an extra layer of security. Even if someone gets your password, they won&apos;t be able to access your account without the second factor.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <Button
+                onClick={() => setSetupStep(1)}
+                className="gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg shadow-emerald-500/20"
+              >
+                <ShieldCheck className="h-4 w-4" /> Enable Two-Factor Authentication
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 2FA Setup Flow */}
+      {setupStep > 0 && !twoFAEnabled && (
+        <Card className="shadow-sm backdrop-blur-sm bg-card/80 border-border/50 overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-500 to-purple-600" />
+          <CardHeader>
+            <CardTitle className="text-lg">Set Up Two-Factor Authentication</CardTitle>
+            <CardDescription>Follow these steps to secure your account</CardDescription>
+            {/* Progress Steps */}
+            <div className="flex items-center gap-2 mt-4">
+              {[1, 2, 3, 4].map((step) => (
+                <React.Fragment key={step}>
+                  <div className={`flex items-center justify-center h-8 w-8 rounded-full text-xs font-bold transition-all ${
+                    setupStep >= step
+                      ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md'
+                      : 'bg-muted text-muted-foreground'
+                  }`}>
+                    {setupStep > step ? <Check className="h-4 w-4" /> : step}
+                  </div>
+                  {step < 4 && (
+                    <div className={`h-0.5 flex-1 transition-all ${setupStep > step ? 'bg-emerald-500' : 'bg-muted'}`} />
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* Step 1: Choose Method */}
+            {setupStep === 1 && (
+              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+                <p className="text-sm text-muted-foreground">Choose how you want to receive your second factor:</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    { value: 'app' as const, label: 'Authenticator App', desc: 'Google Authenticator, Authy, etc.', icon: Smartphone },
+                    { value: 'sms' as const, label: 'SMS', desc: 'Receive codes via text message', icon: Phone },
+                    { value: 'email' as const, label: 'Email', desc: 'Receive codes via email', icon: Mail },
+                  ].map((method) => (
+                    <button
+                      key={method.value}
+                      onClick={() => setSelectedMethod(method.value)}
+                      className={`p-4 rounded-lg border text-left transition-all ${
+                        selectedMethod === method.value
+                          ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 ring-1 ring-emerald-500'
+                          : 'border-border/50 hover:border-border'
+                      }`}
+                    >
+                      <method.icon className={`h-6 w-6 mb-2 ${selectedMethod === method.value ? 'text-emerald-600' : 'text-muted-foreground'}`} />
+                      <p className="text-sm font-medium">{method.label}</p>
+                      <p className="text-xs text-muted-foreground">{method.desc}</p>
+                    </button>
+                  ))}
+                </div>
+                <div className="flex justify-between pt-2">
+                  <Button variant="outline" onClick={() => setSetupStep(0)} className="gap-2">
+                    <ArrowLeft className="h-3.5 w-3.5" /> Cancel
+                  </Button>
+                  <Button onClick={() => setSetupStep(2)} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+                    Continue <ChevronDown className="h-3.5 w-3.5 rotate-[-90deg]" />
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Step 2: QR Code / Setup */}
+            {setupStep === 2 && (
+              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+                {selectedMethod === 'app' ? (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
+                    </p>
+                    <div className="flex justify-center py-4">
+                      <div className="h-48 w-48 rounded-xl border-2 border-dashed border-border bg-muted/30 flex items-center justify-center relative overflow-hidden">
+                        {/* Simulated QR code */}
+                        <QrCode className="h-24 w-24 text-muted-foreground/60" />
+                        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-transparent to-emerald-500/5" />
+                      </div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-muted/50 text-center">
+                      <p className="text-xs text-muted-foreground mb-1">Manual entry key</p>
+                      <code className="text-sm font-mono bg-background px-3 py-1 rounded border">
+                        JBSW Y3DP EHPK 3PXP
+                      </code>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="ml-2 h-7 text-xs gap-1"
+                        onClick={() => {
+                          navigator.clipboard?.writeText('JBSWY3DPEHPK3PXP');
+                          toast.success('Key copied!');
+                        }}
+                      >
+                        <Copy className="h-3 w-3" /> Copy
+                      </Button>
+                    </div>
+                  </>
+                ) : selectedMethod === 'sms' ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">Enter your phone number to receive verification codes via SMS.</p>
+                    <div className="space-y-2">
+                      <Label>Phone Number</Label>
+                      <Input placeholder="+1 (555) 000-0000" />
+                    </div>
+                    <Button variant="outline" className="gap-2" onClick={() => toast.success('Verification code sent!')}>
+                      <Send className="h-3.5 w-3.5" /> Send Test Code
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">Verification codes will be sent to your registered email address.</p>
+                    <div className="p-4 rounded-lg bg-muted/50 flex items-center gap-3">
+                      <Mail className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">admin@nextgen-lms.com</p>
+                        <p className="text-xs text-muted-foreground">Verified email address</p>
+                      </div>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 ml-auto" />
+                    </div>
+                  </div>
+                )}
+                <div className="flex justify-between pt-2">
+                  <Button variant="outline" onClick={() => setSetupStep(1)} className="gap-2">
+                    <ArrowLeft className="h-3.5 w-3.5" /> Back
+                  </Button>
+                  <Button onClick={() => setSetupStep(3)} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+                    Continue <ChevronDown className="h-3.5 w-3.5 rotate-[-90deg]" />
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Step 3: Verify Code */}
+            {setupStep === 3 && (
+              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Enter the 6-digit verification code from your {selectedMethod === 'app' ? 'authenticator app' : selectedMethod === 'sms' ? 'SMS message' : 'email'}.
+                </p>
+                <div className="flex justify-center gap-3 py-4">
+                  {verificationCode.map((digit, index) => (
+                    <Input
+                      key={index}
+                      ref={(el) => { codeInputRefs.current[index] = el; }}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleCodeChange(index, e.target.value.replace(/\D/g, ''))}
+                      onKeyDown={(e) => handleCodeKeyDown(index, e)}
+                      className="h-14 w-12 text-center text-xl font-bold rounded-lg border-2 focus:border-emerald-500 focus:ring-emerald-500/20"
+                    />
+                  ))}
+                </div>
+                <p className="text-xs text-center text-muted-foreground">
+                  Didn&apos;t receive the code?{' '}
+                  <button className="text-emerald-600 hover:underline" onClick={() => toast.success('Code resent!')}>
+                    Resend
+                  </button>
+                </p>
+                <div className="flex justify-between pt-2">
+                  <Button variant="outline" onClick={() => setSetupStep(2)} className="gap-2">
+                    <ArrowLeft className="h-3.5 w-3.5" /> Back
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setTwoFAEnabled(true);
+                      setSetupStep(4);
+                      toast.success('2FA enabled successfully!', {
+                        description: 'Your account is now protected with two-factor authentication.',
+                      });
+                    }}
+                    disabled={verificationCode.some((c) => c === '')}
+                    className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    Verify & Enable <ShieldCheck className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Step 4: Recovery Codes */}
+            {setupStep === 4 && (
+              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+                <div className="p-4 rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-900/10">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Save your recovery codes</p>
+                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                        Store these codes in a safe place. You can use them to sign in if you lose access to your authentication device. Each code can only be used once.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 py-2">
+                  {recoveryCodes.map((code, i) => (
+                    <div key={i} className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50 border border-border/30">
+                      <code className="text-xs font-mono flex-1">{code}</code>
+                      <button
+                        onClick={() => copyRecoveryCode(code)}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <Button variant="outline" size="sm" onClick={copyAllRecoveryCodes} className="gap-2">
+                    <Copy className="h-3.5 w-3.5" /> Copy All
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Download className="h-3.5 w-3.5" /> Download as PDF
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Printer className="h-3.5 w-3.5" /> Print
+                  </Button>
+                </div>
+                <div className="flex justify-end pt-2">
+                  <Button onClick={() => setSetupStep(0)} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+                    <Check className="h-3.5 w-3.5" /> Done
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Recovery Codes Display (when viewing after setup) */}
+      {showRecoveryCodes && twoFAEnabled && (
+        <Card className="shadow-sm backdrop-blur-sm bg-card/80 border-border/50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+                  <Key className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Recovery Codes</CardTitle>
+                  <CardDescription>Use these codes if you lose access to your authentication device</CardDescription>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowRecoveryCodes(false)}>
+                <XCircle className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="p-3 rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-900/10">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5" />
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  Treat your recovery codes with the same level of security as your password. Store them somewhere safe and accessible.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {recoveryCodes.map((code, i) => (
+                <div key={i} className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50 border border-border/30">
+                  <code className="text-xs font-mono flex-1">{code}</code>
+                  <button
+                    onClick={() => copyRecoveryCode(code)}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={copyAllRecoveryCodes} className="gap-2">
+                <Copy className="h-3.5 w-3.5" /> Copy All
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Download className="h-3.5 w-3.5" /> Download as PDF
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Printer className="h-3.5 w-3.5" /> Print
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Trusted Devices */}
+      <Card className="shadow-sm hover:shadow-md transition-shadow backdrop-blur-sm bg-card/80 border-border/50">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+              <Fingerprint className="h-5 w-5 text-white" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-lg">Trusted Devices</CardTitle>
+              <CardDescription>Devices that don&apos;t require 2FA on every login</CardDescription>
+            </div>
+            {trustedDevices.length > 1 && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20">
+                    <Trash2 className="h-3.5 w-3.5" /> Revoke All
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Revoke all trusted devices?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will remove all trusted devices except your current one. You&apos;ll need to complete 2FA on each device the next time you sign in.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={revokeAllDevices} className="bg-red-600 hover:bg-red-700">
+                      Revoke All
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {trustedDevices.map((device) => {
+            const DeviceIcon = getDeviceIcon(device.type);
+            return (
+              <div key={device.id} className="flex items-center gap-3 p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors">
+                <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
+                  device.isCurrent
+                    ? 'bg-emerald-100 dark:bg-emerald-900/30'
+                    : 'bg-muted'
+                }`}>
+                  <DeviceIcon className={`h-5 w-5 ${device.isCurrent ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium truncate">{device.name}</p>
+                    {device.isCurrent && (
+                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] px-1.5 py-0">
+                        Current
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                    <span className="flex items-center gap-1"><Globe className="h-3 w-3" />{device.browser}</span>
+                    <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{device.location}</span>
+                    <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{device.lastActive}</span>
+                  </div>
+                </div>
+                {!device.isCurrent && (
+                  <Button variant="ghost" size="sm" onClick={() => revokeDevice(device.id)} className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 h-8">
+                    Revoke
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+          {trustedDevices.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              <Fingerprint className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No trusted devices</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Session Management */}
+      <Card className="shadow-sm hover:shadow-md transition-shadow backdrop-blur-sm bg-card/80 border-border/50">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+              <Wifi className="h-5 w-5 text-white" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-lg">Active Sessions</CardTitle>
+              <CardDescription>Manage your active login sessions</CardDescription>
+            </div>
+            {sessions.length > 1 && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20">
+                    <LogOut className="h-3.5 w-3.5" /> Sign Out All Others
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Sign out all other sessions?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will terminate all sessions except your current one. Other devices will need to sign in again.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={signOutOtherSessions} className="bg-red-600 hover:bg-red-700">
+                      Sign Out Others
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {sessions.map((session) => (
+            <div key={session.id} className="flex items-center gap-3 p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors">
+              <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
+                session.isCurrent
+                  ? 'bg-emerald-100 dark:bg-emerald-900/30'
+                  : 'bg-muted'
+              }`}>
+                <Monitor className={`h-5 w-5 ${session.isCurrent ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium truncate">{session.device}</p>
+                  {session.isCurrent && (
+                    <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] px-1.5 py-0">
+                      Current
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                  <span>{session.browser}</span>
+                  <span className="flex items-center gap-1"><Globe className="h-3 w-3" />{session.ip}</span>
+                  <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{session.location}</span>
+                  <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{session.lastActivity}</span>
+                </div>
+              </div>
+              {!session.isCurrent && (
+                <Button variant="ghost" size="sm" onClick={() => {
+                  setSessions((prev) => prev.filter((s) => s.id !== session.id));
+                  toast.success('Session terminated');
+                }} className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 h-8">
+                  <LogOut className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+          ))}
+          {sessions.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              <Wifi className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No active sessions</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Security Log */}
+      <Card className="shadow-sm hover:shadow-md transition-shadow backdrop-blur-sm bg-card/80 border-border/50">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-rose-500 to-red-600 flex items-center justify-center">
+              <FileText className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Security Log</CardTitle>
+              <CardDescription>Recent security events on your account</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2 max-h-96 overflow-y-auto">
+          {securityLog.map((entry) => (
+            <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-colors">
+              <div className={`h-2.5 w-2.5 rounded-full mt-1.5 flex-shrink-0 ${getStatusColor(entry.status)}`} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-medium">{entry.eventType}</p>
+                  {getStatusBadge(entry.status)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">{entry.details}</p>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                  <span>{entry.timestamp}</span>
+                  <span className="flex items-center gap-1"><Globe className="h-3 w-3" />{entry.ip}</span>
+                  <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{entry.location}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+          <div className="pt-2">
+            <Button variant="outline" size="sm" className="w-full gap-2">
+              <FileText className="h-3.5 w-3.5" /> View Full Security Log
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// Tab 10: Data & Privacy Settings
+// ============================================================
+
+type ExportType = 'course' | 'user' | 'financial' | 'community' | 'assessment' | 'analytics';
+type ExportFormat = 'csv' | 'json' | 'xlsx';
+type ExportStatus = 'completed' | 'processing' | 'failed';
+type ImportStatus = 'completed' | 'processing' | 'failed' | 'partial';
+
+interface RecentExport {
+  id: string;
+  filename: string;
+  type: ExportType;
+  format: ExportFormat;
+  size: string;
+  date: string;
+  status: ExportStatus;
+}
+
+interface RecentImport {
+  id: string;
+  filename: string;
+  type: string;
+  records: number;
+  date: string;
+  status: ImportStatus;
+}
+
+interface BackupEntry {
+  id: string;
+  date: string;
+  size: string;
+  type: 'Automatic' | 'Manual';
+}
+
+const EXPORT_TYPE_INFO: Record<ExportType, { label: string; description: string; icon: React.ElementType; color: string }> = {
+  course: { label: 'Course Data', description: 'All courses, modules, lessons, progress', icon: BookOpen, color: 'emerald' },
+  user: { label: 'User Data', description: 'All users, enrollments, achievements', icon: Users, color: 'blue' },
+  financial: { label: 'Financial Data', description: 'Orders, transactions, revenue', icon: CreditCard, color: 'amber' },
+  community: { label: 'Community Data', description: 'Posts, comments, reactions', icon: MessageSquare, color: 'pink' },
+  assessment: { label: 'Assessment Data', description: 'Quizzes, submissions, scores', icon: CheckCircle2, color: 'purple' },
+  analytics: { label: 'Analytics Data', description: 'Events, metrics, reports', icon: Activity, color: 'teal' },
+};
+
+const MOCK_RECENT_EXPORTS: RecentExport[] = [
+  { id: '1', filename: 'courses_export_2025-02-28.csv', type: 'course', format: 'csv', size: '2.4 MB', date: '2025-02-28', status: 'completed' },
+  { id: '2', filename: 'users_export_2025-02-27.json', type: 'user', format: 'json', size: '5.1 MB', date: '2025-02-27', status: 'completed' },
+  { id: '3', filename: 'financial_q4_2025.xlsx', type: 'financial', format: 'xlsx', size: '1.8 MB', date: '2025-02-25', status: 'completed' },
+  { id: '4', filename: 'community_export_2025-02-24.csv', type: 'community', format: 'csv', size: '3.2 MB', date: '2025-02-24', status: 'processing' },
+  { id: '5', filename: 'assessments_export_2025-02-20.json', type: 'assessment', format: 'json', size: '800 KB', date: '2025-02-20', status: 'failed' },
+  { id: '6', filename: 'analytics_export_2025-02-18.csv', type: 'analytics', format: 'csv', size: '12.5 MB', date: '2025-02-18', status: 'completed' },
+];
+
+const MOCK_RECENT_IMPORTS: RecentImport[] = [
+  { id: '1', filename: 'new_courses_batch.csv', type: 'Course Data', records: 145, date: '2025-02-27', status: 'completed' },
+  { id: '2', filename: 'user_migration.json', type: 'User Data', records: 2530, date: '2025-02-25', status: 'completed' },
+  { id: '3', filename: 'quiz_bank_import.xlsx', type: 'Assessment Data', records: 89, date: '2025-02-22', status: 'partial' },
+  { id: '4', filename: 'community_archive.csv', type: 'Community Data', records: 0, date: '2025-02-19', status: 'failed' },
+];
+
+const MOCK_BACKUPS: BackupEntry[] = [
+  { id: '1', date: '2025-02-28 03:00 AM', size: '4.2 GB', type: 'Automatic' },
+  { id: '2', date: '2025-02-27 03:00 AM', size: '4.1 GB', type: 'Automatic' },
+  { id: '3', date: '2025-02-25 11:30 AM', size: '4.0 GB', type: 'Manual' },
+  { id: '4', date: '2025-02-21 03:00 AM', size: '3.9 GB', type: 'Automatic' },
+  { id: '5', date: '2025-02-14 03:00 AM', size: '3.7 GB', type: 'Automatic' },
+];
+
+function DataPrivacySettings() {
+  // Export state
+  const [selectedExportType, setSelectedExportType] = useState<ExportType>('course');
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('csv');
+  const [dateRange, setDateRange] = useState('all');
+  const [customDateFrom, setCustomDateFrom] = useState('');
+  const [customDateTo, setCustomDateTo] = useState('');
+  const [exportProgress, setExportProgress] = useState(0);
+  const [isExporting, setIsExporting] = useState(false);
+  const [recentExports, setRecentExports] = useState<RecentExport[]>(MOCK_RECENT_EXPORTS);
+  const [scheduleWeekly, setScheduleWeekly] = useState(false);
+  const [scheduleMonthly, setScheduleMonthly] = useState(true);
+  const [exportSuccess, setExportSuccess] = useState(false);
+
+  // Import state
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importType, setImportType] = useState('course');
+  const [importProgress, setImportProgress] = useState(0);
+  const [isImporting, setIsImporting] = useState(false);
+  const [showImportPreview, setShowImportPreview] = useState(false);
+  const [columnMappings, setColumnMappings] = useState<Record<string, string>>({
+    'title': 'Course Title',
+    'description': 'Description',
+    'category': 'Category',
+    'instructor': 'Instructor',
+    'duration': 'Duration',
+  });
+  const [recentImports] = useState<RecentImport[]>(MOCK_RECENT_IMPORTS);
+
+  // Data Retention state
+  const [retentionCourse, setRetentionCourse] = useState('1year');
+  const [retentionUser, setRetentionUser] = useState('1year');
+  const [retentionFinancial, setRetentionFinancial] = useState('forever');
+  const [retentionCommunity, setRetentionCommunity] = useState('90days');
+  const [retentionAssessment, setRetentionAssessment] = useState('1year');
+  const [retentionAnalytics, setRetentionAnalytics] = useState('90days');
+  const [autoDeleteExpired, setAutoDeleteExpired] = useState(true);
+  const [dataAnonymization, setDataAnonymization] = useState(false);
+  const [showRetentionPolicyDialog, setShowRetentionPolicyDialog] = useState(false);
+
+  // Privacy & Compliance state
+  const [gdprCompliance, setGdprCompliance] = useState(true);
+  const [dataProcessingAgreement, setDataProcessingAgreement] = useState(true);
+  const [cookieConsent, setCookieConsent] = useState(true);
+  const [privacyPolicyUrl, setPrivacyPolicyUrl] = useState('https://nextgen-lms.com/privacy');
+  const [cookiePolicyUrl, setCookiePolicyUrl] = useState('https://nextgen-lms.com/cookies');
+  const [showEraseDialog, setShowEraseDialog] = useState(false);
+  const [eraseConfirmText, setEraseConfirmText] = useState('');
+  const [showAccessRequestDialog, setShowAccessRequestDialog] = useState(false);
+  const [accessRequestEmail, setAccessRequestEmail] = useState('');
+
+  // Backup & Restore state
+  const [backups] = useState<BackupEntry[]>(MOCK_BACKUPS);
+  const [autoBackupSchedule, setAutoBackupSchedule] = useState('weekly');
+  const [isCreatingBackup, setIsCreatingBackup] = useState(false);
+  const [showRestoreDialog, setShowRestoreDialog] = useState(false);
+  const [selectedBackupId, setSelectedBackupId] = useState<string | null>(null);
+  const [backupStorageUsed] = useState(4.2);
+  const [backupStorageTotal] = useState(10);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Export simulation
+  const handleExport = useCallback(() => {
+    setIsExporting(true);
+    setExportProgress(0);
+    setExportSuccess(false);
+
+    const interval = setInterval(() => {
+      setExportProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setIsExporting(false);
+          setExportSuccess(true);
+          const info = EXPORT_TYPE_INFO[selectedExportType];
+          const newExport: RecentExport = {
+            id: Date.now().toString(),
+            filename: `${selectedExportType}_export_${new Date().toISOString().split('T')[0]}.${exportFormat}`,
+            type: selectedExportType,
+            format: exportFormat,
+            size: `${(Math.random() * 10 + 0.5).toFixed(1)} MB`,
+            date: new Date().toISOString().split('T')[0],
+            status: 'completed',
+          };
+          setRecentExports((prev) => [newExport, ...prev]);
+          toast.success(`${info.label} exported successfully!`, {
+            description: `File saved as ${newExport.filename}`,
+          });
+          setTimeout(() => setExportSuccess(false), 3000);
+          return 100;
+        }
+        return prev + Math.random() * 15 + 5;
+      });
+    }, 200);
+  }, [selectedExportType, exportFormat]);
+
+  // Import simulation
+  const handleImport = useCallback(() => {
+    setIsImporting(true);
+    setImportProgress(0);
+
+    const interval = setInterval(() => {
+      setImportProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setIsImporting(false);
+          toast.success('Data imported successfully!', {
+            description: `${importFile?.name} has been processed.`,
+          });
+          setImportFile(null);
+          setShowImportPreview(false);
+          return 100;
+        }
+        return prev + Math.random() * 12 + 3;
+      });
+    }, 250);
+  }, [importFile]);
+
+  // Backup simulation
+  const handleCreateBackup = useCallback(() => {
+    setIsCreatingBackup(true);
+    toast.loading('Creating backup...', { id: 'backup-creation' });
+    setTimeout(() => {
+      setIsCreatingBackup(false);
+      toast.success('Backup created successfully!', {
+        description: 'Backup size: 4.3 GB',
+        id: 'backup-creation',
+      });
+    }, 3000);
+  }, []);
+
+  // Drag and drop handlers
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      const validTypes = ['text/csv', 'application/json', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+      if (validTypes.includes(file.type) || file.name.endsWith('.csv') || file.name.endsWith('.json') || file.name.endsWith('.xlsx')) {
+        setImportFile(file);
+        setShowImportPreview(true);
+        toast.info(`File "${file.name}" selected for import.`);
+      } else {
+        toast.error('Invalid file type', { description: 'Please upload .csv, .json, or .xlsx files only.' });
+      }
+    }
+  }, []);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      setImportFile(files[0]);
+      setShowImportPreview(true);
+      toast.info(`File "${files[0].name}" selected for import.`);
+    }
+  }, []);
+
+  // Preview data for import
+  const previewRows = [
+    { title: 'Intro to Machine Learning', description: 'Fundamentals of ML', category: 'Technology', instructor: 'Dr. Smith', duration: '8 weeks' },
+    { title: 'Advanced Web Development', description: 'Full-stack web dev', category: 'Technology', instructor: 'Prof. Johnson', duration: '12 weeks' },
+    { title: 'Digital Marketing 101', description: 'Marketing basics', category: 'Business', instructor: 'Sarah Lee', duration: '6 weeks' },
+    { title: 'Data Science with Python', description: 'Data analysis & ML', category: 'Data Science', instructor: 'Dr. Chen', duration: '10 weeks' },
+    { title: 'UX Design Principles', description: 'User experience design', category: 'Design', instructor: 'Mark Davis', duration: '4 weeks' },
+  ];
+
+  const statusBadgeClass = (status: string) => {
+    switch (status) {
+      case 'completed': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
+      case 'processing': return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
+      case 'failed': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+      case 'partial': return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400';
+      default: return '';
+    }
+  };
+
+  const formatIcon = (format: ExportFormat) => {
+    switch (format) {
+      case 'csv': return <FileText className="h-3.5 w-3.5 text-emerald-500" />;
+      case 'json': return <FileJson className="h-3.5 w-3.5 text-amber-500" />;
+      case 'xlsx': return <FileSpreadsheet className="h-3.5 w-3.5 text-blue-500" />;
+    }
+  };
+
+  const retentionOptions = [
+    { value: '30days', label: '30 days' },
+    { value: '90days', label: '90 days' },
+    { value: '1year', label: '1 year' },
+    { value: 'forever', label: 'Forever' },
+  ];
+
+  return (
+    <div className="space-y-8">
+      {/* =============================== */}
+      {/* DATA EXPORT SECTION */}
+      {/* =============================== */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+        <Card className="backdrop-blur-sm bg-card/80 border-border/50 shadow-lg">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
+                <FileDown className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Data Export</CardTitle>
+                <CardDescription>Export platform data in various formats for backup or migration</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Export Type Selection */}
+            <div>
+              <Label className="text-sm font-medium mb-3 block">Export Type</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {(Object.entries(EXPORT_TYPE_INFO) as [ExportType, typeof EXPORT_TYPE_INFO[ExportType]][]).map(([key, info]) => {
+                  const IconComp = info.icon;
+                  return (
+                    <motion.button
+                      key={key}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setSelectedExportType(key)}
+                      className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
+                        selectedExportType === key
+                          ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/20 shadow-sm'
+                          : 'border-border/50 bg-background/50 hover:border-emerald-300 dark:hover:border-emerald-700'
+                      }`}
+                    >
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                        selectedExportType === key
+                          ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white'
+                          : 'bg-muted text-muted-foreground'
+                      }`}>
+                        <IconComp className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{info.label}</p>
+                        <p className="text-xs text-muted-foreground truncate">{info.description}</p>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Export Format & Date Range */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Export Format</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['csv', 'json', 'xlsx'] as ExportFormat[]).map((fmt) => (
+                    <motion.button
+                      key={fmt}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => setExportFormat(fmt)}
+                      className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 transition-all cursor-pointer ${
+                        exportFormat === fmt
+                          ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/20 shadow-sm'
+                          : 'border-border/50 bg-background/50 hover:border-emerald-300 dark:hover:border-emerald-700'
+                      }`}
+                    >
+                      {formatIcon(fmt)}
+                      <span className="text-sm font-medium">{fmt.toUpperCase()}</span>
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Date Range</Label>
+                <Select value={dateRange} onValueChange={setDateRange}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All time</SelectItem>
+                    <SelectItem value="30days">Last 30 days</SelectItem>
+                    <SelectItem value="90days">Last 90 days</SelectItem>
+                    <SelectItem value="1year">Last year</SelectItem>
+                    <SelectItem value="custom">Custom range</SelectItem>
+                  </SelectContent>
+                </Select>
+                {dateRange === 'custom' && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="flex gap-2">
+                    <Input type="date" value={customDateFrom} onChange={(e) => setCustomDateFrom(e.target.value)} className="flex-1" placeholder="From" />
+                    <Input type="date" value={customDateTo} onChange={(e) => setCustomDateTo(e.target.value)} className="flex-1" placeholder="To" />
+                  </motion.div>
+                )}
+              </div>
+            </div>
+
+            {/* Export Button & Progress */}
+            <div className="space-y-3">
+              <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
+                <Button
+                  onClick={handleExport}
+                  disabled={isExporting}
+                  className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg shadow-emerald-500/20 h-11"
+                >
+                  {isExporting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Exporting {EXPORT_TYPE_INFO[selectedExportType].label}...
+                    </>
+                  ) : exportSuccess ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Export Complete!
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4 mr-2" />
+                      Export {EXPORT_TYPE_INFO[selectedExportType].label}
+                    </>
+                  )}
+                </Button>
+              </motion.div>
+              {isExporting && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Exporting data...</span>
+                    <span>{Math.min(Math.round(exportProgress), 100)}%</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                    <motion.div
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min(exportProgress, 100)}%` }}
+                      transition={{ duration: 0.3 }}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </div>
+
+            {/* Recent Exports Table */}
+            <div>
+              <Label className="text-sm font-medium mb-3 block">Recent Exports</Label>
+              <div className="rounded-xl border border-border/50 overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30">
+                      <TableHead className="text-xs">Filename</TableHead>
+                      <TableHead className="text-xs hidden sm:table-cell">Type</TableHead>
+                      <TableHead className="text-xs">Format</TableHead>
+                      <TableHead className="text-xs hidden md:table-cell">Size</TableHead>
+                      <TableHead className="text-xs hidden lg:table-cell">Date</TableHead>
+                      <TableHead className="text-xs">Status</TableHead>
+                      <TableHead className="text-xs text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentExports.map((exp) => (
+                      <TableRow key={exp.id} className="hover:bg-muted/20">
+                        <TableCell className="text-xs font-medium max-w-[140px] truncate">{exp.filename}</TableCell>
+                        <TableCell className="text-xs hidden sm:table-cell capitalize">{exp.type}</TableCell>
+                        <TableCell className="text-xs">
+                          <span className="flex items-center gap-1">{formatIcon(exp.format)} {exp.format.toUpperCase()}</span>
+                        </TableCell>
+                        <TableCell className="text-xs hidden md:table-cell">{exp.size}</TableCell>
+                        <TableCell className="text-xs hidden lg:table-cell">{exp.date}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={`text-[10px] px-2 py-0 ${statusBadgeClass(exp.status)}`}>
+                            {exp.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {exp.status === 'completed' && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toast.success('Download started!')}>
+                                      <Download className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Download</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" onClick={() => {
+                                    setRecentExports((prev) => prev.filter((e) => e.id !== exp.id));
+                                    toast.success('Export deleted');
+                                  }}>
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Delete</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
+            {/* Schedule Exports */}
+            <Separator />
+            <div>
+              <Label className="text-sm font-medium mb-3 block">Schedule Automatic Exports</Label>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-background/50">
+                  <Switch checked={scheduleWeekly} onCheckedChange={setScheduleWeekly} />
+                  <div>
+                    <p className="text-sm font-medium">Weekly Export</p>
+                    <p className="text-xs text-muted-foreground">Every Sunday at 3:00 AM</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-background/50">
+                  <Switch checked={scheduleMonthly} onCheckedChange={setScheduleMonthly} />
+                  <div>
+                    <p className="text-sm font-medium">Monthly Export</p>
+                    <p className="text-xs text-muted-foreground">1st of each month at 3:00 AM</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* =============================== */}
+      {/* DATA IMPORT SECTION */}
+      {/* =============================== */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+        <Card className="backdrop-blur-sm bg-card/80 border-border/50 shadow-lg">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white">
+                <CloudUpload className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Data Import</CardTitle>
+                <CardDescription>Import data from external sources into your platform</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Import Drop Zone */}
+            {!showImportPreview && (
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`relative flex flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed p-8 sm:p-12 transition-all overflow-hidden ${
+                  isDragOver
+                    ? 'border-violet-500 bg-violet-50/50 dark:bg-violet-900/20 scale-[1.01]'
+                    : 'border-border/60 bg-muted/20 hover:border-violet-400 dark:hover:border-violet-600'
+                }`}
+              >
+                {/* Continuous subtle border pulse animation */}
+                <motion.div
+                  className="absolute inset-0 rounded-2xl border-2 border-dashed pointer-events-none"
+                  animate={isDragOver
+                    ? { opacity: [0.3, 0.8, 0.3], borderColor: 'rgb(139 92 246)' }
+                    : { opacity: [0, 0.4, 0] }
+                  }
+                  transition={isDragOver
+                    ? { duration: 1.5, repeat: Infinity }
+                    : { duration: 3, repeat: Infinity, ease: 'easeInOut' }
+                  }
+                  style={{ borderColor: isDragOver ? undefined : 'rgb(139 92 246 / 0.3)' }}
+                />
+                <motion.div
+                  animate={isDragOver ? { y: -5, scale: 1.1 } : { y: [0, -3, 0] }}
+                  transition={isDragOver ? { duration: 0.2 } : { duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <CloudUpload className={`h-12 w-12 ${isDragOver ? 'text-violet-500' : 'text-muted-foreground'}`} />
+                </motion.div>
+                <div className="text-center">
+                  <p className="text-sm font-medium">
+                    {isDragOver ? 'Drop your file here' : 'Drag & drop your file here'}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Supports .csv, .json, and .xlsx files</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-emerald-500" />
+                    <span className="text-xs text-muted-foreground">CSV</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FileJson className="h-5 w-5 text-amber-500" />
+                    <span className="text-xs text-muted-foreground">JSON</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FileSpreadsheet className="h-5 w-5 text-blue-500" />
+                    <span className="text-xs text-muted-foreground">XLSX</span>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  className="gap-2 mt-2"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  Browse Files
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.json,.xlsx"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                />
+              </div>
+            )}
+
+            {/* Import Preview */}
+            {showImportPreview && importFile && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/30">
+                      {importFile.name.endsWith('.csv') ? <FileText className="h-5 w-5 text-emerald-500" /> :
+                       importFile.name.endsWith('.json') ? <FileJson className="h-5 w-5 text-amber-500" /> :
+                       <FileSpreadsheet className="h-5 w-5 text-blue-500" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{importFile.name}</p>
+                      <p className="text-xs text-muted-foreground">{(importFile.size / 1024).toFixed(1)} KB</p>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setImportFile(null); setShowImportPreview(false); }}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Import Type Selection */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Import As</Label>
+                  <Select value={importType} onValueChange={setImportType}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="course">Course Data</SelectItem>
+                      <SelectItem value="user">User Data</SelectItem>
+                      <SelectItem value="financial">Financial Data</SelectItem>
+                      <SelectItem value="community">Community Data</SelectItem>
+                      <SelectItem value="assessment">Assessment Data</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Preview Table */}
+                <div>
+                  <Label className="text-sm font-medium mb-2 block">Preview (First 5 Rows)</Label>
+                  <div className="rounded-xl border border-border/50 overflow-auto max-h-64">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/30">
+                          <TableHead className="text-xs">Title</TableHead>
+                          <TableHead className="text-xs">Description</TableHead>
+                          <TableHead className="text-xs hidden sm:table-cell">Category</TableHead>
+                          <TableHead className="text-xs hidden md:table-cell">Instructor</TableHead>
+                          <TableHead className="text-xs hidden lg:table-cell">Duration</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {previewRows.map((row, i) => (
+                          <TableRow key={i} className="hover:bg-muted/20">
+                            <TableCell className="text-xs font-medium">{row.title}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{row.description}</TableCell>
+                            <TableCell className="text-xs hidden sm:table-cell">{row.category}</TableCell>
+                            <TableCell className="text-xs hidden md:table-cell">{row.instructor}</TableCell>
+                            <TableCell className="text-xs hidden lg:table-cell">{row.duration}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                {/* Column Mapping */}
+                <div>
+                  <Label className="text-sm font-medium mb-2 block">Column Mapping</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {Object.entries(columnMappings).map(([source, target]) => (
+                      <div key={source} className="flex items-center gap-2 p-2 rounded-lg border border-border/40 bg-background/50">
+                        <span className="text-xs text-muted-foreground min-w-[80px] truncate">{source}</span>
+                        <ArrowLeft className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <span className="text-xs font-medium truncate">{target}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Validation Summary */}
+                <div className="flex flex-wrap gap-3">
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">142 valid rows</span>
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+                    <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                    <span className="text-xs font-medium text-yellow-700 dark:text-yellow-400">3 warnings</span>
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                    <XCircle className="h-4 w-4 text-red-500" />
+                    <span className="text-xs font-medium text-red-700 dark:text-red-400">1 error</span>
+                  </div>
+                </div>
+
+                {/* Import Button & Progress */}
+                <div className="space-y-3">
+                  <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
+                    <Button
+                      onClick={handleImport}
+                      disabled={isImporting}
+                      className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-lg shadow-violet-500/20 h-11"
+                    >
+                      {isImporting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Importing Data...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Start Import
+                        </>
+                      )}
+                    </Button>
+                  </motion.div>
+                  {isImporting && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Importing data...</span>
+                        <span>{Math.min(Math.round(importProgress), 100)}%</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                        <motion.div
+                          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-500"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${Math.min(importProgress, 100)}%` }}
+                          transition={{ duration: 0.3 }}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
+            {/* Import History Table */}
+            <div>
+              <Label className="text-sm font-medium mb-3 block">Import History</Label>
+              <div className="rounded-xl border border-border/50 overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30">
+                      <TableHead className="text-xs">Filename</TableHead>
+                      <TableHead className="text-xs hidden sm:table-cell">Type</TableHead>
+                      <TableHead className="text-xs">Records</TableHead>
+                      <TableHead className="text-xs hidden md:table-cell">Date</TableHead>
+                      <TableHead className="text-xs">Status</TableHead>
+                      <TableHead className="text-xs text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentImports.map((imp) => (
+                      <TableRow key={imp.id} className="hover:bg-muted/20">
+                        <TableCell className="text-xs font-medium max-w-[140px] truncate">{imp.filename}</TableCell>
+                        <TableCell className="text-xs hidden sm:table-cell">{imp.type}</TableCell>
+                        <TableCell className="text-xs">{imp.records > 0 ? imp.records.toLocaleString() : '—'}</TableCell>
+                        <TableCell className="text-xs hidden md:table-cell">{imp.date}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={`text-[10px] px-2 py-0 ${statusBadgeClass(imp.status)}`}>
+                            {imp.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {imp.status === 'completed' && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toast.info('View import details')}>
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>View Details</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
+            {/* Import Templates */}
+            <Separator />
+            <div>
+              <Label className="text-sm font-medium mb-3 block">Download Import Templates</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {[
+                  { label: 'Courses', icon: BookOpen, color: 'text-emerald-500' },
+                  { label: 'Users', icon: Users, color: 'text-blue-500' },
+                  { label: 'Financial', icon: CreditCard, color: 'text-amber-500' },
+                  { label: 'Community', icon: MessageSquare, color: 'text-pink-500' },
+                  { label: 'Assessments', icon: CheckCircle2, color: 'text-purple-500' },
+                ].map((tmpl) => {
+                  const TmplIcon = tmpl.icon;
+                  return (
+                    <motion.button
+                      key={tmpl.label}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => toast.success(`${tmpl.label} template downloaded!`)}
+                      className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/30 transition-colors"
+                    >
+                      <TmplIcon className={`h-6 w-6 ${tmpl.color}`} />
+                      <span className="text-xs font-medium">{tmpl.label}</span>
+                      <span className="text-[10px] text-muted-foreground">.csv template</span>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* =============================== */}
+      {/* DATA RETENTION SETTINGS */}
+      {/* =============================== */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
+        <Card className="backdrop-blur-sm bg-card/80 border-border/50 shadow-lg">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white">
+                <Timer className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Data Retention</CardTitle>
+                <CardDescription>Configure how long different data types are retained</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Retention Period Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                { label: 'Course Data', icon: BookOpen, value: retentionCourse, setter: setRetentionCourse },
+                { label: 'User Data', icon: Users, value: retentionUser, setter: setRetentionUser },
+                { label: 'Financial Data', icon: CreditCard, value: retentionFinancial, setter: setRetentionFinancial },
+                { label: 'Community Data', icon: MessageSquare, value: retentionCommunity, setter: setRetentionCommunity },
+                { label: 'Assessment Data', icon: CheckCircle2, value: retentionAssessment, setter: setRetentionAssessment },
+                { label: 'Analytics Data', icon: Activity, value: retentionAnalytics, setter: setRetentionAnalytics },
+              ].map((item) => {
+                const ItemIcon = item.icon;
+                return (
+                  <div key={item.label} className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-background/50">
+                    <ItemIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm font-medium flex-1">{item.label}</span>
+                    <Select value={item.value} onValueChange={item.setter}>
+                      <SelectTrigger className="w-[130px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {retentionOptions.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                );
+              })}
+            </div>
+
+            <Separator />
+
+            {/* Auto-Delete & Anonymization Toggles */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 rounded-xl border border-border/50 bg-background/50">
+                <div className="flex items-center gap-3">
+                  <Trash2 className="h-4 w-4 text-red-500" />
+                  <div>
+                    <p className="text-sm font-medium">Auto-Delete Expired Data</p>
+                    <p className="text-xs text-muted-foreground">Automatically remove data past retention period</p>
+                  </div>
+                </div>
+                <Switch checked={autoDeleteExpired} onCheckedChange={setAutoDeleteExpired} />
+              </div>
+              <div className="flex items-center justify-between p-4 rounded-xl border border-border/50 bg-background/50">
+                <div className="flex items-center gap-3">
+                  <EyeOff className="h-4 w-4 text-amber-500" />
+                  <div>
+                    <p className="text-sm font-medium">Data Anonymization</p>
+                    <p className="text-xs text-muted-foreground">Anonymize data instead of deleting when retention expires</p>
+                  </div>
+                </div>
+                <Switch checked={dataAnonymization} onCheckedChange={setDataAnonymization} />
+              </div>
+            </div>
+
+            {/* Apply Retention Policy */}
+            <AlertDialog open={showRetentionPolicyDialog} onOpenChange={setShowRetentionPolicyDialog}>
+              <Button
+                variant="outline"
+                className="gap-2 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                onClick={() => setShowRetentionPolicyDialog(true)}
+              >
+                <RefreshCw className="h-4 w-4" />
+                Apply Retention Policy Now
+              </Button>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-amber-500" />
+                    Apply Retention Policy
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will immediately apply your retention policy to all data. Data past the retention period will be {dataAnonymization ? 'anonymized' : 'permanently deleted'}. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-amber-600 hover:bg-amber-700 text-white"
+                    onClick={() => {
+                      setShowRetentionPolicyDialog(false);
+                      toast.success('Retention policy applied successfully!', {
+                        description: `${dataAnonymization ? 'Anonymized' : 'Deleted'} expired data across all types.`,
+                      });
+                    }}
+                  >
+                    Apply Policy
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* =============================== */}
+      {/* PRIVACY & COMPLIANCE */}
+      {/* =============================== */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.3 }}>
+        <Card className="backdrop-blur-sm bg-card/80 border-border/50 shadow-lg">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 text-white">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Privacy & Compliance</CardTitle>
+                <CardDescription>GDPR compliance, data processing, and privacy settings</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* GDPR & Legal */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 rounded-xl border border-border/50 bg-background/50">
+                <div className="flex items-center gap-3">
+                  <ShieldCheck className="h-4 w-4 text-blue-500" />
+                  <div>
+                    <p className="text-sm font-medium">GDPR Compliance Mode</p>
+                    <p className="text-xs text-muted-foreground">Enable GDPR-compliant data handling features</p>
+                  </div>
+                </div>
+                <Switch checked={gdprCompliance} onCheckedChange={setGdprCompliance} />
+              </div>
+              <div className="flex items-center gap-3 p-4 rounded-xl border border-border/50 bg-background/50">
+                <Checkbox
+                  id="dpa"
+                  checked={dataProcessingAgreement}
+                  onCheckedChange={(checked) => setDataProcessingAgreement(checked === true)}
+                />
+                <label htmlFor="dpa" className="text-sm font-medium cursor-pointer">
+                  Data Processing Agreement (DPA) accepted
+                </label>
+              </div>
+              <div className="flex items-center justify-between p-4 rounded-xl border border-border/50 bg-background/50">
+                <div className="flex items-center gap-3">
+                  <Cookie className="h-4 w-4 text-amber-500" />
+                  <div>
+                    <p className="text-sm font-medium">Cookie Consent Banner</p>
+                    <p className="text-xs text-muted-foreground">Show cookie consent dialog to visitors</p>
+                  </div>
+                </div>
+                <Switch checked={cookieConsent} onCheckedChange={setCookieConsent} />
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Privacy & Cookie Policy URLs */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Privacy Policy URL</Label>
+                <Input
+                  value={privacyPolicyUrl}
+                  onChange={(e) => setPrivacyPolicyUrl(e.target.value)}
+                  placeholder="https://example.com/privacy"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Cookie Policy URL</Label>
+                <Input
+                  value={cookiePolicyUrl}
+                  onChange={(e) => setCookiePolicyUrl(e.target.value)}
+                  placeholder="https://example.com/cookies"
+                />
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Data Access Request */}
+            <div>
+              <Label className="text-sm font-medium mb-3 block">Data Access Request Handler</Label>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Input
+                  value={accessRequestEmail}
+                  onChange={(e) => setAccessRequestEmail(e.target.value)}
+                  placeholder="Enter user email to process request"
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  className="gap-2 shrink-0"
+                  onClick={() => {
+                    if (!accessRequestEmail) {
+                      toast.error('Please enter an email address');
+                      return;
+                    }
+                    toast.success('Data access request processed', {
+                      description: `Data package for ${accessRequestEmail} will be sent within 30 days.`,
+                    });
+                    setAccessRequestEmail('');
+                  }}
+                >
+                  <Eye className="h-4 w-4" />
+                  Process Request
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Right to Erasure - Danger Zone */}
+            <div className="rounded-xl border-2 border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-900/10 p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+                <h3 className="text-sm font-bold text-red-700 dark:text-red-400">Danger Zone</h3>
+              </div>
+              <p className="text-xs text-red-600 dark:text-red-400 mb-4">
+                Permanently delete all user data associated with an account. This action is irreversible and is intended to comply with GDPR &quot;Right to Erasure&quot; requirements.
+              </p>
+              <Dialog open={showEraseDialog} onOpenChange={setShowEraseDialog}>
+                <Button
+                  variant="destructive"
+                  className="gap-2"
+                  onClick={() => setShowEraseDialog(true)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete All User Data (Right to Erasure)
+                </Button>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-red-600">
+                      <AlertTriangle className="h-5 w-5" />
+                      Confirm Data Erasure
+                    </DialogTitle>
+                    <DialogDescription>
+                      This will permanently delete ALL data associated with the specified user. This includes enrollments, progress, community posts, achievements, and personal information. This action CANNOT be undone.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">User Email</Label>
+                      <Input placeholder="Enter user email address" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-red-600">
+                        Type &quot;DELETE&quot; to confirm
+                      </Label>
+                      <Input
+                        value={eraseConfirmText}
+                        onChange={(e) => setEraseConfirmText(e.target.value)}
+                        placeholder="DELETE"
+                        className="border-red-300 focus:border-red-500"
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => { setShowEraseDialog(false); setEraseConfirmText(''); }}>
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      disabled={eraseConfirmText !== 'DELETE'}
+                      onClick={() => {
+                        setShowEraseDialog(false);
+                        setEraseConfirmText('');
+                        toast.success('User data erased successfully', {
+                          description: 'All associated data has been permanently removed.',
+                        });
+                      }}
+                    >
+                      Permanently Delete Data
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* =============================== */}
+      {/* BACKUP & RESTORE */}
+      {/* =============================== */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.4 }}>
+        <Card className="backdrop-blur-sm bg-card/80 border-border/50 shadow-lg">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-slate-600 to-slate-800 text-white">
+                <HardDrive className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Backup & Restore</CardTitle>
+                <CardDescription>Create backups and restore your platform from a previous state</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Backup Storage Indicator */}
+            <div className="p-4 rounded-xl border border-border/50 bg-background/50">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium">Backup Storage</span>
+                <span className="text-xs text-muted-foreground">{backupStorageUsed} GB used of {backupStorageTotal} GB</span>
+              </div>
+              <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-slate-500 to-slate-700"
+                  style={{ width: `${(backupStorageUsed / backupStorageTotal) * 100}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">{(backupStorageTotal - backupStorageUsed).toFixed(1)} GB available</p>
+            </div>
+
+            {/* Create Backup Button */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="flex-1">
+                <Button
+                  onClick={handleCreateBackup}
+                  disabled={isCreatingBackup}
+                  className="w-full gap-2 h-11 bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-slate-950 text-white shadow-lg"
+                >
+                  {isCreatingBackup ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Creating Backup...
+                    </>
+                  ) : (
+                    <>
+                      <Archive className="h-4 w-4" />
+                      Create Backup Now
+                    </>
+                  )}
+                </Button>
+              </motion.div>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground whitespace-nowrap">Auto-backup:</Label>
+                <Select value={autoBackupSchedule} onValueChange={setAutoBackupSchedule}>
+                  <SelectTrigger className="w-[130px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="daily">Daily</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Backup History */}
+            <div>
+              <Label className="text-sm font-medium mb-3 block">Backup History</Label>
+              <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
+                {backups.map((backup) => (
+                  <motion.div
+                    key={backup.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="flex items-center justify-between p-3 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/20 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                        backup.type === 'Automatic'
+                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600'
+                          : 'bg-slate-100 dark:bg-slate-900/30 text-slate-600'
+                      }`}>
+                        {backup.type === 'Automatic' ? <Clock className="h-4 w-4" /> : <Server className="h-4 w-4" />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{backup.date}</p>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                            {backup.type}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">{backup.size}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => toast.success('Download started', { description: `${backup.date} backup` })}
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Download</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-amber-600 hover:text-amber-700"
+                              onClick={() => { setSelectedBackupId(backup.id); setShowRestoreDialog(true); }}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Restore</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            {/* Restore Confirmation Dialog */}
+            <AlertDialog open={showRestoreDialog} onOpenChange={setShowRestoreDialog}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-amber-500" />
+                    Restore from Backup
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will restore your platform to the state captured in this backup. All data created after this backup will be lost. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => setSelectedBackupId(null)}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-amber-600 hover:bg-amber-700 text-white"
+                    onClick={() => {
+                      setShowRestoreDialog(false);
+                      setSelectedBackupId(null);
+                      toast.success('Restore initiated', {
+                        description: 'Your platform will be restored shortly. You will be notified when complete.',
+                      });
+                    }}
+                  >
+                    Confirm Restore
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* =============================== */}
+      {/* SAVE ALL SETTINGS */}
+      {/* =============================== */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.5 }}>
+        <Card className="backdrop-blur-sm bg-card/80 border-border/50 shadow-lg">
+          <CardContent className="p-6">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
+                  <Save className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Save All Data &amp; Privacy Settings</p>
+                  <p className="text-xs text-muted-foreground">Apply all changes to export, import, retention, privacy, and backup settings</p>
+                </div>
+              </div>
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                <Button
+                  className="gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg shadow-emerald-500/20 h-11 px-8"
+                  onClick={() => {
+                    toast.success('All settings saved successfully!', {
+                      description: 'Data export, import, retention, privacy, and backup settings have been updated.',
+                    });
+                  }}
+                >
+                  <Save className="h-4 w-4" />
+                  Save All Settings
+                </Button>
+              </motion.div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    </div>
+  );
+}
+
+// ============================================================
 // Main Admin Settings Component
 // ============================================================
 export function AdminSettings() {
@@ -3393,6 +5928,9 @@ export function AdminSettings() {
     { value: 'email-templates', label: 'Email Templates', icon: Mail },
     { value: 'webhooks', label: 'Webhooks', icon: Webhook },
     { value: 'api-keys', label: 'API Keys', icon: Key },
+    { value: 'notifications', label: 'Notifications', icon: Bell },
+    { value: 'security', label: 'Security', icon: ShieldCheck },
+    { value: 'data-privacy', label: 'Data & Privacy', icon: Database },
   ];
 
   return (
@@ -3462,6 +6000,21 @@ export function AdminSettings() {
           <TabsContent value="api-keys">
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
               <ApiKeysSettings />
+            </motion.div>
+          </TabsContent>
+          <TabsContent value="notifications">
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+              <NotificationPreferences />
+            </motion.div>
+          </TabsContent>
+          <TabsContent value="security">
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+              <TwoFactorAuth />
+            </motion.div>
+          </TabsContent>
+          <TabsContent value="data-privacy">
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+              <DataPrivacySettings />
             </motion.div>
           </TabsContent>
         </div>

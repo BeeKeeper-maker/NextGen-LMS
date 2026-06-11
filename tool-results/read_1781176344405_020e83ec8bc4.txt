@@ -1,0 +1,1102 @@
+     1→'use client';
+     2→
+     3→import { useState, useMemo } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Search,
+     7→  Plus,
+     8→  GripVertical,
+     9→  Star,
+    10→  Users,
+    11→  Clock,
+    12→  Copy,
+    13→  Archive,
+    14→  Pencil,
+    15→  ChevronDown,
+    16→  ChevronRight,
+    17→  Video,
+    18→  FileText,
+    19→  Headphones,
+    20→  File,
+    21→  Radio,
+    22→  Eye,
+    23→  Upload,
+    24→  Trash2,
+    25→  BookOpen,
+    26→  Layers,
+    27→  LayoutList,
+    28→  CheckCircle2,
+    29→  Circle,
+    30→  MoreVertical,
+    31→} from 'lucide-react';
+    32→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    33→import { Card, CardContent, CardHeader } from '@/components/ui/card';
+    34→import { Button } from '@/components/ui/button';
+    35→import { Input } from '@/components/ui/input';
+    36→import { Badge } from '@/components/ui/badge';
+    37→import { Label } from '@/components/ui/label';
+    38→import { Progress } from '@/components/ui/progress';
+    39→import { Switch } from '@/components/ui/switch';
+    40→import { Separator } from '@/components/ui/separator';
+    41→import { Textarea } from '@/components/ui/textarea';
+    42→import {
+    43→  Select,
+    44→  SelectContent,
+    45→  SelectItem,
+    46→  SelectTrigger,
+    47→  SelectValue,
+    48→} from '@/components/ui/select';
+    49→import {
+    50→  Dialog,
+    51→  DialogContent,
+    52→  DialogDescription,
+    53→  DialogFooter,
+    54→  DialogHeader,
+    55→  DialogTitle,
+    56→  DialogTrigger,
+    57→} from '@/components/ui/dialog';
+    58→import {
+    59→  Collapsible,
+    60→  CollapsibleContent,
+    61→  CollapsibleTrigger,
+    62→} from '@/components/ui/collapsible';
+    63→import { ScrollArea } from '@/components/ui/scroll-area';
+    64→import { demoCourses } from '@/lib/mock-data';
+    65→import type { Course, Module, Lesson } from '@/types';
+    66→
+    67→// ─── Helpers ────────────────────────────────────────────────
+    68→
+    69→const categoryGradients: Record<string, string> = {
+    70→  'Web Development': 'from-emerald-500 to-teal-600',
+    71→  'AI & ML': 'from-violet-500 to-purple-600',
+    72→  'Data Science': 'from-amber-500 to-orange-600',
+    73→  Design: 'from-rose-500 to-pink-600',
+    74→  Business: 'from-slate-500 to-gray-600',
+    75→  Marketing: 'from-fuchsia-500 to-violet-600',
+    76→};
+    77→
+    78→const categoryBadgeColors: Record<string, string> = {
+    79→  'Web Development': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+    80→  'AI & ML': 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
+    81→  'Data Science': 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+    82→  Design: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300',
+    83→  Business: 'bg-slate-100 text-slate-700 dark:text-slate-300 dark:bg-slate-950 dark:text-slate-300',
+    84→  Marketing: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-300',
+    85→};
+    86→
+    87→const levelBadgeColors: Record<string, string> = {
+    88→  beginner: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300',
+    89→  intermediate: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300',
+    90→  advanced: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300',
+    91→  expert: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300',
+    92→};
+    93→
+    94→function formatDuration(seconds: number): string {
+    95→  const mins = Math.floor(seconds / 60);
+    96→  if (mins < 60) return `${mins}m`;
+    97→  const hrs = Math.floor(mins / 60);
+    98→  const rem = mins % 60;
+    99→  return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
+   100→}
+   101→
+   102→
+   103→
+   104→function renderStars(rating: number) {
+   105→  return (
+   106→    <div className="flex items-center gap-0.5">
+   107→      {[1, 2, 3, 4, 5].map((s) => (
+   108→        <Star
+   109→          key={s}
+   110→          className={`h-3 w-3 ${
+   111→            s <= Math.round(rating)
+   112→              ? 'text-amber-400 fill-amber-400'
+   113→              : 'text-gray-300 dark:text-gray-600'
+   114→          }`}
+   115→        />
+   116→      ))}
+   117→      <span className="text-xs text-muted-foreground ml-1">{rating}</span>
+   118→    </div>
+   119→  );
+   120→}
+   121→
+   122→// ─── Tab 1: Course Catalog ──────────────────────────────────
+   123→
+   124→function CourseCatalogTab() {
+   125→  const [search, setSearch] = useState('');
+   126→  const [categoryFilter, setCategoryFilter] = useState('all');
+   127→  const [levelFilter, setLevelFilter] = useState('all');
+   128→
+   129→  const categories = useMemo(
+   130→    () => ['all', ...Array.from(new Set(demoCourses.map((c) => c.category).filter(Boolean)))],
+   131→    []
+   132→  );
+   133→
+   134→  const levels = ['all', 'beginner', 'intermediate', 'advanced', 'expert'];
+   135→
+   136→  const filtered = demoCourses.filter((c) => {
+   137→    const matchSearch =
+   138→      !search ||
+   139→      c.title.toLowerCase().includes(search.toLowerCase()) ||
+   140→      c.description?.toLowerCase().includes(search.toLowerCase());
+   141→    const matchCategory = categoryFilter === 'all' || c.category === categoryFilter;
+   142→    const matchLevel = levelFilter === 'all' || c.level === levelFilter;
+   143→    return matchSearch && matchCategory && matchLevel;
+   144→  });
+   145→
+   146→  return (
+   147→    <div className="space-y-6">
+   148→      {/* Top bar */}
+   149→      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+   150→        <div className="relative flex-1 w-full sm:max-w-sm">
+   151→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   152→          <Input
+   153→            placeholder="Search courses..."
+   154→            value={search}
+   155→            onChange={(e) => setSearch(e.target.value)}
+   156→            className="pl-9"
+   157→          />
+   158→        </div>
+   159→
+   160→        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+   161→          <SelectTrigger className="w-full sm:w-[160px]">
+   162→            <SelectValue placeholder="Category" />
+   163→          </SelectTrigger>
+   164→          <SelectContent>
+   165→            {categories.map((cat) => (
+   166→              <SelectItem key={cat} value={cat!}>
+   167→                {cat === 'all' ? 'All Categories' : cat}
+   168→              </SelectItem>
+   169→            ))}
+   170→          </SelectContent>
+   171→        </Select>
+   172→
+   173→        <Select value={levelFilter} onValueChange={setLevelFilter}>
+   174→          <SelectTrigger className="w-full sm:w-[150px]">
+   175→            <SelectValue placeholder="Level" />
+   176→          </SelectTrigger>
+   177→          <SelectContent>
+   178→            {levels.map((lvl) => (
+   179→              <SelectItem key={lvl} value={lvl}>
+   180→                {lvl === 'all' ? 'All Levels' : lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+   181→              </SelectItem>
+   182→            ))}
+   183→          </SelectContent>
+   184→        </Select>
+   185→
+   186→        <NewCourseDialog />
+   187→      </div>
+   188→
+   189→      {/* Results count */}
+   190→      <p className="text-sm text-muted-foreground">
+   191→        Showing {filtered.length} of {demoCourses.length} courses
+   192→      </p>
+   193→
+   194→      {/* Course Grid */}
+   195→      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+   196→        <AnimatePresence mode="popLayout">
+   197→          {filtered.map((course) => (
+   198→            <CourseCard key={course.id} course={course} />
+   199→          ))}
+   200→        </AnimatePresence>
+   201→      </div>
+   202→
+   203→      {filtered.length === 0 && (
+   204→        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+   205→          <BookOpen className="h-12 w-12 mb-4 opacity-40" />
+   206→          <p className="text-lg font-medium">No courses found</p>
+   207→          <p className="text-sm">Try adjusting your search or filters</p>
+   208→        </div>
+   209→      )}
+   210→    </div>
+   211→  );
+   212→}
+   213→
+   214→function CourseCard({ course }: { course: Course }) {
+   215→  const gradient = categoryGradients[course.category || ''] || 'from-slate-500 to-slate-600';
+   216→  const catBadge = categoryBadgeColors[course.category || ''] || 'bg-slate-100 text-slate-700 dark:text-slate-300 dark:bg-slate-950 dark:text-slate-300';
+   217→  const lvlBadge = levelBadgeColors[course.level] || 'bg-slate-100 text-slate-700 dark:text-slate-300 dark:bg-slate-950 dark:text-slate-300';
+   218→
+   219→  return (
+   220→    <motion.div
+   221→      layout
+   222→      initial={{ opacity: 0, y: 20 }}
+   223→      animate={{ opacity: 1, y: 0 }}
+   224→      exit={{ opacity: 0, scale: 0.95 }}
+   225→      transition={{ duration: 0.2 }}
+   226→    >
+   227→      <Card className="overflow-hidden hover:shadow-lg transition-shadow group h-full shadow-sm flex flex-col">
+   228→        {/* Colored header band */}
+   229→        <div className={`h-24 bg-gradient-to-r ${gradient} relative`}>
+   230→          <div className="absolute inset-0 bg-black/10" />
+   231→          <div className="absolute top-3 left-3 flex gap-2">
+   232→            <Badge className={`${catBadge} text-[10px] font-medium px-2 py-0.5`}>
+   233→              {course.category}
+   234→            </Badge>
+   235→            <Badge className={`${lvlBadge} text-[10px] font-medium px-2 py-0.5`}>
+   236→              {course.level}
+   237→            </Badge>
+   238→          </div>
+   239→          {course.isFeatured && (
+   240→            <Badge className="absolute top-3 right-3 bg-amber-400 text-amber-900 text-[10px] font-semibold px-2 py-0.5">
+   241→              Featured
+   242→            </Badge>
+   243→          )}
+   244→        </div>
+   245→
+   246→        <CardContent className="p-6 space-y-4 flex-1 flex flex-col">
+   247→          {/* Title & Description */}
+   248→          <div>
+   249→            <h3 className="font-semibold text-foreground line-clamp-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+   250→              {course.title}
+   251→            </h3>
+   252→            <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+   253→              {course.description}
+   254→            </p>
+   255→          </div>
+   256→
+   257→          {/* Stats row */}
+   258→          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+   259→            <span className="flex items-center gap-1">
+   260→              <Users className="h-3.5 w-3.5" />
+   261→              {course.enrollmentCount.toLocaleString()}
+   262→            </span>
+   263→            {renderStars(course.avgRating)}
+   264→            <span className="flex items-center gap-1">
+   265→              <Clock className="h-3.5 w-3.5" />
+   266→              {course.durationHours}h
+   267→            </span>
+   268→          </div>
+   269→
+   270→          {/* Price */}
+   271→          <div className="flex items-baseline gap-2">
+   272→            <span className="text-lg font-bold text-foreground">${course.price}</span>
+   273→            {course.compareAtPrice && (
+   274→              <span className="text-sm text-muted-foreground line-through">
+   275→                ${course.compareAtPrice}
+   276→              </span>
+   277→            )}
+   278→          </div>
+   279→
+   280→          {/* Completion rate */}
+   281→          <div className="space-y-1.5">
+   282→            <div className="flex items-center justify-between text-xs">
+   283→              <span className="text-muted-foreground">Completion Rate</span>
+   284→              <span className="font-medium text-foreground">{course.completionRate}%</span>
+   285→            </div>
+   286→            <Progress value={course.completionRate} className="h-1.5" />
+   287→          </div>
+   288→
+   289→          {/* Status & Actions */}
+   290→          <div className="flex items-center justify-between pt-1">
+   291→            <Badge
+   292→              variant="outline"
+   293→              className={`text-[10px] ${
+   294→                course.isPublished
+   295→                  ? 'border-emerald-300 text-emerald-600 dark:border-emerald-700 dark:text-emerald-400'
+   296→                  : 'border-yellow-300 text-yellow-600 dark:border-yellow-700 dark:text-yellow-400'
+   297→              }`}
+   298→            >
+   299→              {course.isPublished ? 'Published' : 'Draft'}
+   300→            </Badge>
+   301→
+   302→            <div className="flex items-center gap-1">
+   303→              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+   304→                <Pencil className="h-3.5 w-3.5" />
+   305→              </Button>
+   306→              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+   307→                <Copy className="h-3.5 w-3.5" />
+   308→              </Button>
+   309→              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+   310→                <Archive className="h-3.5 w-3.5" />
+   311→              </Button>
+   312→            </div>
+   313→          </div>
+   314→        </CardContent>
+   315→      </Card>
+   316→    </motion.div>
+   317→  );
+   318→}
+   319→
+   320→function NewCourseDialog() {
+   321→  const [open, setOpen] = useState(false);
+   322→
+   323→  return (
+   324→    <Dialog open={open} onOpenChange={setOpen}>
+   325→      <DialogTrigger asChild>
+   326→        <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shrink-0 w-full sm:w-auto">
+   327→          <Plus className="h-4 w-4" />
+   328→          New Course
+   329→        </Button>
+   330→      </DialogTrigger>
+   331→      <DialogContent className="sm:max-w-[580px]">
+   332→        <DialogHeader>
+   333→          <DialogTitle>Create New Course</DialogTitle>
+   334→          <DialogDescription>
+   335→            Add a new course to your learning platform. You can configure details and curriculum after creation.
+   336→          </DialogDescription>
+   337→        </DialogHeader>
+   338→        <div className="grid gap-5 py-4">
+   339→          <div className="grid gap-2">
+   340→            <Label htmlFor="course-title">Course Title</Label>
+   341→            <Input id="course-title" placeholder="e.g. Advanced TypeScript Patterns" />
+   342→          </div>
+   343→          <div className="grid gap-2">
+   344→            <Label htmlFor="course-desc">Description</Label>
+   345→            <Textarea id="course-desc" placeholder="Brief description of the course..." rows={3} className="resize-none" />
+   346→          </div>
+   347→          <Separator />
+   348→          <div className="grid grid-cols-2 gap-4">
+   349→            <div className="grid gap-2">
+   350→              <Label>Category</Label>
+   351→              <Select>
+   352→                <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+   353→                <SelectContent>
+   354→                  <SelectItem value="web-dev">Web Development</SelectItem>
+   355→                  <SelectItem value="ai-ml">AI & ML</SelectItem>
+   356→                  <SelectItem value="data-science">Data Science</SelectItem>
+   357→                  <SelectItem value="design">Design</SelectItem>
+   358→                  <SelectItem value="business">Business</SelectItem>
+   359→                  <SelectItem value="marketing">Marketing</SelectItem>
+   360→                </SelectContent>
+   361→              </Select>
+   362→            </div>
+   363→            <div className="grid gap-2">
+   364→              <Label>Level</Label>
+   365→              <Select>
+   366→                <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+   367→                <SelectContent>
+   368→                  <SelectItem value="beginner">Beginner</SelectItem>
+   369→                  <SelectItem value="intermediate">Intermediate</SelectItem>
+   370→                  <SelectItem value="advanced">Advanced</SelectItem>
+   371→                  <SelectItem value="expert">Expert</SelectItem>
+   372→                </SelectContent>
+   373→              </Select>
+   374→            </div>
+   375→          </div>
+   376→          <div className="grid grid-cols-2 gap-4">
+   377→            <div className="grid gap-2">
+   378→              <Label htmlFor="course-price">Price ($)</Label>
+   379→              <Input id="course-price" type="number" placeholder="0" />
+   380→            </div>
+   381→            <div className="grid gap-2">
+   382→              <Label htmlFor="course-compare">Compare-at Price ($)</Label>
+   383→              <Input id="course-compare" type="number" placeholder="0" />
+   384→            </div>
+   385→          </div>
+   386→        </div>
+   387→        <DialogFooter className="gap-2">
+   388→          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+   389→          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={() => setOpen(false)}>
+   390→            <BookOpen className="h-4 w-4" />
+   391→            Create Course
+   392→          </Button>
+   393→        </DialogFooter>
+   394→      </DialogContent>
+   395→    </Dialog>
+   396→  );
+   397→}
+   398→
+   399→// ─── Tab 2: Course Builder ──────────────────────────────────
+   400→
+   401→function CourseBuilderTab() {
+   402→  const [selectedCourseId, setSelectedCourseId] = useState<string>(demoCourses[0].id);
+   403→  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
+   404→  const [expandedModules, setExpandedModules] = useState<Set<string>>(
+   405→    new Set(demoCourses[0].modules?.map((m) => m.id) || [])
+   406→  );
+   407→
+   408→  const selectedCourse = useMemo(
+   409→    () => demoCourses.find((c) => c.id === selectedCourseId) || demoCourses[0],
+   410→    [selectedCourseId]
+   411→  );
+   412→
+   413→  const selectedLesson = useMemo(() => {
+   414→    if (!selectedLessonId) return null;
+   415→    for (const mod of selectedCourse.modules || []) {
+   416→      const found = mod.lessons?.find((l) => l.id === selectedLessonId);
+   417→      if (found) return found;
+   418→    }
+   419→    return null;
+   420→  }, [selectedLessonId, selectedCourse]);
+   421→
+   422→  const toggleModule = (moduleId: string) => {
+   423→    setExpandedModules((prev) => {
+   424→      const next = new Set(prev);
+   425→      if (next.has(moduleId)) next.delete(moduleId);
+   426→      else next.add(moduleId);
+   427→      return next;
+   428→    });
+   429→  };
+   430→
+   431→  const totalLessons = useMemo(
+   432→    () =>
+   433→      (selectedCourse.modules || []).reduce(
+   434→        (acc, m) => acc + (m.lessons?.length || 0),
+   435→        0
+   436→      ),
+   437→    [selectedCourse]
+   438→  );
+   439→
+   440→  const totalDurationSec = useMemo(
+   441→    () =>
+   442→      (selectedCourse.modules || []).reduce(
+   443→        (acc, m) =>
+   444→          acc +
+   445→          (m.lessons || []).reduce(
+   446→            (a, l) => a + (l.videoDuration || 0),
+   447→            0
+   448→          ),
+   449→        0
+   450→      ),
+   451→    [selectedCourse]
+   452→  );
+   453→
+   454→  return (
+   455→    <div className="space-y-4">
+   456→      {/* Course selector */}
+   457→      <div className="flex items-center gap-3">
+   458→        <Label className="text-sm font-medium shrink-0">Course:</Label>
+   459→        <Select value={selectedCourseId} onValueChange={(v) => { setSelectedCourseId(v); setSelectedLessonId(null); }}>
+   460→          <SelectTrigger className="w-full sm:w-[320px]">
+   461→            <SelectValue />
+   462→          </SelectTrigger>
+   463→          <SelectContent>
+   464→            {demoCourses.map((c) => (
+   465→              <SelectItem key={c.id} value={c.id}>
+   466→                {c.title}
+   467→              </SelectItem>
+   468→            ))}
+   469→          </SelectContent>
+   470→        </Select>
+   471→      </div>
+   472→
+   473→      {/* Two-panel layout */}
+   474→      <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-4 min-h-[600px]">
+   475→        {/* Left panel: Module & Lesson Tree */}
+   476→        <Card className="overflow-hidden">
+   477→          <div className="p-4 border-b bg-muted/30">
+   478→            <div className="flex items-center justify-between">
+   479→              <h3 className="text-sm font-semibold text-foreground">Curriculum</h3>
+   480→              <div className="flex items-center gap-1">
+   481→                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300">
+   482→                  <Plus className="h-3 w-3" /> Module
+   483→                </Button>
+   484→              </div>
+   485→            </div>
+   486→            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+   487→              <span>{(selectedCourse.modules || []).length} modules</span>
+   488→              <span>{totalLessons} lessons</span>
+   489→              <span>{formatDuration(totalDurationSec)}</span>
+   490→            </div>
+   491→          </div>
+   492→
+   493→          <ScrollArea className="h-[540px]">
+   494→            <div className="p-2">
+   495→              {(selectedCourse.modules || []).length === 0 ? (
+   496→                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+   497→                  <Layers className="h-8 w-8 mb-2 opacity-40" />
+   498→                  <p className="text-sm">No modules yet</p>
+   499→                  <p className="text-xs">Add a module to start building</p>
+   500→                </div>
+   501→              ) : (
+   502→                (selectedCourse.modules || [])
+   503→                  .sort((a, b) => a.orderIndex - b.orderIndex)
+   504→                  .map((mod) => (
+   505→                    <ModuleTreeItem
+   506→                      key={mod.id}
+   507→                      module={mod}
+   508→                      isExpanded={expandedModules.has(mod.id)}
+   509→                      onToggle={() => toggleModule(mod.id)}
+   510→                      selectedLessonId={selectedLessonId}
+   511→                      onSelectLesson={setSelectedLessonId}
+   512→                    />
+   513→                  ))
+   514→              )}
+   515→            </div>
+   516→          </ScrollArea>
+   517→        </Card>
+   518→
+   519→        {/* Right panel: Content Editor */}
+   520→        <Card className="overflow-hidden">
+   521→          {selectedLesson ? (
+   522→            <LessonEditor lesson={selectedLesson} />
+   523→          ) : (
+   524→            <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-muted-foreground">
+   525→              <BookOpen className="h-12 w-12 mb-4 opacity-30" />
+   526→              <p className="text-lg font-medium">Select a lesson</p>
+   527→              <p className="text-sm">Choose a lesson from the curriculum tree to edit its content</p>
+   528→            </div>
+   529→          )}
+   530→        </Card>
+   531→      </div>
+   532→    </div>
+   533→  );
+   534→}
+   535→
+   536→function ModuleTreeItem({
+   537→  module,
+   538→  isExpanded,
+   539→  onToggle,
+   540→  selectedLessonId,
+   541→  onSelectLesson,
+   542→}: {
+   543→  module: Module;
+   544→  isExpanded: boolean;
+   545→  onToggle: () => void;
+   546→  selectedLessonId: string | null;
+   547→  onSelectLesson: (id: string) => void;
+   548→}) {
+   549→  const lessonCount = module.lessons?.length || 0;
+   550→  const publishedLessons = module.lessons?.filter((l) => l.isPublished).length || 0;
+   551→
+   552→  return (
+   553→    <Collapsible open={isExpanded} onOpenChange={onToggle} className="mb-1">
+   554→      <div className="flex items-center gap-1">
+   555→        <GripVertical className="h-4 w-4 text-muted-foreground/40 cursor-grab shrink-0" />
+   556→        <CollapsibleTrigger asChild>
+   557→          <button className="flex items-center gap-2 flex-1 rounded-md px-2 py-2 text-sm font-medium hover:bg-muted/60 transition-colors text-left">
+   558→            {isExpanded ? (
+   559→              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+   560→            ) : (
+   561→              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+   562→            )}
+   563→            <span className="truncate flex-1 text-foreground">{module.title}</span>
+   564→            <span className="text-[10px] text-muted-foreground shrink-0">
+   565→              {publishedLessons}/{lessonCount}
+   566→            </span>
+   567→            {module.isPublished ? (
+   568→              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+   569→            ) : (
+   570→              <Circle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+   571→            )}
+   572→          </button>
+   573→        </CollapsibleTrigger>
+   574→      </div>
+   575→      <CollapsibleContent>
+   576→        <div className="ml-6 pl-3 border-l border-border">
+   577→          {(module.lessons || [])
+   578→            .sort((a, b) => a.orderIndex - b.orderIndex)
+   579→            .map((lesson) => (
+   580→              <LessonTreeItem
+   581→                key={lesson.id}
+   582→                lesson={lesson}
+   583→                isSelected={selectedLessonId === lesson.id}
+   584→                onSelect={() => onSelectLesson(lesson.id)}
+   585→              />
+   586→            ))}
+   587→          <Button
+   588→            variant="ghost"
+   589→            size="sm"
+   590→            className="w-full h-7 mt-1 text-xs gap-1 text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 justify-start"
+   591→          >
+   592→            <Plus className="h-3 w-3" /> Add Lesson
+   593→          </Button>
+   594→        </div>
+   595→      </CollapsibleContent>
+   596→    </Collapsible>
+   597→  );
+   598→}
+   599→
+   600→function ContentTypeIcon({ type, className }: { type: Lesson['contentType']; className?: string }) {
+   601→  switch (type) {
+   602→    case 'video': return <Video className={className} />;
+   603→    case 'text': return <FileText className={className} />;
+   604→    case 'audio': return <Headphones className={className} />;
+   605→    case 'document': return <File className={className} />;
+   606→    case 'live_session': return <Radio className={className} />;
+   607→    default: return <FileText className={className} />;
+   608→  }
+   609→}
+   610→
+   611→function LessonTreeItem({
+   612→  lesson,
+   613→  isSelected,
+   614→  onSelect,
+   615→}: {
+   616→  lesson: Lesson;
+   617→  isSelected: boolean;
+   618→  onSelect: () => void;
+   619→}) {
+   620→  return (
+   621→    <div className="flex items-center gap-1">
+   622→      <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 cursor-grab shrink-0" />
+   623→      <button
+   624→        onClick={onSelect}
+   625→        className={`flex items-center gap-2 flex-1 rounded-md px-2 py-1.5 text-xs transition-colors text-left ${
+   626→          isSelected
+   627→            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+   628→            : 'hover:bg-muted/60 text-muted-foreground'
+   629→        }`}
+   630→      >
+   631→        <ContentTypeIcon type={lesson.contentType} className="h-3.5 w-3.5 shrink-0" />
+   632→        <span className="truncate flex-1">{lesson.title}</span>
+   633→        {lesson.videoDuration && (
+   634→          <span className="text-[10px] text-muted-foreground shrink-0">
+   635→            {formatDuration(lesson.videoDuration)}
+   636→          </span>
+   637→        )}
+   638→        {lesson.isPreview && (
+   639→          <Eye className="h-3 w-3 text-amber-500 shrink-0" />
+   640→        )}
+   641→        {lesson.isPublished ? (
+   642→          <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
+   643→        ) : (
+   644→          <Circle className="h-3 w-3 text-muted-foreground shrink-0" />
+   645→        )}
+   646→      </button>
+   647→    </div>
+   648→  );
+   649→}
+   650→
+   651→function LessonEditor({ lesson }: { lesson: Lesson }) {
+   652→  const [title, setTitle] = useState(lesson.title);
+   653→  const [contentType, setContentType] = useState(lesson.contentType);
+   654→  const [videoUrl, setVideoUrl] = useState(lesson.videoUrl || '');
+   655→  const [textContent, setTextContent] = useState(lesson.content || '');
+   656→  const [duration, setDuration] = useState(lesson.videoDuration ? Math.floor(lesson.videoDuration / 60) : 0);
+   657→  const [isPreview, setIsPreview] = useState(lesson.isPreview);
+   658→  const [isPublished, setIsPublished] = useState(lesson.isPublished);
+   659→  const [resources, setResources] = useState<string[]>(
+   660→    lesson.resources ? lesson.resources.split(',').filter(Boolean) : []
+   661→  );
+   662→
+   663→  return (
+   664→    <div className="flex flex-col h-full">
+   665→      {/* Editor header */}
+   666→      <div className="p-4 border-b bg-muted/30 flex items-center justify-between">
+   667→        <div className="flex items-center gap-2">
+   668→          <ContentTypeIcon type={contentType} className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+   669→          <h3 className="text-sm font-semibold text-foreground">Edit Lesson</h3>
+   670→        </div>
+   671→        <div className="flex items-center gap-2">
+   672→          <Button variant="outline" size="sm" className="h-8 text-xs">Cancel</Button>
+   673→          <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1">
+   674→            <CheckCircle2 className="h-3 w-3" /> Save
+   675→          </Button>
+   676→        </div>
+   677→      </div>
+   678→
+   679→      {/* Editor body */}
+   680→      <ScrollArea className="flex-1">
+   681→        <div className="p-6 space-y-6 max-w-2xl">
+   682→          {/* Title */}
+   683→          <div className="grid gap-2">
+   684→            <Label htmlFor="lesson-title">Lesson Title</Label>
+   685→            <Input
+   686→              id="lesson-title"
+   687→              value={title}
+   688→              onChange={(e) => setTitle(e.target.value)}
+   689→              placeholder="Enter lesson title..."
+   690→            />
+   691→          </div>
+   692→
+   693→          {/* Content Type */}
+   694→          <div className="grid gap-2">
+   695→            <Label>Content Type</Label>
+   696→            <Select value={contentType} onValueChange={(v) => setContentType(v as Lesson['contentType'])}>
+   697→              <SelectTrigger className="w-full">
+   698→                <SelectValue />
+   699→              </SelectTrigger>
+   700→              <SelectContent>
+   701→                <SelectItem value="video">
+   702→                  <span className="flex items-center gap-2"><Video className="h-3.5 w-3.5" /> Video</span>
+   703→                </SelectItem>
+   704→                <SelectItem value="text">
+   705→                  <span className="flex items-center gap-2"><FileText className="h-3.5 w-3.5" /> Text</span>
+   706→                </SelectItem>
+   707→                <SelectItem value="audio">
+   708→                  <span className="flex items-center gap-2"><Headphones className="h-3.5 w-3.5" /> Audio</span>
+   709→                </SelectItem>
+   710→                <SelectItem value="document">
+   711→                  <span className="flex items-center gap-2"><File className="h-3.5 w-3.5" /> Document</span>
+   712→                </SelectItem>
+   713→                <SelectItem value="live_session">
+   714→                  <span className="flex items-center gap-2"><Radio className="h-3.5 w-3.5" /> Live Session</span>
+   715→                </SelectItem>
+   716→              </SelectContent>
+   717→            </Select>
+   718→          </div>
+   719→
+   720→          {/* Conditional fields based on content type */}
+   721→          {contentType === 'video' && (
+   722→            <div className="grid gap-2">
+   723→              <Label htmlFor="video-url">Video URL</Label>
+   724→              <Input
+   725→                id="video-url"
+   726→                value={videoUrl}
+   727→                onChange={(e) => setVideoUrl(e.target.value)}
+   728→                placeholder="https://example.com/video.mp4 or embed URL"
+   729→              />
+   730→              <p className="text-xs text-muted-foreground">
+   731→                Supports MP4, YouTube, Vimeo, and Loom embed URLs
+   732→              </p>
+   733→            </div>
+   734→          )}
+   735→
+   736→          {contentType === 'text' && (
+   737→            <div className="grid gap-2">
+   738→              <Label htmlFor="text-content">Content</Label>
+   739→              <Textarea
+   740→                id="text-content"
+   741→                value={textContent}
+   742→                onChange={(e) => setTextContent(e.target.value)}
+   743→                placeholder="Write your lesson content here... Supports rich text formatting."
+   744→                rows={8}
+   745→                className="min-h-[200px]"
+   746→              />
+   747→            </div>
+   748→          )}
+   749→
+   750→          {contentType === 'audio' && (
+   751→            <div className="grid gap-2">
+   752→              <Label htmlFor="audio-url">Audio URL</Label>
+   753→              <Input
+   754→                id="audio-url"
+   755→                placeholder="https://example.com/audio.mp3"
+   756→              />
+   757→            </div>
+   758→          )}
+   759→
+   760→          {contentType === 'document' && (
+   761→            <div className="grid gap-2">
+   762→              <Label>Document</Label>
+   763→              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+   764→                <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+   765→                <p className="text-sm text-muted-foreground">
+   766→                  Drag & drop or click to upload
+   767→                </p>
+   768→                <p className="text-xs text-muted-foreground mt-1">
+   769→                  PDF, DOCX, PPTX up to 50MB
+   770→                </p>
+   771→              </div>
+   772→            </div>
+   773→          )}
+   774→
+   775→          {contentType === 'live_session' && (
+   776→            <div className="grid gap-2">
+   777→              <Label htmlFor="session-url">Meeting URL</Label>
+   778→              <Input
+   779→                id="session-url"
+   780→                placeholder="https://zoom.us/j/... or Google Meet link"
+   781→              />
+   782→            </div>
+   783→          )}
+   784→
+   785→          <Separator />
+   786→
+   787→          {/* Duration */}
+   788→          <div className="grid gap-2">
+   789→            <Label htmlFor="lesson-duration">Duration (minutes)</Label>
+   790→            <Input
+   791→              id="lesson-duration"
+   792→              type="number"
+   793→              value={duration}
+   794→              onChange={(e) => setDuration(Number(e.target.value))}
+   795→              min={0}
+   796→            />
+   797→          </div>
+   798→
+   799→          {/* Toggles */}
+   800→          <div className="flex flex-col sm:flex-row gap-4">
+   801→            <div className="flex items-center justify-between gap-4 flex-1 rounded-lg border p-3">
+   802→              <div>
+   803→                <Label className="text-sm">Preview Available</Label>
+   804→                <p className="text-xs text-muted-foreground">Allow free preview of this lesson</p>
+   805→              </div>
+   806→              <Switch checked={isPreview} onCheckedChange={setIsPreview} />
+   807→            </div>
+   808→            <div className="flex items-center justify-between gap-4 flex-1 rounded-lg border p-3">
+   809→              <div>
+   810→                <Label className="text-sm">Published</Label>
+   811→                <p className="text-xs text-muted-foreground">Make visible to learners</p>
+   812→              </div>
+   813→              <Switch checked={isPublished} onCheckedChange={setIsPublished} />
+   814→            </div>
+   815→          </div>
+   816→
+   817→          <Separator />
+   818→
+   819→          {/* Resources */}
+   820→          <div className="grid gap-3">
+   821→            <div className="flex items-center justify-between">
+   822→              <Label>Resources</Label>
+   823→              <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+   824→                <Upload className="h-3 w-3" /> Upload
+   825→              </Button>
+   826→            </div>
+   827→            {resources.length > 0 ? (
+   828→              <div className="space-y-2">
+   829→                {resources.map((res, idx) => (
+   830→                  <div
+   831→                    key={idx}
+   832→                    className="flex items-center justify-between rounded-md border px-3 py-2"
+   833→                  >
+   834→                    <span className="text-sm text-foreground">{res}</span>
+   835→                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive">
+   836→                      <Trash2 className="h-3 w-3" />
+   837→                    </Button>
+   838→                  </div>
+   839→                ))}
+   840→              </div>
+   841→            ) : (
+   842→              <p className="text-xs text-muted-foreground py-2">
+   843→                No resources attached. Click Upload to add files.
+   844→              </p>
+   845→            )}
+   846→          </div>
+   847→        </div>
+   848→      </ScrollArea>
+   849→    </div>
+   850→  );
+   851→}
+   852→
+   853→// ─── Tab 3: Curriculum Overview ─────────────────────────────
+   854→
+   855→function CurriculumOverviewTab() {
+   856→  const [selectedCourseId, setSelectedCourseId] = useState<string>(demoCourses[0].id);
+   857→
+   858→  const selectedCourse = useMemo(
+   859→    () => demoCourses.find((c) => c.id === selectedCourseId) || demoCourses[0],
+   860→    [selectedCourseId]
+   861→  );
+   862→
+   863→  const modules = useMemo(
+   864→    () => (selectedCourse.modules || []).sort((a, b) => a.orderIndex - b.orderIndex),
+   865→    [selectedCourse]
+   866→  );
+   867→
+   868→  const totalLessons = useMemo(
+   869→    () => modules.reduce((acc, m) => acc + (m.lessons?.length || 0), 0),
+   870→    [modules]
+   871→  );
+   872→
+   873→  const totalDurationSec = useMemo(
+   874→    () =>
+   875→      modules.reduce(
+   876→        (acc, m) =>
+   877→          acc + (m.lessons || []).reduce((a, l) => a + (l.videoDuration || 0), 0),
+   878→        0
+   879→      ),
+   880→    [modules]
+   881→  );
+   882→
+   883→  const publishedLessons = useMemo(
+   884→    () =>
+   885→      modules.reduce(
+   886→        (acc, m) => acc + (m.lessons?.filter((l) => l.isPublished).length || 0),
+   887→        0
+   888→      ),
+   889→    [modules]
+   890→  );
+   891→
+   892→  return (
+   893→    <div className="space-y-6">
+   894→      {/* Course selector & quick stats */}
+   895→      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+   896→        <Select value={selectedCourseId} onValueChange={setSelectedCourseId}>
+   897→          <SelectTrigger className="w-full sm:w-[320px]">
+   898→            <SelectValue />
+   899→          </SelectTrigger>
+   900→          <SelectContent>
+   901→            {demoCourses.map((c) => (
+   902→              <SelectItem key={c.id} value={c.id}>
+   903→                {c.title}
+   904→              </SelectItem>
+   905→            ))}
+   906→          </SelectContent>
+   907→        </Select>
+   908→
+   909→        <div className="flex items-center gap-4 flex-wrap">
+   910→          <div className="flex items-center gap-2 text-sm">
+   911→            <div className="h-8 w-8 rounded-lg bg-violet-100 dark:bg-violet-950 flex items-center justify-center">
+   912→              <Layers className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+   913→            </div>
+   914→            <div>
+   915→              <p className="font-semibold text-foreground">{modules.length}</p>
+   916→              <p className="text-[10px] text-muted-foreground">Modules</p>
+   917→            </div>
+   918→          </div>
+   919→          <div className="flex items-center gap-2 text-sm">
+   920→            <div className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center">
+   921→              <BookOpen className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+   922→            </div>
+   923→            <div>
+   924→              <p className="font-semibold text-foreground">{totalLessons}</p>
+   925→              <p className="text-[10px] text-muted-foreground">Lessons</p>
+   926→            </div>
+   927→          </div>
+   928→          <div className="flex items-center gap-2 text-sm">
+   929→            <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-950 flex items-center justify-center">
+   930→              <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+   931→            </div>
+   932→            <div>
+   933→              <p className="font-semibold text-foreground">{formatDuration(totalDurationSec)}</p>
+   934→              <p className="text-[10px] text-muted-foreground">Duration</p>
+   935→            </div>
+   936→          </div>
+   937→          <div className="flex items-center gap-2 text-sm">
+   938→            <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+   939→              <CheckCircle2 className="h-4 w-4 text-slate-600 dark:text-slate-400 dark:text-slate-500" />
+   940→            </div>
+   941→            <div>
+   942→              <p className="font-semibold text-foreground">{publishedLessons}/{totalLessons}</p>
+   943→              <p className="text-[10px] text-muted-foreground">Published</p>
+   944→            </div>
+   945→          </div>
+   946→        </div>
+   947→      </div>
+   948→
+   949→      {/* Curriculum Flow */}
+   950→      {modules.length === 0 ? (
+   951→        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+   952→          <LayoutList className="h-12 w-12 mb-4 opacity-30" />
+   953→          <p className="text-lg font-medium">No curriculum yet</p>
+   954→          <p className="text-sm">Add modules and lessons to build the course curriculum</p>
+   955→        </div>
+   956→      ) : (
+   957→        <div className="relative space-y-0">
+   958→          {/* Timeline line */}
+   959→          <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-border hidden sm:block" />
+   960→
+   961→          {modules.map((mod, modIdx) => {
+   962→            const gradient = categoryGradients[selectedCourse.category || ''] || 'from-slate-500 to-slate-600';
+   963→            const modLessons = (mod.lessons || []).sort((a, b) => a.orderIndex - b.orderIndex);
+   964→            const modDurationSec = modLessons.reduce((a, l) => a + (l.videoDuration || 0), 0);
+   965→
+   966→            return (
+   967→              <motion.div
+   968→                key={mod.id}
+   969→                initial={{ opacity: 0, x: -20 }}
+   970→                animate={{ opacity: 1, x: 0 }}
+   971→                transition={{ delay: modIdx * 0.1 }}
+   972→                className="relative sm:pl-12 pb-6"
+   973→              >
+   974→                {/* Timeline dot */}
+   975→                <div className="hidden sm:flex absolute left-3 top-6 h-5 w-5 rounded-full bg-gradient-to-r from-emerald-500 to-violet-500 items-center justify-center ring-4 ring-background z-10">
+   976→                  <span className="text-[9px] font-bold text-white">{modIdx + 1}</span>
+   977→                </div>
+   978→
+   979→                <Card className="overflow-hidden">
+   980→                  {/* Module header */}
+   981→                  <div className={`px-6 py-3 bg-gradient-to-r ${gradient} flex items-center justify-between`}>
+   982→                    <div className="flex items-center gap-3">
+   983→                      <GripVertical className="h-4 w-4 text-white/60 cursor-grab" />
+   984→                      <h3 className="text-sm font-semibold text-white">{mod.title}</h3>
+   985→                    </div>
+   986→                    <div className="flex items-center gap-3">
+   987→                      <span className="text-xs text-white/70">
+   988→                        {modLessons.length} lessons &middot; {formatDuration(modDurationSec)}
+   989→                      </span>
+   990→                      {mod.isPublished ? (
+   991→                        <Badge className="bg-white/20 text-white text-[10px] border-0">Published</Badge>
+   992→                      ) : (
+   993→                        <Badge className="bg-white/10 text-white/70 text-[10px] border-0">Draft</Badge>
+   994→                      )}
+   995→                    </div>
+   996→                  </div>
+   997→
+   998→                  {/* Lessons list */}
+   999→                  <div className="divide-y divide-border">
+  1000→                    {modLessons.map((lesson) => (
+  1001→                        <div
+  1002→                          key={lesson.id}
+  1003→                          className="flex items-center gap-3 px-6 py-3 hover:bg-muted/30 transition-colors"
+  1004→                        >
+  1005→                          <GripVertical className="h-4 w-4 text-muted-foreground/30 cursor-grab shrink-0" />
+  1006→                          <div className="h-6 w-6 rounded-md bg-muted flex items-center justify-center shrink-0">
+  1007→                            <ContentTypeIcon type={lesson.contentType} className="h-3 w-3 text-muted-foreground" />
+  1008→                          </div>
+  1009→                          <div className="flex-1 min-w-0">
+  1010→                            <p className="text-sm text-foreground truncate">{lesson.title}</p>
+  1011→                          </div>
+  1012→                          <div className="flex items-center gap-2 shrink-0">
+  1013→                            {lesson.isPreview && (
+  1014→                              <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400">
+  1015→                                Preview
+  1016→                              </Badge>
+  1017→                            )}
+  1018→                            {lesson.videoDuration && (
+  1019→                              <span className="text-xs text-muted-foreground">
+  1020→                                {formatDuration(lesson.videoDuration)}
+  1021→                              </span>
+  1022→                            )}
+  1023→                            {lesson.isPublished ? (
+  1024→                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+  1025→                            ) : (
+  1026→                              <Circle className="h-3.5 w-3.5 text-muted-foreground" />
+  1027→                            )}
+  1028→                          </div>
+  1029→                        </div>
+  1030→                    ))}
+  1031→                    {modLessons.length === 0 && (
+  1032→                      <div className="px-6 py-6 text-center text-sm text-muted-foreground">
+  1033→                        No lessons in this module
+  1034→                      </div>
+  1035→                    )}
+  1036→                  </div>
+  1037→                </Card>
+  1038→              </motion.div>
+  1039→            );
+  1040→          })}
+  1041→        </div>
+  1042→      )}
+  1043→    </div>
+  1044→  );
+  1045→}
+  1046→
+  1047→// ─── Main Component ─────────────────────────────────────────
+  1048→
+  1049→export function AdminCourses() {
+  1050→  const [activeTab, setActiveTab] = useState('catalog');
+  1051→
+  1052→  return (
+  1053→    <div className="p-6 space-y-6">
+  1054→      {/* Page header */}
+  1055→      <div>
+  1056→        <h1 className="text-2xl font-bold text-foreground">Course Management</h1>
+  1057→        <p className="text-muted-foreground mt-1">
+  1058→          Create, manage, and organize your course catalog and curriculum
+  1059→        </p>
+  1060→      </div>
+  1061→
+  1062→      {/* Tabs */}
+  1063→      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+  1064→        <TabsList>
+  1065→          <TabsTrigger value="catalog" className="gap-1.5">
+  1066→            <LayoutList className="h-3.5 w-3.5" />
+  1067→            Course Catalog
+  1068→          </TabsTrigger>
+  1069→          <TabsTrigger value="builder" className="gap-1.5">
+  1070→            <Pencil className="h-3.5 w-3.5" />
+  1071→            Course Builder
+  1072→          </TabsTrigger>
+  1073→          <TabsTrigger value="curriculum" className="gap-1.5">
+  1074→            <Layers className="h-3.5 w-3.5" />
+  1075→            Curriculum Overview
+  1076→          </TabsTrigger>
+  1077→        </TabsList>
+  1078→
+  1079→        <AnimatePresence mode="wait">
+  1080→          <motion.div
+  1081→            key={activeTab}
+  1082→            initial={{ opacity: 0, y: 8 }}
+  1083→            animate={{ opacity: 1, y: 0 }}
+  1084→            exit={{ opacity: 0, y: -8 }}
+  1085→            transition={{ duration: 0.15 }}
+  1086→          >
+  1087→            <TabsContent value="catalog" forceMount={activeTab === 'catalog'} hidden={activeTab !== 'catalog'}>
+  1088→              <CourseCatalogTab />
+  1089→            </TabsContent>
+  1090→            <TabsContent value="builder" forceMount={activeTab === 'builder'} hidden={activeTab !== 'builder'}>
+  1091→              <CourseBuilderTab />
+  1092→            </TabsContent>
+  1093→            <TabsContent value="curriculum" forceMount={activeTab === 'curriculum'} hidden={activeTab !== 'curriculum'}>
+  1094→              <CurriculumOverviewTab />
+  1095→            </TabsContent>
+  1096→          </motion.div>
+  1097→        </AnimatePresence>
+  1098→      </Tabs>
+  1099→    </div>
+  1100→  );
+  1101→}
+  1102→
