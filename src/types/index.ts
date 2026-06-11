@@ -420,4 +420,5 @@ export interface CurrencyOption {
   symbol: string;
   name: string;
   rate: number;
+  flag: string;
 }

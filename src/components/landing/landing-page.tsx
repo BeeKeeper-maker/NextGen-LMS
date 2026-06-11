@@ -582,7 +582,10 @@ function SavingsCalculator() {
             step={500}
             value={revenue}
             onChange={(e) => setRevenue(Number(e.target.value))}
-            className="w-full h-2 bg-muted rounded-full appearance-none cursor-pointer accent-emerald-600"
+            className="w-full h-2 rounded-full appearance-none cursor-pointer accent-emerald-600 relative"
+            style={{
+              background: `linear-gradient(to right, #10b981 0%, #8b5cf6 ${((revenue - 500) / (50000 - 500)) * 100}%, hsl(var(--muted)) ${((revenue - 500) / (50000 - 500)) * 100}%, hsl(var(--muted)) 100%)`,
+            }}
           />
           <div className="flex justify-between text-xs text-muted-foreground mt-1">
             <span>$500</span>
@@ -624,6 +627,48 @@ function SavingsCalculator() {
 }
 
 // ============================================================
+// Sparkle Particles (for "2 months free" badge)
+// ============================================================
+function SparkleParticles() {
+  const sparkles = Array.from({ length: 6 }, (_, i) => ({
+    x: ((i * 17 + 5) % 30) - 15,
+    y: ((i * 13 + 3) % 20) - 10,
+    size: 2 + (i % 3),
+    delay: (i * 0.4) % 2,
+    duration: 1.5 + (i % 3) * 0.5,
+  }));
+
+  return (
+    <span className="relative inline-flex">
+      {sparkles.map((s, i) => (
+        <motion.span
+          key={i}
+          className="absolute pointer-events-none"
+          style={{
+            left: `calc(50% + ${s.x}px)`,
+            top: `calc(50% + ${s.y}px)`,
+            width: s.size,
+            height: s.size,
+          }}
+          animate={{
+            opacity: [0, 1, 0],
+            scale: [0.5, 1.2, 0.5],
+          }}
+          transition={{
+            duration: s.duration,
+            repeat: Infinity,
+            delay: s.delay,
+            ease: 'easeInOut',
+          }}
+        >
+          <span className="block w-full h-full rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.6)]" />
+        </motion.span>
+      ))}
+    </span>
+  );
+}
+
+// ============================================================
 // Animated Border Glow Card (Pulsing for "Most Popular")
 // ============================================================
 function GlowBorderCard({ children, highlighted }: { children: React.ReactNode; highlighted: boolean }) {
@@ -647,6 +692,8 @@ function GlowBorderCard({ children, highlighted }: { children: React.ReactNode; 
         animate={{ opacity: [0.2, 0.5, 0.2], scale: [1, 1.02, 1] }}
         transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
       />
+      {/* Radial gradient glow behind popular card */}
+      <div className="absolute -inset-8 rounded-3xl bg-gradient-radial from-emerald-500/15 via-emerald-500/5 to-transparent pointer-events-none" />
       <div className="relative rounded-xl">{children}</div>
     </div>
   );
@@ -670,15 +717,42 @@ function GradientBorderCard({ children, className = '' }: { children: React.Reac
 }
 
 // ============================================================
-// "As Seen In" Media Logos Marquee (smooth infinite scroll)
+// Animated Gradient Divider
+// ============================================================
+function AnimatedGradientDivider() {
+  return (
+    <div className="relative h-px w-full overflow-hidden">
+      <motion.div
+        className="absolute inset-0 h-full bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent"
+        animate={{ x: ['-100%', '100%'] }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+        style={{ width: '50%' }}
+      />
+      <div className="absolute inset-0 h-full bg-gradient-to-r from-transparent via-border/40 to-transparent" />
+    </div>
+  );
+}
+
+// ============================================================
+// "As Seen In" Media Logos Marquee (smooth infinite scroll) — Enhanced
 // ============================================================
 function MediaLogosMarquee() {
   const logos = ['TechCrunch', 'Forbes', 'Wired', 'EdTech', 'The Verge', 'VentureBeat'];
 
   return (
-    <section className="py-10 border-y border-border/40 bg-muted/20 overflow-hidden">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <p className="text-center text-xs text-muted-foreground uppercase tracking-wider font-medium mb-6">As Seen In</p>
+    <section className="py-10 bg-muted/20 overflow-hidden">
+      {/* Animated gradient divider - top */}
+      <AnimatedGradientDivider />
+
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+        <motion.p
+          initial={{ opacity: 0, y: 10 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center text-xs text-muted-foreground uppercase tracking-[0.2em] font-medium mb-6"
+        >
+          As Seen In
+        </motion.p>
       </div>
       <div className="relative">
         {/* Fade edges */}
@@ -689,15 +763,26 @@ function MediaLogosMarquee() {
           {[...logos, ...logos, ...logos, ...logos, ...logos, ...logos, ...logos, ...logos].map((logo, i) => (
             <div
               key={`${logo}-${i}`}
-              className="flex items-center justify-center mx-8 sm:mx-12 shrink-0"
+              className="flex items-center justify-center mx-8 sm:mx-12 shrink-0 group"
             >
-              <span className="text-xl sm:text-2xl font-bold text-muted-foreground/40 whitespace-nowrap tracking-tight select-none">
+              <motion.span
+                className="text-xl sm:text-2xl font-bold text-muted-foreground/40 whitespace-nowrap tracking-tight select-none transition-all duration-500 group-hover:text-muted-foreground/70 group-hover:drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]"
+                initial={{ opacity: 0.3 }}
+                animate={{ opacity: [0.3, 0.55, 0.3] }}
+                transition={{ duration: 4, repeat: Infinity, delay: (i * 0.5) % 4, ease: 'easeInOut' }}
+              >
                 {logo}
-              </span>
+              </motion.span>
             </div>
           ))}
         </div>
       </div>
+
+      {/* Animated gradient divider - bottom */}
+      <div className="mt-6">
+        <AnimatedGradientDivider />
+      </div>
+
       <style jsx>{`
         @keyframes marquee-smooth {
           0% { transform: translateX(0); }
@@ -712,11 +797,123 @@ function MediaLogosMarquee() {
 }
 
 // ============================================================
+// Animated Stats Section (between hero and features)
+// ============================================================
+function AnimatedStatsSection() {
+  const ref = useRef<HTMLDivElement>(null);
+  const isInView = useInView(ref, { once: true, margin: '-80px' });
+
+  const stats = [
+    { target: 10000, suffix: '+', label: 'Creators', prefix: '', gradient: 'from-emerald-600 to-emerald-400', iconBg: 'bg-emerald-500/10' },
+    { target: 500000, suffix: '+', label: 'Learners', prefix: '', gradient: 'from-violet-600 to-violet-400', iconBg: 'bg-violet-500/10' },
+    { target: 50, suffix: '+', label: 'Currencies', prefix: '', gradient: 'from-amber-600 to-amber-400', iconBg: 'bg-amber-500/10' },
+    { target: 99.9, suffix: '%', label: 'Uptime', prefix: '', gradient: 'from-sky-600 to-sky-400', iconBg: 'bg-sky-500/10', isDecimal: true },
+  ];
+
+  function StatCounter({ target, suffix, label, gradient, isDecimal = false }: {
+    target: number; suffix: string; label: string; gradient: string; isDecimal?: boolean;
+  }) {
+    const [count, setCount] = useState(0);
+    const prevTarget = useRef(0);
+
+    useEffect(() => {
+      if (!isInView) return;
+      if (target === prevTarget.current) return;
+      prevTarget.current = target;
+
+      const duration = 2000;
+      const startTime = performance.now();
+
+      const animate = (now: number) => {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        // easeOutExpo
+        const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+        const current = target * eased;
+        setCount(isDecimal ? parseFloat(current.toFixed(1)) : Math.round(current));
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        }
+      };
+
+      requestAnimationFrame(animate);
+    }, [target, isInView, isDecimal]);
+
+    const displayValue = isDecimal
+      ? count.toFixed(1)
+      : count.toLocaleString('en-US');
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={isInView ? { opacity: 1, y: 0 } : {}}
+        transition={{ duration: 0.6, ease: 'easeOut' }}
+        className="relative group"
+      >
+        {/* Dot pattern behind each stat */}
+        <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none opacity-[0.06]">
+          <svg width="100%" height="100%">
+            <defs>
+              <pattern id={`stat-dots-${label}`} width="16" height="16" patternUnits="userSpaceOnUse">
+                <circle cx="8" cy="8" r="1.2" fill="currentColor" />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill={`url(#stat-dots-${label})`} className="text-foreground" />
+          </svg>
+        </div>
+
+        <div className="relative rounded-2xl border border-border/30 bg-white/50 dark:bg-white/5 backdrop-blur-md p-6 sm:p-8 text-center transition-all duration-300 group-hover:border-border/60 group-hover:shadow-lg group-hover:scale-[1.02]">
+          <p className={`text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r ${gradient} bg-clip-text text-transparent`}>
+            {displayValue}{suffix}
+          </p>
+          <p className="mt-2 text-sm sm:text-base text-muted-foreground font-medium">{label}</p>
+        </div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <section ref={ref} className="py-16 sm:py-20 relative overflow-hidden">
+      {/* Subtle background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-b from-muted/10 via-background to-muted/10" />
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-1/2 left-1/4 h-[600px] w-[600px] rounded-full bg-emerald-500/5 blur-3xl" />
+        <div className="absolute -bottom-1/2 right-1/4 h-[600px] w-[600px] rounded-full bg-violet-500/5 blur-3xl" />
+      </div>
+
+      <div className="relative mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
+          {stats.map((stat) => (
+            <StatCounter key={stat.label} {...stat} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ============================================================
 // Live Dashboard Preview Section
 // ============================================================
 function LiveDashboardPreview() {
   const [inView, setInView] = useState(false);
   const sectionRef = useRef<HTMLDivElement>(null);
+  const [urlText, setUrlText] = useState('');
+  const fullUrl = 'academy.nextgen-lms.com/admin/dashboard';
+
+  // Animated typing in URL bar
+  useEffect(() => {
+    let charIndex = 0;
+    const typeTimer = setInterval(() => {
+      if (charIndex < fullUrl.length) {
+        setUrlText(fullUrl.slice(0, charIndex + 1));
+        charIndex++;
+      } else {
+        clearInterval(typeTimer);
+      }
+    }, 50);
+    return () => clearInterval(typeTimer);
+  }, []);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -789,13 +986,18 @@ function LiveDashboardPreview() {
               {/* Browser chrome */}
               <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border/40 bg-muted/30">
                 <div className="flex gap-1.5">
-                  <div className="h-3 w-3 rounded-full bg-red-400" />
-                  <div className="h-3 w-3 rounded-full bg-yellow-400" />
-                  <div className="h-3 w-3 rounded-full bg-green-400" />
+                  <div className="h-3 w-3 rounded-full bg-red-400 shadow-sm shadow-red-400/50" />
+                  <div className="h-3 w-3 rounded-full bg-yellow-400 shadow-sm shadow-yellow-400/50" />
+                  <div className="h-3 w-3 rounded-full bg-green-400 shadow-sm shadow-green-400/50" />
                 </div>
                 <div className="flex-1 flex justify-center">
                   <div className="h-7 w-72 rounded-md bg-muted/60 flex items-center justify-center px-3">
-                    <span className="text-[11px] text-muted-foreground">academy.nextgen-lms.com/admin/dashboard</span>
+                    <span className="text-[11px] text-muted-foreground truncate">
+                      {urlText}
+                      {urlText.length < fullUrl.length && (
+                        <span className="inline-block w-0.5 h-3 bg-emerald-500 ml-0.5 animate-pulse align-middle" />
+                      )}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -870,6 +1072,14 @@ function LiveDashboardPreview() {
               </div>
             </div>
           </motion.div>
+
+          {/* Reflection / glow below the preview */}
+          <div className="relative mt-4">
+            <div className="h-16 bg-gradient-to-b from-card/20 via-card/5 to-transparent rounded-b-2xl blur-sm" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-1 w-3/4 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent rounded-full blur-sm" />
+            </div>
+          </div>
 
           {/* Try it yourself button */}
           <motion.div
@@ -1237,6 +1447,106 @@ function FloatingStatsCounter() {
 }
 
 // ============================================================
+// Animated Mesh Gradient Background (for features section)
+// ============================================================
+function MeshGradientBackground() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <motion.div
+        className="absolute -top-40 -left-40 h-80 w-80 rounded-full bg-emerald-500/8 blur-3xl"
+        animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
+        transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute top-1/2 -right-20 h-72 w-72 rounded-full bg-violet-500/8 blur-3xl"
+        animate={{ x: [0, -25, 0], y: [0, 30, 0] }}
+        transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute -bottom-20 left-1/3 h-64 w-64 rounded-full bg-amber-500/6 blur-3xl"
+        animate={{ x: [0, 20, 0], y: [0, 15, 0] }}
+        transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute top-1/4 left-1/2 h-56 w-56 rounded-full bg-sky-500/5 blur-3xl"
+        animate={{ x: [0, -15, 0], y: [0, -25, 0] }}
+        transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
+      />
+    </div>
+  );
+}
+
+// ============================================================
+// Mouse-Following Glow Feature Card
+// ============================================================
+function GlowFeatureCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [isHovered, setIsHovered] = useState(false);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  }, []);
+
+  return (
+    <div
+      ref={cardRef}
+      className={`relative overflow-hidden ${className}`}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Mouse-following glow */}
+      {isHovered && (
+        <motion.div
+          className="absolute pointer-events-none z-0"
+          animate={{
+            left: mousePos.x - 80,
+            top: mousePos.y - 80,
+            opacity: 1,
+          }}
+          initial={{ opacity: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15, ease: 'easeOut' }}
+          style={{ width: 160, height: 160 }}
+        >
+          <div className="w-full h-full rounded-full bg-emerald-500/10 dark:bg-emerald-500/5 blur-xl" />
+        </motion.div>
+      )}
+      <div className="relative z-10">{children}</div>
+    </div>
+  );
+}
+
+// ============================================================
+// Pulsing Icon Container
+// ============================================================
+function PulsingIconContainer({ icon: Icon, index }: { icon: React.ElementType; index: number }) {
+  const gradients = [
+    'from-emerald-500 to-emerald-600',
+    'from-violet-500 to-violet-600',
+    'from-amber-500 to-amber-600',
+    'from-sky-500 to-sky-600',
+    'from-rose-500 to-rose-600',
+    'from-teal-500 to-teal-600',
+  ];
+  const gradient = gradients[index % gradients.length];
+
+  return (
+    <motion.div
+      className={`relative h-10 w-10 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg`}
+      animate={{ scale: [1, 1.05, 1] }}
+      transition={{ duration: 3, repeat: Infinity, delay: index * 0.3, ease: 'easeInOut' }}
+    >
+      <Icon className="h-5 w-5 text-white" />
+      <div className={`absolute inset-0 rounded-lg bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-40 blur-md transition-opacity duration-300`} />
+    </motion.div>
+  );
+}
+
+// ============================================================
 // Back To Top Button
 // ============================================================
 function BackToTopButton() {
@@ -1497,8 +1807,14 @@ export function LandingPage() {
         {/* ============ AS SEEN IN MEDIA LOGOS ============ */}
         <MediaLogosMarquee />
 
+        {/* ============ ANIMATED STATS SECTION ============ */}
+        <AnimatedStatsSection />
+
         {/* ============ FEATURES SECTION ============ */}
-        <section id="features" className="py-20 sm:py-28 bg-muted/30">
+        <section id="features" className="py-20 sm:py-28 bg-muted/30 relative">
+          {/* Mesh gradient background */}
+          <MeshGradientBackground />
+
           <motion.div
             initial="hidden"
             whileInView="visible"
@@ -1536,21 +1852,19 @@ export function LandingPage() {
                       const Icon = feature.icon;
                       return (
                         <motion.div key={feature.title} variants={fadeInUp} custom={idx}>
-                          <GradientBorderCard>
-                            <Card className="h-full transition-all duration-300 border-border/60 group relative overflow-hidden hover:shadow-xl">
-                              {/* Gradient border overlay on hover */}
-                              <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-r from-emerald-500/10 via-transparent to-violet-500/10 pointer-events-none" />
+                          <GlowFeatureCard>
+                            <Card className="h-full transition-all duration-300 border-border/40 bg-white/70 dark:bg-white/5 backdrop-blur-md group relative overflow-hidden hover:shadow-xl hover:border-border/60">
+                              {/* Gradient overlay on hover */}
+                              <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-r from-emerald-500/5 via-transparent to-violet-500/5 pointer-events-none" />
                               <CardHeader className="pb-3 relative">
-                                <div className="h-10 w-10 rounded-lg bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center mb-2 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900 transition-colors">
-                                  <Icon className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                                </div>
-                                <CardTitle className="text-base font-semibold">{feature.title}</CardTitle>
+                                <PulsingIconContainer icon={Icon} index={idx} />
+                                <CardTitle className="text-base font-semibold mt-2">{feature.title}</CardTitle>
                               </CardHeader>
                               <CardContent className="relative">
                                 <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
                               </CardContent>
                             </Card>
-                          </GradientBorderCard>
+                          </GlowFeatureCard>
                         </motion.div>
                       );
                     })}
@@ -1631,8 +1945,9 @@ export function LandingPage() {
                   </button>
                   <span className={`text-sm font-medium ${isAnnual ? 'text-foreground' : 'text-muted-foreground'}`}>
                     Annual
-                    <Badge className="ml-1.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-[10px] px-1.5 py-0">
+                    <Badge className="ml-1.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-[10px] px-1.5 py-0 relative">
                       2 months free
+                      <SparkleParticles />
                     </Badge>
                   </span>
                 </motion.div>
@@ -1894,10 +2209,73 @@ export function LandingPage() {
 
         {/* ============ CTA SECTION ============ */}
         <section className="py-20 sm:py-28 relative overflow-hidden">
+          {/* Dramatic gradient mesh background */}
           <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900" />
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-0 right-0 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl" />
-            <div className="absolute bottom-0 left-0 h-96 w-96 rounded-full bg-violet-500/10 blur-3xl" />
+            <motion.div
+              className="absolute top-0 right-0 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl"
+              animate={{ x: [0, 20, 0], y: [0, -15, 0] }}
+              transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <motion.div
+              className="absolute bottom-0 left-0 h-96 w-96 rounded-full bg-violet-500/10 blur-3xl"
+              animate={{ x: [0, -20, 0], y: [0, 15, 0] }}
+              transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <motion.div
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[500px] w-[500px] rounded-full bg-teal-500/5 blur-3xl"
+              animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.5, 0.3] }}
+              transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+            />
+          </div>
+
+          {/* Floating geometric shapes with parallax */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            {/* Circles */}
+            <motion.div
+              className="absolute top-[10%] left-[10%] h-16 w-16 rounded-full border border-white/5"
+              animate={{ y: [0, -20, 0], rotate: [0, 180, 360] }}
+              transition={{ duration: 15, repeat: Infinity, ease: 'linear' }}
+            />
+            <motion.div
+              className="absolute top-[60%] right-[15%] h-12 w-12 rounded-full border border-emerald-500/10"
+              animate={{ y: [0, 15, 0], rotate: [0, -90, -180] }}
+              transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
+            />
+            <motion.div
+              className="absolute top-[30%] right-[8%] h-8 w-8 rounded-full bg-emerald-500/5"
+              animate={{ y: [0, -25, 0], x: [0, 10, 0] }}
+              transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            {/* Squares */}
+            <motion.div
+              className="absolute bottom-[20%] left-[20%] h-10 w-10 rounded-sm border border-violet-500/10 rotate-45"
+              animate={{ y: [0, 20, 0], rotate: [45, 135, 225] }}
+              transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
+            />
+            <motion.div
+              className="absolute top-[15%] right-[25%] h-6 w-6 rounded-sm bg-white/3 rotate-12"
+              animate={{ y: [0, -12, 0], rotate: [12, 72, 132] }}
+              transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
+            />
+            {/* Diamond */}
+            <motion.div
+              className="absolute bottom-[35%] right-[30%] h-8 w-8 rotate-45 border border-emerald-400/10"
+              animate={{ y: [0, 18, 0], scale: [1, 1.1, 1] }}
+              transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
+            />
+          </div>
+
+          {/* Grid / dot pattern overlay */}
+          <div className="absolute inset-0 pointer-events-none opacity-[0.03]">
+            <svg width="100%" height="100%">
+              <defs>
+                <pattern id="cta-dots" width="30" height="30" patternUnits="userSpaceOnUse">
+                  <circle cx="15" cy="15" r="1" fill="white" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#cta-dots)" />
+            </svg>
           </div>
 
           <motion.div
@@ -1914,13 +2292,28 @@ export function LandingPage() {
               Join thousands of creators who are building profitable, engaging learning experiences with zero transaction fees.
             </motion.p>
             <motion.div variants={fadeInUp} className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white text-base px-8 h-12" onClick={enterAdminMode}>
-                Start Free Trial
-                <ChevronRight className="ml-2 h-4 w-4" />
-              </Button>
-              <Button size="lg" variant="outline" className="text-base px-8 h-12 border-slate-500 text-white hover:bg-white/10" onClick={enterLearnerMode}>
-                Explore as Learner
-              </Button>
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.98 }}
+                className="relative group/btn"
+              >
+                {/* Liquid glow behind button */}
+                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-600 opacity-0 group-hover/btn:opacity-60 blur-md transition-opacity duration-500" />
+                <Button size="lg" className="relative bg-emerald-600 hover:bg-emerald-500 text-white text-base px-8 h-12 transition-all duration-300" onClick={enterAdminMode}>
+                  Start Free Trial
+                  <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              </motion.div>
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.98 }}
+                className="relative group/btn2"
+              >
+                <div className="absolute -inset-1 rounded-lg bg-white/10 opacity-0 group-hover/btn2:opacity-100 blur-md transition-opacity duration-500" />
+                <Button size="lg" variant="outline" className="relative text-base px-8 h-12 border-slate-500 text-white hover:bg-white/10 transition-all duration-300" onClick={enterLearnerMode}>
+                  Explore as Learner
+                </Button>
+              </motion.div>
             </motion.div>
           </motion.div>
         </section>

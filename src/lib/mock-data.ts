@@ -506,14 +506,16 @@ export const leaderboardData = [
 
 // Currency options for checkout
 export const supportedCurrencies = [
-  { code: 'USD', symbol: '$', name: 'US Dollar', rate: 1 },
-  { code: 'EUR', symbol: '€', name: 'Euro', rate: 0.92 },
-  { code: 'GBP', symbol: '£', name: 'British Pound', rate: 0.79 },
-  { code: 'JPY', symbol: '¥', name: 'Japanese Yen', rate: 149.5 },
-  { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar', rate: 1.36 },
-  { code: 'AUD', symbol: 'A$', name: 'Australian Dollar', rate: 1.53 },
-  { code: 'INR', symbol: '₹', name: 'Indian Rupee', rate: 83.1 },
-  { code: 'BRL', symbol: 'R$', name: 'Brazilian Real', rate: 4.97 },
+  { code: 'USD', symbol: '$', name: 'US Dollar', rate: 1, flag: '🇺🇸' },
+  { code: 'EUR', symbol: '€', name: 'Euro', rate: 0.92, flag: '🇪🇺' },
+  { code: 'GBP', symbol: '£', name: 'British Pound', rate: 0.79, flag: '🇬🇧' },
+  { code: 'JPY', symbol: '¥', name: 'Japanese Yen', rate: 149.5, flag: '🇯🇵' },
+  { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar', rate: 1.36, flag: '🇨🇦' },
+  { code: 'AUD', symbol: 'A$', name: 'Australian Dollar', rate: 1.53, flag: '🇦🇺' },
+  { code: 'INR', symbol: '₹', name: 'Indian Rupee', rate: 83.1, flag: '🇮🇳' },
+  { code: 'BRL', symbol: 'R$', name: 'Brazilian Real', rate: 4.97, flag: '🇧🇷' },
+  { code: 'MXN', symbol: 'MX$', name: 'Mexican Peso', rate: 17.15, flag: '🇲🇽' },
+  { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar', rate: 1.34, flag: '🇸🇬' },
 ];
 
 // Calendar events for Live Cohorts
