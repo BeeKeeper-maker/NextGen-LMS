@@ -1,0 +1,498 @@
+// NextGen Global LMS Ecosystem - Multi-Tenant Database Schema
+// Designed for complete data isolation, RBAC, and scalability
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// TENANT & ORGANIZATION MODELS
+// ============================================================
+
+model Tenant {
+  id                String   @id @default(cuid())
+  name              String
+  slug              String   @unique
+  domain            String?
+  logoUrl           String?
+  primaryColor      String   @default("#0F172A")
+  secondaryColor    String   @default("#6366F1")
+  accentColor       String   @default("#10B981")
+  fontFamily        String   @default("Inter")
+  description       String?
+  isActive          Boolean  @default(true)
+  plan              String   @default("professional") // starter, professional, enterprise
+  maxUsers          Int      @default(1000)
+  currency          String   @default("USD")
+  locale            String   @default("en")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  users             User[]
+  courses           Course[]
+  communityPosts    CommunityPost[]
+  communityCategories CommunityCategory[]
+  achievements      Achievement[]
+  certificates      Certificate[]
+  webhooks          Webhook[]
+  pages             LandingPage[]
+  products          Product[]
+  orders            Order[]
+}
+
+model Webhook {
+  id        String   @id @default(cuid())
+  tenantId  String
+  url       String
+  events    String   // comma-separated event types
+  isActive  Boolean  @default(true)
+  secret    String?
+  createdAt DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// USER & AUTHENTICATION MODELS
+// ============================================================
+
+model User {
+  id            String   @id @default(cuid())
+  tenantId      String
+  email         String
+  name          String?
+  avatarUrl     String?
+  role          String   @default("learner") // super_admin, tenant_admin, instructor, content_creator, learner
+  bio           String?
+  timezone      String   @default("UTC")
+  locale        String   @default("en")
+  streakDays    Int      @default(0)
+  totalPoints   Int      @default(0)
+  isActive      Boolean  @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  enrollments         Enrollment[]
+  quizSubmissions     QuizSubmission[]
+  certificateAwards   CertificateAward[]
+  userAchievements    UserAchievement[]
+  communityPosts      CommunityPost[]
+  communityComments   CommunityComment[]
+  communityReactions  CommunityReaction[]
+  lessonProgress      LessonProgress[]
+  orderPurchases      Order[]
+
+  @@unique([tenantId, email])
+}
+
+// ============================================================
+// COURSE & CONTENT MODELS
+// ============================================================
+
+model Course {
+  id            String   @id @default(cuid())
+  tenantId      String
+  title         String
+  slug          String
+  description   String?
+  thumbnailUrl  String?
+  coverImageUrl String?
+  category      String?
+  level         String   @default("beginner") // beginner, intermediate, advanced, expert
+  language      String   @default("en")
+  durationHours Float?
+  price         Float    @default(0)
+  compareAtPrice Float?
+  isPublished   Boolean  @default(false)
+  isFeatured    Boolean  @default(false)
+  enrollmentCount Int    @default(0)
+  avgRating     Float    @default(0)
+  totalRatings  Int      @default(0)
+  completionRate Float   @default(0)
+  certificateTemplateId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  modules       Module[]
+  enrollments   Enrollment[]
+  assessments   Assessment[]
+
+  @@unique([tenantId, slug])
+}
+
+model Module {
+  id          String   @id @default(cuid())
+  courseId     String
+  title       String
+  description String?
+  orderIndex  Int      @default(0)
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+}
+
+model Lesson {
+  id           String   @id @default(cuid())
+  moduleId     String
+  title        String
+  slug         String
+  description  String?
+  content      String?  // Rich text/HTML content
+  videoUrl     String?
+  videoDuration Int?    // in seconds
+  contentType  String   @default("video") // video, text, audio, document, live_session
+  orderIndex   Int      @default(0)
+  isPreview    Boolean  @default(false) // free preview
+  isPublished  Boolean  @default(false)
+  resources    String?  // JSON string for downloadable resources
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  module       Module            @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  progress     LessonProgress[]
+  discussions  LessonDiscussion[]
+
+  @@unique([moduleId, slug])
+}
+
+model LessonProgress {
+  id              String   @id @default(cuid())
+  userId          String
+  lessonId        String
+  status          String   @default("not_started") // not_started, in_progress, completed
+  progressPercent Int      @default(0)
+  lastPosition    Int?     // video position in seconds
+  timeSpent       Int      @default(0) // total seconds spent
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson          Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+}
+
+model LessonDiscussion {
+  id        String   @id @default(cuid())
+  lessonId  String
+  userId    String
+  content   String
+  parentId  String?  // for threaded replies
+  isPinned  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// ENROLLMENT MODELS
+// ============================================================
+
+model Enrollment {
+  id            String   @id @default(cuid())
+  userId        String
+  courseId      String
+  tenantId      String
+  status        String   @default("active") // active, completed, suspended, expired
+  progress      Float    @default(0)
+  enrolledAt    DateTime @default(now())
+  completedAt   DateTime?
+  expiresAt     DateTime?
+  lastAccessedAt DateTime?
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+}
+
+// ============================================================
+// ASSESSMENT & QUIZ MODELS
+// ============================================================
+
+model Assessment {
+  id           String   @id @default(cuid())
+  courseId      String
+  tenantId     String
+  title        String
+  description  String?
+  type         String   @default("quiz") // quiz, assignment, peer_review, coding, file_upload
+  passingScore Float    @default(70)
+  maxAttempts  Int      @default(3)
+  timeLimit    Int?     // in minutes
+  isPublished  Boolean  @default(false)
+  shuffleQuestions Boolean @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  course       Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questions    Question[]
+  submissions  QuizSubmission[]
+}
+
+model Question {
+  id             String   @id @default(cuid())
+  assessmentId   String
+  type           String   @default("multiple_choice") // multiple_choice, true_false, short_answer, long_answer, file_upload, coding
+  question       String
+  options        String?  // JSON array of options
+  correctAnswer  String?  // JSON for correct answer(s)
+  explanation    String?
+  points         Float    @default(1)
+  orderIndex     Int      @default(0)
+  poolGroup      String?  // for random question pools
+  difficulty     String   @default("medium") // easy, medium, hard
+  createdAt      DateTime @default(now())
+
+  assessment     Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+}
+
+model QuizSubmission {
+  id            String   @id @default(cuid())
+  userId        String
+  assessmentId  String
+  tenantId      String
+  answers       String   // JSON object of answers
+  score         Float?
+  maxScore      Float?
+  percentScore  Float?
+  passed        Boolean?
+  timeTaken     Int?     // in seconds
+  feedback      String?
+  gradedAt      DateTime?
+  createdAt     DateTime @default(now())
+
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assessment    Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// CERTIFICATE MODELS
+// ============================================================
+
+model Certificate {
+  id           String   @id @default(cuid())
+  tenantId     String
+  name         String
+  template     String   // JSON template configuration
+  backgroundUrl String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  awards       CertificateAward[]
+}
+
+model CertificateAward {
+  id             String   @id @default(cuid())
+  userId         String
+  certificateId  String
+  tenantId       String
+  courseId       String?
+  verificationCode String @unique
+  issuedAt       DateTime @default(now())
+
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  certificate    Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// COMMUNITY MODELS
+// ============================================================
+
+model CommunityCategory {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  icon        String?
+  color       String?
+  orderIndex  Int      @default(0)
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  posts       CommunityPost[]
+}
+
+model CommunityPost {
+  id           String   @id @default(cuid())
+  tenantId     String
+  authorId     String
+  categoryId   String?
+  title        String
+  content      String
+  type         String   @default("discussion") // discussion, question, announcement, resource
+  isPinned     Boolean  @default(false)
+  isLocked     Boolean  @default(false)
+  viewCount    Int      @default(0)
+  likeCount    Int      @default(0)
+  commentCount Int      @default(0)
+  tags         String?  // comma-separated tags
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  author       User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  category     CommunityCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  comments     CommunityComment[]
+  reactions    CommunityReaction[]
+}
+
+model CommunityComment {
+  id        String   @id @default(cuid())
+  postId    String
+  authorId  String
+  content   String
+  parentId  String?  // for threaded replies
+  likeCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model CommunityReaction {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  type      String   @default("like") // like, love, celebrate, insightful
+  createdAt DateTime @default(now())
+
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId, type])
+}
+
+// ============================================================
+// GAMIFICATION MODELS
+// ============================================================
+
+model Achievement {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String
+  icon        String   // emoji or icon name
+  type        String   // streak, completion, score, community, milestone
+  criteria    String   // JSON criteria definition
+  points      Int      @default(10)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userAchievements UserAchievement[]
+}
+
+model UserAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  achievementId String
+  earnedAt      DateTime @default(now())
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+}
+
+// ============================================================
+// E-COMMERCE & LANDING PAGE MODELS
+// ============================================================
+
+model LandingPage {
+  id          String   @id @default(cuid())
+  tenantId    String
+  title       String
+  slug        String
+  content     String   // JSON blocks for page builder
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, slug])
+}
+
+model Product {
+  id             String   @id @default(cuid())
+  tenantId       String
+  name           String
+  description    String?
+  type           String   @default("course") // course, bundle, digital_download, membership, coaching
+  price          Float
+  compareAtPrice Float?
+  currency       String   @default("USD")
+  isActive       Boolean  @default(true)
+  features       String?  // JSON array of feature strings
+  metadata       String?  // JSON for type-specific data
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orders         Order[]
+}
+
+model Order {
+  id              String   @id @default(cuid())
+  tenantId        String
+  userId          String?
+  productId       String
+  amount          Float
+  currency        String   @default("USD")
+  status          String   @default("pending") // pending, completed, refunded, failed
+  paymentProvider String?  // stripe, paypal, etc.
+  paymentId       String?
+  createdAt       DateTime @default(now())
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// ANALYTICS & TELEMETRY MODELS
+// ============================================================
+
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String?
+  eventType  String   // page_view, lesson_start, lesson_complete, quiz_attempt, login, enrollment
+  eventData  String?  // JSON event details
+  sessionId  String?
+  createdAt  DateTime @default(now())
+}
+
+model DailyMetric {
+  id              String   @id @default(cuid())
+  tenantId        String
+  date            DateTime
+  activeUsers     Int      @default(0)
+  newEnrollments  Int      @default(0)
+  completions     Int      @default(0)
+  revenue         Float    @default(0)
+  quizAttempts    Int      @default(0)
+  avgSessionDuration Float  @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([tenantId, date])
+}
