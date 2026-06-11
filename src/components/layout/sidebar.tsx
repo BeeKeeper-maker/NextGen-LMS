@@ -25,6 +25,7 @@ import {
   Calendar,
   FileText,
   Sun,
+  Map,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -60,6 +61,7 @@ interface NavItem {
 const adminNavItems: NavItem[] = [
   { label: 'Dashboard', view: 'admin-dashboard', icon: LayoutDashboard },
   { label: 'Courses', view: 'admin-courses', icon: BookOpen },
+  { label: 'Learning Paths', view: 'admin-learning-paths', icon: Map },
   { label: 'Community', view: 'admin-community', icon: MessageCircle },
   { label: 'Live Cohorts', view: 'admin-live-cohorts', icon: Calendar },
   { label: 'Assessments', view: 'admin-assessments', icon: ClipboardCheck },
@@ -73,6 +75,7 @@ const adminNavItems: NavItem[] = [
 const learnerNavItems: NavItem[] = [
   { label: 'Dashboard', view: 'learner-dashboard', icon: LayoutDashboard },
   { label: 'My Courses', view: 'learner-course', icon: BookOpen },
+  { label: 'Learning Paths', view: 'learner-learning-paths', icon: Map },
   { label: 'Community', view: 'learner-community', icon: MessageCircle },
   { label: 'Live Cohorts', view: 'learner-live-cohorts', icon: Calendar },
   { label: 'Achievements', view: 'learner-achievements', icon: Trophy },

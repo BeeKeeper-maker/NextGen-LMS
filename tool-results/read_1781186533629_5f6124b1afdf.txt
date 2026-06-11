@@ -1,0 +1,828 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import { useState } from 'react';
+     4→     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→     5→import {
+     6→     6→  Search, Plus, LayoutGrid, List, Pin, Lock, Unlock, Trash2, Eye,
+     7→     7→  MessageSquare, Heart, Clock, Tag, Megaphone, HelpCircle, Star,
+     8→     8→  Edit3, X, Filter
+     9→     9→} from 'lucide-react';
+    10→    10→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    11→    11→import { Input } from '@/components/ui/input';
+    12→    12→import { Button } from '@/components/ui/button';
+    13→    13→import { Badge } from '@/components/ui/badge';
+    14→    14→import {
+    15→    15→  Select,
+    16→    16→  SelectContent,
+    17→    17→  SelectItem,
+    18→    18→  SelectTrigger,
+    19→    19→  SelectValue,
+    20→    20→} from '@/components/ui/select';
+    21→    21→import {
+    22→    22→  Dialog,
+    23→    23→  DialogContent,
+    24→    24→  DialogHeader,
+    25→    25→  DialogTitle,
+    26→    26→  DialogFooter,
+    27→    27→} from '@/components/ui/dialog';
+    28→    28→import { Textarea } from '@/components/ui/textarea';
+    29→    29→import { Label } from '@/components/ui/label';
+    30→    30→import { Separator } from '@/components/ui/separator';
+    31→    31→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    32→    32→import { demoCommunityPosts } from '@/lib/mock-data';
+    33→    33→import type { CommunityPost, CommunityCategory } from '@/types';
+    34→    34→
+    35→    35→// Category data for display
+    36→    36→const communityCategories: CommunityCategory[] = [
+    37→    37→  { id: 'cat-1', tenantId: 'demo-tenant-1', name: 'General Discussion', description: 'Open discussions about anything', icon: '💬', color: '#10B981', orderIndex: 0, isDefault: true },
+    38→    38→  { id: 'cat-2', tenantId: 'demo-tenant-1', name: 'Q&A Support', description: 'Get help and ask questions', icon: '❓', color: '#8B5CF6', orderIndex: 1, isDefault: false },
+    39→    39→  { id: 'cat-3', tenantId: 'demo-tenant-1', name: 'Announcements', description: 'Official announcements', icon: '📢', color: '#F59E0B', orderIndex: 2, isDefault: false },
+    40→    40→  { id: 'cat-4', tenantId: 'demo-tenant-1', name: 'Show & Tell', description: 'Share your work and projects', icon: '🌟', color: '#EC4899', orderIndex: 3, isDefault: false },
+    41→    41→];
+    42→    42→
+    43→    43→// Post counts per category
+    44→    44→const categoryPostCounts: Record<string, number> = {
+    45→    45→  'cat-1': 24,
+    46→    46→  'cat-2': 18,
+    47→    47→  'cat-3': 7,
+    48→    48→  'cat-4': 12,
+    49→    49→};
+    50→    50→
+    51→    51→function getTypeIcon(type: CommunityPost['type']) {
+    52→    52→  switch (type) {
+    53→    53→    case 'discussion': return <MessageSquare className="h-4 w-4" />;
+    54→    54→    case 'question': return <HelpCircle className="h-4 w-4" />;
+    55→    55→    case 'announcement': return <Megaphone className="h-4 w-4" />;
+    56→    56→    case 'resource': return <Star className="h-4 w-4" />;
+    57→    57→  }
+    58→    58→}
+    59→    59→
+    60→    60→function getTypeEmoji(type: CommunityPost['type']) {
+    61→    61→  switch (type) {
+    62→    62→    case 'discussion': return '💬';
+    63→    63→    case 'question': return '❓';
+    64→    64→    case 'announcement': return '📢';
+    65→    65→    case 'resource': return '🌟';
+    66→    66→  }
+    67→    67→}
+    68→    68→
+    69→    69→function getTypeColor(type: CommunityPost['type']) {
+    70→    70→  switch (type) {
+    71→    71→    case 'discussion': return 'bg-emerald-100 text-emerald-700 border-emerald-500/30';
+    72→    72→    case 'question': return 'bg-violet-100 text-violet-700 border-violet-200';
+    73→    73→    case 'announcement': return 'bg-amber-100 text-amber-700 border-amber-200';
+    74→    74→    case 'resource': return 'bg-pink-100 text-pink-700 border-pink-200';
+    75→    75→  }
+    76→    76→}
+    77→    77→
+    78→    78→function timeAgo(dateStr: string) {
+    79→    79→  const now = new Date();
+    80→    80→  const date = new Date(dateStr);
+    81→    81→  const diffMs = now.getTime() - date.getTime();
+    82→    82→  const diffMins = Math.floor(diffMs / 60000);
+    83→    83→  if (diffMins < 60) return `${diffMins}m ago`;
+    84→    84→  const diffHours = Math.floor(diffMins / 60);
+    85→    85→  if (diffHours < 24) return `${diffHours}h ago`;
+    86→    86→  const diffDays = Math.floor(diffHours / 24);
+    87→    87→  if (diffDays < 30) return `${diffDays}d ago`;
+    88→    88→  return `${Math.floor(diffDays / 30)}mo ago`;
+    89→    89→}
+    90→    90→
+    91→    91→export function AdminCommunity() {
+    92→    92→  const [posts, setPosts] = useState<CommunityPost[]>(demoCommunityPosts);
+    93→    93→  const [searchQuery, setSearchQuery] = useState('');
+    94→    94→  const [typeFilter, setTypeFilter] = useState<string>('all');
+    95→    95→  const [statusFilter, setStatusFilter] = useState<string>('all');
+    96→    96→  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+    97→    97→  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    98→    98→  const [showCreateDialog, setShowCreateDialog] = useState(false);
+    99→    99→  const [showCategoryDialog, setShowCategoryDialog] = useState(false);
+   100→   100→  const [editingCategory, setEditingCategory] = useState<CommunityCategory | null>(null);
+   101→   101→  const [newPost, setNewPost] = useState({ title: '', content: '', type: 'discussion' as CommunityPost['type'], categoryId: 'cat-1', tags: '' });
+   102→   102→  const [newCategory, setNewCategory] = useState({ name: '', icon: '💬', color: '#10B981' });
+   103→   103→
+   104→   104→  // Filter posts
+   105→   105→  const filteredPosts = posts.filter((post) => {
+   106→   106→    const matchesSearch = post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+   107→   107→      post.content.toLowerCase().includes(searchQuery.toLowerCase());
+   108→   108→    const matchesType = typeFilter === 'all' || post.type === typeFilter;
+   109→   109→    const matchesStatus =
+   110→   110→      statusFilter === 'all' ||
+   111→   111→      (statusFilter === 'pinned' && post.isPinned) ||
+   112→   112→      (statusFilter === 'locked' && post.isLocked) ||
+   113→   113→      (statusFilter === 'active' && !post.isPinned && !post.isLocked);
+   114→   114→    const matchesCategory = categoryFilter === 'all' || post.categoryId === categoryFilter;
+   115→   115→    return matchesSearch && matchesType && matchesStatus && matchesCategory;
+   116→   116→  });
+   117→   117→
+   118→   118→  // Stats
+   119→   119→  const totalPosts = posts.length;
+   120→   120→  const activeDiscussions = posts.filter(p => !p.isLocked).length;
+   121→   121→  const engagementRate = Math.round((posts.reduce((sum, p) => sum + p.likeCount + p.commentCount, 0) / (posts.reduce((sum, p) => sum + p.viewCount, 0) || 1)) * 100);
+   122→   122→
+   123→   123→  const handleCreatePost = () => {
+   124→   124→    const post: CommunityPost = {
+   125→   125→      id: `post-${Date.now()}`,
+   126→   126→      tenantId: 'demo-tenant-1',
+   127→   127→      authorId: 'demo-admin-1',
+   128→   128→      categoryId: newPost.categoryId,
+   129→   129→      title: newPost.title,
+   130→   130→      content: newPost.content,
+   131→   131→      type: newPost.type,
+   132→   132→      isPinned: false,
+   133→   133→      isLocked: false,
+   134→   134→      viewCount: 0,
+   135→   135→      likeCount: 0,
+   136→   136→      commentCount: 0,
+   137→   137→      tags: newPost.tags ? newPost.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+   138→   138→      author: {
+   139→   139→        id: 'demo-admin-1',
+   140→   140→        tenantId: 'demo-tenant-1',
+   141→   141→        email: 'admin@nextgen-lms.com',
+   142→   142→        name: 'Sarah Mitchell',
+   143→   143→        role: 'tenant_admin',
+   144→   144→        timezone: 'America/New_York',
+   145→   145→        locale: 'en',
+   146→   146→        streakDays: 14,
+   147→   147→        totalPoints: 2850,
+   148→   148→        isActive: true,
+   149→   149→        createdAt: '2024-01-15T00:00:00Z',
+   150→   150→      },
+   151→   151→      createdAt: new Date().toISOString(),
+   152→   152→    };
+   153→   153→    setPosts([post, ...posts]);
+   154→   154→    setShowCreateDialog(false);
+   155→   155→    setNewPost({ title: '', content: '', type: 'discussion', categoryId: 'cat-1', tags: '' });
+   156→   156→  };
+   157→   157→
+   158→   158→  const handleTogglePin = (postId: string) => {
+   159→   159→    setPosts(posts.map(p => p.id === postId ? { ...p, isPinned: !p.isPinned } : p));
+   160→   160→  };
+   161→   161→
+   162→   162→  const handleToggleLock = (postId: string) => {
+   163→   163→    setPosts(posts.map(p => p.id === postId ? { ...p, isLocked: !p.isLocked } : p));
+   164→   164→  };
+   165→   165→
+   166→   166→  const handleDeletePost = (postId: string) => {
+   167→   167→    setPosts(posts.filter(p => p.id !== postId));
+   168→   168→  };
+   169→   169→
+   170→   170→  const handleAddCategory = () => {
+   171→   171→    const category: CommunityCategory = {
+   172→   172→      id: `cat-${Date.now()}`,
+   173→   173→      tenantId: 'demo-tenant-1',
+   174→   174→      name: newCategory.name,
+   175→   175→      icon: newCategory.icon,
+   176→   176→      color: newCategory.color,
+   177→   177→      orderIndex: communityCategories.length,
+   178→   178→      isDefault: false,
+   179→   179→    };
+   180→   180→    communityCategories.push(category);
+   181→   181→    categoryPostCounts[category.id] = 0;
+   182→   182→    setShowCategoryDialog(false);
+   183→   183→    setNewCategory({ name: '', icon: '💬', color: '#10B981' });
+   184→   184→  };
+   185→   185→
+   186→   186→  return (
+   187→   187→    <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
+   188→   188→      {/* Header */}
+   189→   189→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+   190→   190→        <div>
+   191→   191→          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-50">Community Management</h1>
+   192→   192→          <p className="text-slate-500 mt-1">Moderate posts, manage categories, and track engagement</p>
+   193→   193→        </div>
+   194→   194→        <Button onClick={() => setShowCreateDialog(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shrink-0">
+   195→   195→          <Megaphone className="h-4 w-4" />
+   196→   196→          New Announcement
+   197→   197→        </Button>
+   198→   198→      </div>
+   199→   199→
+   200→   200→      {/* Top Bar: Search, Filters, View Toggle */}
+   201→   201→      <Card className="border-border">
+   202→   202→        <CardContent className="p-4">
+   203→   203→          <div className="flex flex-col lg:flex-row gap-3">
+   204→   204→            {/* Search */}
+   205→   205→            <div className="relative flex-1">
+   206→   206→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
+   207→   207→              <Input
+   208→   208→                placeholder="Search posts..."
+   209→   209→                value={searchQuery}
+   210→   210→                onChange={(e) => setSearchQuery(e.target.value)}
+   211→   211→                className="pl-9 border-border focus:border-emerald-400"
+   212→   212→              />
+   213→   213→            </div>
+   214→   214→            {/* Filters */}
+   215→   215→            <div className="flex flex-wrap gap-2">
+   216→   216→              <Select value={typeFilter} onValueChange={setTypeFilter}>
+   217→   217→                <SelectTrigger className="w-[150px] border-border">
+   218→   218→                  <Filter className="h-3.5 w-3.5 mr-1 text-slate-400 dark:text-slate-500" />
+   219→   219→                  <SelectValue placeholder="Type" />
+   220→   220→                </SelectTrigger>
+   221→   221→                <SelectContent>
+   222→   222→                  <SelectItem value="all">All Types</SelectItem>
+   223→   223→                  <SelectItem value="discussion">💬 Discussion</SelectItem>
+   224→   224→                  <SelectItem value="question">❓ Question</SelectItem>
+   225→   225→                  <SelectItem value="announcement">📢 Announcement</SelectItem>
+   226→   226→                  <SelectItem value="resource">🌟 Resource</SelectItem>
+   227→   227→                </SelectContent>
+   228→   228→              </Select>
+   229→   229→              <Select value={statusFilter} onValueChange={setStatusFilter}>
+   230→   230→                <SelectTrigger className="w-[140px] border-border">
+   231→   231→                  <SelectValue placeholder="Status" />
+   232→   232→                </SelectTrigger>
+   233→   233→                <SelectContent>
+   234→   234→                  <SelectItem value="all">All Status</SelectItem>
+   235→   235→                  <SelectItem value="pinned">📌 Pinned</SelectItem>
+   236→   236→                  <SelectItem value="locked">🔒 Locked</SelectItem>
+   237→   237→                  <SelectItem value="active">✅ Active</SelectItem>
+   238→   238→                </SelectContent>
+   239→   239→              </Select>
+   240→   240→              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+   241→   241→                <SelectTrigger className="w-[170px] border-border">
+   242→   242→                  <SelectValue placeholder="Category" />
+   243→   243→                </SelectTrigger>
+   244→   244→                <SelectContent>
+   245→   245→                  <SelectItem value="all">All Categories</SelectItem>
+   246→   246→                  {communityCategories.map(cat => (
+   247→   247→                    <SelectItem key={cat.id} value={cat.id}>{cat.icon} {cat.name}</SelectItem>
+   248→   248→                  ))}
+   249→   249→                </SelectContent>
+   250→   250→              </Select>
+   251→   251→              {/* View Toggle */}
+   252→   252→              <div className="flex border border-border rounded-md overflow-hidden">
+   253→   253→                <Button
+   254→   254→                  variant={viewMode === 'grid' ? 'default' : 'ghost'}
+   255→   255→                  size="sm"
+   256→   256→                  onClick={() => setViewMode('grid')}
+   257→   257→                  className={viewMode === 'grid' ? 'bg-slate-900 text-white rounded-none' : 'rounded-none'}
+   258→   258→                >
+   259→   259→                  <LayoutGrid className="h-4 w-4" />
+   260→   260→                </Button>
+   261→   261→                <Button
+   262→   262→                  variant={viewMode === 'list' ? 'default' : 'ghost'}
+   263→   263→                  size="sm"
+   264→   264→                  onClick={() => setViewMode('list')}
+   265→   265→                  className={viewMode === 'list' ? 'bg-slate-900 text-white rounded-none' : 'rounded-none'}
+   266→   266→                >
+   267→   267→                  <List className="h-4 w-4" />
+   268→   268→                </Button>
+   269→   269→              </div>
+   270→   270→            </div>
+   271→   271→          </div>
+   272→   272→        </CardContent>
+   273→   273→      </Card>
+   274→   274→
+   275→   275→      {/* Stats Row */}
+   276→   276→      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   277→   277→        {[
+   278→   278→          { label: 'Total Posts', value: totalPosts, icon: MessageSquare, color: 'emerald' },
+   279→   279→          { label: 'Active Discussions', value: activeDiscussions, icon: Eye, color: 'violet' },
+   280→   280→          { label: 'Engagement Rate', value: `${engagementRate}%`, icon: Heart, color: 'pink' },
+   281→   281→        ].map((stat, i) => (
+   282→   282→          <motion.div
+   283→   283→            key={stat.label}
+   284→   284→            initial={{ opacity: 0, y: 20 }}
+   285→   285→            animate={{ opacity: 1, y: 0 }}
+   286→   286→            transition={{ delay: i * 0.1 }}
+   287→   287→          >
+   288→   288→            <Card className="border-border hover:shadow-md transition-shadow">
+   289→   289→              <CardContent className="p-4 flex items-center gap-4">
+   290→   290→                <div className={`p-3 rounded-xl ${
+   291→   291→                  stat.color === 'emerald' ? 'bg-emerald-100 text-emerald-600' :
+   292→   292→                  stat.color === 'violet' ? 'bg-violet-100 text-violet-600' :
+   293→   293→                  'bg-pink-100 text-pink-600'
+   294→   294→                }`}>
+   295→   295→                  <stat.icon className="h-5 w-5" />
+   296→   296→                </div>
+   297→   297→                <div>
+   298→   298→                  <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">{stat.label}</p>
+   299→   299→                  <p className="text-2xl font-bold text-slate-900 dark:text-slate-50">{stat.value}</p>
+   300→   300→                </div>
+   301→   301→              </CardContent>
+   302→   302→            </Card>
+   303→   303→          </motion.div>
+   304→   304→        ))}
+   305→   305→      </div>
+   306→   306→
+   307→   307→      {/* Posts Grid/List */}
+   308→   308→      <div>
+   309→   309→        <div className="flex items-center justify-between mb-4">
+   310→   310→          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Posts ({filteredPosts.length})</h2>
+   311→   311→        </div>
+   312→   312→        <AnimatePresence mode="popLayout">
+   313→   313→          {viewMode === 'grid' ? (
+   314→   314→            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+   315→   315→              {filteredPosts.map((post, i) => (
+   316→   316→                <PostCard
+   317→   317→                  key={post.id}
+   318→   318→                  post={post}
+   319→   319→                  index={i}
+   320→   320→                  onTogglePin={handleTogglePin}
+   321→   321→                  onToggleLock={handleToggleLock}
+   322→   322→                  onDelete={handleDeletePost}
+   323→   323→                />
+   324→   324→              ))}
+   325→   325→            </div>
+   326→   326→          ) : (
+   327→   327→            <div className="space-y-3">
+   328→   328→              {filteredPosts.map((post, i) => (
+   329→   329→                <PostListItem
+   330→   330→                  key={post.id}
+   331→   331→                  post={post}
+   332→   332→                  index={i}
+   333→   333→                  onTogglePin={handleTogglePin}
+   334→   334→                  onToggleLock={handleToggleLock}
+   335→   335→                  onDelete={handleDeletePost}
+   336→   336→                />
+   337→   337→              ))}
+   338→   338→            </div>
+   339→   339→          )}
+   340→   340→        </AnimatePresence>
+   341→   341→        {filteredPosts.length === 0 && (
+   342→   342→          <div className="text-center py-12">
+   343→   343→            <MessageSquare className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+   344→   344→            <p className="text-slate-500 text-lg">No posts match your filters</p>
+   345→   345→            <p className="text-slate-400 text-sm mt-1">Try adjusting your search or filters</p>
+   346→   346→          </div>
+   347→   347→        )}
+   348→   348→      </div>
+   349→   349→
+   350→   350→      {/* Category Management */}
+   351→   351→      <Card className="border-border shadow-sm hover:shadow-md transition-shadow">
+   352→   352→        <CardHeader className="pb-3">
+   353→   353→          <div className="flex items-center justify-between">
+   354→   354→            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+   355→   355→              <Tag className="h-4 w-4 text-emerald-500" />
+   356→   356→              Category Management
+   357→   357→            </CardTitle>
+   358→   358→            <Button
+   359→   359→              variant="outline"
+   360→   360→              size="sm"
+   361→   361→              onClick={() => {
+   362→   362→                setEditingCategory(null);
+   363→   363→                setNewCategory({ name: '', icon: '💬', color: '#10B981' });
+   364→   364→                setShowCategoryDialog(true);
+   365→   365→              }}
+   366→   366→              className="gap-1.5 border-border text-slate-700 dark:text-slate-300 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-500/30"
+   367→   367→            >
+   368→   368→              <Plus className="h-3.5 w-3.5" />
+   369→   369→              Add Category
+   370→   370→            </Button>
+   371→   371→          </div>
+   372→   372→        </CardHeader>
+   373→   373→        <CardContent>
+   374→   374→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+   375→   375→            {communityCategories.map((cat, i) => (
+   376→   376→              <motion.div
+   377→   377→                key={cat.id}
+   378→   378→                initial={{ opacity: 0, scale: 0.95 }}
+   379→   379→                animate={{ opacity: 1, scale: 1 }}
+   380→   380→                transition={{ delay: i * 0.05 }}
+   381→   381→              >
+   382→   382→                <div className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-border hover:shadow-sm transition-all group">
+   383→   383→                  <div
+   384→   384→                    className="w-10 h-10 rounded-lg flex items-center justify-center text-lg shrink-0"
+   385→   385→                    style={{ backgroundColor: cat.color + '20', color: cat.color }}
+   386→   386→                  >
+   387→   387→                    {cat.icon}
+   388→   388→                  </div>
+   389→   389→                  <div className="flex-1 min-w-0">
+   390→   390→                    <p className="font-medium text-slate-900 dark:text-slate-50 text-sm truncate">{cat.name}</p>
+   391→   391→                    <p className="text-xs text-slate-400 dark:text-slate-500">{categoryPostCounts[cat.id] || 0} posts</p>
+   392→   392→                  </div>
+   393→   393→                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+   394→   394→                    <Button
+   395→   395→                      variant="ghost"
+   396→   396→                      size="sm"
+   397→   397→                      className="h-7 w-7 p-0 text-slate-400 hover:text-violet-600"
+   398→   398→                      onClick={() => {
+   399→   399→                        setEditingCategory(cat);
+   400→   400→                        setNewCategory({ name: cat.name, icon: cat.icon || '💬', color: cat.color || '#10B981' });
+   401→   401→                        setShowCategoryDialog(true);
+   402→   402→                      }}
+   403→   403→                    >
+   404→   404→                      <Edit3 className="h-3 w-3" />
+   405→   405→                    </Button>
+   406→   406→                    <Button
+   407→   407→                      variant="ghost"
+   408→   408→                      size="sm"
+   409→   409→                      className="h-7 w-7 p-0 text-slate-400 hover:text-red-600"
+   410→   410→                    >
+   411→   411→                      <Trash2 className="h-3 w-3" />
+   412→   412→                    </Button>
+   413→   413→                  </div>
+   414→   414→                </div>
+   415→   415→              </motion.div>
+   416→   416→            ))}
+   417→   417→          </div>
+   418→   418→        </CardContent>
+   419→   419→      </Card>
+   420→   420→
+   421→   421→      {/* Create/Edit Post Dialog */}
+   422→   422→      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+   423→   423→        <DialogContent className="sm:max-w-lg">
+   424→   424→          <DialogHeader>
+   425→   425→            <DialogTitle className="text-slate-900 dark:text-slate-50">Create New Post</DialogTitle>
+   426→   426→          </DialogHeader>
+   427→   427→          <div className="space-y-4 py-2">
+   428→   428→            <div>
+   429→   429→              <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Title</Label>
+   430→   430→              <Input
+   431→   431→                placeholder="Enter post title..."
+   432→   432→                value={newPost.title}
+   433→   433→                onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
+   434→   434→                className="border-border focus:border-emerald-400"
+   435→   435→              />
+   436→   436→            </div>
+   437→   437→            <div>
+   438→   438→              <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Content</Label>
+   439→   439→              <Textarea
+   440→   440→                placeholder="Write your post content..."
+   441→   441→                value={newPost.content}
+   442→   442→                onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
+   443→   443→                rows={4}
+   444→   444→                className="border-border focus:border-emerald-400 resize-none"
+   445→   445→              />
+   446→   446→            </div>
+   447→   447→            <div className="grid grid-cols-2 gap-3">
+   448→   448→              <div>
+   449→   449→                <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Type</Label>
+   450→   450→                <Select value={newPost.type} onValueChange={(v) => setNewPost({ ...newPost, type: v as CommunityPost['type'] })}>
+   451→   451→                  <SelectTrigger className="border-border">
+   452→   452→                    <SelectValue />
+   453→   453→                  </SelectTrigger>
+   454→   454→                  <SelectContent>
+   455→   455→                    <SelectItem value="discussion">💬 Discussion</SelectItem>
+   456→   456→                    <SelectItem value="question">❓ Question</SelectItem>
+   457→   457→                    <SelectItem value="announcement">📢 Announcement</SelectItem>
+   458→   458→                    <SelectItem value="resource">🌟 Resource</SelectItem>
+   459→   459→                  </SelectContent>
+   460→   460→                </Select>
+   461→   461→              </div>
+   462→   462→              <div>
+   463→   463→                <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Category</Label>
+   464→   464→                <Select value={newPost.categoryId} onValueChange={(v) => setNewPost({ ...newPost, categoryId: v })}>
+   465→   465→                  <SelectTrigger className="border-border">
+   466→   466→                    <SelectValue />
+   467→   467→                  </SelectTrigger>
+   468→   468→                  <SelectContent>
+   469→   469→                    {communityCategories.map(cat => (
+   470→   470→                      <SelectItem key={cat.id} value={cat.id}>{cat.icon} {cat.name}</SelectItem>
+   471→   471→                    ))}
+   472→   472→                  </SelectContent>
+   473→   473→                </Select>
+   474→   474→              </div>
+   475→   475→            </div>
+   476→   476→            <div>
+   477→   477→              <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Tags (comma separated)</Label>
+   478→   478→              <Input
+   479→   479→                placeholder="e.g., nextjs, react, tips"
+   480→   480→                value={newPost.tags}
+   481→   481→                onChange={(e) => setNewPost({ ...newPost, tags: e.target.value })}
+   482→   482→                className="border-border focus:border-emerald-400"
+   483→   483→              />
+   484→   484→            </div>
+   485→   485→          </div>
+   486→   486→          <DialogFooter>
+   487→   487→            <Button variant="outline" onClick={() => setShowCreateDialog(false)} className="border-border">
+   488→   488→              Cancel
+   489→   489→            </Button>
+   490→   490→            <Button
+   491→   491→              onClick={handleCreatePost}
+   492→   492→              disabled={!newPost.title.trim() || !newPost.content.trim()}
+   493→   493→              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   494→   494→            >
+   495→   495→              Create Post
+   496→   496→            </Button>
+   497→   497→          </DialogFooter>
+   498→   498→        </DialogContent>
+   499→   499→      </Dialog>
+   500→   500→
+   501→   501→      {/* Add/Edit Category Dialog */}
+   502→   502→      <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
+   503→   503→        <DialogContent className="sm:max-w-md">
+   504→   504→          <DialogHeader>
+   505→   505→            <DialogTitle className="text-slate-900 dark:text-slate-50">
+   506→   506→              {editingCategory ? 'Edit Category' : 'Add New Category'}
+   507→   507→            </DialogTitle>
+   508→   508→          </DialogHeader>
+   509→   509→          <div className="space-y-4 py-2">
+   510→   510→            <div>
+   511→   511→              <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Name</Label>
+   512→   512→              <Input
+   513→   513→                placeholder="Category name..."
+   514→   514→                value={newCategory.name}
+   515→   515→                onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
+   516→   516→                className="border-border focus:border-emerald-400"
+   517→   517→              />
+   518→   518→            </div>
+   519→   519→            <div className="grid grid-cols-2 gap-3">
+   520→   520→              <div>
+   521→   521→                <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Icon (emoji)</Label>
+   522→   522→                <Input
+   523→   523→                  placeholder="💬"
+   524→   524→                  value={newCategory.icon}
+   525→   525→                  onChange={(e) => setNewCategory({ ...newCategory, icon: e.target.value })}
+   526→   526→                  className="border-border focus:border-emerald-400"
+   527→   527→                />
+   528→   528→              </div>
+   529→   529→              <div>
+   530→   530→                <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Color</Label>
+   531→   531→                <div className="flex gap-2 items-center">
+   532→   532→                  <input
+   533→   533→                    type="color"
+   534→   534→                    value={newCategory.color}
+   535→   535→                    onChange={(e) => setNewCategory({ ...newCategory, color: e.target.value })}
+   536→   536→                    className="h-9 w-9 rounded border border-border cursor-pointer"
+   537→   537→                  />
+   538→   538→                  <Input
+   539→   539→                    value={newCategory.color}
+   540→   540→                    onChange={(e) => setNewCategory({ ...newCategory, color: e.target.value })}
+   541→   541→                    className="border-border flex-1"
+   542→   542→                  />
+   543→   543→                </div>
+   544→   544→              </div>
+   545→   545→            </div>
+   546→   546→          </div>
+   547→   547→          <DialogFooter>
+   548→   548→            <Button variant="outline" onClick={() => setShowCategoryDialog(false)} className="border-border">
+   549→   549→              Cancel
+   550→   550→            </Button>
+   551→   551→            <Button
+   552→   552→              onClick={handleAddCategory}
+   553→   553→              disabled={!newCategory.name.trim()}
+   554→   554→              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   555→   555→            >
+   556→   556→              {editingCategory ? 'Save Changes' : 'Add Category'}
+   557→   557→            </Button>
+   558→   558→          </DialogFooter>
+   559→   559→        </DialogContent>
+   560→   560→      </Dialog>
+   561→   561→    </div>
+   562→   562→  );
+   563→   563→}
+   564→   564→
+   565→   565→// ─── Post Card (Grid View) ────────────────────────────────────────────────────
+   566→   566→
+   567→   567→function PostCard({
+   568→   568→  post,
+   569→   569→  index,
+   570→   570→  onTogglePin,
+   571→   571→  onToggleLock,
+   572→   572→  onDelete,
+   573→   573→}: {
+   574→   574→  post: CommunityPost;
+   575→   575→  index: number;
+   576→   576→  onTogglePin: (id: string) => void;
+   577→   577→  onToggleLock: (id: string) => void;
+   578→   578→  onDelete: (id: string) => void;
+   579→   579→}) {
+   580→   580→  const cat = communityCategories.find(c => c.id === post.categoryId);
+   581→   581→
+   582→   582→  return (
+   583→   583→    <motion.div
+   584→   584→      layout
+   585→   585→      initial={{ opacity: 0, y: 20 }}
+   586→   586→      animate={{ opacity: 1, y: 0 }}
+   587→   587→      exit={{ opacity: 0, scale: 0.95 }}
+   588→   588→      transition={{ delay: index * 0.05 }}
+   589→   589→    >
+   590→   590→      <Card className={`border-border hover:shadow-lg transition-all h-full flex flex-col ${post.isPinned ? 'ring-2 ring-emerald-500/30 border-emerald-500/30' : ''}`}>
+   591→   591→        <CardContent className="p-4 flex-1 flex flex-col">
+   592→   592→          {/* Top: Badges */}
+   593→   593→          <div className="flex items-center gap-2 flex-wrap mb-2">
+   594→   594→            {post.isPinned && (
+   595→   595→              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-500/30 text-xs gap-1">
+   596→   596→                <Pin className="h-3 w-3" /> Pinned
+   597→   597→              </Badge>
+   598→   598→            )}
+   599→   599→            {post.isLocked && (
+   600→   600→              <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 text-xs gap-1">
+   601→   601→                <Lock className="h-3 w-3" /> Locked
+   602→   602→              </Badge>
+   603→   603→            )}
+   604→   604→            <Badge variant="outline" className={`text-xs gap-1 ${getTypeColor(post.type)}`}>
+   605→   605→              {getTypeEmoji(post.type)} {post.type.charAt(0).toUpperCase() + post.type.slice(1)}
+   606→   606→            </Badge>
+   607→   607→          </div>
+   608→   608→
+   609→   609→          {/* Title */}
+   610→   610→          <h3 className="font-bold text-slate-900 dark:text-slate-50 text-base leading-snug mb-1.5 line-clamp-2">
+   611→   611→            {post.title}
+   612→   612→          </h3>
+   613→   613→
+   614→   614→          {/* Content preview */}
+   615→   615→          <p className="text-slate-500 text-sm leading-relaxed mb-3 line-clamp-2 flex-1" title={post.content}>
+   616→   616→            {post.content}
+   617→   617→          </p>
+   618→   618→
+   619→   619→          {/* Tags */}
+   620→   620→          {post.tags && post.tags.length > 0 && (
+   621→   621→            <div className="flex flex-wrap gap-1.5 mb-3">
+   622→   622→              {post.tags.map(tag => (
+   623→   623→                <Badge key={tag} variant="secondary" className="text-xs bg-slate-100 text-slate-600 hover:bg-slate-200">
+   624→   624→                  <Tag className="h-2.5 w-2.5 mr-1" />
+   625→   625→                  {tag}
+   626→   626→                </Badge>
+   627→   627→              ))}
+   628→   628→            </div>
+   629→   629→          )}
+   630→   630→
+   631→   631→          {/* Category */}
+   632→   632→          {cat && (
+   633→   633→            <div className="mb-3">
+   634→   634→              <span
+   635→   635→                className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+   636→   636→                style={{ backgroundColor: (cat.color || '#10B981') + '15', color: cat.color || '#10B981' }}
+   637→   637→              >
+   638→   638→                {cat.icon} {cat.name}
+   639→   639→              </span>
+   640→   640→            </div>
+   641→   641→          )}
+   642→   642→
+   643→   643→          {/* Author & Stats */}
+   644→   644→          <div className="flex items-center justify-between mt-auto pt-3 border-t border-border/50">
+   645→   645→            <div className="flex items-center gap-2">
+   646→   646→              <Avatar className="h-6 w-6">
+   647→   647→                <AvatarFallback className="bg-violet-100 text-violet-700 text-xs font-medium">
+   648→   648→                  {post.author?.name?.charAt(0) || 'U'}
+   649→   649→                </AvatarFallback>
+   650→   650→              </Avatar>
+   651→   651→              <span className="text-xs text-slate-600 font-medium">{post.author?.name || 'Unknown'}</span>
+   652→   652→              <span className="text-xs text-slate-400 flex items-center gap-1">
+   653→   653→                <Clock className="h-3 w-3" /> {timeAgo(post.createdAt)}
+   654→   654→              </span>
+   655→   655→            </div>
+   656→   656→            <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+   657→   657→              <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{post.viewCount}</span>
+   658→   658→              <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{post.likeCount}</span>
+   659→   659→              <span className="flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{post.commentCount}</span>
+   660→   660→            </div>
+   661→   661→          </div>
+   662→   662→
+   663→   663→          {/* Actions */}
+   664→   664→          <div className="flex items-center gap-1 mt-3 pt-2 border-t border-border/50">
+   665→   665→            <Button
+   666→   666→              variant="ghost"
+   667→   667→              size="sm"
+   668→   668→              onClick={() => onTogglePin(post.id)}
+   669→   669→              className={`h-8 text-xs gap-1 ${post.isPinned ? 'text-emerald-600 hover:text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}
+   670→   670→            >
+   671→   671→              <Pin className="h-3 w-3" />
+   672→   672→              {post.isPinned ? 'Unpin' : 'Pin'}
+   673→   673→            </Button>
+   674→   674→            <Button
+   675→   675→              variant="ghost"
+   676→   676→              size="sm"
+   677→   677→              onClick={() => onToggleLock(post.id)}
+   678→   678→              className={`h-8 text-xs gap-1 ${post.isLocked ? 'text-red-600 hover:text-red-700' : 'text-slate-500 hover:text-slate-700'}`}
+   679→   679→            >
+   680→   680→              {post.isLocked ? <Unlock className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+   681→   681→              {post.isLocked ? 'Unlock' : 'Lock'}
+   682→   682→            </Button>
+   683→   683→            <Button
+   684→   684→              variant="ghost"
+   685→   685→              size="sm"
+   686→   686→              className="h-8 text-xs gap-1 text-slate-500 hover:text-slate-700 dark:text-slate-300"
+   687→   687→            >
+   688→   688→              <Eye className="h-3 w-3" />
+   689→   689→              View
+   690→   690→            </Button>
+   691→   691→            <div className="flex-1" />
+   692→   692→            <Button
+   693→   693→              variant="ghost"
+   694→   694→              size="sm"
+   695→   695→              onClick={() => onDelete(post.id)}
+   696→   696→              className="h-8 text-xs gap-1 text-slate-400 hover:text-red-600"
+   697→   697→            >
+   698→   698→              <Trash2 className="h-3 w-3" />
+   699→   699→            </Button>
+   700→   700→          </div>
+   701→   701→        </CardContent>
+   702→   702→      </Card>
+   703→   703→    </motion.div>
+   704→   704→  );
+   705→   705→}
+   706→   706→
+   707→   707→// ─── Post List Item ───────────────────────────────────────────────────────────
+   708→   708→
+   709→   709→function PostListItem({
+   710→   710→  post,
+   711→   711→  index,
+   712→   712→  onTogglePin,
+   713→   713→  onToggleLock,
+   714→   714→  onDelete,
+   715→   715→}: {
+   716→   716→  post: CommunityPost;
+   717→   717→  index: number;
+   718→   718→  onTogglePin: (id: string) => void;
+   719→   719→  onToggleLock: (id: string) => void;
+   720→   720→  onDelete: (id: string) => void;
+   721→   721→}) {
+   722→   722→  const cat = communityCategories.find(c => c.id === post.categoryId);
+   723→   723→
+   724→   724→  return (
+   725→   725→    <motion.div
+   726→   726→      layout
+   727→   727→      initial={{ opacity: 0, x: -20 }}
+   728→   728→      animate={{ opacity: 1, x: 0 }}
+   729→   729→      exit={{ opacity: 0, x: 20 }}
+   730→   730→      transition={{ delay: index * 0.05 }}
+   731→   731→    >
+   732→   732→      <Card className={`border-border hover:shadow-md transition-all ${post.isPinned ? 'ring-2 ring-emerald-500/30 border-emerald-500/30' : ''}`}>
+   733→   733→        <CardContent className="p-4">
+   734→   734→          <div className="flex gap-4">
+   735→   735→            {/* Left: Type icon */}
+   736→   736→            <div className={`shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-sm ${
+   737→   737→              post.type === 'discussion' ? 'bg-emerald-100 text-emerald-600' :
+   738→   738→              post.type === 'question' ? 'bg-violet-100 text-violet-600' :
+   739→   739→              post.type === 'announcement' ? 'bg-amber-100 text-amber-600' :
+   740→   740→              'bg-pink-100 text-pink-600'
+   741→   741→            }`}>
+   742→   742→              {getTypeEmoji(post.type)}
+   743→   743→            </div>
+   744→   744→
+   745→   745→            {/* Content */}
+   746→   746→            <div className="flex-1 min-w-0">
+   747→   747→              <div className="flex items-center gap-2 flex-wrap mb-1">
+   748→   748→                {post.isPinned && (
+   749→   749→                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-500/30 text-xs gap-1">
+   750→   750→                    <Pin className="h-3 w-3" /> Pinned
+   751→   751→                  </Badge>
+   752→   752→                )}
+   753→   753→                {post.isLocked && (
+   754→   754→                  <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 text-xs gap-1">
+   755→   755→                    <Lock className="h-3 w-3" /> Locked
+   756→   756→                  </Badge>
+   757→   757→                )}
+   758→   758→                <Badge variant="outline" className={`text-xs gap-1 ${getTypeColor(post.type)}`}>
+   759→   759→                  {getTypeEmoji(post.type)} {post.type.charAt(0).toUpperCase() + post.type.slice(1)}
+   760→   760→                </Badge>
+   761→   761→                {cat && (
+   762→   762→                  <span
+   763→   763→                    className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+   764→   764→                    style={{ backgroundColor: (cat.color || '#10B981') + '15', color: cat.color || '#10B981' }}
+   765→   765→                  >
+   766→   766→                    {cat.icon} {cat.name}
+   767→   767→                  </span>
+   768→   768→                )}
+   769→   769→              </div>
+   770→   770→              <h3 className="font-bold text-slate-900 dark:text-slate-50 text-sm mb-1">{post.title}</h3>
+   771→   771→              <p className="text-slate-500 text-sm line-clamp-1 mb-2">{post.content}</p>
+   772→   772→              <div className="flex items-center gap-3 flex-wrap">
+   773→   773→                {post.tags && post.tags.slice(0, 3).map(tag => (
+   774→   774→                  <Badge key={tag} variant="secondary" className="text-xs bg-slate-100 text-slate-500 dark:text-slate-400 dark:text-slate-500">
+   775→   775→                    {tag}
+   776→   776→                  </Badge>
+   777→   777→                ))}
+   778→   778→                <span className="text-xs text-slate-400 dark:text-slate-500">by {post.author?.name}</span>
+   779→   779→                <span className="text-xs text-slate-400 flex items-center gap-0.5">
+   780→   780→                  <Clock className="h-3 w-3" /> {timeAgo(post.createdAt)}
+   781→   781→                </span>
+   782→   782→              </div>
+   783→   783→            </div>
+   784→   784→
+   785→   785→            {/* Right: Stats + Actions */}
+   786→   786→            <div className="shrink-0 flex flex-col items-end justify-between">
+   787→   787→              <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500">
+   788→   788→                <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{post.viewCount}</span>
+   789→   789→                <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{post.likeCount}</span>
+   790→   790→                <span className="flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{post.commentCount}</span>
+   791→   791→              </div>
+   792→   792→              <div className="flex items-center gap-1 mt-2">
+   793→   793→                <Button
+   794→   794→                  variant="ghost"
+   795→   795→                  size="sm"
+   796→   796→                  onClick={() => onTogglePin(post.id)}
+   797→   797→                  className={`h-7 w-7 p-0 ${post.isPinned ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
+   798→   798→                >
+   799→   799→                  <Pin className="h-3.5 w-3.5" />
+   800→   800→                </Button>
+   801→   801→                <Button
+   802→   802→                  variant="ghost"
+   803→   803→                  size="sm"
+   804→   804→                  onClick={() => onToggleLock(post.id)}
+   805→   805→                  className={`h-7 w-7 p-0 ${post.isLocked ? 'text-red-500' : 'text-slate-400 hover:text-slate-600'}`}
+   806→   806→                >
+   807→   807→                  {post.isLocked ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+   808→   808→                </Button>
+   809→   809→                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:text-slate-500">
+   810→   810→                  <Eye className="h-3.5 w-3.5" />
+   811→   811→                </Button>
+   812→   812→                <Button
+   813→   813→                  variant="ghost"
+   814→   814→                  size="sm"
+   815→   815→                  onClick={() => onDelete(post.id)}
+   816→   816→                  className="h-7 w-7 p-0 text-slate-400 hover:text-red-600"
+   817→   817→                >
+   818→   818→                  <Trash2 className="h-3.5 w-3.5" />
+   819→   819→                </Button>
+   820→   820→              </div>
+   821→   821→            </div>
+   822→   822→          </div>
+   823→   823→        </CardContent>
+   824→   824→      </Card>
+   825→   825→    </motion.div>
+   826→   826→  );
+   827→   827→}
+   828→   828→

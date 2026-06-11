@@ -13,15 +13,18 @@ export type AppView =
   | 'admin-analytics'
   | 'admin-settings'
   | 'admin-live-cohorts'
+  | 'admin-learning-paths'
   | 'learner-dashboard'
   | 'learner-course'
   | 'learner-community'
   | 'learner-achievements'
   | 'learner-live-cohorts'
+  | 'learner-learning-paths'
   | 'learner-profile'
   | 'course-builder'
   | 'ai-assistant'
   | 'ai-content-gen'
+  | 'notification-center'
   | 'checkout';
 
 export type UserRole = 'super_admin' | 'tenant_admin' | 'instructor' | 'content_creator' | 'learner';
@@ -421,4 +424,70 @@ export interface CurrencyOption {
   name: string;
   rate: number;
   flag: string;
+}
+
+// ─── Data Export / Import Types ─────────────────────────────────
+export type ExportDataSource =
+  | 'courses'
+  | 'users_enrollments'
+  | 'assessments'
+  | 'analytics'
+  | 'community'
+  | 'certificates'
+  | 'all';
+
+export type ExportFormat = 'csv' | 'json' | 'xlsx';
+
+export type ExportDateRange = '7d' | '30d' | '90d' | 'custom' | 'all';
+
+export interface ExportColumn {
+  key: string;
+  label: string;
+  selected: boolean;
+}
+
+export interface ExportConfig {
+  source: ExportDataSource;
+  format: ExportFormat;
+  dateRange: ExportDateRange;
+  customStartDate?: string;
+  customEndDate?: string;
+  columns: ExportColumn[];
+}
+
+export interface ExportSummary {
+  rowCount: number;
+  fileSizeEstimate: string;
+  estimatedTime: string;
+}
+
+export interface ImportValidationResult {
+  totalRows: number;
+  validRows: number;
+  errors: ImportValidationError[];
+  warnings: ImportValidationWarning[];
+}
+
+export interface ImportValidationError {
+  row: number;
+  column: string;
+  message: string;
+}
+
+export interface ImportValidationWarning {
+  row: number;
+  column: string;
+  message: string;
+}
+
+export interface ImportResult {
+  imported: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface ColumnMapping {
+  sourceColumn: string;
+  targetField: string;
+  confirmed: boolean;
 }

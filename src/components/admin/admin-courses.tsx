@@ -1,26 +1,7 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragStartEvent,
-  DragEndEvent,
-  DragOverlay,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import {
   Search,
   Plus,
@@ -33,12 +14,14 @@ import {
   Pencil,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Video,
   FileText,
   Headphones,
   File,
   Radio,
   Eye,
+  EyeOff,
   Upload,
   Trash2,
   BookOpen,
@@ -53,6 +36,25 @@ import {
   Save,
   Sparkles,
   Trophy,
+  MessageSquare,
+  ShieldCheck,
+  Flag,
+  ThumbsUp,
+  Download,
+  Send,
+  X,
+  AlertTriangle,
+  ArrowUp,
+  ArrowDown,
+  Bold,
+  Italic,
+  Heading1,
+  List,
+  Code2,
+  Link2,
+  Palette,
+  ExternalLink,
+  Minus,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -86,8 +88,12 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { demoCourses } from '@/lib/mock-data';
+import { courseReviews as allMockReviews, reviewTags } from '@/lib/mock-data';
+import type { CourseReview } from '@/lib/mock-data';
 import type { Course, Module, Lesson } from '@/types';
+import { cn } from '@/lib/utils';
 
 // ─── Helpers ────────────────────────────────────────────────
 
@@ -1069,40 +1075,69 @@ function CurriculumOverviewTab() {
   );
 }
 
-// ─── Tab 4: Visual Course Builder ───────────────────────────
+// ─── Tab 4: Visual Course Builder (Enhanced) ────────────────
 
-const builderModuleGradients = [
-  'from-emerald-500 to-teal-500',
-  'from-violet-500 to-purple-500',
-  'from-amber-500 to-orange-500',
-  'from-rose-500 to-pink-500',
-  'from-cyan-500 to-sky-500',
-  'from-fuchsia-500 to-pink-500',
+const moduleAccentColors = [
+  { name: 'Emerald', bar: 'bg-emerald-500', gradient: 'from-emerald-500 to-teal-500', bg: 'bg-emerald-50 dark:bg-emerald-950/30', ring: 'ring-emerald-200 dark:ring-emerald-800' },
+  { name: 'Sky', bar: 'bg-sky-500', gradient: 'from-sky-500 to-cyan-500', bg: 'bg-sky-50 dark:bg-sky-950/30', ring: 'ring-sky-200 dark:ring-sky-800' },
+  { name: 'Violet', bar: 'bg-violet-500', gradient: 'from-violet-500 to-purple-500', bg: 'bg-violet-50 dark:bg-violet-950/30', ring: 'ring-violet-200 dark:ring-violet-800' },
+  { name: 'Amber', bar: 'bg-amber-500', gradient: 'from-amber-500 to-orange-500', bg: 'bg-amber-50 dark:bg-amber-950/30', ring: 'ring-amber-200 dark:ring-amber-800' },
+  { name: 'Rose', bar: 'bg-rose-500', gradient: 'from-rose-500 to-pink-500', bg: 'bg-rose-50 dark:bg-rose-950/30', ring: 'ring-rose-200 dark:ring-rose-800' },
+  { name: 'Teal', bar: 'bg-teal-500', gradient: 'from-teal-500 to-cyan-500', bg: 'bg-teal-50 dark:bg-teal-950/30', ring: 'ring-teal-200 dark:ring-teal-800' },
 ];
 
-type BuilderModule = Module & { lessons: BuilderLesson[] };
-type BuilderLesson = Lesson;
+const lessonTypeColors: Record<string, { bg: string; text: string; border: string }> = {
+  video: { bg: 'bg-sky-100 dark:bg-sky-950', text: 'text-sky-600 dark:text-sky-400', border: 'border-sky-200 dark:border-sky-800' },
+  text: { bg: 'bg-emerald-100 dark:bg-emerald-950', text: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-800' },
+  document: { bg: 'bg-orange-100 dark:bg-orange-950', text: 'text-orange-600 dark:text-orange-400', border: 'border-orange-200 dark:border-orange-800' },
+  audio: { bg: 'bg-violet-100 dark:bg-violet-950', text: 'text-violet-600 dark:text-violet-400', border: 'border-violet-200 dark:border-violet-800' },
+  live_session: { bg: 'bg-amber-100 dark:bg-amber-950', text: 'text-amber-600 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-800' },
+};
+
+const lessonTypeLabels: Record<string, string> = {
+  video: 'Video',
+  text: 'Text',
+  document: 'Document',
+  audio: 'Audio',
+  live_session: 'Live Session',
+};
+
+type BuilderModule = Module & { lessons: BuilderLesson[]; accentColor?: number; description?: string };
+type BuilderLesson = Lesson & { content?: string; videoUrl?: string; resources?: BuilderResource[] };
+type BuilderResource = { id: string; name: string; type: 'file' | 'link' | 'document'; url?: string };
+type ViewDensity = 'compact' | 'comfortable' | 'spacious';
 
 function VisualCourseBuilderTab() {
   const [selectedCourseId, setSelectedCourseId] = useState<string>(demoCourses[0].id);
-  const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
+  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
-  const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
-  const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
   const [addModuleOpen, setAddModuleOpen] = useState(false);
   const [addLessonOpen, setAddLessonOpen] = useState(false);
   const [addLessonModuleId, setAddLessonModuleId] = useState<string | null>(null);
   const [courseSettingsOpen, setCourseSettingsOpen] = useState(false);
   const [editingModuleTitle, setEditingModuleTitle] = useState<string | null>(null);
+  const [editingModuleDesc, setEditingModuleDesc] = useState<string | null>(null);
   const [editingLessonTitle, setEditingLessonTitle] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<{ type: 'module' | 'lesson'; id: string } | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [viewDensity, setViewDensity] = useState<ViewDensity>('comfortable');
+  const [lastSaved, setLastSaved] = useState<string>('just now');
+  const [courseTitle, setCourseTitle] = useState(demoCourses[0].title);
+  const [isCoursePublished, setIsCoursePublished] = useState(demoCourses[0].isPublished);
 
   // Local mutable modules state
   const [modules, setModules] = useState<BuilderModule[]>(() => {
     const c = demoCourses[0];
-    return (c.modules || []).map((m) => ({
+    return (c.modules || []).map((m, i) => ({
       ...m,
-      lessons: [...(m.lessons || [])],
+      lessons: [...(m.lessons || [])].map((l) => ({
+        ...l,
+        content: l.content || '',
+        videoUrl: l.videoUrl || '',
+        resources: [] as BuilderResource[],
+      })),
+      accentColor: i % moduleAccentColors.length,
+      description: m.description || '',
     })) as BuilderModule[];
   });
 
@@ -1111,71 +1146,36 @@ function VisualCourseBuilderTab() {
     [selectedCourseId]
   );
 
+  // Auto-save simulation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLastSaved(`${Math.floor(Math.random() * 5) + 1} min ago`);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Sync modules when course changes
   const handleCourseChange = useCallback((courseId: string) => {
     setSelectedCourseId(courseId);
-    setSelectedModuleId(null);
+    setSelectedLessonId(null);
     const c = demoCourses.find((co) => co.id === courseId) || demoCourses[0];
+    setCourseTitle(c.title);
+    setIsCoursePublished(c.isPublished);
     setModules(
-      (c.modules || []).map((m) => ({
+      (c.modules || []).map((m, i) => ({
         ...m,
-        lessons: [...(m.lessons || [])],
+        lessons: [...(m.lessons || [])].map((l) => ({
+          ...l,
+          content: l.content || '',
+          videoUrl: l.videoUrl || '',
+          resources: [] as BuilderResource[],
+        })),
+        accentColor: i % moduleAccentColors.length,
+        description: m.description || '',
       })) as BuilderModule[]
     );
     setExpandedModules(new Set());
   }, []);
-
-  // Module DnD sensors
-  const moduleSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  // Lesson DnD sensors
-  const lessonSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  // Module drag handlers
-  const handleModuleDragStart = (event: DragStartEvent) => {
-    setActiveModuleId(event.active.id as string);
-  };
-
-  const handleModuleDragEnd = (event: DragEndEvent) => {
-    setActiveModuleId(null);
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      setModules((prev) => {
-        const oldIndex = prev.findIndex((m) => m.id === active.id);
-        const newIndex = prev.findIndex((m) => m.id === over.id);
-        const moved = arrayMove(prev, oldIndex, newIndex);
-        return moved.map((m, i) => ({ ...m, orderIndex: i }));
-      });
-    }
-  };
-
-  // Lesson drag handlers
-  const handleLessonDragStart = (event: DragStartEvent) => {
-    setActiveLessonId(event.active.id as string);
-  };
-
-  const handleLessonDragEnd = (moduleId: string) => (event: DragEndEvent) => {
-    setActiveLessonId(null);
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      setModules((prev) =>
-        prev.map((mod) => {
-          if (mod.id !== moduleId) return mod;
-          const lessons = [...mod.lessons];
-          const oldIndex = lessons.findIndex((l) => l.id === active.id);
-          const newIndex = lessons.findIndex((l) => l.id === over.id);
-          const moved = arrayMove(lessons, oldIndex, newIndex);
-          return { ...mod, lessons: moved.map((l, i) => ({ ...l, orderIndex: i })) };
-        })
-      );
-    }
-  };
 
   const toggleModule = (moduleId: string) => {
     setExpandedModules((prev) => {
@@ -1186,12 +1186,59 @@ function VisualCourseBuilderTab() {
     });
   };
 
-  const selectModule = (moduleId: string) => {
-    setSelectedModuleId(moduleId);
-    if (!expandedModules.has(moduleId)) {
-      toggleModule(moduleId);
-    }
-  };
+  // Move module up/down
+  const moveModule = useCallback((moduleId: string, direction: 'up' | 'down') => {
+    setModules((prev) => {
+      const idx = prev.findIndex((m) => m.id === moduleId);
+      if (idx < 0) return prev;
+      const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
+      const arr = [...prev];
+      const tmp = arr[idx];
+      arr[idx] = arr[newIdx];
+      arr[newIdx] = tmp;
+      return arr.map((m, i) => ({ ...m, orderIndex: i }));
+    });
+  }, []);
+
+  // Move lesson up/down within module
+  const moveLesson = useCallback((moduleId: string, lessonId: string, direction: 'up' | 'down') => {
+    setModules((prev) =>
+      prev.map((mod) => {
+        if (mod.id !== moduleId) return mod;
+        const lessons = [...mod.lessons].sort((a, b) => a.orderIndex - b.orderIndex);
+        const idx = lessons.findIndex((l) => l.id === lessonId);
+        if (idx < 0) return mod;
+        const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+        if (newIdx < 0 || newIdx >= lessons.length) return mod;
+        const tmp = lessons[idx];
+        lessons[idx] = lessons[newIdx];
+        lessons[newIdx] = tmp;
+        return { ...mod, lessons: lessons.map((l, i) => ({ ...l, orderIndex: i })) };
+      })
+    );
+  }, []);
+
+  // Move lesson to different module
+  const moveLessonToModule = useCallback((fromModuleId: string, lessonId: string, toModuleId: string) => {
+    setModules((prev) => {
+      const fromMod = prev.find((m) => m.id === fromModuleId);
+      if (!fromMod) return prev;
+      const lesson = fromMod.lessons.find((l) => l.id === lessonId);
+      if (!lesson) return prev;
+      return prev.map((mod) => {
+        if (mod.id === fromModuleId) {
+          return { ...mod, lessons: mod.lessons.filter((l) => l.id !== lessonId).map((l, i) => ({ ...l, orderIndex: i })) };
+        }
+        if (mod.id === toModuleId) {
+          const newLessons = [...mod.lessons, { ...lesson, moduleId: toModuleId, orderIndex: mod.lessons.length }];
+          return { ...mod, lessons: newLessons };
+        }
+        return mod;
+      });
+    });
+    setSelectedLessonId(null);
+  }, []);
 
   // Add module
   const handleAddModule = (title: string, description: string) => {
@@ -1203,11 +1250,11 @@ function VisualCourseBuilderTab() {
       orderIndex: modules.length,
       isPublished: false,
       lessons: [],
+      accentColor: modules.length % moduleAccentColors.length,
     };
     setModules((prev) => [...prev, newMod]);
     setAddModuleOpen(false);
     setExpandedModules((prev) => new Set([...prev, newMod.id]));
-    setSelectedModuleId(newMod.id);
   };
 
   // Add lesson
@@ -1221,7 +1268,10 @@ function VisualCourseBuilderTab() {
       orderIndex: 0,
       isPreview: false,
       isPublished: false,
-      videoDuration: contentType === 'video' ? durationMin * 60 : contentType === 'audio' ? durationMin * 60 : undefined,
+      videoDuration: contentType === 'video' || contentType === 'audio' ? durationMin * 60 : undefined,
+      content: '',
+      videoUrl: '',
+      resources: [],
     };
     setModules((prev) =>
       prev.map((mod) => {
@@ -1232,12 +1282,12 @@ function VisualCourseBuilderTab() {
     );
     setAddLessonOpen(false);
     setAddLessonModuleId(null);
+    setSelectedLessonId(newLesson.id);
   };
 
   // Delete module
   const handleDeleteModule = (moduleId: string) => {
     setModules((prev) => prev.filter((m) => m.id !== moduleId).map((m, i) => ({ ...m, orderIndex: i })));
-    if (selectedModuleId === moduleId) setSelectedModuleId(null);
     setDeleteConfirmId(null);
   };
 
@@ -1249,6 +1299,7 @@ function VisualCourseBuilderTab() {
         return { ...mod, lessons: mod.lessons.filter((l) => l.id !== lessonId).map((l, i) => ({ ...l, orderIndex: i })) };
       })
     );
+    if (selectedLessonId === lessonId) setSelectedLessonId(null);
     setDeleteConfirmId(null);
   };
 
@@ -1256,6 +1307,19 @@ function VisualCourseBuilderTab() {
   const toggleModulePublished = (moduleId: string) => {
     setModules((prev) =>
       prev.map((mod) => (mod.id === moduleId ? { ...mod, isPublished: !mod.isPublished } : mod))
+    );
+  };
+
+  // Toggle lesson preview
+  const toggleLessonPreview = (moduleId: string, lessonId: string) => {
+    setModules((prev) =>
+      prev.map((mod) => {
+        if (mod.id !== moduleId) return mod;
+        return {
+          ...mod,
+          lessons: mod.lessons.map((l) => (l.id === lessonId ? { ...l, isPreview: !l.isPreview } : l)),
+        };
+      })
     );
   };
 
@@ -1281,6 +1345,14 @@ function VisualCourseBuilderTab() {
     setEditingModuleTitle(null);
   };
 
+  // Update module description
+  const updateModuleDesc = (moduleId: string, newDesc: string) => {
+    setModules((prev) =>
+      prev.map((mod) => (mod.id === moduleId ? { ...mod, description: newDesc } : mod))
+    );
+    setEditingModuleDesc(null);
+  };
+
   // Update lesson title
   const updateLessonTitle = (moduleId: string, lessonId: string, newTitle: string) => {
     if (!newTitle.trim()) { setEditingLessonTitle(null); return; }
@@ -1298,244 +1370,371 @@ function VisualCourseBuilderTab() {
     setEditingLessonTitle(null);
   };
 
-  const selectedModule = useMemo(
-    () => modules.find((m) => m.id === selectedModuleId) || null,
-    [modules, selectedModuleId]
-  );
+  // Update lesson content
+  const updateLessonContent = (moduleId: string, lessonId: string, field: string, value: string | number | boolean) => {
+    setModules((prev) =>
+      prev.map((mod) => {
+        if (mod.id !== moduleId) return mod;
+        return {
+          ...mod,
+          lessons: mod.lessons.map((l) =>
+            l.id === lessonId ? { ...l, [field]: value } : l
+          ),
+        };
+      })
+    );
+  };
 
-  const totalLessons = useMemo(() => modules.reduce((acc, m) => acc + m.lessons.length, 0), [modules]);
-  const totalDurationSec = useMemo(
-    () => modules.reduce((acc, m) => acc + m.lessons.reduce((a, l) => a + (l.videoDuration || 0), 0), 0),
-    [modules]
-  );
+  // Change module accent color
+  const changeModuleAccent = (moduleId: string, colorIndex: number) => {
+    setModules((prev) =>
+      prev.map((mod) => (mod.id === moduleId ? { ...mod, accentColor: colorIndex } : mod))
+    );
+  };
+
+  // Find selected lesson and its module
+  const selectedLessonData = (() => {
+    if (!selectedLessonId) return null;
+    for (const mod of modules) {
+      const lesson = mod.lessons.find((l) => l.id === selectedLessonId);
+      if (lesson) return { lesson, moduleId: mod.id };
+    }
+    return null;
+  })();
+
+  const totalLessons = modules.reduce((acc, m) => acc + m.lessons.length, 0);
+  const totalDurationSec = modules.reduce((acc, m) => acc + m.lessons.reduce((a, l) => a + (l.videoDuration || 0), 0), 0);
+  const publishedLessons = modules.reduce((acc, m) => acc + m.lessons.filter((l) => l.isPublished).length, 0);
+  const completionPct = totalLessons > 0 ? Math.round((publishedLessons / totalLessons) * 100) : 0;
+
+  const densityClasses = (() => {
+    switch (viewDensity) {
+      case 'compact': return { gap: 'gap-2', py: 'py-2', px: 'px-3', text: 'text-xs', lessonPy: 'py-1.5' };
+      case 'spacious': return { gap: 'gap-4', py: 'py-5', px: 'px-5', text: 'text-sm', lessonPy: 'py-3' };
+      default: return { gap: 'gap-3', py: 'py-3', px: 'px-4', text: 'text-sm', lessonPy: 'py-2' };
+    }
+  })();
 
   return (
     <div className="space-y-4">
-      {/* Course selector & header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-        <Select value={selectedCourseId} onValueChange={handleCourseChange}>
-          <SelectTrigger className="w-full sm:w-[320px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {demoCourses.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.title}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-md px-2.5 py-1.5">
+      {/* ─── Builder Toolbar ─── */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 rounded-xl border bg-card/80 backdrop-blur-sm shadow-sm">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <Input
+            value={courseTitle}
+            onChange={(e) => setCourseTitle(e.target.value)}
+            className="h-8 text-sm font-semibold border-dashed hover:border-solid max-w-[260px]"
+          />
+          <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <Layers className="h-3 w-3" /> {modules.length} modules
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-md px-2.5 py-1.5">
+            <span className="mx-1">·</span>
             <BookOpen className="h-3 w-3" /> {totalLessons} lessons
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-md px-2.5 py-1.5">
-            <Clock className="h-3 w-3" /> {formatDuration(totalDurationSec)}
-          </div>
         </div>
-        <div className="flex items-center gap-2 sm:ml-auto">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5"
-            onClick={() => setCourseSettingsOpen(true)}
+            className="gap-1.5 h-8"
+            onClick={() => setPreviewOpen(true)}
           >
-            <Settings className="h-3.5 w-3.5" /> Settings
+            <Eye className="h-3.5 w-3.5" /> Preview
+          </Button>
+          <div className="flex items-center gap-1 rounded-lg border px-2 py-1">
+            <Button
+              variant={isCoursePublished ? 'default' : 'outline'}
+              size="sm"
+              className={`h-6 text-[11px] gap-1 ${isCoursePublished ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+              onClick={() => setIsCoursePublished(!isCoursePublished)}
+            >
+              {isCoursePublished ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
+              {isCoursePublished ? 'Published' : 'Draft'}
+            </Button>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 h-8"
+            onClick={() => { setLastSaved('just now'); }}
+          >
+            <Save className="h-3.5 w-3.5" /> Save Draft
           </Button>
           <Button
-            size="sm"
-            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
-            onClick={() => setAddModuleOpen(true)}
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setCourseSettingsOpen(true)}
           >
-            <Plus className="h-3.5 w-3.5" /> Add Module
+            <Settings className="h-4 w-4" />
           </Button>
+          <div className="flex items-center border rounded-lg overflow-hidden">
+            {(['compact', 'comfortable', 'spacious'] as ViewDensity[]).map((d) => (
+              <button
+                key={d}
+                onClick={() => setViewDensity(d)}
+                className={`px-2 py-1 text-[10px] capitalize transition-colors ${
+                  viewDensity === d ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {d.slice(0, 4)}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground whitespace-nowrap">
+            <Save className="h-3 w-3" /> Auto-saved: {lastSaved}
+          </div>
         </div>
       </div>
 
-      {/* Two-panel layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-4 min-h-[640px]">
-        {/* Left panel: Sortable Module List */}
+      {/* ─── Three-Panel Layout ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr_340px] gap-4 min-h-[640px]">
+        {/* ─── Left: Course Overview Sidebar ─── */}
         <Card className="overflow-hidden flex flex-col">
           <div className="p-4 border-b bg-muted/30">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-foreground">Modules</h3>
-              <span className="text-[10px] text-muted-foreground">Drag to reorder</span>
-            </div>
+            <h3 className="text-sm font-semibold text-foreground">Course Overview</h3>
           </div>
           <ScrollArea className="flex-1">
-            <div className="p-3">
+            <div className="p-4 space-y-4">
+              {/* Thumbnail */}
+              <div className="relative aspect-video rounded-lg overflow-hidden bg-muted/50 border">
+                {selectedCourse.thumbnailUrl ? (
+                  <img src={selectedCourse.thumbnailUrl} alt={selectedCourse.title} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <ImageIcon className="h-8 w-8 text-muted-foreground/30" />
+                  </div>
+                )}
+              </div>
+
+              {/* Stats */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Modules</span>
+                  <span className="font-medium">{modules.length}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Lessons</span>
+                  <span className="font-medium">{totalLessons}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Duration</span>
+                  <span className="font-medium">{formatDuration(totalDurationSec)}</span>
+                </div>
+                <Separator />
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Completion</span>
+                    <span className="font-medium">{completionPct}%</span>
+                  </div>
+                  <Progress value={completionPct} className="h-1.5" />
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Actions */}
+              <div className="space-y-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-1.5 h-8 text-xs"
+                  onClick={() => setPreviewOpen(true)}
+                >
+                  <Eye className="h-3.5 w-3.5" /> Preview Course
+                </Button>
+                <Button
+                  size="sm"
+                  className={`w-full gap-1.5 h-8 text-xs ${isCoursePublished ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-amber-500 hover:bg-amber-600 text-white'}`}
+                  onClick={() => setIsCoursePublished(!isCoursePublished)}
+                >
+                  {isCoursePublished ? (
+                    <><CheckCircle2 className="h-3.5 w-3.5" /> Publish Course</>
+                  ) : (
+                    <><EyeOff className="h-3.5 w-3.5" /> Unpublish</>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-1.5 h-8 text-xs"
+                  onClick={() => setCourseSettingsOpen(true)}
+                >
+                  <Settings className="h-3.5 w-3.5" /> Course Settings
+                </Button>
+              </div>
+
+              <Separator />
+
+              {/* Module outline */}
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Outline</p>
+                {modules.length === 0 ? (
+                  <p className="text-xs text-muted-foreground/60 italic">No modules</p>
+                ) : (
+                  modules.map((mod, idx) => {
+                    const accent = moduleAccentColors[mod.accentColor ?? idx % moduleAccentColors.length];
+                    return (
+                      <button
+                        key={mod.id}
+                        onClick={() => { if (!expandedModules.has(mod.id)) toggleModule(mod.id); }}
+                        className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded-md hover:bg-muted/60 transition-colors text-xs"
+                      >
+                        <div className={`h-1.5 w-1.5 rounded-full ${accent.bar} shrink-0`} />
+                        <span className="truncate flex-1 text-foreground/80">{mod.title}</span>
+                        <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0">
+                          {mod.lessons.length}
+                        </Badge>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </ScrollArea>
+        </Card>
+
+        {/* ─── Center: Module & Lesson List ─── */}
+        <Card className="overflow-hidden flex flex-col">
+          <div className="p-4 border-b bg-muted/30 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground">Curriculum Builder</h3>
+            <Select value={selectedCourseId} onValueChange={handleCourseChange}>
+              <SelectTrigger className="w-[200px] h-7 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {demoCourses.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <ScrollArea className="flex-1">
+            <div className={`p-4 ${densityClasses.gap} space-y-3`}>
               {modules.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                  <Layers className="h-10 w-10 mb-3 opacity-30" />
+                <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+                  <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-950 dark:to-teal-950 flex items-center justify-center mb-4">
+                    <Layers className="h-8 w-8 text-emerald-400 dark:text-emerald-600" />
+                  </div>
                   <p className="text-sm font-medium">No modules yet</p>
-                  <p className="text-xs mt-1">Click &quot;Add Module&quot; to start building</p>
+                  <p className="text-xs mt-1 text-muted-foreground/70">Add your first module to start building!</p>
                   <Button
                     size="sm"
-                    className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                    className="mt-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white gap-1.5 shadow-md"
                     onClick={() => setAddModuleOpen(true)}
                   >
                     <Plus className="h-3.5 w-3.5" /> Add First Module
                   </Button>
                 </div>
               ) : (
-                <DndContext
-                  sensors={moduleSensors}
-                  collisionDetection={closestCenter}
-                  onDragStart={handleModuleDragStart}
-                  onDragEnd={handleModuleDragEnd}
+                <AnimatePresence>
+                  {modules.map((mod, idx) => (
+                    <BuilderModuleCard
+                      key={mod.id}
+                      module={mod}
+                      index={idx}
+                      isExpanded={expandedModules.has(mod.id)}
+                      isEditingTitle={editingModuleTitle === mod.id}
+                      isEditingDesc={editingModuleDesc === mod.id}
+                      selectedLessonId={selectedLessonId}
+                      onToggle={() => toggleModule(mod.id)}
+                      onEditTitle={() => setEditingModuleTitle(mod.id)}
+                      onUpdateTitle={(t) => updateModuleTitle(mod.id, t)}
+                      onCancelEditTitle={() => setEditingModuleTitle(null)}
+                      onEditDesc={() => setEditingModuleDesc(mod.id)}
+                      onUpdateDesc={(d) => updateModuleDesc(mod.id, d)}
+                      onCancelEditDesc={() => setEditingModuleDesc(null)}
+                      onTogglePublished={() => toggleModulePublished(mod.id)}
+                      onDelete={() => setDeleteConfirmId({ type: 'module', id: mod.id })}
+                      onAddLesson={() => { setAddLessonModuleId(mod.id); setAddLessonOpen(true); }}
+                      onMoveUp={() => moveModule(mod.id, 'up')}
+                      onMoveDown={() => moveModule(mod.id, 'down')}
+                      canMoveUp={idx > 0}
+                      canMoveDown={idx < modules.length - 1}
+                      onChangeAccent={(c) => changeModuleAccent(mod.id, c)}
+                      onSelectLesson={(lid) => setSelectedLessonId(lid)}
+                      onToggleLessonPreview={(lid) => toggleLessonPreview(mod.id, lid)}
+                      onToggleLessonPublished={(lid) => toggleLessonPublished(mod.id, lid)}
+                      onEditLessonTitle={(lid) => setEditingLessonTitle(lid)}
+                      onUpdateLessonTitle={(lid, t) => updateLessonTitle(mod.id, lid, t)}
+                      onCancelEditLessonTitle={() => setEditingLessonTitle(null)}
+                      onDeleteLesson={(lid) => setDeleteConfirmId({ type: 'lesson', id: lid })}
+                      onMoveLessonUp={(lid) => moveLesson(mod.id, lid, 'up')}
+                      onMoveLessonDown={(lid) => moveLesson(mod.id, lid, 'down')}
+                      onMoveLessonToModule={(lid, toModId) => moveLessonToModule(mod.id, lid, toModId)}
+                      allModules={modules}
+                      editingLessonTitle={editingLessonTitle}
+                      density={densityClasses}
+                    />
+                  ))}
+                </AnimatePresence>
+              )}
+
+              {/* Add Module Button */}
+              {modules.length > 0 && (
+                <Button
+                  variant="outline"
+                  className="w-full h-10 border-dashed gap-1.5 text-muted-foreground hover:text-foreground bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-emerald-950/20 dark:to-teal-950/20 hover:from-emerald-100/50 hover:to-teal-100/50 dark:hover:from-emerald-950/30 dark:hover:to-teal-950/30"
+                  onClick={() => setAddModuleOpen(true)}
                 >
-                  <SortableContext items={modules.map((m) => m.id)} strategy={verticalListSortingStrategy}>
-                    <div className="space-y-2">
-                      <AnimatePresence>
-                        {modules.map((mod, idx) => (
-                          <SortableModuleCard
-                            key={mod.id}
-                            module={mod}
-                            index={idx}
-                            isExpanded={expandedModules.has(mod.id)}
-                            isSelected={selectedModuleId === mod.id}
-                            isEditingTitle={editingModuleTitle === mod.id}
-                            onToggle={() => toggleModule(mod.id)}
-                            onSelect={() => selectModule(mod.id)}
-                            onEditTitle={() => setEditingModuleTitle(mod.id)}
-                            onUpdateTitle={(t) => updateModuleTitle(mod.id, t)}
-                            onCancelEditTitle={() => setEditingModuleTitle(null)}
-                            onTogglePublished={() => toggleModulePublished(mod.id)}
-                            onDelete={() => setDeleteConfirmId({ type: 'module', id: mod.id })}
-                            onAddLesson={() => { setAddLessonModuleId(mod.id); setAddLessonOpen(true); }}
-                          />
-                        ))}
-                      </AnimatePresence>
-                    </div>
-                  </SortableContext>
-                  <DragOverlay>
-                    {activeModuleId ? (
-                      <ModuleDragOverlayItem
-                        module={modules.find((m) => m.id === activeModuleId)!}
-                        index={modules.findIndex((m) => m.id === activeModuleId)}
-                      />
-                    ) : null}
-                  </DragOverlay>
-                </DndContext>
+                  <Plus className="h-4 w-4" /> Add Module
+                </Button>
               )}
             </div>
           </ScrollArea>
         </Card>
 
-        {/* Right panel: Lesson Editor for selected module */}
+        {/* ─── Right: Lesson Content Editor Panel ─── */}
         <Card className="overflow-hidden flex flex-col">
-          {selectedModule ? (
-            <>
-              <div className="p-4 border-b bg-muted/30">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className={`h-2 w-8 rounded-full bg-gradient-to-r ${builderModuleGradients[modules.findIndex((m) => m.id === selectedModule.id) % builderModuleGradients.length]}`} />
-                    <h3 className="text-sm font-semibold text-foreground">{selectedModule.title}</h3>
-                    <Badge variant="outline" className="text-[10px]">
-                      {selectedModule.lessons.length} lessons
-                    </Badge>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 h-7 text-xs"
-                    onClick={() => { setAddLessonModuleId(selectedModule.id); setAddLessonOpen(true); }}
-                  >
-                    <Plus className="h-3 w-3" /> Add Lesson
-                  </Button>
-                </div>
-              </div>
-              <ScrollArea className="flex-1">
-                <div className="p-4">
-                  {selectedModule.lessons.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                      <BookOpen className="h-10 w-10 mb-3 opacity-30" />
-                      <p className="text-sm font-medium">No lessons yet</p>
-                      <p className="text-xs mt-1">Add lessons to build this module&apos;s content</p>
-                      <Button
-                        size="sm"
-                        className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
-                        onClick={() => { setAddLessonModuleId(selectedModule.id); setAddLessonOpen(true); }}
-                      >
-                        <Plus className="h-3.5 w-3.5" /> Add First Lesson
-                      </Button>
-                    </div>
-                  ) : (
-                    <DndContext
-                      sensors={lessonSensors}
-                      collisionDetection={closestCenter}
-                      onDragStart={handleLessonDragStart}
-                      onDragEnd={handleLessonDragEnd(selectedModule.id)}
-                    >
-                      <SortableContext items={selectedModule.lessons.map((l) => l.id)} strategy={verticalListSortingStrategy}>
-                        <div className="space-y-1.5">
-                          <AnimatePresence>
-                            {selectedModule.lessons
-                              .sort((a, b) => a.orderIndex - b.orderIndex)
-                              .map((lesson) => (
-                                <SortableLessonRow
-                                  key={lesson.id}
-                                  lesson={lesson}
-                                  moduleId={selectedModule.id}
-                                  isEditingTitle={editingLessonTitle === lesson.id}
-                                  onEditTitle={() => setEditingLessonTitle(lesson.id)}
-                                  onUpdateTitle={(t) => updateLessonTitle(selectedModule.id, lesson.id, t)}
-                                  onCancelEditTitle={() => setEditingLessonTitle(null)}
-                                  onTogglePublished={() => toggleLessonPublished(selectedModule.id, lesson.id)}
-                                  onDelete={() => setDeleteConfirmId({ type: 'lesson', id: lesson.id })}
-                                  deleteConfirmId={deleteConfirmId}
-                                />
-                              ))}
-                          </AnimatePresence>
-                        </div>
-                      </SortableContext>
-                      <DragOverlay>
-                        {activeLessonId ? (
-                          <LessonDragOverlayItem
-                            lesson={selectedModule.lessons.find((l) => l.id === activeLessonId)!}
-                          />
-                        ) : null}
-                      </DragOverlay>
-                    </DndContext>
-                  )}
-                </div>
-              </ScrollArea>
-            </>
+          {selectedLessonData ? (
+            <LessonContentEditor
+              lesson={selectedLessonData.lesson}
+              moduleId={selectedLessonData.moduleId}
+              onUpdate={(field, value) => updateLessonContent(selectedLessonData.moduleId, selectedLessonData.lesson.id, field, value)}
+              onTogglePreview={() => toggleLessonPreview(selectedLessonData.moduleId, selectedLessonData.lesson.id)}
+              onTogglePublished={() => toggleLessonPublished(selectedLessonData.moduleId, selectedLessonData.lesson.id)}
+              onClose={() => setSelectedLessonId(null)}
+            />
           ) : (
             <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-muted-foreground">
-              <Sparkles className="h-12 w-12 mb-4 opacity-30" />
-              <p className="text-lg font-medium">Select a module</p>
-              <p className="text-sm">Choose a module from the left panel to manage its lessons</p>
+              <div className="h-14 w-14 rounded-2xl bg-muted/50 flex items-center justify-center mb-3">
+                <Pencil className="h-7 w-7 text-muted-foreground/40" />
+              </div>
+              <p className="text-sm font-medium">Lesson Editor</p>
+              <p className="text-xs mt-1 text-muted-foreground/70">Select a lesson to edit its content</p>
             </div>
           )}
         </Card>
       </div>
 
-      {/* Add Module Dialog */}
+      {/* ─── Dialogs ─── */}
       <AddModuleDialog open={addModuleOpen} onOpenChange={setAddModuleOpen} onAdd={handleAddModule} />
-
-      {/* Add Lesson Dialog */}
       <AddLessonDialog
         open={addLessonOpen}
         onOpenChange={(open) => { setAddLessonOpen(open); if (!open) setAddLessonModuleId(null); }}
         onAdd={(title, type, dur) => addLessonModuleId && handleAddLesson(addLessonModuleId, title, type, dur)}
       />
-
-      {/* Course Settings Dialog */}
-      <CourseSettingsDialog
+      <EnhancedCourseSettingsDialog
         open={courseSettingsOpen}
         onOpenChange={setCourseSettingsOpen}
         course={selectedCourse}
+      />
+      <CoursePreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        course={selectedCourse}
+        modules={modules}
       />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deleteConfirmId} onOpenChange={(open) => { if (!open) setDeleteConfirmId(null); }}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle>Confirm Delete</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Confirm Delete
+            </DialogTitle>
             <DialogDescription>
               {deleteConfirmId?.type === 'module'
                 ? 'This will delete the module and all its lessons. This action cannot be undone.'
@@ -1565,87 +1764,140 @@ function VisualCourseBuilderTab() {
   );
 }
 
-// ─── Sortable Module Card ──────────────────────────────────
+// ─── Builder Module Card ───────────────────────────────────
 
-function SortableModuleCard({
+function BuilderModuleCard({
   module,
   index,
   isExpanded,
-  isSelected,
   isEditingTitle,
+  isEditingDesc,
+  selectedLessonId,
   onToggle,
-  onSelect,
   onEditTitle,
   onUpdateTitle,
   onCancelEditTitle,
+  onEditDesc,
+  onUpdateDesc,
+  onCancelEditDesc,
   onTogglePublished,
   onDelete,
   onAddLesson,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
+  onChangeAccent,
+  onSelectLesson,
+  onToggleLessonPreview,
+  onToggleLessonPublished,
+  onEditLessonTitle,
+  onUpdateLessonTitle,
+  onCancelEditLessonTitle,
+  onDeleteLesson,
+  onMoveLessonUp,
+  onMoveLessonDown,
+  onMoveLessonToModule,
+  allModules,
+  editingLessonTitle,
+  density,
 }: {
   module: BuilderModule;
   index: number;
   isExpanded: boolean;
-  isSelected: boolean;
   isEditingTitle: boolean;
+  isEditingDesc: boolean;
+  selectedLessonId: string | null;
   onToggle: () => void;
-  onSelect: () => void;
   onEditTitle: () => void;
   onUpdateTitle: (title: string) => void;
   onCancelEditTitle: () => void;
+  onEditDesc: () => void;
+  onUpdateDesc: (desc: string) => void;
+  onCancelEditDesc: () => void;
   onTogglePublished: () => void;
   onDelete: () => void;
   onAddLesson: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onChangeAccent: (colorIndex: number) => void;
+  onSelectLesson: (lessonId: string) => void;
+  onToggleLessonPreview: (lessonId: string) => void;
+  onToggleLessonPublished: (lessonId: string) => void;
+  onEditLessonTitle: (lessonId: string) => void;
+  onUpdateLessonTitle: (lessonId: string, title: string) => void;
+  onCancelEditLessonTitle: () => void;
+  onDeleteLesson: (lessonId: string) => void;
+  onMoveLessonUp: (lessonId: string) => void;
+  onMoveLessonDown: (lessonId: string) => void;
+  onMoveLessonToModule: (lessonId: string, toModuleId: string) => void;
+  allModules: BuilderModule[];
+  editingLessonTitle: string | null;
+  density: { gap: string; py: string; px: string; text: string; lessonPy: string };
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: module.id });
-  const gradient = builderModuleGradients[index % builderModuleGradients.length];
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const accent = moduleAccentColors[module.accentColor ?? index % moduleAccentColors.length];
   const lessonCount = module.lessons.length;
-  const publishedLessons = module.lessons.filter((l) => l.isPublished).length;
   const modDurationSec = module.lessons.reduce((a, l) => a + (l.videoDuration || 0), 0);
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  };
 
   return (
     <motion.div
-      ref={setNodeRef}
-      style={style}
       layout
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: 0.25, layout: { duration: 0.2 } }}
     >
-      <div
-        className={`group rounded-xl border transition-all duration-200 overflow-hidden ${
-          isSelected
-            ? 'border-emerald-300 dark:border-emerald-700 shadow-md shadow-emerald-100/50 dark:shadow-emerald-900/20'
-            : 'border-border hover:border-emerald-200 dark:hover:border-emerald-800'
-        } ${isDragging ? 'shadow-xl' : ''}`}
-        onClick={onSelect}
-      >
-        {/* Gradient left border */}
+      <div className="group rounded-xl border border-border/70 hover:border-border transition-all duration-200 overflow-hidden shadow-sm hover:shadow-md backdrop-blur-sm bg-card/90">
         <div className="flex">
-          <div className={`w-1.5 bg-gradient-to-b ${gradient} shrink-0`} />
+          {/* Color accent bar */}
+          <div className="relative w-1.5 shrink-0">
+            <div className={`absolute inset-0 bg-gradient-to-b ${accent.gradient}`} />
+            {/* Color picker trigger */}
+            <button
+              className="absolute bottom-1 left-1/2 -translate-x-1/2 h-3 w-3 rounded-full opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 dark:bg-black/50 border border-white/20 flex items-center justify-center"
+              onClick={() => setShowColorPicker(!showColorPicker)}
+            >
+              <Palette className="h-2 w-2 text-foreground/60" />
+            </button>
+          </div>
 
-          <div className="flex-1 backdrop-blur-sm bg-card/80">
+          {/* Color picker popup */}
+          <AnimatePresence>
+            {showColorPicker && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="absolute left-5 top-2 z-10 bg-popover border rounded-lg shadow-lg p-1.5 flex gap-1"
+              >
+                {moduleAccentColors.map((c, i) => (
+                  <button
+                    key={c.name}
+                    onClick={() => { onChangeAccent(i); setShowColorPicker(false); }}
+                    className={`h-5 w-5 rounded-full ${c.bar} transition-transform hover:scale-110 ${
+                      (module.accentColor ?? index % moduleAccentColors.length) === i ? 'ring-2 ring-offset-1 ring-foreground/30' : ''
+                    }`}
+                    title={c.name}
+                  />
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="flex-1">
             {/* Module header */}
-            <div className="p-3">
+            <div className={`${density.px} ${density.py}`}>
               <div className="flex items-center gap-2">
                 {/* Drag handle */}
-                <button
-                  className="cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-muted/60 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                  {...attributes}
-                  {...listeners}
-                  onClick={(e) => e.stopPropagation()}
-                >
+                <div className="cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-muted/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors shrink-0">
                   <GripVertical className="h-4 w-4" />
-                </button>
+                </div>
 
                 {/* Module number badge */}
-                <div className={`h-6 w-6 rounded-md bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0`}>
+                <div className={`h-6 w-6 rounded-md bg-gradient-to-br ${accent.gradient} flex items-center justify-center shrink-0`}>
                   <span className="text-[10px] font-bold text-white">{index + 1}</span>
                 </div>
 
@@ -1664,8 +1916,35 @@ function SortableModuleCard({
                       className="h-6 text-sm px-1 py-0"
                     />
                   ) : (
-                    <p className="text-sm font-medium text-foreground truncate">{module.title}</p>
+                    <p className="text-sm font-medium text-foreground truncate cursor-default">{module.title}</p>
                   )}
+                </div>
+
+                {/* Lesson count badge */}
+                <Badge variant="secondary" className="text-[10px] h-5 px-1.5 shrink-0 gap-1">
+                  <BookOpen className="h-2.5 w-2.5" /> {lessonCount}
+                </Badge>
+
+                {/* Reorder buttons */}
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-6 w-6 ${!canMoveUp ? 'opacity-20' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+                    onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
+                    disabled={!canMoveUp}
+                  >
+                    <ArrowUp className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-6 w-6 ${!canMoveDown ? 'opacity-20' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+                    onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
+                    disabled={!canMoveDown}
+                  >
+                    <ArrowDown className="h-3 w-3" />
+                  </Button>
                 </div>
 
                 {/* Status */}
@@ -1684,6 +1963,16 @@ function SortableModuleCard({
                   )}
                 </button>
 
+                {/* Delete */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0"
+                  onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+
                 {/* Expand/collapse toggle */}
                 <motion.button
                   onClick={(e) => { e.stopPropagation(); onToggle(); }}
@@ -1695,76 +1984,220 @@ function SortableModuleCard({
                 </motion.button>
               </div>
 
+              {/* Description */}
+              <div className="ml-8 mt-1" onDoubleClick={(e) => { e.stopPropagation(); onEditDesc(); }}>
+                {isEditingDesc ? (
+                  <Input
+                    autoFocus
+                    defaultValue={module.description || ''}
+                    placeholder="Add description..."
+                    onBlur={(e) => onUpdateDesc(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') onUpdateDesc((e.target as HTMLInputElement).value);
+                      if (e.key === 'Escape') onCancelEditDesc();
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-5 text-xs px-1 py-0"
+                  />
+                ) : (
+                  <p className="text-[11px] text-muted-foreground/70 truncate cursor-default">
+                    {module.description || 'Double-click to add description...'}
+                  </p>
+                )}
+              </div>
+
               {/* Module meta */}
               <div className="flex items-center gap-3 mt-1.5 ml-8 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <BookOpen className="h-3 w-3" /> {lessonCount} lessons
-                </span>
                 {modDurationSec > 0 && (
                   <span className="flex items-center gap-1">
                     <Clock className="h-3 w-3" /> {formatDuration(modDurationSec)}
                   </span>
                 )}
-                <span>{publishedLessons}/{lessonCount} published</span>
+                <span>{module.lessons.filter((l) => l.isPublished).length}/{lessonCount} published</span>
               </div>
             </div>
 
-            {/* Expanded: lessons preview & actions */}
+            {/* Expanded: Lesson cards */}
             <AnimatePresence>
               {isExpanded && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
+                  transition={{ duration: 0.25 }}
                   className="overflow-hidden"
                 >
-                  <div className="px-3 pb-3 space-y-1">
+                  <div className={`${density.px} pb-3 space-y-1.5`}>
                     <div className="border-t border-border/50 pt-2" />
-                    {module.lessons.length > 0 ? (
-                      module.lessons
-                        .sort((a, b) => a.orderIndex - b.orderIndex)
-                        .map((lesson) => {
-                          const typeColor = lessonTypeColors[lesson.contentType] || lessonTypeColors.text;
-                          return (
-                            <div
-                              key={lesson.id}
-                              className="flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-muted/40 transition-colors text-xs"
-                            >
-                              <div className={`h-5 w-5 rounded flex items-center justify-center shrink-0 ${typeColor.bg}`}>
-                                <ContentTypeIcon type={lesson.contentType} className={`h-3 w-3 ${typeColor.text}`} />
-                              </div>
-                              <span className="flex-1 truncate text-foreground">{lesson.title}</span>
-                              {lesson.videoDuration && (
-                                <span className="text-muted-foreground shrink-0">{formatDuration(lesson.videoDuration)}</span>
-                              )}
-                              {lesson.isPublished ? (
-                                <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
-                              ) : (
-                                <Circle className="h-3 w-3 text-muted-foreground/50 shrink-0" />
-                              )}
-                            </div>
-                          );
-                        })
-                    ) : (
-                      <p className="text-xs text-muted-foreground py-2 text-center">No lessons yet</p>
-                    )}
-                    <div className="flex items-center gap-2 pt-1">
+
+                    {/* Vertical line connector */}
+                    <div className="relative ml-4">
+                      <div className="absolute left-3 top-0 bottom-0 w-px bg-border/40" />
+
+                      {module.lessons.length > 0 ? (
+                        module.lessons
+                          .sort((a, b) => a.orderIndex - b.orderIndex)
+                          .map((lesson, lIdx) => {
+                            const typeColor = lessonTypeColors[lesson.contentType] || lessonTypeColors.text;
+                            const isSelected = selectedLessonId === lesson.id;
+                            const isEditing = editingLessonTitle === lesson.id;
+                            const canLUp = lIdx > 0;
+                            const canLDown = lIdx < module.lessons.length - 1;
+                            const otherModules = allModules.filter((m) => m.id !== module.id);
+
+                            return (
+                              <motion.div
+                                key={lesson.id}
+                                layout
+                                initial={{ opacity: 0, x: -8 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 8 }}
+                                transition={{ duration: 0.15 }}
+                                className={`relative flex items-center gap-2 ${density.lessonPy} px-3 ml-4 rounded-lg border transition-all duration-200 cursor-pointer ${
+                                  isSelected
+                                    ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/20 shadow-sm'
+                                    : 'border-border/40 hover:border-border hover:bg-muted/20'
+                                }`}
+                                onClick={() => onSelectLesson(lesson.id)}
+                              >
+                                {/* Connector dot */}
+                                <div className={`absolute -left-5 top-1/2 -translate-y-1/2 h-2 w-2 rounded-full border-2 ${
+                                  isSelected ? `border-emerald-400 bg-emerald-400` : 'border-border bg-background'
+                                }`} />
+
+                                {/* Content type badge */}
+                                <div className={`h-6 w-6 rounded flex items-center justify-center shrink-0 ${typeColor.bg}`}>
+                                  <ContentTypeIcon type={lesson.contentType} className={`h-3 w-3 ${typeColor.text}`} />
+                                </div>
+
+                                {/* Title */}
+                                <div className="flex-1 min-w-0" onDoubleClick={(e) => { e.stopPropagation(); onEditLessonTitle(lesson.id); }}>
+                                  {isEditing ? (
+                                    <Input
+                                      autoFocus
+                                      defaultValue={lesson.title}
+                                      onBlur={(e) => onUpdateLessonTitle(lesson.id, e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') onUpdateLessonTitle(lesson.id, (e.target as HTMLInputElement).value);
+                                        if (e.key === 'Escape') onCancelEditLessonTitle();
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="h-5 text-xs px-1 py-0"
+                                    />
+                                  ) : (
+                                    <p className="text-xs text-foreground truncate">{lesson.title}</p>
+                                  )}
+                                </div>
+
+                                {/* Content type label */}
+                                <Badge variant="outline" className={`text-[9px] h-4 px-1 shrink-0 ${typeColor.border} ${typeColor.text}`}>
+                                  {lessonTypeLabels[lesson.contentType] || lesson.contentType}
+                                </Badge>
+
+                                {/* Duration */}
+                                {lesson.videoDuration && (
+                                  <span className="text-[10px] text-muted-foreground shrink-0 flex items-center gap-0.5">
+                                    <Clock className="h-2.5 w-2.5" /> {formatDuration(lesson.videoDuration)}
+                                  </span>
+                                )}
+
+                                {/* Preview toggle */}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); onToggleLessonPreview(lesson.id); }}
+                                  className={`shrink-0 p-0.5 rounded transition-colors ${lesson.isPreview ? 'text-amber-500' : 'text-muted-foreground/30 hover:text-muted-foreground'}`}
+                                  title={lesson.isPreview ? 'Remove preview' : 'Mark as preview'}
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </button>
+
+                                {/* Published toggle */}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); onToggleLessonPublished(lesson.id); }}
+                                  className="shrink-0 hover:scale-110 transition-transform"
+                                  title={lesson.isPublished ? 'Unpublish' : 'Publish'}
+                                >
+                                  {lesson.isPublished ? (
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                  ) : (
+                                    <Circle className="h-3.5 w-3.5 text-muted-foreground/40 hover:text-muted-foreground" />
+                                  )}
+                                </button>
+
+                                {/* Lesson reorder buttons */}
+                                <div className="flex items-center gap-0 shrink-0 opacity-0 group-hover:opacity-0" style={{ opacity: 1 }}>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className={`h-5 w-5 ${!canLUp ? 'opacity-20' : ''}`}
+                                    onClick={(e) => { e.stopPropagation(); onMoveLessonUp(lesson.id); }}
+                                    disabled={!canLUp}
+                                  >
+                                    <ChevronUp className="h-2.5 w-2.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className={`h-5 w-5 ${!canLDown ? 'opacity-20' : ''}`}
+                                    onClick={(e) => { e.stopPropagation(); onMoveLessonDown(lesson.id); }}
+                                    disabled={!canLDown}
+                                  >
+                                    <ChevronDown className="h-2.5 w-2.5" />
+                                  </Button>
+                                </div>
+
+                                {/* Move to module dropdown */}
+                                {otherModules.length > 0 && (
+                                  <Select
+                                    onValueChange={(val) => { onMoveLessonToModule(lesson.id, val); }}
+                                  >
+                                    <SelectTrigger
+                                      className="h-5 w-5 p-0 border-0 bg-transparent shrink-0"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <MoreVertical className="h-3 w-3 text-muted-foreground/50" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="__header__" disabled className="text-[10px] text-muted-foreground">
+                                        Move to module...
+                                      </SelectItem>
+                                      {otherModules.map((m) => (
+                                        <SelectItem key={m.id} value={m.id} className="text-xs">
+                                          {m.title}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+
+                                {/* Delete */}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 opacity-0 hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive shrink-0"
+                                  style={{ opacity: undefined }}
+                                  onClick={(e) => { e.stopPropagation(); onDeleteLesson(lesson.id); }}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </motion.div>
+                            );
+                          })
+                      ) : (
+                        <div className="ml-4 py-4 text-center">
+                          <p className="text-xs text-muted-foreground/60">No lessons yet</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Add Lesson Button */}
+                    <div className="ml-8 pt-1">
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-6 text-[11px] gap-1 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 w-full"
+                        className="h-7 text-[11px] gap-1 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 w-full border border-dashed border-emerald-200 dark:border-emerald-800 hover:border-emerald-300 dark:hover:border-emerald-700"
                         onClick={(e) => { e.stopPropagation(); onAddLesson(); }}
                       >
                         <Plus className="h-3 w-3" /> Add Lesson
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 text-[11px] gap-1 text-destructive hover:text-destructive shrink-0"
-                        onClick={(e) => { e.stopPropagation(); onDelete(); }}
-                      >
-                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                   </div>
@@ -1778,201 +2211,212 @@ function SortableModuleCard({
   );
 }
 
-// ─── Module Drag Overlay ───────────────────────────────────
+// ─── Lesson Content Editor Panel ───────────────────────────
 
-function ModuleDragOverlayItem({ module, index }: { module: BuilderModule; index: number }) {
-  const gradient = builderModuleGradients[index % builderModuleGradients.length];
-  return (
-    <div className="rounded-xl border shadow-2xl bg-card/95 backdrop-blur-md scale-[1.02] overflow-hidden">
-      <div className="flex">
-        <div className={`w-1.5 bg-gradient-to-b ${gradient} shrink-0`} />
-        <div className="p-3">
-          <div className="flex items-center gap-2">
-            <div className={`h-6 w-6 rounded-md bg-gradient-to-br ${gradient} flex items-center justify-center`}>
-              <span className="text-[10px] font-bold text-white">{index + 1}</span>
-            </div>
-            <p className="text-sm font-medium text-foreground">{module.title}</p>
-            <Badge variant="outline" className="text-[10px]">
-              {module.lessons.length} lessons
-            </Badge>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Lesson type colors ────────────────────────────────────
-
-const lessonTypeColors: Record<string, { bg: string; text: string }> = {
-  video: { bg: 'bg-sky-100 dark:bg-sky-950', text: 'text-sky-600 dark:text-sky-400' },
-  text: { bg: 'bg-emerald-100 dark:bg-emerald-950', text: 'text-emerald-600 dark:text-emerald-400' },
-  document: { bg: 'bg-emerald-100 dark:bg-emerald-950', text: 'text-emerald-600 dark:text-emerald-400' },
-  audio: { bg: 'bg-violet-100 dark:bg-violet-950', text: 'text-violet-600 dark:text-violet-400' },
-  live_session: { bg: 'bg-amber-100 dark:bg-amber-950', text: 'text-amber-600 dark:text-amber-400' },
-};
-
-// ─── Sortable Lesson Row ───────────────────────────────────
-
-function SortableLessonRow({
+function LessonContentEditor({
   lesson,
   moduleId,
-  isEditingTitle,
-  onEditTitle,
-  onUpdateTitle,
-  onCancelEditTitle,
+  onUpdate,
+  onTogglePreview,
   onTogglePublished,
-  onDelete,
-  deleteConfirmId,
+  onClose,
 }: {
   lesson: BuilderLesson;
   moduleId: string;
-  isEditingTitle: boolean;
-  onEditTitle: () => void;
-  onUpdateTitle: (title: string) => void;
-  onCancelEditTitle: () => void;
+  onUpdate: (field: string, value: string | number | boolean) => void;
+  onTogglePreview: () => void;
   onTogglePublished: () => void;
-  onDelete: () => void;
-  deleteConfirmId: { type: 'module' | 'lesson'; id: string } | null;
+  onClose: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lesson.id });
+  const [showToolbar, setShowToolbar] = useState(true);
   const typeColor = lessonTypeColors[lesson.contentType] || lessonTypeColors.text;
-  const isDeleteConfirming = deleteConfirmId?.type === 'lesson' && deleteConfirmId.id === lesson.id;
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  };
 
   return (
-    <motion.div
-      ref={setNodeRef}
-      style={style}
-      layout
-      initial={{ opacity: 0, x: -8 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 8 }}
-      transition={{ duration: 0.15 }}
-    >
-      <div
-        className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-all duration-200 ${
-          isDragging
-            ? 'border-emerald-300 dark:border-emerald-700 shadow-lg bg-card/95 backdrop-blur-sm'
-            : 'border-border/60 hover:border-border hover:bg-muted/20'
-        } group`}
-      >
-        {/* Drag handle */}
-        <button
-          className="cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-muted/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors shrink-0"
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
-
-        {/* Lesson type icon */}
-        <div className={`h-7 w-7 rounded-md flex items-center justify-center shrink-0 ${typeColor.bg}`}>
-          <ContentTypeIcon type={lesson.contentType} className={`h-3.5 w-3.5 ${typeColor.text}`} />
-        </div>
-
-        {/* Title */}
-        <div className="flex-1 min-w-0" onDoubleClick={onEditTitle}>
-          {isEditingTitle ? (
-            <Input
-              autoFocus
-              defaultValue={lesson.title}
-              onBlur={(e) => onUpdateTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') onUpdateTitle((e.target as HTMLInputElement).value);
-                if (e.key === 'Escape') onCancelEditTitle();
-              }}
-              className="h-6 text-sm px-1 py-0"
-            />
-          ) : (
-            <p className="text-sm text-foreground truncate cursor-default">{lesson.title}</p>
-          )}
-        </div>
-
-        {/* Duration badge */}
-        {lesson.videoDuration && (
-          <Badge variant="outline" className="text-[10px] shrink-0 gap-1">
-            <Clock className="h-2.5 w-2.5" /> {formatDuration(lesson.videoDuration)}
-          </Badge>
-        )}
-
-        {/* Preview badge */}
-        {lesson.isPreview && (
-          <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400 shrink-0">
-            Preview
-          </Badge>
-        )}
-
-        {/* Published toggle */}
-        <button
-          onClick={onTogglePublished}
-          className="shrink-0 hover:scale-110 transition-transform"
-          title={lesson.isPublished ? 'Unpublish' : 'Publish'}
-        >
-          {lesson.isPublished ? (
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          ) : (
-            <Circle className="h-4 w-4 text-muted-foreground/50 hover:text-muted-foreground" />
-          )}
-        </button>
-
-        {/* Delete button - visible on hover */}
-        {isDeleteConfirming ? (
-          <div className="flex items-center gap-1 shrink-0">
-            <Button
-              variant="destructive"
-              size="sm"
-              className="h-6 text-[10px] px-2"
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            >
-              Confirm
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 text-[10px] px-2"
-              onClick={(e) => { e.stopPropagation(); /* closes via parent */ }}
-            >
-              Cancel
-            </Button>
+    <>
+      <div className="p-3 border-b bg-muted/30">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className={`h-6 w-6 rounded flex items-center justify-center shrink-0 ${typeColor.bg}`}>
+              <ContentTypeIcon type={lesson.contentType} className={`h-3 w-3 ${typeColor.text}`} />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground truncate">{lesson.title}</h3>
           </div>
-        ) : (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0"
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onClose}>
+            <X className="h-4 w-4" />
           </Button>
-        )}
+        </div>
       </div>
-    </motion.div>
-  );
-}
+      <ScrollArea className="flex-1">
+        <div className="p-4 space-y-4">
+          {/* Title */}
+          <div className="grid gap-1.5">
+            <Label className="text-xs">Title</Label>
+            <Input
+              value={lesson.title}
+              onChange={(e) => onUpdate('title', e.target.value)}
+              className="h-8 text-sm"
+            />
+          </div>
 
-// ─── Lesson Drag Overlay ───────────────────────────────────
+          {/* Content Type */}
+          <div className="grid gap-1.5">
+            <Label className="text-xs">Content Type</Label>
+            <Select value={lesson.contentType} onValueChange={(v) => onUpdate('contentType', v)}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="video">Video</SelectItem>
+                <SelectItem value="text">Text</SelectItem>
+                <SelectItem value="audio">Audio</SelectItem>
+                <SelectItem value="document">Document</SelectItem>
+                <SelectItem value="live_session">Live Session</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-function LessonDragOverlayItem({ lesson }: { lesson: BuilderLesson }) {
-  const typeColor = lessonTypeColors[lesson.contentType] || lessonTypeColors.text;
-  return (
-    <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-emerald-300 dark:border-emerald-700 shadow-2xl bg-card/95 backdrop-blur-md scale-[1.02]">
-      <GripVertical className="h-4 w-4 text-muted-foreground/50" />
-      <div className={`h-7 w-7 rounded-md flex items-center justify-center ${typeColor.bg}`}>
-        <ContentTypeIcon type={lesson.contentType} className={`h-3.5 w-3.5 ${typeColor.text}`} />
-      </div>
-      <p className="text-sm font-medium text-foreground">{lesson.title}</p>
-      {lesson.videoDuration && (
-        <Badge variant="outline" className="text-[10px] gap-1">
-          <Clock className="h-2.5 w-2.5" /> {formatDuration(lesson.videoDuration)}
-        </Badge>
-      )}
-    </div>
+          {/* Rich Text Editor */}
+          <div className="grid gap-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Content</Label>
+              <Button variant="ghost" size="sm" className="h-5 text-[10px] gap-1" onClick={() => setShowToolbar(!showToolbar)}>
+                <Pencil className="h-2.5 w-2.5" /> {showToolbar ? 'Hide' : 'Show'} toolbar
+              </Button>
+            </div>
+            {showToolbar && (
+              <div className="flex items-center gap-0.5 p-1 border rounded-t-md bg-muted/30">
+                {[
+                  { icon: Bold, label: 'Bold' },
+                  { icon: Italic, label: 'Italic' },
+                  { icon: Heading1, label: 'Heading' },
+                  { icon: List, label: 'List' },
+                  { icon: Code2, label: 'Code' },
+                  { icon: Link2, label: 'Link' },
+                  { icon: ImageIcon, label: 'Image' },
+                ].map(({ icon: Icon, label }) => (
+                  <Button key={label} variant="ghost" size="icon" className="h-6 w-6" title={label}>
+                    <Icon className="h-3 w-3" />
+                  </Button>
+                ))}
+              </div>
+            )}
+            <Textarea
+              value={lesson.content || ''}
+              onChange={(e) => onUpdate('content', e.target.value)}
+              placeholder="Write your lesson content here..."
+              rows={8}
+              className={`text-sm resize-none ${showToolbar ? 'rounded-t-none' : ''}`}
+            />
+          </div>
+
+          {/* Video URL */}
+          {(lesson.contentType === 'video' || lesson.contentType === 'live_session') && (
+            <div className="grid gap-1.5">
+              <Label className="text-xs">Video URL</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={lesson.videoUrl || ''}
+                  onChange={(e) => onUpdate('videoUrl', e.target.value)}
+                  placeholder="https://youtube.com/watch?v=... or Vimeo URL"
+                  className="h-8 text-xs flex-1"
+                />
+                <Button variant="outline" size="sm" className="h-8 px-2 shrink-0">
+                  <ExternalLink className="h-3 w-3" />
+                </Button>
+              </div>
+              {/* Embed Preview */}
+              {lesson.videoUrl && (lesson.videoUrl.includes('youtube') || lesson.videoUrl.includes('vimeo')) && (
+                <div className="aspect-video rounded-lg border bg-muted/30 flex items-center justify-center">
+                  <div className="text-center">
+                    <Video className="h-8 w-8 text-muted-foreground/30 mx-auto mb-1" />
+                    <p className="text-[10px] text-muted-foreground">Video embed preview</p>
+                    <p className="text-[10px] text-muted-foreground/60 truncate max-w-[200px]">{lesson.videoUrl}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Duration */}
+          <div className="grid gap-1.5">
+            <Label className="text-xs">Duration (minutes)</Label>
+            <Input
+              type="number"
+              value={lesson.videoDuration ? Math.round(lesson.videoDuration / 60) : 0}
+              onChange={(e) => onUpdate('videoDuration', (parseInt(e.target.value) || 0) * 60)}
+              min={0}
+              className="h-8 text-xs w-24"
+            />
+          </div>
+
+          {/* Toggles */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <Eye className={`h-4 w-4 ${lesson.isPreview ? 'text-amber-500' : 'text-muted-foreground/50'}`} />
+                <div>
+                  <Label className="text-xs">Mark as Preview</Label>
+                  <p className="text-[10px] text-muted-foreground">Allow free access before purchase</p>
+                </div>
+              </div>
+              <Switch checked={lesson.isPreview} onCheckedChange={onTogglePreview} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                {lesson.isPublished ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                ) : (
+                  <Circle className="h-4 w-4 text-muted-foreground/50" />
+                )}
+                <div>
+                  <Label className="text-xs">Published</Label>
+                  <p className="text-[10px] text-muted-foreground">{lesson.isPublished ? 'Visible to learners' : 'Hidden (draft)'}</p>
+                </div>
+              </div>
+              <Switch checked={lesson.isPublished} onCheckedChange={onTogglePublished} />
+            </div>
+          </div>
+
+          {/* Resources */}
+          <div className="grid gap-1.5">
+            <Label className="text-xs">Resources</Label>
+            {lesson.resources && lesson.resources.length > 0 ? (
+              <div className="space-y-1">
+                {lesson.resources.map((r) => (
+                  <div key={r.id} className="flex items-center gap-2 text-xs p-2 rounded-md border bg-muted/30">
+                    {r.type === 'file' && <Upload className="h-3 w-3 text-muted-foreground" />}
+                    {r.type === 'link' && <Link2 className="h-3 w-3 text-muted-foreground" />}
+                    {r.type === 'document' && <File className="h-3 w-3 text-muted-foreground" />}
+                    <span className="flex-1 truncate">{r.name}</span>
+                    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0">
+                      <X className="h-2.5 w-2.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[10px] text-muted-foreground/60 italic">No resources attached</p>
+            )}
+            <div className="flex gap-1.5">
+              <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1 flex-1">
+                <Upload className="h-2.5 w-2.5" /> File
+              </Button>
+              <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1 flex-1">
+                <Link2 className="h-2.5 w-2.5" /> Link
+              </Button>
+              <Button variant="outline" size="sm" className="h-6 text-[10px] gap-1 flex-1">
+                <File className="h-2.5 w-2.5" /> Document
+              </Button>
+            </div>
+          </div>
+
+          {/* Save button */}
+          <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 h-9 text-xs">
+            <Save className="h-3.5 w-3.5" /> Save Changes
+          </Button>
+        </div>
+      </ScrollArea>
+    </>
   );
 }
 
@@ -2106,6 +2550,14 @@ function AddLessonDialog({
     onOpenChange(newOpen);
   };
 
+  const contentTypes = [
+    { value: 'video' as const, icon: Video, label: 'Video', bg: 'bg-sky-50 dark:bg-sky-950/50', border: 'border-sky-300 dark:border-sky-700', text: 'text-sky-700 dark:text-sky-300' },
+    { value: 'text' as const, icon: FileText, label: 'Text', bg: 'bg-emerald-50 dark:bg-emerald-950/50', border: 'border-emerald-300 dark:border-emerald-700', text: 'text-emerald-700 dark:text-emerald-300' },
+    { value: 'audio' as const, icon: Headphones, label: 'Audio', bg: 'bg-violet-50 dark:bg-violet-950/50', border: 'border-violet-300 dark:border-violet-700', text: 'text-violet-700 dark:text-violet-300' },
+    { value: 'document' as const, icon: File, label: 'Document', bg: 'bg-orange-50 dark:bg-orange-950/50', border: 'border-orange-300 dark:border-orange-700', text: 'text-orange-700 dark:text-orange-300' },
+    { value: 'live_session' as const, icon: Radio, label: 'Live Session', bg: 'bg-amber-50 dark:bg-amber-950/50', border: 'border-amber-300 dark:border-amber-700', text: 'text-amber-700 dark:text-amber-300' },
+  ];
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[480px]">
@@ -2143,18 +2595,13 @@ function AddLessonDialog({
           <div className="grid gap-2">
             <Label>Content Type</Label>
             <div className="grid grid-cols-2 gap-2">
-              {([
-                { value: 'video' as const, icon: Video, label: 'Video', color: 'sky' },
-                { value: 'text' as const, icon: FileText, label: 'Document', color: 'emerald' },
-                { value: 'audio' as const, icon: Headphones, label: 'Audio', color: 'violet' },
-                { value: 'live_session' as const, icon: Radio, label: 'Live Session', color: 'amber' },
-              ]).map((type) => (
+              {contentTypes.map((type) => (
                 <button
                   key={type.value}
                   onClick={() => setContentType(type.value)}
                   className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm transition-all ${
                     contentType === type.value
-                      ? `border-${type.color}-300 bg-${type.color}-50 dark:bg-${type.color}-950/50 text-${type.color}-700 dark:text-${type.color}-300`
+                      ? `${type.border} ${type.bg} ${type.text}`
                       : 'border-border hover:border-muted-foreground/30 text-muted-foreground'
                   }`}
                 >
@@ -2188,9 +2635,9 @@ function AddLessonDialog({
   );
 }
 
-// ─── Course Settings Dialog ────────────────────────────────
+// ─── Enhanced Course Settings Dialog ───────────────────────
 
-function CourseSettingsDialog({
+function EnhancedCourseSettingsDialog({
   open,
   onOpenChange,
   course,
@@ -2205,6 +2652,11 @@ function CourseSettingsDialog({
   const [level, setLevel] = useState(course.level);
   const [language, setLanguage] = useState(course.language);
   const [isPublished, setIsPublished] = useState(course.isPublished);
+  const [price, setPrice] = useState(course.price.toString());
+  const [compareAtPrice, setCompareAtPrice] = useState(course.compareAtPrice?.toString() || '');
+  const [certificateTemplate, setCertificateTemplate] = useState(course.certificateTemplateId || '');
+  const [metaTitle, setMetaTitle] = useState(course.title);
+  const [metaDescription, setMetaDescription] = useState(course.description?.slice(0, 160) || '');
   const [saved, setSaved] = useState(false);
 
   const handleSave = () => {
@@ -2217,17 +2669,17 @@ function CourseSettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[580px]">
+      <DialogContent className="sm:max-w-[620px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-muted-foreground" />
             Course Settings
           </DialogTitle>
           <DialogDescription>
-            Configure the course details, visibility, and metadata.
+            Configure the course details, pricing, SEO, and metadata.
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="max-h-[60vh]">
+        <ScrollArea className="max-h-[65vh]">
           <div className="grid gap-5 py-4">
             {/* Thumbnail upload area */}
             <div className="grid gap-2">
@@ -2243,13 +2695,11 @@ function CourseSettingsDialog({
 
             <Separator />
 
-            {/* Course title */}
+            {/* Course title & description */}
             <div className="grid gap-2">
               <Label htmlFor="settings-title">Course Title</Label>
               <Input id="settings-title" value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
-
-            {/* Description */}
             <div className="grid gap-2">
               <Label htmlFor="settings-desc">Description</Label>
               <Textarea id="settings-desc" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="resize-none" />
@@ -2257,8 +2707,8 @@ function CourseSettingsDialog({
 
             <Separator />
 
-            {/* Category & Level */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Category, Level, Language */}
+            <div className="grid grid-cols-3 gap-3">
               <div className="grid gap-2">
                 <Label>Category</Label>
                 <Select value={category} onValueChange={setCategory}>
@@ -2285,22 +2735,102 @@ function CourseSettingsDialog({
                   </SelectContent>
                 </Select>
               </div>
+              <div className="grid gap-2">
+                <Label>Language</Label>
+                <Select value={language} onValueChange={setLanguage}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="es">Spanish</SelectItem>
+                    <SelectItem value="fr">French</SelectItem>
+                    <SelectItem value="de">German</SelectItem>
+                    <SelectItem value="zh">Chinese</SelectItem>
+                    <SelectItem value="ja">Japanese</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            {/* Language */}
+            <Separator />
+
+            {/* Pricing */}
+            <div>
+              <Label className="text-sm font-medium">Pricing</Label>
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <div className="grid gap-1.5">
+                  <Label className="text-xs text-muted-foreground">Price ($)</Label>
+                  <Input
+                    type="number"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="0.00"
+                    min={0}
+                    step={0.01}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs text-muted-foreground">Compare-at price ($)</Label>
+                  <Input
+                    type="number"
+                    value={compareAtPrice}
+                    onChange={(e) => setCompareAtPrice(e.target.value)}
+                    placeholder="0.00"
+                    min={0}
+                    step={0.01}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Certificate template */}
             <div className="grid gap-2">
-              <Label>Language</Label>
-              <Select value={language} onValueChange={setLanguage}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <Label>Certificate Template</Label>
+              <Select value={certificateTemplate} onValueChange={setCertificateTemplate}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a template..." />
+                </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="es">Spanish</SelectItem>
-                  <SelectItem value="fr">French</SelectItem>
-                  <SelectItem value="de">German</SelectItem>
-                  <SelectItem value="zh">Chinese</SelectItem>
-                  <SelectItem value="ja">Japanese</SelectItem>
+                  <SelectItem value="classic">Classic Certificate</SelectItem>
+                  <SelectItem value="modern">Modern Certificate</SelectItem>
+                  <SelectItem value="minimal">Minimal Certificate</SelectItem>
+                  <SelectItem value="premium">Premium Certificate</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <Separator />
+
+            {/* SEO */}
+            <div>
+              <Label className="text-sm font-medium flex items-center gap-1.5">
+                <Search className="h-3.5 w-3.5" /> SEO
+              </Label>
+              <div className="grid gap-3 mt-2">
+                <div className="grid gap-1.5">
+                  <Label className="text-xs text-muted-foreground">Meta Title</Label>
+                  <Input
+                    value={metaTitle}
+                    onChange={(e) => setMetaTitle(e.target.value)}
+                    placeholder="SEO title..."
+                    maxLength={70}
+                  />
+                  <p className="text-[10px] text-muted-foreground">{metaTitle.length}/70 characters</p>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs text-muted-foreground">Meta Description</Label>
+                  <Textarea
+                    value={metaDescription}
+                    onChange={(e) => setMetaDescription(e.target.value)}
+                    placeholder="SEO description..."
+                    rows={2}
+                    className="resize-none"
+                    maxLength={160}
+                  />
+                  <p className="text-[10px] text-muted-foreground">{metaDescription.length}/160 characters</p>
+                </div>
+              </div>
             </div>
 
             <Separator />
@@ -2351,13 +2881,553 @@ function CourseSettingsDialog({
               </>
             ) : (
               <>
-                <Save className="h-4 w-4" /> Save Changes
+                <Save className="h-4 w-4" /> Save Settings
               </>
             )}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── Course Preview Dialog ─────────────────────────────────
+
+function CoursePreviewDialog({
+  open,
+  onOpenChange,
+  course,
+  modules,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  course: Course;
+  modules: BuilderModule[];
+}) {
+  const totalLessons = modules.reduce((acc, m) => acc + m.lessons.length, 0);
+  const totalDuration = modules.reduce((acc, m) => acc + m.lessons.reduce((a, l) => a + (l.videoDuration || 0), 0), 0);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[600px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Eye className="h-5 w-5 text-muted-foreground" />
+            Course Preview
+          </DialogTitle>
+          <DialogDescription>
+            This is how learners will see your course.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          {/* Hero */}
+          <div className="relative aspect-video rounded-xl overflow-hidden bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center">
+                <h3 className="text-lg font-bold text-foreground">{course.title}</h3>
+                <p className="text-xs text-muted-foreground mt-1">{course.description}</p>
+                <div className="flex items-center justify-center gap-3 mt-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1"><Layers className="h-3 w-3" /> {modules.length} modules</span>
+                  <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {totalLessons} lessons</span>
+                  <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatDuration(totalDuration)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Module list */}
+          <ScrollArea className="max-h-[300px]">
+            <div className="space-y-2">
+              {modules.map((mod, idx) => {
+                const accent = moduleAccentColors[mod.accentColor ?? idx % moduleAccentColors.length];
+                return (
+                  <div key={mod.id} className="flex items-center gap-3 p-3 rounded-lg border">
+                    <div className={`h-8 w-8 rounded-md bg-gradient-to-br ${accent.gradient} flex items-center justify-center shrink-0`}>
+                      <span className="text-[10px] font-bold text-white">{idx + 1}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{mod.title}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {mod.lessons.length} lessons · {formatDuration(mod.lessons.reduce((a, l) => a + (l.videoDuration || 0), 0))}
+                      </p>
+                    </div>
+                    {mod.isPublished ? (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                    ) : (
+                      <Circle className="h-4 w-4 text-muted-foreground/30 shrink-0" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close Preview</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Review Management Tab ──────────────────────────────────
+
+function ReviewManagementTab() {
+  const [reviews, setReviews] = useState<CourseReview[]>(allMockReviews);
+  const [search, setSearch] = useState('');
+  const [courseFilter, setCourseFilter] = useState('all');
+  const [ratingFilter, setRatingFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [replyDialogOpen, setReplyDialogOpen] = useState(false);
+  const [replyReviewId, setReplyReviewId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteReviewId, setDeleteReviewId] = useState<string | null>(null);
+
+  // Filter reviews
+  const filteredReviews = useMemo(() => {
+    return reviews.filter((r) => {
+      const matchSearch =
+        !search ||
+        r.userName.toLowerCase().includes(search.toLowerCase()) ||
+        r.title.toLowerCase().includes(search.toLowerCase()) ||
+        r.content.toLowerCase().includes(search.toLowerCase());
+      const matchCourse = courseFilter === 'all' || r.courseId === courseFilter;
+      const matchRating = ratingFilter === 'all' || r.rating.toString() === ratingFilter;
+      const matchStatus = statusFilter === 'all' || r.status === statusFilter;
+      return matchSearch && matchCourse && matchRating && matchStatus;
+    });
+  }, [reviews, search, courseFilter, ratingFilter, statusFilter]);
+
+  // Stats
+  const totalReviews = reviews.length;
+  const flaggedCount = reviews.filter((r) => r.status === 'flagged').length;
+  const avgRating = totalReviews > 0
+    ? (reviews.reduce((s, r) => s + r.rating, 0) / totalReviews).toFixed(1)
+    : '0';
+  const responseRate = totalReviews > 0
+    ? Math.round((reviews.filter((r) => r.instructorReply).length / totalReviews) * 100)
+    : 0;
+
+  // Flag/unflag review
+  const handleToggleFlag = (id: string) => {
+    setReviews((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? { ...r, status: r.status === 'flagged' ? 'published' : 'flagged' }
+          : r
+      )
+    );
+  };
+
+  // Hide review
+  const handleHideReview = (id: string) => {
+    setReviews((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? { ...r, status: r.status === 'hidden' ? 'published' : 'hidden' }
+          : r
+      )
+    );
+  };
+
+  // Submit reply
+  const handleSubmitReply = () => {
+    if (!replyReviewId || !replyText.trim()) return;
+    setReviews((prev) =>
+      prev.map((r) =>
+        r.id === replyReviewId
+          ? {
+              ...r,
+              instructorReply: {
+                instructorName: 'Sarah Mitchell',
+                content: replyText.trim(),
+                date: new Date().toISOString(),
+              },
+            }
+          : r
+      )
+    );
+    setReplyText('');
+    setReplyReviewId(null);
+    setReplyDialogOpen(false);
+  };
+
+  // Delete review
+  const handleDeleteReview = () => {
+    if (!deleteReviewId) return;
+    setReviews((prev) => prev.filter((r) => r.id !== deleteReviewId));
+    setDeleteReviewId(null);
+    setDeleteDialogOpen(false);
+  };
+
+  // Export to CSV
+  const handleExportCSV = () => {
+    const headers = ['Course', 'Reviewer', 'Rating', 'Title', 'Content', 'Date', 'Status', 'Helpful', 'Tags'];
+    const courseMap = Object.fromEntries(demoCourses.map((c) => [c.id, c.title]));
+    const rows = filteredReviews.map((r) => [
+      courseMap[r.courseId] || r.courseId,
+      r.userName,
+      r.rating,
+      `"${r.title.replace(/"/g, '""')}"`,
+      `"${r.content.replace(/"/g, '""')}"`,
+      new Date(r.date).toLocaleDateString(),
+      r.status,
+      r.helpfulCount,
+      r.tags.join('; '),
+    ]);
+    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'course-reviews.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / 86400000);
+    if (diffDays < 1) return 'Today';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+    return date.toLocaleDateString();
+  };
+
+  const statusColors: Record<string, string> = {
+    published: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+    flagged: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+    hidden: 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300',
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Reviews', value: totalReviews, icon: MessageSquare, color: 'text-amber-600' },
+          { label: 'Flagged', value: flaggedCount, icon: Flag, color: 'text-red-600' },
+          { label: 'Avg. Rating', value: avgRating, icon: Star, color: 'text-amber-500' },
+          { label: 'Response Rate', value: `${responseRate}%`, icon: Send, color: 'text-emerald-600' },
+        ].map((stat) => (
+          <Card key={stat.label}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
+                  <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                </div>
+                <stat.icon className={`h-8 w-8 ${stat.color} opacity-20`} />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="relative flex-1 w-full sm:max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search reviews..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={courseFilter} onValueChange={setCourseFilter}>
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue placeholder="All Courses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Courses</SelectItem>
+                {demoCourses.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.title.length > 30 ? c.title.slice(0, 30) + '...' : c.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={ratingFilter} onValueChange={setRatingFilter}>
+              <SelectTrigger className="w-full sm:w-[120px]">
+                <SelectValue placeholder="Rating" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Ratings</SelectItem>
+                {[5, 4, 3, 2, 1].map((r) => (
+                  <SelectItem key={r} value={r.toString()}>
+                    {r} Star{r > 1 ? 's' : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full sm:w-[130px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="published">Published</SelectItem>
+                <SelectItem value="flagged">Flagged</SelectItem>
+                <SelectItem value="hidden">Hidden</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExportCSV}>
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Review List */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Showing {filteredReviews.length} of {totalReviews} reviews
+          </p>
+        </div>
+        <ScrollArea className="max-h-[600px]">
+          <div className="space-y-3 pr-4">
+            {filteredReviews.length > 0 ? (
+              filteredReviews.map((review) => {
+                const courseName = demoCourses.find((c) => c.id === review.courseId)?.title || 'Unknown Course';
+                return (
+                  <Card key={review.id} className={cn(
+                    'transition-all',
+                    review.status === 'flagged' && 'border-red-200 dark:border-red-800/50',
+                    review.status === 'hidden' && 'opacity-60',
+                  )}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <Avatar className="h-9 w-9 shrink-0">
+                          <AvatarFallback className="text-xs bg-gradient-to-br from-amber-100 to-amber-200 text-amber-700 dark:from-amber-900/40 dark:to-amber-800/40 dark:text-amber-300">
+                            {review.userAvatar}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          {/* Header */}
+                          <div className="flex items-center flex-wrap gap-2 mb-1">
+                            <span className="text-sm font-medium text-foreground">{review.userName}</span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                              {courseName.length > 25 ? courseName.slice(0, 25) + '...' : courseName}
+                            </Badge>
+                            <Badge className={cn('text-[10px] px-1.5 py-0', statusColors[review.status])}>
+                              {review.status === 'flagged' && <Flag className="h-2.5 w-2.5 mr-0.5" />}
+                              {review.status.charAt(0).toUpperCase() + review.status.slice(1)}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">· {formatDate(review.date)}</span>
+                          </div>
+
+                          {/* Stars + Helpful */}
+                          <div className="flex items-center gap-3 mb-1.5">
+                            <div className="flex items-center gap-0.5">
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star
+                                  key={s}
+                                  className={cn(
+                                    'h-3.5 w-3.5',
+                                    s <= review.rating
+                                      ? 'fill-amber-400 text-amber-400'
+                                      : 'text-muted-foreground/30'
+                                  )}
+                                />
+                              ))}
+                            </div>
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <ThumbsUp className="h-3 w-3" /> {review.helpfulCount}
+                            </span>
+                            {review.isVerifiedPurchase && (
+                              <span className="flex items-center gap-0.5 text-[10px] text-emerald-600">
+                                <ShieldCheck className="h-3 w-3" /> Verified
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Title & Content */}
+                          <h4 className="text-sm font-semibold text-foreground mb-0.5">{review.title}</h4>
+                          <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{review.content}</p>
+
+                          {/* Tags */}
+                          {review.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {review.tags.map((tag) => (
+                                <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Instructor Reply indicator */}
+                          {review.instructorReply && (
+                            <div className="flex items-center gap-1.5 text-xs text-violet-600 dark:text-violet-400 mb-2">
+                              <MessageSquare className="h-3 w-3" />
+                              <span>Instructor replied: &quot;{review.instructorReply.content.slice(0, 50)}...&quot;</span>
+                            </div>
+                          )}
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={cn(
+                                'h-7 text-xs gap-1',
+                                review.status === 'flagged'
+                                  ? 'text-red-600 hover:text-red-700'
+                                  : 'text-muted-foreground hover:text-foreground'
+                              )}
+                              onClick={() => handleToggleFlag(review.id)}
+                            >
+                              <Flag className="h-3.5 w-3.5" />
+                              {review.status === 'flagged' ? 'Unflag' : 'Flag'}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={cn(
+                                'h-7 text-xs gap-1',
+                                review.status === 'hidden'
+                                  ? 'text-amber-600 hover:text-amber-700'
+                                  : 'text-muted-foreground hover:text-foreground'
+                              )}
+                              onClick={() => handleHideReview(review.id)}
+                            >
+                              {review.status === 'hidden' ? (
+                                <><Eye className="h-3.5 w-3.5" /> Unhide</>
+                              ) : (
+                                <><Eye className="h-3.5 w-3.5" /> Hide</>
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                              onClick={() => {
+                                setReplyReviewId(review.id);
+                                setReplyText('');
+                                setReplyDialogOpen(true);
+                              }}
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                              Reply
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs gap-1 text-muted-foreground hover:text-red-600"
+                              onClick={() => {
+                                setDeleteReviewId(review.id);
+                                setDeleteDialogOpen(true);
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
+            ) : (
+              <div className="text-center py-12">
+                <MessageSquare className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-muted-foreground">No reviews match your filters.</p>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+
+      {/* Reply Dialog */}
+      <Dialog open={replyDialogOpen} onOpenChange={setReplyDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-violet-500" />
+              Reply to Review
+            </DialogTitle>
+            <DialogDescription>
+              Your reply will be visible to all learners as an instructor response.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {replyReviewId && (() => {
+              const review = reviews.find((r) => r.id === replyReviewId);
+              if (!review) return null;
+              return (
+                <div className="p-3 rounded-lg bg-muted/50 border">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-medium">{review.userName}</span>
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star
+                          key={s}
+                          className={cn(
+                            'h-3 w-3',
+                            s <= review.rating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'
+                          )}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{review.content.slice(0, 100)}...</p>
+                </div>
+              );
+            })()}
+            <Textarea
+              placeholder="Write your instructor response..."
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              rows={4}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setReplyDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmitReply}
+              disabled={!replyText.trim()}
+              className="gap-2 bg-violet-600 hover:bg-violet-700 text-white"
+            >
+              <Send className="h-4 w-4" />
+              Send Reply
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Delete Review
+            </DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. The review will be permanently removed from the platform.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteReview}>
+              Delete Review
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 
@@ -2395,6 +3465,10 @@ export function AdminCourses() {
             <Sparkles className="h-3.5 w-3.5" />
             Visual Builder
           </TabsTrigger>
+          <TabsTrigger value="reviews" className="gap-1.5">
+            <MessageSquare className="h-3.5 w-3.5" />
+            Reviews
+          </TabsTrigger>
         </TabsList>
 
         <AnimatePresence mode="wait">
@@ -2416,6 +3490,9 @@ export function AdminCourses() {
             </TabsContent>
             <TabsContent value="visual-builder" forceMount={activeTab === 'visual-builder'} hidden={activeTab !== 'visual-builder'}>
               <VisualCourseBuilderTab />
+            </TabsContent>
+            <TabsContent value="reviews" forceMount={activeTab === 'reviews'} hidden={activeTab !== 'reviews'}>
+              <ReviewManagementTab />
             </TabsContent>
           </motion.div>
         </AnimatePresence>

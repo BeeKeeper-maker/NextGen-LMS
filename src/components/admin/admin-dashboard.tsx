@@ -46,6 +46,15 @@ import {
   ArrowDownRight,
   Trophy,
   Target,
+  Zap,
+  Search,
+  GraduationCap as GradCapIcon,
+  Heart,
+  BarChart3,
+  Shield,
+  ChevronDown,
+  ChevronUp,
+  Radio,
 } from 'lucide-react';
 
 import {
@@ -85,6 +94,72 @@ import {
 } from '@/lib/mock-data';
 import { useAppStore } from '@/store/app-store';
 import type { DashboardKPI, Course } from '@/types';
+import { BulkOperationsDialog } from '@/components/admin/bulk-ops/bulk-operations-dialog';
+
+// ─── CSS Keyframe Animations ──────────────────────────────────
+const cssAnimations = `
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%) rotate(45deg); }
+  100% { transform: translateX(200%) rotate(45deg); }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+@keyframes bounce-arrow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes draw-line {
+  0% { transform: scaleY(0); }
+  100% { transform: scaleY(1); }
+}
+
+@keyframes score-fill {
+  0% { stroke-dashoffset: 283; }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes data-pulse {
+  0% { r: 3; opacity: 1; }
+  50% { r: 6; opacity: 0.4; }
+  100% { r: 3; opacity: 1; }
+}
+
+@keyframes ripple {
+  0% { transform: scale(0); opacity: 0.5; }
+  100% { transform: scale(4); opacity: 0; }
+}
+`;
+
+// Inject CSS animations
+if (typeof document !== 'undefined') {
+  const existingStyle = document.getElementById('admin-dashboard-animations');
+  if (!existingStyle) {
+    const style = document.createElement('style');
+    style.id = 'admin-dashboard-animations';
+    style.textContent = cssAnimations;
+    document.head.appendChild(style);
+  }
+}
 
 // ─── Icon mapping ────────────────────────────────────────────
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -134,49 +209,76 @@ const sparklineDataMap: Record<string, number[]> = {
   'user-plus': [180, 190, 200, 210, 218, 225, 234],
 };
 
-// ─── KPI card gradient backgrounds (per-card specific) ──────────
-const kpiGradientMap: Record<string, { from: string; to: string; iconBg: string; iconText: string; borderAccent: string }> = {
+// ─── KPI card gradient backgrounds (glassmorphism per-card) ──────
+const kpiGradientMap: Record<string, {
+  from: string;
+  to: string;
+  iconBg: string;
+  iconText: string;
+  borderAccent: string;
+  borderGradientFrom: string;
+  borderGradientTo: string;
+  shimmerColor: string;
+}> = {
   'dollar-sign': {
-    from: 'from-emerald-500/15',
-    to: 'to-emerald-500/5',
+    from: 'from-emerald-500/20',
+    to: 'to-emerald-700/10',
     iconBg: 'bg-emerald-500/20 dark:bg-emerald-500/30',
     iconText: 'text-emerald-600 dark:text-emerald-300',
     borderAccent: 'border-l-emerald-500',
+    borderGradientFrom: '#10b981',
+    borderGradientTo: '#34d399',
+    shimmerColor: 'rgba(16, 185, 129, 0.15)',
   },
   users: {
-    from: 'from-violet-500/15',
-    to: 'to-violet-500/5',
-    iconBg: 'bg-violet-500/20 dark:bg-violet-500/30',
-    iconText: 'text-violet-600 dark:text-violet-300',
-    borderAccent: 'border-l-violet-500',
-  },
-  'graduation-cap': {
-    from: 'from-amber-500/15',
-    to: 'to-amber-500/5',
-    iconBg: 'bg-amber-500/20 dark:bg-amber-500/30',
-    iconText: 'text-amber-600 dark:text-amber-300',
-    borderAccent: 'border-l-amber-500',
-  },
-  'check-circle': {
-    from: 'from-sky-500/15',
-    to: 'to-sky-500/5',
+    from: 'from-sky-500/20',
+    to: 'to-sky-700/10',
     iconBg: 'bg-sky-500/20 dark:bg-sky-500/30',
     iconText: 'text-sky-600 dark:text-sky-300',
     borderAccent: 'border-l-sky-500',
+    borderGradientFrom: '#0ea5e9',
+    borderGradientTo: '#38bdf8',
+    shimmerColor: 'rgba(14, 165, 233, 0.15)',
+  },
+  'graduation-cap': {
+    from: 'from-violet-500/20',
+    to: 'to-violet-700/10',
+    iconBg: 'bg-violet-500/20 dark:bg-violet-500/30',
+    iconText: 'text-violet-600 dark:text-violet-300',
+    borderAccent: 'border-l-violet-500',
+    borderGradientFrom: '#8b5cf6',
+    borderGradientTo: '#a78bfa',
+    shimmerColor: 'rgba(139, 92, 246, 0.15)',
+  },
+  'check-circle': {
+    from: 'from-amber-500/20',
+    to: 'to-amber-700/10',
+    iconBg: 'bg-amber-500/20 dark:bg-amber-500/30',
+    iconText: 'text-amber-600 dark:text-amber-300',
+    borderAccent: 'border-l-amber-500',
+    borderGradientFrom: '#f59e0b',
+    borderGradientTo: '#fbbf24',
+    shimmerColor: 'rgba(245, 158, 11, 0.15)',
   },
   'message-circle': {
-    from: 'from-cyan-500/15',
-    to: 'to-cyan-500/5',
-    iconBg: 'bg-cyan-500/20 dark:bg-cyan-500/30',
-    iconText: 'text-cyan-600 dark:text-cyan-300',
-    borderAccent: 'border-l-cyan-500',
+    from: 'from-rose-500/20',
+    to: 'to-rose-700/10',
+    iconBg: 'bg-rose-500/20 dark:bg-rose-500/30',
+    iconText: 'text-rose-600 dark:text-rose-300',
+    borderAccent: 'border-l-rose-500',
+    borderGradientFrom: '#f43f5e',
+    borderGradientTo: '#fb7185',
+    shimmerColor: 'rgba(244, 63, 94, 0.15)',
   },
   'user-plus': {
-    from: 'from-teal-500/15',
-    to: 'to-teal-500/5',
+    from: 'from-teal-500/20',
+    to: 'to-teal-700/10',
     iconBg: 'bg-teal-500/20 dark:bg-teal-500/30',
     iconText: 'text-teal-600 dark:text-teal-300',
     borderAccent: 'border-l-teal-500',
+    borderGradientFrom: '#14b8a6',
+    borderGradientTo: '#2dd4bf',
+    shimmerColor: 'rgba(20, 184, 166, 0.15)',
   },
 };
 
@@ -252,6 +354,16 @@ const funnelDropoffVariants = {
     scale: 1,
     transition: { duration: 0.3, delay: i * 0.12 + 0.25, ease: 'easeOut' },
   }),
+};
+
+// ─── Category color map ──────────────────────────────────────
+const categoryColorMap: Record<string, string> = {
+  'Web Development': 'bg-violet-500',
+  'Data Science': 'bg-emerald-500',
+  'Design': 'bg-amber-500',
+  'Business': 'bg-red-500',
+  'Marketing': 'bg-purple-500',
+  'AI & ML': 'bg-cyan-500',
 };
 
 // ─── Level badge helper ──────────────────────────────────────
@@ -357,7 +469,7 @@ function PercentageCounter({ value, duration = 1200 }: { value: number; duration
 }
 
 // ─── Circular Progress Ring ──────────────────────────────────
-function ProgressRing({ percent, size = 32, strokeWidth = 3, color = '#10b981' }: { percent: number; size?: number; strokeWidth?: number; color?: string }) {
+function ProgressRing({ percent, size = 32, strokeWidth = 3, color = '#10b981', animate = true }: { percent: number; size?: number; strokeWidth?: number; color?: string; animate?: boolean }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (percent / 100) * circumference;
@@ -382,7 +494,7 @@ function ProgressRing({ percent, size = 32, strokeWidth = 3, color = '#10b981' }
         strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeDasharray={circumference}
-        initial={{ strokeDashoffset: circumference }}
+        initial={animate ? { strokeDashoffset: circumference } : { strokeDashoffset: offset }}
         animate={{ strokeDashoffset: offset }}
         transition={{ duration: 1, ease: 'easeOut' }}
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
@@ -419,7 +531,7 @@ function StarRating({ rating, max = 5 }: { rating: number; max?: number }) {
 // ─── Sparkline Mini Chart ────────────────────────────────────
 function SparklineMiniChart({ data, color, isPositive }: { data: number[]; color: string; isPositive: boolean }) {
   const chartData = data.map((v, i) => ({ d: i, v }));
-  const gradientId = `sparkline-${color.replace('#', '')}`;
+  const gradientId = `sparkline-${color.replace('#', '')}-${Math.random().toString(36).slice(2, 6)}`;
 
   return (
     <div className="w-20 h-8">
@@ -447,7 +559,37 @@ function SparklineMiniChart({ data, color, isPositive }: { data: number[]; color
   );
 }
 
-// ─── KPI Card (Enhanced with Glassmorphism) ──────────────────
+// ─── Table Sparkline ─────────────────────────────────────────
+function TableSparkline({ data, color }: { data: number[]; color: string }) {
+  const chartData = data.map((v, i) => ({ d: i, v }));
+  const gid = `tspark-${color.replace('#', '')}-${Math.random().toString(36).slice(2, 6)}`;
+  return (
+    <div className="w-16 h-6">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={chartData} margin={{ top: 1, right: 0, left: 0, bottom: 1 }}>
+          <defs>
+            <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <Area
+            type="monotone"
+            dataKey="v"
+            stroke={color}
+            strokeWidth={1.5}
+            fill={`url(#${gid})`}
+            dot={false}
+            isAnimationActive={true}
+            animationDuration={800}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ─── KPI Card (Enhanced with Glassmorphism + Animated Gradient Border) ──
 function KPICard({ kpi, index }: { kpi: DashboardKPI; index: number }) {
   const Icon = iconMap[kpi.icon] ?? Users;
   const isPositive = kpi.change >= 0;
@@ -458,73 +600,114 @@ function KPICard({ kpi, index }: { kpi: DashboardKPI; index: number }) {
 
   return (
     <motion.div variants={itemVariants} custom={index}>
-      <Card className={`border-l-4 ${gradients.borderAccent} h-full shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden relative backdrop-blur-md bg-white/80 dark:bg-slate-900/70`}>
-        {/* Gradient background */}
-        <div className={`absolute inset-0 bg-gradient-to-br ${gradients.from} ${gradients.to} pointer-events-none`} />
-        {/* Subtle glassmorphism shimmer */}
-        <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/20 via-transparent to-transparent dark:from-white/5" />
-        <CardContent className="p-6 relative z-10">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">
-                {kpi.label}
-              </p>
-              <p className="text-3xl font-bold tracking-tight">
-                <AnimatedCounter value={String(kpi.value)} />
-              </p>
-            </div>
-            <motion.div
-              className={`rounded-xl p-2.5 ${gradients.iconBg} ${gradients.iconText} shadow-sm`}
-              whileHover={{ scale: 1.1, rotate: 5 }}
-              transition={{ type: 'spring', stiffness: 300 }}
-            >
-              <Icon className="h-5 w-5" />
-            </motion.div>
+      <motion.div
+        className="relative group rounded-xl p-[1.5px] overflow-hidden"
+        whileHover={{ y: -4 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+      >
+        {/* Animated gradient border */}
+        <div
+          className="absolute inset-0 opacity-60 group-hover:opacity-100 transition-opacity duration-500"
+          style={{
+            background: `linear-gradient(135deg, ${gradients.borderGradientFrom}, ${gradients.borderGradientTo}, ${gradients.borderGradientFrom})`,
+            backgroundSize: '200% 200%',
+            animation: 'gradientShift 4s ease infinite',
+          }}
+        />
+
+        {/* Inner card with glassmorphism */}
+        <Card className="border-0 h-full shadow-sm group-hover:shadow-xl transition-shadow duration-300 overflow-hidden relative backdrop-blur-xl bg-white/70 dark:bg-gray-900/60">
+          {/* Gradient mesh background */}
+          <div className={`absolute inset-0 bg-gradient-to-br ${gradients.from} ${gradients.to} pointer-events-none`} />
+
+          {/* Glassmorphism shimmer overlay */}
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/20 via-transparent to-transparent dark:from-white/5" />
+
+          {/* Animated shimmer sweep */}
+          <div
+            className="absolute inset-0 pointer-events-none overflow-hidden"
+          >
+            <div
+              className="absolute inset-0"
+              style={{
+                background: `linear-gradient(105deg, transparent 40%, ${gradients.shimmerColor} 45%, transparent 50%)`,
+                animation: 'shimmer 3s ease-in-out infinite',
+                animationDelay: `${index * 0.5}s`,
+              }}
+            />
           </div>
-          {/* Sparkline + trend row */}
-          <div className="mt-3 flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-sm">
-              {/* Pulsing indicator dot */}
-              <span className="relative flex h-2.5 w-2.5">
-                {isPositive && (
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                )}
-                <span
-                  className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                    isPositive ? 'bg-emerald-500' : 'bg-red-500'
-                  }`}
-                />
-              </span>
-              {/* Animated trend arrow */}
+
+          <CardContent className="p-6 relative z-10">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">
+                  {kpi.label}
+                </p>
+                <p className="text-3xl font-bold tracking-tight">
+                  <AnimatedCounter value={String(kpi.value)} />
+                </p>
+              </div>
               <motion.div
-                className="flex items-center"
-                animate={{
-                  color: isPositive ? '#10b981' : '#ef4444',
-                }}
-                transition={{ duration: 0.6, repeat: Infinity, repeatType: 'reverse' }}
+                className={`rounded-xl p-2.5 ${gradients.iconBg} ${gradients.iconText} shadow-sm relative overflow-hidden`}
+                whileHover={{ scale: 1.1, rotate: 5 }}
+                transition={{ type: 'spring', stiffness: 300 }}
               >
-                {isPositive ? (
-                  <ArrowUpRight className="h-4 w-4" />
-                ) : (
-                  <ArrowDownRight className="h-4 w-4" />
-                )}
+                {/* Sparkle/shimmer on icon bg */}
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background: `linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.3) 45%, transparent 50%)`,
+                    animation: 'shimmer 2.5s ease-in-out infinite',
+                  }}
+                />
+                <Icon className="h-5 w-5 relative z-10" />
               </motion.div>
-              <span
-                className={
-                  isPositive
-                    ? 'font-medium text-emerald-600 dark:text-emerald-400'
-                    : 'font-medium text-red-600 dark:text-red-400'
-                }
-              >
-                {isPositive ? '+' : ''}
-                {kpi.change}%
-              </span>
-              <span className="text-muted-foreground">{kpi.changeLabel}</span>
             </div>
-            <SparklineMiniChart data={sparklineData} color={sparklineColor} isPositive={isPositive} />
-          </div>
-        </CardContent>
-      </Card>
+            {/* Sparkline + trend row */}
+            <div className="mt-3 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-sm">
+                {/* Pulsing indicator dot */}
+                <span className="relative flex h-2.5 w-2.5">
+                  {isPositive && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  )}
+                  <span
+                    className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                      isPositive ? 'bg-emerald-500' : 'bg-red-500'
+                    }`}
+                  />
+                </span>
+                {/* Bouncing trend arrow */}
+                <motion.div
+                  className="flex items-center"
+                  style={{
+                    color: isPositive ? '#10b981' : '#ef4444',
+                    animation: 'bounce-arrow 1.5s ease-in-out infinite',
+                  }}
+                >
+                  {isPositive ? (
+                    <ArrowUpRight className="h-4 w-4" />
+                  ) : (
+                    <ArrowDownRight className="h-4 w-4" />
+                  )}
+                </motion.div>
+                <span
+                  className={
+                    isPositive
+                      ? 'font-medium text-emerald-600 dark:text-emerald-400'
+                      : 'font-medium text-red-600 dark:text-red-400'
+                  }
+                >
+                  {isPositive ? '+' : ''}
+                  {kpi.change}%
+                </span>
+                <span className="text-muted-foreground">{kpi.changeLabel}</span>
+              </div>
+              <SparklineMiniChart data={sparklineData} color={sparklineColor} isPositive={isPositive} />
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
     </motion.div>
   );
 }
@@ -533,7 +716,6 @@ function KPICard({ kpi, index }: { kpi: DashboardKPI; index: number }) {
 function RevenueCustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string; dataKey: string }>; label?: string }) {
   if (!active || !payload || !payload.length) return null;
 
-  // Filter out prevRevenue from the main display
   const mainPayload = payload.filter((p) => p.dataKey !== 'prevRevenue');
   const prevRev = payload.find((p) => p.dataKey === 'prevRevenue');
 
@@ -567,9 +749,10 @@ function RevenueCustomTooltip({ active, payload, label }: { active?: boolean; pa
   );
 }
 
-// ─── Revenue Analytics Chart (Enhanced with YoY) ─────────────
+// ─── Revenue Analytics Chart (Enhanced with YoY, Live indicator, Period pills) ──
 function RevenueChart() {
   const [view, setView] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
+  const [periodPill, setPeriodPill] = useState<'7D' | '30D' | '90D' | '1Y'>('30D');
 
   const baseData = view === 'monthly' ? revenueDataWithPrev : view === 'weekly' ? revenueWeeklyData : revenueDailyData;
   const xKey = 'month';
@@ -577,29 +760,81 @@ function RevenueChart() {
   // Find peak revenue for annotation
   const peakIndex = baseData.reduce((maxI, d, i, arr) => d.revenue > arr[maxI].revenue ? i : maxI, 0);
 
+  // YoY change calculation
+  const latestRevenue = baseData[baseData.length - 1].revenue;
+  const latestPrev = baseData[baseData.length - 1].prevRevenue;
+  const yoyChange = ((latestRevenue - latestPrev) / latestPrev * 100).toFixed(1);
+
+  // Pulsing data point data for the area chart
+  const pulseDotData = baseData.map((d, i) => ({ ...d, pulseR: i === baseData.length - 1 ? 6 : 0 }));
+
   return (
     <motion.div variants={itemVariants}>
       <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
         <CardHeader className="pb-2">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Revenue Analytics</CardTitle>
-              <CardDescription>
-                Revenue, enrollments & completions trend with YoY comparison
-              </CardDescription>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  Revenue Analytics
+                  {/* Live indicator */}
+                  <span className="flex items-center gap-1.5 text-xs font-normal text-emerald-600 dark:text-emerald-400">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                    </span>
+                    Live
+                  </span>
+                </CardTitle>
+                <CardDescription>
+                  Revenue, enrollments & completions trend with YoY comparison
+                </CardDescription>
+              </div>
+              {/* YoY comparison badge */}
+              <Badge
+                variant="secondary"
+                className="bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-700/30 whitespace-nowrap"
+              >
+                <TrendingUp className="h-3 w-3 mr-1" />
+                YoY +{yoyChange}%
+              </Badge>
             </div>
-            <Tabs value={view} onValueChange={(v) => setView(v as 'monthly' | 'weekly' | 'daily')}>
-              <TabsList className="h-8">
-                <TabsTrigger value="monthly" className="text-xs px-2.5 py-1">Monthly</TabsTrigger>
-                <TabsTrigger value="weekly" className="text-xs px-2.5 py-1">Weekly</TabsTrigger>
-                <TabsTrigger value="daily" className="text-xs px-2.5 py-1">Daily</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex items-center gap-2">
+              {/* Period toggle pills */}
+              <div className="flex items-center rounded-lg border border-border/60 bg-muted/30 p-0.5">
+                {(['7D', '30D', '90D', '1Y'] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => {
+                      setPeriodPill(p);
+                      if (p === '7D') setView('daily');
+                      else if (p === '30D') setView('weekly');
+                      else setView('monthly');
+                    }}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-200 ${
+                      periodPill === p
+                        ? 'bg-background shadow-sm text-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+              <Tabs value={view} onValueChange={(v) => setView(v as 'monthly' | 'weekly' | 'daily')}>
+                <TabsList className="h-8">
+                  <TabsTrigger value="monthly" className="text-xs px-2.5 py-1">Monthly</TabsTrigger>
+                  <TabsTrigger value="weekly" className="text-xs px-2.5 py-1">Weekly</TabsTrigger>
+                  <TabsTrigger value="daily" className="text-xs px-2.5 py-1">Daily</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-0 pb-4 px-6">
           <ChartContainer config={revenueChartConfig} className="h-[320px] w-full">
-            <ComposedChart data={baseData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
+            <ComposedChart data={pulseDotData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
               <defs>
                 <linearGradient id="revenueGradEnhanced" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
@@ -627,7 +862,6 @@ function RevenueChart() {
               />
               <Tooltip content={<RevenueCustomTooltip />} cursor={{ strokeDasharray: '3 3', stroke: '#94a3b8' }} />
               <ChartLegend content={<ChartLegendContent />} />
-              {/* Annotation marker for peak revenue */}
               {peakIndex >= 0 && (
                 <ReferenceLine
                   yAxisId="left"
@@ -648,6 +882,16 @@ function RevenueChart() {
                   strokeWidth={2}
                 />
               )}
+              {/* Animated pulsing data point on latest */}
+              <ReferenceDot
+                yAxisId="left"
+                x={baseData[baseData.length - 1][xKey]}
+                y={baseData[baseData.length - 1].revenue}
+                r={4}
+                fill="#10b981"
+                stroke="#fff"
+                strokeWidth={2}
+              />
               {/* YoY comparison line (dashed, lighter) */}
               <Line
                 yAxisId="left"
@@ -777,7 +1021,6 @@ function CategoryChart() {
 function CompletionFunnel() {
   const maxCount = completionFunnelData[0].count;
 
-  // Color gradients from emerald to amber to red based on dropoff
   const funnelColors = [
     'from-emerald-500 to-emerald-400',
     'from-emerald-400 to-teal-400',
@@ -796,7 +1039,6 @@ function CompletionFunnel() {
     'border-red-400/30',
   ];
 
-  // Calculate dropoff between stages
   const getDropoff = useCallback((currentIdx: number): { pct: number; count: number } | null => {
     if (currentIdx >= completionFunnelData.length - 1) return null;
     const current = completionFunnelData[currentIdx];
@@ -849,13 +1091,11 @@ function CompletionFunnel() {
                         animate={{ width: `${widthPct}%` }}
                         transition={{ duration: 1, delay: idx * 0.12, ease: [0.25, 0.46, 0.45, 0.94] }}
                       >
-                        {/* Shimmer effect inside bar */}
                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
                       </motion.div>
                     </div>
                   </motion.div>
 
-                  {/* Dropoff indicator between stages */}
                   {dropoff && (
                     <motion.div
                       custom={idx}
@@ -899,7 +1139,19 @@ const courseTrends: Record<string, { direction: 'up' | 'down'; value: number }> 
   'course-8': { direction: 'up', value: 7 },
 };
 
-// ─── Recent Courses Table (Enhanced) ─────────────────────────
+// Sparkline data per course for the Trend column
+const courseSparklineData: Record<string, number[]> = {
+  'course-1': [45, 52, 48, 61, 58, 65, 72],
+  'course-2': [30, 35, 38, 42, 50, 55, 63],
+  'course-3': [40, 42, 41, 39, 38, 37, 36],
+  'course-4': [20, 25, 28, 32, 35, 38, 43],
+  'course-5': [55, 53, 56, 58, 60, 62, 65],
+  'course-6': [35, 34, 33, 35, 32, 31, 30],
+  'course-7': [10, 18, 22, 28, 35, 42, 52],
+  'course-8': [25, 28, 30, 33, 35, 38, 41],
+};
+
+// ─── Recent Courses Table (Enhanced with sparklines, category dots, row gradient) ──
 function RecentCoursesTable() {
   return (
     <motion.div variants={itemVariants}>
@@ -921,6 +1173,7 @@ function RecentCoursesTable() {
                   <TableHead className="text-right min-w-[100px]">Enrollments</TableHead>
                   <TableHead className="min-w-[130px]">Rating</TableHead>
                   <TableHead className="min-w-[110px]">Completion</TableHead>
+                  <TableHead className="min-w-[80px]">Trend</TableHead>
                   <TableHead className="min-w-[100px]">Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -928,28 +1181,30 @@ function RecentCoursesTable() {
                 {demoCourses.map((course, rowIdx) => {
                   const trend = courseTrends[course.id] ?? { direction: 'up' as const, value: 0 };
                   const completionColor = course.completionRate >= 75 ? '#10b981' : course.completionRate >= 50 ? '#f59e0b' : '#ef4444';
+                  const sparkData = courseSparklineData[course.id] ?? [10, 12, 11, 14, 13, 15, 16];
+                  const catDot = categoryColorMap[course.category ?? ''] ?? 'bg-gray-500';
 
                   return (
                     <TableRow
                       key={course.id}
-                      className={`group transition-all duration-200 cursor-pointer relative ${
-                        rowIdx % 2 === 0
-                          ? 'bg-muted/20 hover:bg-muted/50'
-                          : 'bg-background hover:bg-muted/50'
-                      }`}
+                      className="group transition-all duration-200 cursor-pointer relative"
                     >
-                      {/* Gradient border on hover */}
-                      <td className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <div className="absolute inset-0 rounded-lg border border-emerald-500/20 dark:border-emerald-400/10 shadow-sm" />
+                      {/* Row hover gradient overlay */}
+                      <td className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300 p-0">
+                        <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 via-transparent to-violet-500/5 dark:from-emerald-500/10 dark:to-violet-500/10" />
                       </td>
                       <TableCell className="pl-6 font-medium max-w-[200px] truncate relative z-10">
                         <div className="flex items-center gap-2">
+                          <span className={`h-2 w-2 rounded-full shrink-0 ${catDot}`} />
                           <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
                           <span className="truncate">{course.title}</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground relative z-10">
-                        {course.category}
+                        <div className="flex items-center gap-1.5">
+                          <span className={`h-1.5 w-1.5 rounded-full ${catDot}`} />
+                          {course.category}
+                        </div>
                       </TableCell>
                       <TableCell className="relative z-10">
                         <LevelBadge level={course.level} />
@@ -982,12 +1237,17 @@ function RecentCoursesTable() {
                         </div>
                       </TableCell>
                       <TableCell className="relative z-10">
+                        <TableSparkline
+                          data={sparkData}
+                          color={trend.direction === 'up' ? '#10b981' : '#ef4444'}
+                        />
+                      </TableCell>
+                      <TableCell className="relative z-10">
                         {course.isPublished ? (
                           <Badge
                             variant="secondary"
                             className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300 relative"
                           >
-                            {/* Pulse indicator for Published */}
                             <span className="relative flex h-2 w-2 mr-1.5">
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
@@ -1052,7 +1312,7 @@ function VideoDropoffChart() {
   );
 }
 
-// ─── Quick Actions Panel (Enhanced with Glassmorphism) ───────
+// ─── Quick Actions Panel (Enhanced with gradient icons, NEW badge, ripple) ──
 const quickActions = [
   {
     title: 'Create New Course',
@@ -1070,6 +1330,17 @@ const quickActions = [
     pulse: true,
     gradientBorder: 'from-violet-400 to-violet-600',
     iconGradient: 'from-violet-500 to-violet-600',
+    isNew: true,
+  },
+  {
+    title: 'Bulk Operations',
+    description: 'Bulk enroll, email, and issue certificates to users',
+    icon: Zap,
+    accent: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-400',
+    pulse: true,
+    gradientBorder: 'from-cyan-400 to-cyan-600',
+    iconGradient: 'from-cyan-500 to-cyan-600',
+    isBulkOps: true,
   },
   {
     title: 'View Reports',
@@ -1089,7 +1360,7 @@ const quickActions = [
   },
 ];
 
-function QuickActionsPanel() {
+function QuickActionsPanel({ onBulkOpsClick }: { onBulkOpsClick: () => void }) {
   return (
     <motion.div variants={itemVariants}>
       <Card className="shadow-sm hover:shadow-md transition-shadow duration-200 h-full">
@@ -1103,17 +1374,35 @@ function QuickActionsPanel() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
             {quickActions.map((action, idx) => {
               const IconComp = action.icon;
+              const isBulkOps = 'isBulkOps' in action && action.isBulkOps;
+              const isNew = 'isNew' in action && action.isNew;
               return (
                 <motion.button
                   key={action.title}
                   type="button"
-                  whileHover={{ scale: 1.03, y: -3 }}
+                  whileHover={{ scale: 1.02, y: -3 }}
                   whileTap={{ scale: 0.98 }}
-                  className="group relative flex flex-col items-start gap-3 rounded-xl p-[1px] text-left transition-all duration-300 focus:outline-none"
+                  onClick={isBulkOps ? onBulkOpsClick : undefined}
+                  className="group relative flex flex-col items-start gap-3 rounded-xl p-[1px] text-left transition-all duration-300 focus:outline-none overflow-hidden"
                 >
                   {/* Glassmorphism border */}
                   <div className={`absolute inset-0 rounded-xl bg-gradient-to-br ${action.gradientBorder} opacity-0 group-hover:opacity-60 transition-opacity duration-300 blur-[0.5px]`} />
                   <div className="relative w-full flex flex-col items-start gap-3 rounded-xl border border-border/50 bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm p-4 transition-all duration-300 group-hover:bg-white/90 dark:group-hover:bg-slate-900/80 group-hover:shadow-lg group-hover:border-border/80">
+                    {/* Ripple effect container */}
+                    <div className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
+                      <span
+                        className="absolute rounded-full bg-white/20"
+                        style={{
+                          width: 20,
+                          height: 20,
+                          top: '50%',
+                          left: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          animation: 'ripple 0s ease-out forwards',
+                        }}
+                      />
+                    </div>
+
                     {/* Gradient icon container */}
                     <motion.div
                       className={`rounded-xl p-2.5 bg-gradient-to-br ${action.iconGradient} text-white shadow-md relative`}
@@ -1130,8 +1419,15 @@ function QuickActionsPanel() {
                         </span>
                       )}
                     </motion.div>
-                    <div>
-                      <p className="font-semibold text-sm">{action.title}</p>
+                    <div className="relative">
+                      <p className="font-semibold text-sm flex items-center gap-1.5">
+                        {action.title}
+                        {isNew && (
+                          <Badge className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white text-[10px] px-1.5 py-0 h-4 font-bold border-0 shadow-sm">
+                            NEW
+                          </Badge>
+                        )}
+                      </p>
                       <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
                         {action.description}
                       </p>
@@ -1157,17 +1453,28 @@ function QuickActionsPanel() {
   );
 }
 
-// ─── Recent Activity Feed (Enhanced) ─────────────────────────
+// ─── Recent Activity Feed (Enhanced with animated timeline, colored dots, expand/collapse) ──
+const activityTypeColors: Record<string, { dot: string; bg: string; text: string }> = {
+  enrollment: { dot: 'bg-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-600 dark:text-emerald-400' },
+  completion: { dot: 'bg-violet-500', bg: 'bg-violet-50 dark:bg-violet-950/40', text: 'text-violet-600 dark:text-violet-400' },
+  community: { dot: 'bg-sky-500', bg: 'bg-sky-50 dark:bg-sky-950/40', text: 'text-sky-600 dark:text-sky-400' },
+  assessment: { dot: 'bg-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-600 dark:text-amber-400' },
+  achievement: { dot: 'bg-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-600 dark:text-amber-400' },
+  milestone: { dot: 'bg-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-600 dark:text-emerald-400' },
+  system: { dot: 'bg-slate-500', bg: 'bg-slate-50 dark:bg-slate-950/40', text: 'text-slate-600 dark:text-slate-400' },
+};
+
 const recentActivityItems = [
   {
     id: 'ra-1',
     icon: UserPlus,
-    iconColor: 'text-blue-500',
-    iconBg: 'bg-blue-50 dark:bg-blue-950/40',
-    dotColor: 'bg-blue-500',
+    iconColor: 'text-emerald-500',
+    iconBg: 'bg-emerald-50 dark:bg-emerald-950/40',
+    dotColor: 'bg-emerald-500',
     title: 'New enrollment: Mike Chen joined Advanced React Masterclass',
     time: '5 minutes ago',
     type: 'enrollment',
+    detail: 'Mike Chen enrolled via the Pro Annual plan. Course start date: today. Payment: $197 via Stripe.',
   },
   {
     id: 'ra-2',
@@ -1178,26 +1485,29 @@ const recentActivityItems = [
     title: 'Achievement unlocked: Lisa Wang earned "React Master" badge',
     time: '23 minutes ago',
     type: 'achievement',
+    detail: 'Lisa completed all 12 modules and scored 95%+ on every assessment. Badge earned: React Master Gold.',
   },
   {
     id: 'ra-3',
     icon: MessageCircle,
-    iconColor: 'text-emerald-500',
-    iconBg: 'bg-emerald-50 dark:bg-emerald-950/40',
-    dotColor: 'bg-emerald-500',
+    iconColor: 'text-sky-500',
+    iconBg: 'bg-sky-50 dark:bg-sky-950/40',
+    dotColor: 'bg-sky-500',
     title: 'New discussion: "Best practices for API auth?" in Community',
     time: '1 hour ago',
     type: 'community',
+    detail: 'Posted by Alex Rivera in Web Development category. 3 replies so far. Trending in the community feed.',
   },
   {
     id: 'ra-4',
     icon: CheckCircle,
-    iconColor: 'text-purple-500',
-    iconBg: 'bg-purple-50 dark:bg-purple-950/40',
-    dotColor: 'bg-purple-500',
+    iconColor: 'text-violet-500',
+    iconBg: 'bg-violet-50 dark:bg-violet-950/40',
+    dotColor: 'bg-violet-500',
     title: 'Assessment completed: 45 students submitted Quiz #3 in Data Viz',
     time: '2 hours ago',
     type: 'assessment',
+    detail: 'Average score: 82.3%. Pass rate: 91%. 4 students requested retake. Quiz difficulty: Intermediate.',
   },
   {
     id: 'ra-5',
@@ -1208,6 +1518,7 @@ const recentActivityItems = [
     title: 'Revenue milestone: $47K MRR reached!',
     time: '3 hours ago',
     type: 'milestone',
+    detail: 'Monthly recurring revenue crossed $47,000 for the first time. Growth driven by enterprise plan upgrades.',
   },
   {
     id: 'ra-6',
@@ -1217,12 +1528,14 @@ const recentActivityItems = [
     dotColor: 'bg-amber-500',
     title: 'Certificate issued: 12 new certifications this week',
     time: '5 hours ago',
-    type: 'achievement',
+    type: 'completion',
+    detail: 'Top courses: Advanced React (4), Data Science (3), ML Basics (3), UX Design (2). All certificates verified.',
   },
 ];
 
 function RecentActivityFeed() {
   const [showAll, setShowAll] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const displayedItems = showAll ? recentActivityItems : recentActivityItems.slice(0, 4);
 
   return (
@@ -1243,53 +1556,99 @@ function RecentActivityFeed() {
         </CardHeader>
         <CardContent>
           <div className="relative">
-            {/* Timeline connecting line */}
-            <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gradient-to-b from-blue-500/40 via-emerald-500/40 via-amber-500/40 to-purple-500/40" />
+            {/* Animated timeline connecting line */}
+            <div
+              className="absolute left-[15px] top-2 bottom-2 w-0.5 bg-gradient-to-b from-emerald-500/40 via-violet-500/40 to-amber-500/40 origin-top"
+              style={{
+                animation: 'draw-line 1.2s ease-out forwards',
+              }}
+            />
 
             <div className="space-y-0">
               {displayedItems.map((item, i) => {
                 const ItemIcon = item.icon;
+                const typeColor = activityTypeColors[item.type] ?? activityTypeColors.system;
+                const isExpanded = expandedId === item.id;
                 return (
                   <motion.div
                     key={item.id}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3, delay: 0.08 * i }}
-                    className={`relative flex items-start gap-3 py-3 border-b border-border/50 last:border-0 ${
-                      i % 2 === 0 ? 'bg-muted/10 -mx-1 px-1 rounded' : ''
-                    }`}
+                    className="relative"
                   >
-                    {/* Timeline dot */}
-                    <div className="relative z-10 flex items-center justify-center">
-                      <span className={`h-3 w-3 rounded-full ${item.dotColor} ring-2 ring-background shrink-0`} />
-                    </div>
-                    {/* Activity icon */}
-                    <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${item.iconBg}`}>
-                      <ItemIcon className={`h-4 w-4 ${item.iconColor}`} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-foreground line-clamp-2">{item.title}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {item.time}
-                      </p>
-                    </div>
+                    <button
+                      type="button"
+                      className={`relative flex items-start gap-3 py-3 w-full text-left border-b border-border/50 last:border-0 transition-colors duration-200 hover:bg-muted/20 rounded-md px-1 -mx-1 ${
+                        i % 2 === 0 ? 'bg-muted/5' : ''
+                      }`}
+                      onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                    >
+                      {/* Colored timeline dot */}
+                      <div className="relative z-10 flex items-center justify-center mt-0.5">
+                        <span className={`h-3 w-3 rounded-full ${typeColor.dot} ring-2 ring-background shrink-0`} />
+                      </div>
+                      {/* Activity icon */}
+                      <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${typeColor.bg}`}>
+                        <ItemIcon className={`h-4 w-4 ${typeColor.text}`} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-foreground line-clamp-2">{item.title}</p>
+                        <div className="mt-0.5 flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {item.time}
+                          </span>
+                          {/* Relative time badge */}
+                          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 ${typeColor.text} border-current/20`}>
+                            {item.type}
+                          </Badge>
+                          {/* Expand/collapse chevron */}
+                          <motion.div
+                            animate={{ rotate: isExpanded ? 180 : 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="ml-auto"
+                          >
+                            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                          </motion.div>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Expandable detail */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2, ease: 'easeOut' }}
+                          className="overflow-hidden"
+                        >
+                          <div className="ml-[54px] mb-3 p-3 rounded-lg bg-muted/30 border border-border/30 text-xs text-muted-foreground leading-relaxed">
+                            {item.detail}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </motion.div>
                 );
               })}
             </div>
           </div>
 
-          {/* View All button */}
+          {/* View All button - subtle pulse */}
           {recentActivityItems.length > 4 && (
             <motion.button
               type="button"
               onClick={() => setShowAll(!showAll)}
-              className="mt-3 flex items-center gap-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors w-full justify-center py-1.5 rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+              className="mt-3 flex items-center gap-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors w-full justify-center py-1.5 rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/30 relative"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              <span>{showAll ? 'Show Less' : 'View All Activity'}</span>
+              <span style={{ animation: 'pulse-subtle 2s ease-in-out infinite' }}>
+                {showAll ? 'Show Less' : 'View All Activity'}
+              </span>
               <motion.div
                 animate={{ rotate: showAll ? -90 : 0 }}
                 transition={{ duration: 0.2 }}
@@ -1304,12 +1663,173 @@ function RecentActivityFeed() {
   );
 }
 
+// ─── Real-time Metrics Ticker ────────────────────────────────
+const tickerItems = [
+  { icon: Search, label: 'users browsing now', value: '3', color: 'text-sky-500' },
+  { icon: GradCapIcon, label: 'lessons completed today', value: '12', color: 'text-emerald-500' },
+  { icon: DollarSign, label: 'revenue today', value: '$1,240', color: 'text-amber-500' },
+  { icon: UserPlus, label: 'new enrollments this week', value: '8', color: 'text-violet-500' },
+  { icon: Star, label: 'avg rating this month', value: '4.8', color: 'text-rose-500' },
+];
+
+function MetricsTicker() {
+  // Duplicate items for seamless loop
+  const items = [...tickerItems, ...tickerItems];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: 0.2 }}
+      className="relative overflow-hidden rounded-xl border border-border/40 bg-gradient-to-r from-muted/30 via-background to-muted/30 py-2"
+    >
+      {/* Fade edges */}
+      <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none" />
+      <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none" />
+
+      <div
+        className="flex items-center gap-8 whitespace-nowrap"
+        style={{
+          animation: 'marquee 30s linear infinite',
+        }}
+      >
+        {items.map((item, i) => {
+          const TickerIcon = item.icon;
+          return (
+            <div key={i} className="flex items-center gap-2 text-sm">
+              <TickerIcon className={`h-4 w-4 ${item.color}`} />
+              <span className="font-bold text-foreground">{item.value}</span>
+              <span className="text-muted-foreground">{item.label}</span>
+              <span className="text-border">•</span>
+            </div>
+          );
+        })}
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Performance Score Ring ──────────────────────────────────
+function PerformanceScoreRing() {
+  const score = 87;
+  const maxScore = 100;
+  const size = 120;
+  const strokeWidth = 8;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (score / maxScore) * circumference;
+  const color = score > 80 ? '#10b981' : score > 60 ? '#f59e0b' : '#ef4444';
+  const colorLabel = score > 80 ? 'Excellent' : score > 60 ? 'Good' : 'Needs Attention';
+
+  const breakdown = [
+    { label: 'Uptime', value: 99.9, color: '#10b981' },
+    { label: 'Load Speed', value: 92, color: '#0ea5e9' },
+    { label: 'User Satisfaction', value: 88, color: '#8b5cf6' },
+    { label: 'Content Quality', value: 85, color: '#f59e0b' },
+    { label: 'Completion Rate', value: 72, color: '#14b8a6' },
+  ];
+
+  return (
+    <motion.div variants={itemVariants}>
+      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200 h-full">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-4 w-4 text-emerald-500" />
+            Platform Health
+          </CardTitle>
+          <CardDescription>Overall platform performance score</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center gap-4">
+          {/* Circular progress ring */}
+          <div className="relative group cursor-pointer">
+            <svg width={size} height={size} className="transform -rotate-90">
+              <circle
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={strokeWidth}
+                className="text-muted/20"
+              />
+              <motion.circle
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="none"
+                stroke={color}
+                strokeWidth={strokeWidth}
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                initial={{ strokeDashoffset: circumference }}
+                animate={{ strokeDashoffset: offset }}
+                transition={{ duration: 1.5, ease: 'easeOut', delay: 0.5 }}
+              />
+            </svg>
+            {/* Center text */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <motion.span
+                className="text-2xl font-bold"
+                style={{ color }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.2 }}
+              >
+                {score}
+              </motion.span>
+              <span className="text-[10px] text-muted-foreground font-medium">/ {maxScore}</span>
+            </div>
+
+            {/* Breakdown tooltip on hover */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 rounded-xl border bg-background/95 backdrop-blur-md shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+              <p className="text-xs font-semibold mb-2">Score Breakdown</p>
+              <div className="space-y-2">
+                {breakdown.map((b) => (
+                  <div key={b.label} className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between text-[10px] mb-0.5">
+                        <span className="text-muted-foreground">{b.label}</span>
+                        <span className="font-medium">{b.value}%</span>
+                      </div>
+                      <div className="h-1 rounded-full bg-muted overflow-hidden">
+                        <motion.div
+                          className="h-full rounded-full"
+                          style={{ backgroundColor: b.color }}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${b.value}%` }}
+                          transition={{ duration: 0.8, delay: 0.8 }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <Badge
+            variant="secondary"
+            className="text-xs"
+            style={{
+              backgroundColor: score > 80 ? 'rgba(16, 185, 129, 0.1)' : score > 60 ? 'rgba(245, 158, 11, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              color: color,
+            }}
+          >
+            {colorLabel}
+          </Badge>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+}
+
 // ─── Main Dashboard ──────────────────────────────────────────
 export function AdminDashboard() {
   const { currentUser } = useAppStore();
   const firstName = currentUser?.name?.split(' ')[0] || 'Sarah';
 
   const [currentDateTime, setCurrentDateTime] = useState('');
+  const [showBulkOps, setShowBulkOps] = useState(false);
 
   useEffect(() => {
     const update = () => {
@@ -1357,6 +1877,9 @@ export function AdminDashboard() {
         </div>
       </motion.div>
 
+      {/* Real-time Metrics Ticker */}
+      <MetricsTicker />
+
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -1370,13 +1893,16 @@ export function AdminDashboard() {
           ))}
         </div>
 
-        {/* Section 1.5: Recent Activity + Quick Actions row */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Section 1.5: Recent Activity + Quick Actions + Performance Ring */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
           <div className="lg:col-span-2">
             <RecentActivityFeed />
           </div>
           <div className="hidden lg:block">
-            <QuickActionsPanel />
+            <QuickActionsPanel onBulkOpsClick={() => setShowBulkOps(true)} />
+          </div>
+          <div className="hidden lg:block">
+            <PerformanceScoreRing />
           </div>
         </div>
 
@@ -1400,9 +1926,17 @@ export function AdminDashboard() {
 
         {/* Section 7: Quick Actions (visible on smaller screens) */}
         <div className="lg:hidden">
-          <QuickActionsPanel />
+          <QuickActionsPanel onBulkOpsClick={() => setShowBulkOps(true)} />
+        </div>
+
+        {/* Performance Score Ring on mobile */}
+        <div className="lg:hidden">
+          <PerformanceScoreRing />
         </div>
       </motion.div>
+
+      {/* Bulk Operations Dialog */}
+      <BulkOperationsDialog open={showBulkOps} onOpenChange={setShowBulkOps} />
     </div>
   );
 }

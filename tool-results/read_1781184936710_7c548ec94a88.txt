@@ -1,0 +1,702 @@
+  3918→
+  3919→  // Security log
+  3920→  const [securityLog] = useState<SecurityLogEntry[]>([
+  3921→    { id: '1', timestamp: '2025-03-04 09:15:22', eventType: 'Login', ip: '192.168.1.105', location: 'San Francisco, US', status: 'success', details: 'Successful login via Chrome' },
+  3922→    { id: '2', timestamp: '2025-03-04 08:42:11', eventType: '2FA Verification', ip: '192.168.1.105', location: 'San Francisco, US', status: 'success', details: '2FA code verified for login' },
+  3923→    { id: '3', timestamp: '2025-03-03 22:18:05', eventType: 'Login Attempt', ip: '45.33.32.156', location: 'Unknown', status: 'failed', details: 'Invalid credentials from unknown IP' },
+  3924→    { id: '4', timestamp: '2025-03-03 18:30:44', eventType: 'Password Change', ip: '192.168.1.105', location: 'San Francisco, US', status: 'success', details: 'Password changed successfully' },
+  3925→    { id: '5', timestamp: '2025-03-02 14:22:33', eventType: '2FA Change', ip: '192.168.1.105', location: 'San Francisco, US', status: 'success', details: '2FA method updated to Authenticator App' },
+  3926→    { id: '6', timestamp: '2025-03-02 10:05:17', eventType: 'Login Attempt', ip: '89.160.20.112', location: 'London, UK', status: 'failed', details: 'Invalid 2FA code' },
+  3927→    { id: '7', timestamp: '2025-03-01 16:45:09', eventType: 'Login', ip: '10.0.0.42', location: 'San Francisco, US', status: 'success', details: 'Successful login via Safari Mobile' },
+  3928→    { id: '8', timestamp: '2025-03-01 09:12:55', eventType: 'Session Revoked', ip: '172.16.0.88', location: 'Austin, US', status: 'warning', details: 'Remote session terminated by user' },
+  3929→  ]);
+  3930→
+  3931→  const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  3932→
+  3933→  const handleCodeChange = (index: number, value: string) => {
+  3934→    if (value.length > 1) return;
+  3935→    const newCode = [...verificationCode];
+  3936→    newCode[index] = value;
+  3937→    setVerificationCode(newCode);
+  3938→
+  3939→    // Auto-focus next input
+  3940→    if (value && index < 5) {
+  3941→      codeInputRefs.current[index + 1]?.focus();
+  3942→    }
+  3943→
+  3944→    // Auto-submit when all filled
+  3945→    if (newCode.every((c) => c !== '') && newCode.join('').length === 6) {
+  3946→      setTimeout(() => {
+  3947→        setTwoFAEnabled(true);
+  3948→        setSetupStep(4);
+  3949→        toast.success('2FA enabled successfully!', {
+  3950→          description: 'Your account is now protected with two-factor authentication.',
+  3951→        });
+  3952→      }, 300);
+  3953→    }
+  3954→  };
+  3955→
+  3956→  const handleCodeKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+  3957→    if (e.key === 'Backspace' && !verificationCode[index] && index > 0) {
+  3958→      codeInputRefs.current[index - 1]?.focus();
+  3959→    }
+  3960→  };
+  3961→
+  3962→  const revokeDevice = (id: string) => {
+  3963→    setTrustedDevices((prev) => prev.filter((d) => d.id !== id));
+  3964→    toast.success('Device revoked', {
+  3965→      description: 'The device has been removed from your trusted devices.',
+  3966→    });
+  3967→  };
+  3968→
+  3969→  const revokeAllDevices = () => {
+  3970→    setTrustedDevices((prev) => prev.filter((d) => d.isCurrent));
+  3971→    toast.success('All other devices revoked', {
+  3972→      description: 'All devices except your current one have been removed.',
+  3973→    });
+  3974→  };
+  3975→
+  3976→  const signOutOtherSessions = () => {
+  3977→    setSessions((prev) => prev.filter((s) => s.isCurrent));
+  3978→    toast.success('Other sessions signed out', {
+  3979→      description: 'All other sessions have been terminated.',
+  3980→    });
+  3981→  };
+  3982→
+  3983→  const copyRecoveryCode = (code: string) => {
+  3984→    navigator.clipboard?.writeText(code);
+  3985→    toast.success('Code copied!', { description: 'Recovery code copied to clipboard.' });
+  3986→  };
+  3987→
+  3988→  const copyAllRecoveryCodes = () => {
+  3989→    navigator.clipboard?.writeText(recoveryCodes.join('\n'));
+  3990→    toast.success('All codes copied!', { description: 'All recovery codes copied to clipboard.' });
+  3991→  };
+  3992→
+  3993→  const getDeviceIcon = (type: string) => {
+  3994→    switch (type) {
+  3995→      case 'mobile': return Smartphone;
+  3996→      case 'tablet': return Tablet;
+  3997→      default: return Monitor;
+  3998→    }
+  3999→  };
+  4000→
+  4001→  const getStatusColor = (status: string) => {
+  4002→    switch (status) {
+  4003→      case 'success': return 'bg-emerald-500';
+  4004→      case 'failed': return 'bg-red-500';
+  4005→      case 'warning': return 'bg-amber-500';
+  4006→      default: return 'bg-gray-500';
+  4007→    }
+  4008→  };
+  4009→
+  4010→  const getStatusBadge = (status: string) => {
+  4011→    switch (status) {
+  4012→      case 'success': return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"><CheckCircle2 className="h-3 w-3 mr-1" />Success</Badge>;
+  4013→      case 'failed': return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Failed</Badge>;
+  4014→      case 'warning': return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"><AlertTriangle className="h-3 w-3 mr-1" />Warning</Badge>;
+  4015→      default: return <Badge variant="outline">{status}</Badge>;
+  4016→    }
+  4017→  };
+  4018→
+  4019→  return (
+  4020→    <div className="space-y-6">
+  4021→      {/* 2FA Status Card */}
+  4022→      <Card className="shadow-sm hover:shadow-md transition-all backdrop-blur-sm bg-card/80 border-border/50 overflow-hidden">
+  4023→        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" />
+  4024→        <CardHeader>
+  4025→          <div className="flex items-center gap-3">
+  4026→            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+  4027→              <ShieldCheck className="h-6 w-6 text-white" />
+  4028→            </div>
+  4029→            <div className="flex-1">
+  4030→              <CardTitle className="text-lg">Two-Factor Authentication</CardTitle>
+  4031→              <CardDescription>Add an extra layer of security to your account</CardDescription>
+  4032→            </div>
+  4033→            {twoFAEnabled ? (
+  4034→              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-3 py-1 text-sm">
+  4035→                <span className="relative flex h-2 w-2 mr-2">
+  4036→                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+  4037→                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+  4038→                </span>
+  4039→                Enabled
+  4040→              </Badge>
+  4041→            ) : (
+  4042→              <Badge variant="outline" className="text-amber-600 border-amber-300 dark:text-amber-400 dark:border-amber-700">
+  4043→                <ShieldAlert className="h-3 w-3 mr-1" /> Disabled
+  4044→              </Badge>
+  4045→            )}
+  4046→          </div>
+  4047→        </CardHeader>
+  4048→        <CardContent>
+  4049→          {twoFAEnabled ? (
+  4050→            <div className="space-y-4">
+  4051→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  4052→                <div className="p-4 rounded-lg border border-border/50 bg-muted/30">
+  4053→                  <p className="text-xs text-muted-foreground mb-1">Enabled On</p>
+  4054→                  <p className="text-sm font-medium">{new Date(enabledDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+  4055→                </div>
+  4056→                <div className="p-4 rounded-lg border border-border/50 bg-muted/30">
+  4057→                  <p className="text-xs text-muted-foreground mb-1">Last Verified</p>
+  4058→                  <p className="text-sm font-medium">{new Date(lastVerified).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+  4059→                </div>
+  4060→              </div>
+  4061→              <div className="flex flex-wrap gap-3">
+  4062→                <Button
+  4063→                  variant="outline"
+  4064→                  size="sm"
+  4065→                  onClick={() => { setShowRecoveryCodes(true); }}
+  4066→                  className="gap-2"
+  4067→                >
+  4068→                  <Key className="h-3.5 w-3.5" /> View Recovery Codes
+  4069→                </Button>
+  4070→                <AlertDialog>
+  4071→                  <AlertDialogTrigger asChild>
+  4072→                    <Button variant="outline" size="sm" className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20">
+  4073→                      <ShieldAlert className="h-3.5 w-3.5" /> Disable 2FA
+  4074→                    </Button>
+  4075→                  </AlertDialogTrigger>
+  4076→                  <AlertDialogContent>
+  4077→                    <AlertDialogHeader>
+  4078→                      <AlertDialogTitle>Disable Two-Factor Authentication?</AlertDialogTitle>
+  4079→                      <AlertDialogDescription>
+  4080→                        This will remove the extra layer of security from your account. We strongly recommend keeping 2FA enabled to protect your account from unauthorized access.
+  4081→                      </AlertDialogDescription>
+  4082→                    </AlertDialogHeader>
+  4083→                    <AlertDialogFooter>
+  4084→                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+  4085→                      <AlertDialogAction
+  4086→                        onClick={() => {
+  4087→                          setTwoFAEnabled(false);
+  4088→                          setSetupStep(0);
+  4089→                          toast.info('2FA has been disabled', { description: 'Your account is less secure without 2FA.' });
+  4090→                        }}
+  4091→                        className="bg-red-600 hover:bg-red-700"
+  4092→                      >
+  4093→                        Disable 2FA
+  4094→                      </AlertDialogAction>
+  4095→                    </AlertDialogFooter>
+  4096→                  </AlertDialogContent>
+  4097→                </AlertDialog>
+  4098→              </div>
+  4099→            </div>
+  4100→          ) : (
+  4101→            <div className="space-y-4">
+  4102→              <div className="p-4 rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-900/10">
+  4103→                <div className="flex items-start gap-3">
+  4104→                  <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+  4105→                  <div>
+  4106→                    <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Your account is not protected</p>
+  4107→                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+  4108→                      Enable two-factor authentication to add an extra layer of security. Even if someone gets your password, they won&apos;t be able to access your account without the second factor.
+  4109→                    </p>
+  4110→                  </div>
+  4111→                </div>
+  4112→              </div>
+  4113→              <Button
+  4114→                onClick={() => setSetupStep(1)}
+  4115→                className="gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg shadow-emerald-500/20"
+  4116→              >
+  4117→                <ShieldCheck className="h-4 w-4" /> Enable Two-Factor Authentication
+  4118→              </Button>
+  4119→            </div>
+  4120→          )}
+  4121→        </CardContent>
+  4122→      </Card>
+  4123→
+  4124→      {/* 2FA Setup Flow */}
+  4125→      {setupStep > 0 && !twoFAEnabled && (
+  4126→        <Card className="shadow-sm backdrop-blur-sm bg-card/80 border-border/50 overflow-hidden">
+  4127→          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-500 to-purple-600" />
+  4128→          <CardHeader>
+  4129→            <CardTitle className="text-lg">Set Up Two-Factor Authentication</CardTitle>
+  4130→            <CardDescription>Follow these steps to secure your account</CardDescription>
+  4131→            {/* Progress Steps */}
+  4132→            <div className="flex items-center gap-2 mt-4">
+  4133→              {[1, 2, 3, 4].map((step) => (
+  4134→                <React.Fragment key={step}>
+  4135→                  <div className={`flex items-center justify-center h-8 w-8 rounded-full text-xs font-bold transition-all ${
+  4136→                    setupStep >= step
+  4137→                      ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md'
+  4138→                      : 'bg-muted text-muted-foreground'
+  4139→                  }`}>
+  4140→                    {setupStep > step ? <Check className="h-4 w-4" /> : step}
+  4141→                  </div>
+  4142→                  {step < 4 && (
+  4143→                    <div className={`h-0.5 flex-1 transition-all ${setupStep > step ? 'bg-emerald-500' : 'bg-muted'}`} />
+  4144→                  )}
+  4145→                </React.Fragment>
+  4146→              ))}
+  4147→            </div>
+  4148→          </CardHeader>
+  4149→          <CardContent>
+  4150→            {/* Step 1: Choose Method */}
+  4151→            {setupStep === 1 && (
+  4152→              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+  4153→                <p className="text-sm text-muted-foreground">Choose how you want to receive your second factor:</p>
+  4154→                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+  4155→                  {[
+  4156→                    { value: 'app' as const, label: 'Authenticator App', desc: 'Google Authenticator, Authy, etc.', icon: Smartphone },
+  4157→                    { value: 'sms' as const, label: 'SMS', desc: 'Receive codes via text message', icon: Phone },
+  4158→                    { value: 'email' as const, label: 'Email', desc: 'Receive codes via email', icon: Mail },
+  4159→                  ].map((method) => (
+  4160→                    <button
+  4161→                      key={method.value}
+  4162→                      onClick={() => setSelectedMethod(method.value)}
+  4163→                      className={`p-4 rounded-lg border text-left transition-all ${
+  4164→                        selectedMethod === method.value
+  4165→                          ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 ring-1 ring-emerald-500'
+  4166→                          : 'border-border/50 hover:border-border'
+  4167→                      }`}
+  4168→                    >
+  4169→                      <method.icon className={`h-6 w-6 mb-2 ${selectedMethod === method.value ? 'text-emerald-600' : 'text-muted-foreground'}`} />
+  4170→                      <p className="text-sm font-medium">{method.label}</p>
+  4171→                      <p className="text-xs text-muted-foreground">{method.desc}</p>
+  4172→                    </button>
+  4173→                  ))}
+  4174→                </div>
+  4175→                <div className="flex justify-between pt-2">
+  4176→                  <Button variant="outline" onClick={() => setSetupStep(0)} className="gap-2">
+  4177→                    <ArrowLeft className="h-3.5 w-3.5" /> Cancel
+  4178→                  </Button>
+  4179→                  <Button onClick={() => setSetupStep(2)} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+  4180→                    Continue <ChevronDown className="h-3.5 w-3.5 rotate-[-90deg]" />
+  4181→                  </Button>
+  4182→                </div>
+  4183→              </motion.div>
+  4184→            )}
+  4185→
+  4186→            {/* Step 2: QR Code / Setup */}
+  4187→            {setupStep === 2 && (
+  4188→              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+  4189→                {selectedMethod === 'app' ? (
+  4190→                  <>
+  4191→                    <p className="text-sm text-muted-foreground">
+  4192→                      Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
+  4193→                    </p>
+  4194→                    <div className="flex justify-center py-4">
+  4195→                      <div className="h-48 w-48 rounded-xl border-2 border-dashed border-border bg-muted/30 flex items-center justify-center relative overflow-hidden">
+  4196→                        {/* Simulated QR code */}
+  4197→                        <QrCode className="h-24 w-24 text-muted-foreground/60" />
+  4198→                        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-transparent to-emerald-500/5" />
+  4199→                      </div>
+  4200→                    </div>
+  4201→                    <div className="p-3 rounded-lg bg-muted/50 text-center">
+  4202→                      <p className="text-xs text-muted-foreground mb-1">Manual entry key</p>
+  4203→                      <code className="text-sm font-mono bg-background px-3 py-1 rounded border">
+  4204→                        JBSW Y3DP EHPK 3PXP
+  4205→                      </code>
+  4206→                      <Button
+  4207→                        variant="ghost"
+  4208→                        size="sm"
+  4209→                        className="ml-2 h-7 text-xs gap-1"
+  4210→                        onClick={() => {
+  4211→                          navigator.clipboard?.writeText('JBSWY3DPEHPK3PXP');
+  4212→                          toast.success('Key copied!');
+  4213→                        }}
+  4214→                      >
+  4215→                        <Copy className="h-3 w-3" /> Copy
+  4216→                      </Button>
+  4217→                    </div>
+  4218→                  </>
+  4219→                ) : selectedMethod === 'sms' ? (
+  4220→                  <div className="space-y-4">
+  4221→                    <p className="text-sm text-muted-foreground">Enter your phone number to receive verification codes via SMS.</p>
+  4222→                    <div className="space-y-2">
+  4223→                      <Label>Phone Number</Label>
+  4224→                      <Input placeholder="+1 (555) 000-0000" />
+  4225→                    </div>
+  4226→                    <Button variant="outline" className="gap-2" onClick={() => toast.success('Verification code sent!')}>
+  4227→                      <Send className="h-3.5 w-3.5" /> Send Test Code
+  4228→                    </Button>
+  4229→                  </div>
+  4230→                ) : (
+  4231→                  <div className="space-y-4">
+  4232→                    <p className="text-sm text-muted-foreground">Verification codes will be sent to your registered email address.</p>
+  4233→                    <div className="p-4 rounded-lg bg-muted/50 flex items-center gap-3">
+  4234→                      <Mail className="h-5 w-5 text-muted-foreground" />
+  4235→                      <div>
+  4236→                        <p className="text-sm font-medium">admin@nextgen-lms.com</p>
+  4237→                        <p className="text-xs text-muted-foreground">Verified email address</p>
+  4238→                      </div>
+  4239→                      <CheckCircle2 className="h-4 w-4 text-emerald-500 ml-auto" />
+  4240→                    </div>
+  4241→                  </div>
+  4242→                )}
+  4243→                <div className="flex justify-between pt-2">
+  4244→                  <Button variant="outline" onClick={() => setSetupStep(1)} className="gap-2">
+  4245→                    <ArrowLeft className="h-3.5 w-3.5" /> Back
+  4246→                  </Button>
+  4247→                  <Button onClick={() => setSetupStep(3)} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+  4248→                    Continue <ChevronDown className="h-3.5 w-3.5 rotate-[-90deg]" />
+  4249→                  </Button>
+  4250→                </div>
+  4251→              </motion.div>
+  4252→            )}
+  4253→
+  4254→            {/* Step 3: Verify Code */}
+  4255→            {setupStep === 3 && (
+  4256→              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+  4257→                <p className="text-sm text-muted-foreground">
+  4258→                  Enter the 6-digit verification code from your {selectedMethod === 'app' ? 'authenticator app' : selectedMethod === 'sms' ? 'SMS message' : 'email'}.
+  4259→                </p>
+  4260→                <div className="flex justify-center gap-3 py-4">
+  4261→                  {verificationCode.map((digit, index) => (
+  4262→                    <Input
+  4263→                      key={index}
+  4264→                      ref={(el) => { codeInputRefs.current[index] = el; }}
+  4265→                      type="text"
+  4266→                      inputMode="numeric"
+  4267→                      maxLength={1}
+  4268→                      value={digit}
+  4269→                      onChange={(e) => handleCodeChange(index, e.target.value.replace(/\D/g, ''))}
+  4270→                      onKeyDown={(e) => handleCodeKeyDown(index, e)}
+  4271→                      className="h-14 w-12 text-center text-xl font-bold rounded-lg border-2 focus:border-emerald-500 focus:ring-emerald-500/20"
+  4272→                    />
+  4273→                  ))}
+  4274→                </div>
+  4275→                <p className="text-xs text-center text-muted-foreground">
+  4276→                  Didn&apos;t receive the code?{' '}
+  4277→                  <button className="text-emerald-600 hover:underline" onClick={() => toast.success('Code resent!')}>
+  4278→                    Resend
+  4279→                  </button>
+  4280→                </p>
+  4281→                <div className="flex justify-between pt-2">
+  4282→                  <Button variant="outline" onClick={() => setSetupStep(2)} className="gap-2">
+  4283→                    <ArrowLeft className="h-3.5 w-3.5" /> Back
+  4284→                  </Button>
+  4285→                  <Button
+  4286→                    onClick={() => {
+  4287→                      setTwoFAEnabled(true);
+  4288→                      setSetupStep(4);
+  4289→                      toast.success('2FA enabled successfully!', {
+  4290→                        description: 'Your account is now protected with two-factor authentication.',
+  4291→                      });
+  4292→                    }}
+  4293→                    disabled={verificationCode.some((c) => c === '')}
+  4294→                    className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+  4295→                  >
+  4296→                    Verify & Enable <ShieldCheck className="h-3.5 w-3.5" />
+  4297→                  </Button>
+  4298→                </div>
+  4299→              </motion.div>
+  4300→            )}
+  4301→
+  4302→            {/* Step 4: Recovery Codes */}
+  4303→            {setupStep === 4 && (
+  4304→              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+  4305→                <div className="p-4 rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-900/10">
+  4306→                  <div className="flex items-start gap-3">
+  4307→                    <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+  4308→                    <div>
+  4309→                      <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Save your recovery codes</p>
+  4310→                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+  4311→                        Store these codes in a safe place. You can use them to sign in if you lose access to your authentication device. Each code can only be used once.
+  4312→                      </p>
+  4313→                    </div>
+  4314→                  </div>
+  4315→                </div>
+  4316→                <div className="grid grid-cols-2 gap-2 py-2">
+  4317→                  {recoveryCodes.map((code, i) => (
+  4318→                    <div key={i} className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50 border border-border/30">
+  4319→                      <code className="text-xs font-mono flex-1">{code}</code>
+  4320→                      <button
+  4321→                        onClick={() => copyRecoveryCode(code)}
+  4322→                        className="text-muted-foreground hover:text-foreground transition-colors"
+  4323→                      >
+  4324→                        <Copy className="h-3.5 w-3.5" />
+  4325→                      </button>
+  4326→                    </div>
+  4327→                  ))}
+  4328→                </div>
+  4329→                <div className="flex flex-wrap gap-2 pt-2">
+  4330→                  <Button variant="outline" size="sm" onClick={copyAllRecoveryCodes} className="gap-2">
+  4331→                    <Copy className="h-3.5 w-3.5" /> Copy All
+  4332→                  </Button>
+  4333→                  <Button variant="outline" size="sm" className="gap-2">
+  4334→                    <Download className="h-3.5 w-3.5" /> Download as PDF
+  4335→                  </Button>
+  4336→                  <Button variant="outline" size="sm" className="gap-2">
+  4337→                    <Printer className="h-3.5 w-3.5" /> Print
+  4338→                  </Button>
+  4339→                </div>
+  4340→                <div className="flex justify-end pt-2">
+  4341→                  <Button onClick={() => setSetupStep(0)} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+  4342→                    <Check className="h-3.5 w-3.5" /> Done
+  4343→                  </Button>
+  4344→                </div>
+  4345→              </motion.div>
+  4346→            )}
+  4347→          </CardContent>
+  4348→        </Card>
+  4349→      )}
+  4350→
+  4351→      {/* Recovery Codes Display (when viewing after setup) */}
+  4352→      {showRecoveryCodes && twoFAEnabled && (
+  4353→        <Card className="shadow-sm backdrop-blur-sm bg-card/80 border-border/50">
+  4354→          <CardHeader>
+  4355→            <div className="flex items-center justify-between">
+  4356→              <div className="flex items-center gap-3">
+  4357→                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+  4358→                  <Key className="h-5 w-5 text-white" />
+  4359→                </div>
+  4360→                <div>
+  4361→                  <CardTitle className="text-lg">Recovery Codes</CardTitle>
+  4362→                  <CardDescription>Use these codes if you lose access to your authentication device</CardDescription>
+  4363→                </div>
+  4364→              </div>
+  4365→              <Button variant="ghost" size="sm" onClick={() => setShowRecoveryCodes(false)}>
+  4366→                <XCircle className="h-4 w-4" />
+  4367→              </Button>
+  4368→            </div>
+  4369→          </CardHeader>
+  4370→          <CardContent className="space-y-4">
+  4371→            <div className="p-3 rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-900/10">
+  4372→              <div className="flex items-start gap-2">
+  4373→                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5" />
+  4374→                <p className="text-xs text-amber-700 dark:text-amber-400">
+  4375→                  Treat your recovery codes with the same level of security as your password. Store them somewhere safe and accessible.
+  4376→                </p>
+  4377→              </div>
+  4378→            </div>
+  4379→            <div className="grid grid-cols-2 gap-2">
+  4380→              {recoveryCodes.map((code, i) => (
+  4381→                <div key={i} className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50 border border-border/30">
+  4382→                  <code className="text-xs font-mono flex-1">{code}</code>
+  4383→                  <button
+  4384→                    onClick={() => copyRecoveryCode(code)}
+  4385→                    className="text-muted-foreground hover:text-foreground transition-colors"
+  4386→                  >
+  4387→                    <Copy className="h-3.5 w-3.5" />
+  4388→                  </button>
+  4389→                </div>
+  4390→              ))}
+  4391→            </div>
+  4392→            <div className="flex flex-wrap gap-2">
+  4393→              <Button variant="outline" size="sm" onClick={copyAllRecoveryCodes} className="gap-2">
+  4394→                <Copy className="h-3.5 w-3.5" /> Copy All
+  4395→              </Button>
+  4396→              <Button variant="outline" size="sm" className="gap-2">
+  4397→                <Download className="h-3.5 w-3.5" /> Download as PDF
+  4398→              </Button>
+  4399→              <Button variant="outline" size="sm" className="gap-2">
+  4400→                <Printer className="h-3.5 w-3.5" /> Print
+  4401→              </Button>
+  4402→            </div>
+  4403→          </CardContent>
+  4404→        </Card>
+  4405→      )}
+  4406→
+  4407→      {/* Trusted Devices */}
+  4408→      <Card className="shadow-sm hover:shadow-md transition-shadow backdrop-blur-sm bg-card/80 border-border/50">
+  4409→        <CardHeader>
+  4410→          <div className="flex items-center gap-3">
+  4411→            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+  4412→              <Fingerprint className="h-5 w-5 text-white" />
+  4413→            </div>
+  4414→            <div className="flex-1">
+  4415→              <CardTitle className="text-lg">Trusted Devices</CardTitle>
+  4416→              <CardDescription>Devices that don&apos;t require 2FA on every login</CardDescription>
+  4417→            </div>
+  4418→            {trustedDevices.length > 1 && (
+  4419→              <AlertDialog>
+  4420→                <AlertDialogTrigger asChild>
+  4421→                  <Button variant="outline" size="sm" className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20">
+  4422→                    <Trash2 className="h-3.5 w-3.5" /> Revoke All
+  4423→                  </Button>
+  4424→                </AlertDialogTrigger>
+  4425→                <AlertDialogContent>
+  4426→                  <AlertDialogHeader>
+  4427→                    <AlertDialogTitle>Revoke all trusted devices?</AlertDialogTitle>
+  4428→                    <AlertDialogDescription>
+  4429→                      This will remove all trusted devices except your current one. You&apos;ll need to complete 2FA on each device the next time you sign in.
+  4430→                    </AlertDialogDescription>
+  4431→                  </AlertDialogHeader>
+  4432→                  <AlertDialogFooter>
+  4433→                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+  4434→                    <AlertDialogAction onClick={revokeAllDevices} className="bg-red-600 hover:bg-red-700">
+  4435→                      Revoke All
+  4436→                    </AlertDialogAction>
+  4437→                  </AlertDialogFooter>
+  4438→                </AlertDialogContent>
+  4439→              </AlertDialog>
+  4440→            )}
+  4441→          </div>
+  4442→        </CardHeader>
+  4443→        <CardContent className="space-y-2">
+  4444→          {trustedDevices.map((device) => {
+  4445→            const DeviceIcon = getDeviceIcon(device.type);
+  4446→            return (
+  4447→              <div key={device.id} className="flex items-center gap-3 p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors">
+  4448→                <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
+  4449→                  device.isCurrent
+  4450→                    ? 'bg-emerald-100 dark:bg-emerald-900/30'
+  4451→                    : 'bg-muted'
+  4452→                }`}>
+  4453→                  <DeviceIcon className={`h-5 w-5 ${device.isCurrent ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`} />
+  4454→                </div>
+  4455→                <div className="flex-1 min-w-0">
+  4456→                  <div className="flex items-center gap-2">
+  4457→                    <p className="text-sm font-medium truncate">{device.name}</p>
+  4458→                    {device.isCurrent && (
+  4459→                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] px-1.5 py-0">
+  4460→                        Current
+  4461→                      </Badge>
+  4462→                    )}
+  4463→                  </div>
+  4464→                  <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+  4465→                    <span className="flex items-center gap-1"><Globe className="h-3 w-3" />{device.browser}</span>
+  4466→                    <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{device.location}</span>
+  4467→                    <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{device.lastActive}</span>
+  4468→                  </div>
+  4469→                </div>
+  4470→                {!device.isCurrent && (
+  4471→                  <Button variant="ghost" size="sm" onClick={() => revokeDevice(device.id)} className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 h-8">
+  4472→                    Revoke
+  4473→                  </Button>
+  4474→                )}
+  4475→              </div>
+  4476→            );
+  4477→          })}
+  4478→          {trustedDevices.length === 0 && (
+  4479→            <div className="text-center py-8 text-muted-foreground">
+  4480→              <Fingerprint className="h-8 w-8 mx-auto mb-2 opacity-50" />
+  4481→              <p className="text-sm">No trusted devices</p>
+  4482→            </div>
+  4483→          )}
+  4484→        </CardContent>
+  4485→      </Card>
+  4486→
+  4487→      {/* Session Management */}
+  4488→      <Card className="shadow-sm hover:shadow-md transition-shadow backdrop-blur-sm bg-card/80 border-border/50">
+  4489→        <CardHeader>
+  4490→          <div className="flex items-center gap-3">
+  4491→            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+  4492→              <Wifi className="h-5 w-5 text-white" />
+  4493→            </div>
+  4494→            <div className="flex-1">
+  4495→              <CardTitle className="text-lg">Active Sessions</CardTitle>
+  4496→              <CardDescription>Manage your active login sessions</CardDescription>
+  4497→            </div>
+  4498→            {sessions.length > 1 && (
+  4499→              <AlertDialog>
+  4500→                <AlertDialogTrigger asChild>
+  4501→                  <Button variant="outline" size="sm" className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20">
+  4502→                    <LogOut className="h-3.5 w-3.5" /> Sign Out All Others
+  4503→                  </Button>
+  4504→                </AlertDialogTrigger>
+  4505→                <AlertDialogContent>
+  4506→                  <AlertDialogHeader>
+  4507→                    <AlertDialogTitle>Sign out all other sessions?</AlertDialogTitle>
+  4508→                    <AlertDialogDescription>
+  4509→                      This will terminate all sessions except your current one. Other devices will need to sign in again.
+  4510→                    </AlertDialogDescription>
+  4511→                  </AlertDialogHeader>
+  4512→                  <AlertDialogFooter>
+  4513→                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+  4514→                    <AlertDialogAction onClick={signOutOtherSessions} className="bg-red-600 hover:bg-red-700">
+  4515→                      Sign Out Others
+  4516→                    </AlertDialogAction>
+  4517→                  </AlertDialogFooter>
+  4518→                </AlertDialogContent>
+  4519→              </AlertDialog>
+  4520→            )}
+  4521→          </div>
+  4522→        </CardHeader>
+  4523→        <CardContent className="space-y-2">
+  4524→          {sessions.map((session) => (
+  4525→            <div key={session.id} className="flex items-center gap-3 p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors">
+  4526→              <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
+  4527→                session.isCurrent
+  4528→                  ? 'bg-emerald-100 dark:bg-emerald-900/30'
+  4529→                  : 'bg-muted'
+  4530→              }`}>
+  4531→                <Monitor className={`h-5 w-5 ${session.isCurrent ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`} />
+  4532→              </div>
+  4533→              <div className="flex-1 min-w-0">
+  4534→                <div className="flex items-center gap-2">
+  4535→                  <p className="text-sm font-medium truncate">{session.device}</p>
+  4536→                  {session.isCurrent && (
+  4537→                    <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] px-1.5 py-0">
+  4538→                      Current
+  4539→                    </Badge>
+  4540→                  )}
+  4541→                </div>
+  4542→                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-0.5">
+  4543→                  <span>{session.browser}</span>
+  4544→                  <span className="flex items-center gap-1"><Globe className="h-3 w-3" />{session.ip}</span>
+  4545→                  <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{session.location}</span>
+  4546→                  <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{session.lastActivity}</span>
+  4547→                </div>
+  4548→              </div>
+  4549→              {!session.isCurrent && (
+  4550→                <Button variant="ghost" size="sm" onClick={() => {
+  4551→                  setSessions((prev) => prev.filter((s) => s.id !== session.id));
+  4552→                  toast.success('Session terminated');
+  4553→                }} className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 h-8">
+  4554→                  <LogOut className="h-3.5 w-3.5" />
+  4555→                </Button>
+  4556→              )}
+  4557→            </div>
+  4558→          ))}
+  4559→          {sessions.length === 0 && (
+  4560→            <div className="text-center py-8 text-muted-foreground">
+  4561→              <Wifi className="h-8 w-8 mx-auto mb-2 opacity-50" />
+  4562→              <p className="text-sm">No active sessions</p>
+  4563→            </div>
+  4564→          )}
+  4565→        </CardContent>
+  4566→      </Card>
+  4567→
+  4568→      {/* Security Log */}
+  4569→      <Card className="shadow-sm hover:shadow-md transition-shadow backdrop-blur-sm bg-card/80 border-border/50">
+  4570→        <CardHeader>
+  4571→          <div className="flex items-center gap-3">
+  4572→            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-rose-500 to-red-600 flex items-center justify-center">
+  4573→              <FileText className="h-5 w-5 text-white" />
+  4574→            </div>
+  4575→            <div>
+  4576→              <CardTitle className="text-lg">Security Log</CardTitle>
+  4577→              <CardDescription>Recent security events on your account</CardDescription>
+  4578→            </div>
+  4579→          </div>
+  4580→        </CardHeader>
+  4581→        <CardContent className="space-y-2 max-h-96 overflow-y-auto">
+  4582→          {securityLog.map((entry) => (
+  4583→            <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-colors">
+  4584→              <div className={`h-2.5 w-2.5 rounded-full mt-1.5 flex-shrink-0 ${getStatusColor(entry.status)}`} />
+  4585→              <div className="flex-1 min-w-0">
+  4586→                <div className="flex items-center gap-2 flex-wrap">
+  4587→                  <p className="text-sm font-medium">{entry.eventType}</p>
+  4588→                  {getStatusBadge(entry.status)}
+  4589→                </div>
+  4590→                <p className="text-xs text-muted-foreground mt-0.5">{entry.details}</p>
+  4591→                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+  4592→                  <span>{entry.timestamp}</span>
+  4593→                  <span className="flex items-center gap-1"><Globe className="h-3 w-3" />{entry.ip}</span>
+  4594→                  <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{entry.location}</span>
+  4595→                </div>
+  4596→              </div>
+  4597→            </div>
+  4598→          ))}
+  4599→          <div className="pt-2">
+  4600→            <Button variant="outline" size="sm" className="w-full gap-2">
+  4601→              <FileText className="h-3.5 w-3.5" /> View Full Security Log
+  4602→            </Button>
+  4603→          </div>
+  4604→        </CardContent>
+  4605→      </Card>
+  4606→    </div>
+  4607→  );
+  4608→}
+  4609→
+  4610→// ============================================================
+  4611→// Tab 10: Data & Privacy Settings
+  4612→// ============================================================
+  4613→
+  4614→type ExportType = 'course' | 'user' | 'financial' | 'community' | 'assessment' | 'analytics';
+  4615→type ExportFormat = 'csv' | 'json' | 'xlsx';
+  4616→type ExportStatus = 'completed' | 'processing' | 'failed';
+  4617→type ImportStatus = 'completed' | 'processing' | 'failed' | 'partial';
+
+[showing lines 3918-4617 of 6025; use offset=4618 with limit to continue reading]

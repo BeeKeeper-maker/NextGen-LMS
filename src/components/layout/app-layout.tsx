@@ -17,6 +17,8 @@ import { LearnerAchievements } from '@/components/learner/learner-achievements';
 import { LearnerProfile } from '@/components/learner/learner-profile';
 import { AdminLiveCohorts } from '@/components/admin/admin-live-cohorts';
 import { LearnerLiveCohorts } from '@/components/learner/learner-live-cohorts';
+import { LearnerLearningPaths } from '@/components/learner/learner-learning-paths';
+import { AdminLearningPaths } from '@/components/admin/admin-learning-paths';
 import { CheckoutPage } from '@/components/checkout/checkout-page';
 import { AITutorFullPage, AITutorFloatingWidget } from '@/components/ai/ai-tutor-chat';
 import { AIContentGeneration } from '@/components/ai/ai-content-generation';
@@ -57,11 +59,13 @@ const viewLabels: Record<string, string> = {
   'admin-analytics': 'Analytics',
   'admin-settings': 'Settings',
   'admin-live-cohorts': 'Live Cohorts',
+  'admin-learning-paths': 'Learning Paths',
   'learner-dashboard': 'Dashboard',
   'learner-course': 'My Courses',
   'learner-community': 'Community',
   'learner-achievements': 'Achievements',
   'learner-live-cohorts': 'Live Cohorts',
+  'learner-learning-paths': 'Learning Paths',
   'learner-profile': 'Profile',
   'ai-assistant': 'AI Tutor',
   'ai-content-gen': 'AI Content Generation',
@@ -79,11 +83,13 @@ function MainContent() {
     'admin-analytics': <AdminAnalytics />,
     'admin-settings': <AdminSettings />,
     'admin-live-cohorts': <AdminLiveCohorts />,
+    'admin-learning-paths': <AdminLearningPaths />,
     'learner-dashboard': <LearnerDashboard />,
     'learner-course': <LearnerCourse />,
     'learner-community': <LearnerCommunity />,
     'learner-achievements': <LearnerAchievements />,
     'learner-live-cohorts': <LearnerLiveCohorts />,
+    'learner-learning-paths': <LearnerLearningPaths />,
     'learner-profile': <LearnerProfile />,
     'checkout': <CheckoutPage />,
     'ai-assistant': <AITutorFullPage />,

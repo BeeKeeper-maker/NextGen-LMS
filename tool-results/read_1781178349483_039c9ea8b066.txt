@@ -1,0 +1,845 @@
+     1→'use client';
+     2→
+     3→import { useState } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { useAppStore } from '@/store/app-store';
+     6→import { demoCourses, demoEnrollments } from '@/lib/mock-data';
+     7→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+     8→import { Button } from '@/components/ui/button';
+     9→import { Badge } from '@/components/ui/badge';
+    10→import { Progress } from '@/components/ui/progress';
+    11→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    12→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    13→import { Separator } from '@/components/ui/separator';
+    14→import { VideoPlayer } from '@/components/shared/video-player';
+    15→import type { Chapter } from '@/components/shared/video-player';
+    16→import {
+    17→  Play,
+    18→  FileText,
+    19→  Headphones,
+    20→  Video,
+    21→  Monitor,
+    22→  Clock,
+    23→  Star,
+    24→  Users,
+    25→  ChevronDown,
+    26→  ChevronRight,
+    27→  CheckCircle2,
+    28→  Circle,
+    29→  Eye,
+    30→  MessageSquare,
+    31→  Download,
+    32→  ExternalLink,
+    33→  GitBranch,
+    34→  ThumbsUp,
+    35→  Send,
+    36→  BookOpen,
+    37→  Award,
+    38→} from 'lucide-react';
+    39→import { cn } from '@/lib/utils';
+    40→import type { Lesson, Module } from '@/types';
+    41→
+    42→// ─── Content type icon mapping ─────────────────────────────
+    43→function ContentTypeIcon({ type, className }: { type: Lesson['contentType']; className?: string }) {
+    44→  switch (type) {
+    45→    case 'video':
+    46→      return <Video className={className} />;
+    47→    case 'text':
+    48→      return <FileText className={className} />;
+    49→    case 'audio':
+    50→      return <Headphones className={className} />;
+    51→    case 'document':
+    52→      return <FileText className={className} />;
+    53→    case 'live_session':
+    54→      return <Monitor className={className} />;
+    55→    default:
+    56→      return <FileText className={className} />;
+    57→  }
+    58→}
+    59→
+    60→// ─── Format duration ───────────────────────────────────────
+    61→function formatDuration(seconds?: number): string {
+    62→  if (!seconds) return '';
+    63→  const mins = Math.floor(seconds / 60);
+    64→  if (mins < 60) return `${mins} min`;
+    65→  const hours = Math.floor(mins / 60);
+    66→  const remainMins = mins % 60;
+    67→  return `${hours}h ${remainMins}m`;
+    68→}
+    69→
+    70→// ─── Level color mapping ───────────────────────────────────
+    71→function getLevelColor(level: string) {
+    72→  const colors: Record<string, string> = {
+    73→    beginner: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    74→    intermediate: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    75→    advanced: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+    76→    expert: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    77→  };
+    78→  return colors[level] || 'bg-slate-100 text-slate-700';
+    79→}
+    80→
+    81→function getLevelAccent(level: string) {
+    82→  const accents: Record<string, string> = {
+    83→    beginner: 'from-emerald-600 to-emerald-800',
+    84→    intermediate: 'from-amber-600 to-amber-800',
+    85→    advanced: 'from-orange-600 to-orange-800',
+    86→    expert: 'from-red-600 to-red-800',
+    87→  };
+    88→  return accents[level] || 'from-slate-600 to-slate-800';
+    89→}
+    90→
+    91→// ─── Mock lesson progress ──────────────────────────────────
+    92→const lessonProgressMap: Record<string, 'completed' | 'in_progress' | 'not_started'> = {
+    93→  'les-1-1-1': 'completed',
+    94→  'les-1-1-2': 'completed',
+    95→  'les-1-1-3': 'in_progress',
+    96→  'les-1-2-1': 'not_started',
+    97→  'les-1-2-2': 'not_started',
+    98→};
+    99→
+   100→// ─── Demo chapters for video player ────────────────────────────
+   101→const demoChapters: Chapter[] = [
+   102→  { time: 0, title: 'Introduction' },
+   103→  { time: 45, title: 'Core Concepts' },
+   104→  { time: 120, title: 'Setting Up the Environment' },
+   105→  { time: 180, title: 'Building Your First Component' },
+   106→  { time: 240, title: 'Summary & Key Takeaways' },
+   107→];
+   108→
+   109→// ─── Resume positions for lessons (simulated) ─────────────────
+   110→const resumePositions: Record<string, number> = {
+   111→  'les-1-1-3': 120, // Resume from 2 min
+   112→  'les-1-2-1': 0,
+   113→  'les-1-2-2': 0,
+   114→};
+   115→
+   116→// ─── Mock discussion threads ───────────────────────────────
+   117→const discussionThreads = [
+   118→  {
+   119→    id: 'thread-1',
+   120→    author: 'Mike Chen',
+   121→    avatar: 'MC',
+   122→    title: 'How do Server Components interact with client state?',
+   123→    content: 'I\'m confused about how Server Components can trigger client-side state updates. Can someone explain the data flow?',
+   124→    likes: 12,
+   125→    replies: 5,
+   126→    time: '2 hours ago',
+   127→  },
+   128→  {
+   129→    id: 'thread-2',
+   130→    author: 'Emma Rodriguez',
+   131→    avatar: 'ER',
+   132→    title: 'Best pattern for loading states in App Router?',
+   133→    content: 'What\'s the recommended way to handle loading.tsx vs Suspense boundaries for complex pages?',
+   134→    likes: 8,
+   135→    replies: 3,
+   136→    time: '5 hours ago',
+   137→  },
+   138→  {
+   139→    id: 'thread-3',
+   140→    author: 'David Park',
+   141→    avatar: 'DP',
+   142→    title: 'TypeScript generic patterns for API routes',
+   143→    content: 'I\'ve been experimenting with typed API routes. Here\'s my approach to type-safe server actions...',
+   144→    likes: 15,
+   145→    replies: 7,
+   146→    time: '1 day ago',
+   147→  },
+   148→];
+   149→
+   150→// ─── Mock resources ────────────────────────────────────────
+   151→const courseResources = [
+   152→  { id: 'res-1', title: 'React 19 Cheat Sheet', type: 'pdf', size: '2.4 MB' },
+   153→  { id: 'res-2', title: 'Next.js App Router Diagram', type: 'pdf', size: '1.1 MB' },
+   154→  { id: 'res-3', title: 'Course Code Repository', type: 'repo', url: 'github.com/nextgen-lms/react-masterclass' },
+   155→  { id: 'res-4', title: 'TypeScript Best Practices Guide', type: 'pdf', size: '3.8 MB' },
+   156→  { id: 'res-5', title: 'Official React Documentation', type: 'link', url: 'react.dev' },
+   157→  { id: 'res-6', title: 'Next.js Documentation', type: 'link', url: 'nextjs.org/docs' },
+   158→];
+   159→
+   160→// ─── Mock reviews ──────────────────────────────────────────
+   161→const courseReviews = [
+   162→  { id: 'rev-1', author: 'Sarah K.', avatar: 'SK', rating: 5, date: '2 weeks ago', content: 'Absolutely incredible course! The section on Server Components completely changed how I think about React architecture. Highly recommended for anyone serious about modern web development.' },
+   163→  { id: 'rev-2', author: 'James L.', avatar: 'JL', rating: 5, date: '1 month ago', content: 'Best React course I\'ve ever taken. The instructor explains complex concepts in a way that\'s easy to follow. The hands-on projects really solidify the learning.' },
+   164→  { id: 'rev-3', author: 'Priya S.', avatar: 'PS', rating: 4, date: '1 month ago', content: 'Great content overall. The TypeScript patterns section was excellent. Would have liked more content on testing patterns, but still very much worth the investment.' },
+   165→  { id: 'rev-4', author: 'Alex M.', avatar: 'AM', rating: 5, date: '2 months ago', content: 'This course is a game-changer. I went from struggling with React concepts to building production apps confidently. The community support is amazing too.' },
+   166→  { id: 'rev-5', author: 'Tom W.', avatar: 'TW', rating: 4, date: '3 months ago', content: 'Very comprehensive course. The App Router deep-dive was particularly helpful. Some sections could be a bit more beginner-friendly, but the depth is appreciated.' },
+   167→];
+   168→
+   169→// ─── Rating distribution ───────────────────────────────────
+   170→const ratingDistribution = [
+   171→  { stars: 5, count: 186 },
+   172→  { stars: 4, count: 89 },
+   173→  { stars: 3, count: 24 },
+   174→  { stars: 2, count: 9 },
+   175→  { stars: 1, count: 4 },
+   176→];
+   177→const totalReviews = ratingDistribution.reduce((s, r) => s + r.count, 0);
+   178→
+   179→// ─── Animation variants ────────────────────────────────────
+   180→const containerVariants = {
+   181→  hidden: { opacity: 0 },
+   182→  visible: { opacity: 1, transition: { staggerChildren: 0.05 } },
+   183→};
+   184→
+   185→const itemVariants = {
+   186→  hidden: { opacity: 0, y: 12 },
+   187→  visible: { opacity: 1, y: 0, transition: { duration: 0.35 } },
+   188→};
+   189→
+   190→// ─── Module Section Component ──────────────────────────────
+   191→function ModuleSection({ module: mod, moduleIndex, onLessonClick, progressMap }: { module: Module; moduleIndex: number; onLessonClick: (lesson: Lesson) => void; progressMap: Record<string, 'completed' | 'in_progress' | 'not_started'> }) {
+   192→  const [isOpen, setIsOpen] = useState(moduleIndex === 0);
+   193→  const lessons = mod.lessons || [];
+   194→  const completedLessons = lessons.filter(
+   195→    (l) => progressMap[l.id] === 'completed'
+   196→  ).length;
+   197→  const totalDuration = lessons.reduce((sum, l) => sum + (l.videoDuration || 0), 0);
+   198→
+   199→  return (
+   200→    <div className="border rounded-lg overflow-hidden">
+   201→      {/* Module Header */}
+   202→      <button
+   203→        onClick={() => setIsOpen(!isOpen)}
+   204→        className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors text-left"
+   205→      >
+   206→        <div className="flex items-center gap-3">
+   207→          <div className="text-muted-foreground">
+   208→            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+   209→          </div>
+   210→          <div>
+   211→            <div className="flex items-center gap-2">
+   212→              <span className="text-xs font-medium text-muted-foreground">Module {moduleIndex + 1}</span>
+   213→              {mod.isPublished ? (
+   214→                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Published</Badge>
+   215→              ) : (
+   216→                <Badge variant="outline" className="text-[10px] px-1.5 py-0">Draft</Badge>
+   217→              )}
+   218→            </div>
+   219→            <h4 className="font-semibold text-foreground text-sm mt-0.5">{mod.title}</h4>
+   220→          </div>
+   221→        </div>
+   222→        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+   223→          <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {lessons.length} lessons</span>
+   224→          {totalDuration > 0 && <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatDuration(totalDuration)}</span>}
+   225→          {completedLessons > 0 && (
+   226→            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
+   227→              {completedLessons}/{lessons.length} done
+   228→            </Badge>
+   229→          )}
+   230→        </div>
+   231→      </button>
+   232→
+   233→      {/* Module Lessons */}
+   234→      <AnimatePresence>
+   235→        {isOpen && (
+   236→          <motion.div
+   237→            initial={{ height: 0, opacity: 0 }}
+   238→            animate={{ height: 'auto', opacity: 1 }}
+   239→            exit={{ height: 0, opacity: 0 }}
+   240→            transition={{ duration: 0.2 }}
+   241→            className="overflow-hidden"
+   242→          >
+   243→            <div className="border-t bg-muted/20">
+   244→              {lessons.map((lesson, lessonIdx) => {
+   245→                const status = progressMap[lesson.id] || 'not_started';
+   246→                return (
+   247→                  <div
+   248→                    key={lesson.id}
+   249→                    className={cn(
+   250→                      'flex items-center justify-between p-3 pl-12 hover:bg-muted/40 transition-colors',
+   251→                      lessonIdx < lessons.length - 1 && 'border-b border-border/50'
+   252→                    )}
+   253→                  >
+   254→                    <div className="flex items-center gap-3">
+   255→                      {/* Status Icon */}
+   256→                      {status === 'completed' ? (
+   257→                        <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+   258→                      ) : status === 'in_progress' ? (
+   259→                        <div className="h-5 w-5 rounded-full border-2 border-amber-500 border-t-transparent animate-spin shrink-0" />
+   260→                      ) : (
+   261→                        <Circle className="h-5 w-5 text-muted-foreground/40 shrink-0" />
+   262→                      )}
+   263→
+   264→                      {/* Content Type Icon */}
+   265→                      <ContentTypeIcon type={lesson.contentType} className="h-4 w-4 text-muted-foreground shrink-0" />
+   266→
+   267→                      {/* Lesson Info */}
+   268→                      <div>
+   269→                        <p className={cn(
+   270→                          'text-sm font-medium',
+   271→                          status === 'completed' ? 'text-muted-foreground line-through' : 'text-foreground'
+   272→                        )}>
+   273→                          {lesson.title}
+   274→                        </p>
+   275→                        <div className="flex items-center gap-2 mt-0.5">
+   276→                          {lesson.videoDuration && (
+   277→                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+   278→                              <Clock className="h-3 w-3" /> {formatDuration(lesson.videoDuration)}
+   279→                            </span>
+   280→                          )}
+   281→                          {lesson.isPreview && (
+   282→                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-0.5">
+   283→                              <Eye className="h-2.5 w-2.5" /> Preview
+   284→                            </Badge>
+   285→                          )}
+   286→                        </div>
+   287→                      </div>
+   288→                    </div>
+   289→
+   290→                    {/* Action Button */}
+   291→                    <div>
+   292→                      {status === 'completed' ? (
+   293→                        <div className="flex items-center gap-2">
+   294→                          <Badge variant="outline" className="text-emerald-600 border-emerald-500/30 dark:border-emerald-800 text-xs">
+   295→                            Completed
+   296→                          </Badge>
+   297→                          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-emerald-600 hover:text-emerald-700" onClick={() => onLessonClick(lesson)}>
+   298→                            <Play className="h-3 w-3" /> Rewatch
+   299→                          </Button>
+   300→                        </div>
+   301→                      ) : status === 'in_progress' ? (
+   302→                        <Button size="sm" className="h-7 text-xs gap-1 bg-amber-600 hover:bg-amber-700" onClick={() => onLessonClick(lesson)}>
+   303→                          <Play className="h-3 w-3" /> Continue
+   304→                        </Button>
+   305→                      ) : lesson.isPreview ? (
+   306→                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onLessonClick(lesson)}>
+   307→                          <Play className="h-3 w-3" /> Preview
+   308→                        </Button>
+   309→                      ) : (
+   310→                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onLessonClick(lesson)}>
+   311→                          <Play className="h-3 w-3" /> Start
+   312→                        </Button>
+   313→                      )}
+   314→                    </div>
+   315→                  </div>
+   316→                );
+   317→              })}
+   318→            </div>
+   319→          </motion.div>
+   320→        )}
+   321→      </AnimatePresence>
+   322→    </div>
+   323→  );
+   324→}
+   325→
+   326→// ─── Main Component ────────────────────────────────────────
+   327→export function LearnerCourse() {
+   328→  const { currentUser } = useAppStore();
+   329→  const course = demoCourses[0]; // React & Next.js Masterclass
+   330→  const enrollment = demoEnrollments[0]; // Active enrollment for this course
+   331→  const modules = course.modules || [];
+   332→  const [activeTab, setActiveTab] = useState('curriculum');
+   333→  const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
+   334→  const [activeLessonModuleName, setActiveLessonModuleName] = useState('');
+   335→  const [lessonProgressState, setLessonProgressState] = useState(lessonProgressMap);
+   336→
+   337→  // Calculate total lessons and completed
+   338→  const allLessons = modules.flatMap(m => m.lessons || []);
+   339→  const completedCount = allLessons.filter(l => lessonProgressState[l.id] === 'completed').length;
+   340→  const totalLessons = allLessons.length;
+   341→
+   342→  // Handle clicking a lesson
+   343→  const handleLessonClick = (lesson: Lesson) => {
+   344→    setActiveLesson(lesson);
+   345→    // Find the module name for this lesson
+   346→    const parentModule = modules.find(m => m.lessons?.some(l => l.id === lesson.id));
+   347→    setActiveLessonModuleName(parentModule?.title || '');
+   348→  };
+   349→
+   350→  // Handle marking a lesson as complete
+   351→  const handleMarkComplete = (lessonId: string) => {
+   352→    setLessonProgressState(prev => ({ ...prev, [lessonId]: 'completed' }));
+   353→  };
+   354→
+   355→  // Get next lessons for the sidebar
+   356→  const getNextLessons = (): { id: string; title: string; moduleName: string; duration: number; contentType: Lesson['contentType'] }[] => {
+   357→    if (!activeLesson) return [];
+   358→    const currentIdx = allLessons.findIndex(l => l.id === activeLesson.id);
+   359→    const next: { id: string; title: string; moduleName: string; duration: number; contentType: Lesson['contentType'] }[] = [];
+   360→    for (let i = currentIdx + 1; i < Math.min(currentIdx + 4, allLessons.length); i++) {
+   361→      const l = allLessons[i];
+   362→      const mod = modules.find(m => m.lessons?.some(ml => ml.id === l.id));
+   363→      next.push({ id: l.id, title: l.title, moduleName: mod?.title || '', duration: l.videoDuration || 0, contentType: l.contentType });
+   364→    }
+   365→    return next;
+   366→  };
+   367→
+   368→  // If a lesson is active, show the enhanced Video Player
+   369→  if (activeLesson) {
+   370→    return (
+   371→      <div className="p-4 md:p-6">
+   372→        <VideoPlayer
+   373→          title={activeLesson.title}
+   374→          lesson={activeLesson}
+   375→          moduleName={activeLessonModuleName}
+   376→          nextLessons={getNextLessons()}
+   377→          onMarkComplete={handleMarkComplete}
+   378→          onNextLesson={(lessonId) => {
+   379→            const found = allLessons.find(l => l.id === lessonId);
+   380→            if (found) handleLessonClick(found);
+   381→          }}
+   382→          onBack={() => setActiveLesson(null)}
+   383→          isCompleted={lessonProgressState[activeLesson.id] === 'completed'}
+   384→          initialPosition={resumePositions[activeLesson.id] || 0}
+   385→          chapters={demoChapters}
+   386→          onProgress={(progress, currentTime) => {
+   387→            // Store resume position
+   388→            resumePositions[activeLesson.id] = currentTime;
+   389→          }}
+   390→        />
+   391→      </div>
+   392→    );
+   393→  }
+   394→
+   395→  return (
+   396→    <motion.div
+   397→      className="p-4 md:p-6 space-y-6"
+   398→      variants={containerVariants}
+   399→      initial="hidden"
+   400→      animate="visible"
+   401→    >
+   402→      {/* ─── Course Header ────────────────────────────────── */}
+   403→      <motion.div variants={itemVariants}>
+   404→        <Card className="overflow-hidden">
+   405→          {/* Gradient Banner */}
+   406→          <div className={cn(
+   407→            'h-32 md:h-40 bg-gradient-to-r flex items-end p-6',
+   408→            getLevelAccent(course.level)
+   409→          )}>
+   410→            <div className="flex-1">
+   411→              <div className="flex items-center gap-2 mb-2">
+   412→                <Badge className="bg-white/20 text-white border-0 backdrop-blur-sm text-xs">
+   413→                  {course.category}
+   414→                </Badge>
+   415→                <Badge className="bg-white/20 text-white border-0 backdrop-blur-sm text-xs capitalize">
+   416→                  {course.level}
+   417→                </Badge>
+   418→              </div>
+   419→              <h1 className="text-2xl md:text-3xl font-bold text-white leading-tight">{course.title}</h1>
+   420→            </div>
+   421→          </div>
+   422→
+   423→          <CardContent className="p-6">
+   424→            {/* Course Meta */}
+   425→            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-4">
+   426→              <div className="flex items-center gap-1.5">
+   427→                <Avatar className="h-6 w-6">
+   428→                  <AvatarFallback className="text-[10px] bg-slate-200 dark:bg-slate-700">SM</AvatarFallback>
+   429→                </Avatar>
+   430→                <span>Sarah Mitchell</span>
+   431→              </div>
+   432→              <div className="flex items-center gap-1">
+   433→                <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+   434→                <span className="font-medium text-foreground">{course.avgRating}</span>
+   435→                <span>({course.totalRatings} ratings)</span>
+   436→              </div>
+   437→              <div className="flex items-center gap-1">
+   438→                <Users className="h-4 w-4" />
+   439→                <span>{course.enrollmentCount.toLocaleString()} enrolled</span>
+   440→              </div>
+   441→              {course.durationHours && (
+   442→                <div className="flex items-center gap-1">
+   443→                  <Clock className="h-4 w-4" />
+   444→                  <span>{course.durationHours} hours</span>
+   445→                </div>
+   446→              )}
+   447→            </div>
+   448→
+   449→            {/* Description */}
+   450→            <p className="text-muted-foreground text-sm mb-5 max-w-3xl">{course.description}</p>
+   451→
+   452→            {/* Progress */}
+   453→            <div className="space-y-2 mb-4">
+   454→              <div className="flex items-center justify-between text-sm">
+   455→                <span className="font-medium text-foreground">Your Progress</span>
+   456→                <span className="font-semibold text-emerald-600">{enrollment.progress}%</span>
+   457→              </div>
+   458→              <Progress value={enrollment.progress} className="h-2.5" />
+   459→              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+   460→                <span>{completedCount} of {totalLessons} lessons completed</span>
+   461→                {enrollment.lastAccessedAt && (
+   462→                  <span>Last accessed {new Date(enrollment.lastAccessedAt).toLocaleDateString()}</span>
+   463→                )}
+   464→              </div>
+   465→            </div>
+   466→
+   467→            {/* Action Buttons */}
+   468→            <div className="flex items-center gap-3">
+   469→              <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white">
+   470→                <Play className="h-4 w-4" />
+   471→                Continue Learning
+   472→              </Button>
+   473→              <Button variant="outline" className="gap-2">
+   474→                <Award className="h-4 w-4" />
+   475→                View Certificate
+   476→              </Button>
+   477→            </div>
+   478→          </CardContent>
+   479→        </Card>
+   480→      </motion.div>
+   481→
+   482→      {/* ─── Course Content Tabs ──────────────────────────── */}
+   483→      <motion.div variants={itemVariants}>
+   484→        <Tabs value={activeTab} onValueChange={setActiveTab}>
+   485→          <TabsList className="w-full justify-start overflow-x-auto">
+   486→            <TabsTrigger value="curriculum" className="gap-1.5">
+   487→              <BookOpen className="h-4 w-4" />
+   488→              Curriculum
+   489→            </TabsTrigger>
+   490→            <TabsTrigger value="community" className="gap-1.5">
+   491→              <MessageSquare className="h-4 w-4" />
+   492→              Community
+   493→            </TabsTrigger>
+   494→            <TabsTrigger value="resources" className="gap-1.5">
+   495→              <Download className="h-4 w-4" />
+   496→              Resources
+   497→            </TabsTrigger>
+   498→            <TabsTrigger value="reviews" className="gap-1.5">
+   499→              <Star className="h-4 w-4" />
+   500→              Reviews
+   501→            </TabsTrigger>
+   502→          </TabsList>
+   503→
+   504→          {/* ─── Tab 1: Curriculum ─────────────────────────── */}
+   505→          <TabsContent value="curriculum" className="mt-6">
+   506→            <div className="space-y-3">
+   507→              <div className="flex items-center justify-between mb-4">
+   508→                <div>
+   509→                  <h3 className="font-semibold text-foreground">Course Curriculum</h3>
+   510→                  <p className="text-sm text-muted-foreground">
+   511→                    {modules.length} modules · {totalLessons} lessons · {formatDuration(allLessons.reduce((s, l) => s + (l.videoDuration || 0), 0))} total
+   512→                  </p>
+   513→                </div>
+   514→                <Button variant="outline" size="sm" className="gap-1.5">
+   515→                  Expand All
+   516→                </Button>
+   517→              </div>
+   518→
+   519→              {/* ─── Continue Learning / Video Player Section ──── */}
+   520→              {(() => {
+   521→                // Find the current in-progress or next lesson
+   522→                const inProgressLesson = allLessons.find(l => lessonProgressState[l.id] === 'in_progress');
+   523→                const nextLesson = allLessons.find(l => lessonProgressState[l.id] === 'not_started');
+   524→                const currentLesson = inProgressLesson || nextLesson;
+   525→                const currentModule = currentLesson ? modules.find(m => m.lessons?.some(l => l.id === currentLesson.id)) : null;
+   526→
+   527→                if (!currentLesson) return null;
+   528→
+   529→                return (
+   530→                  <Card className="overflow-hidden border-emerald-200 dark:border-emerald-800/50">
+   531→                    <CardContent className="p-0">
+   532→                      <div className="flex flex-col md:flex-row">
+   533→                        {/* Video Player - Compact */}
+   534→                        <div className="md:w-1/2">
+   535→                          <VideoPlayer
+   536→                            title={currentLesson.title}
+   537→                            lesson={currentLesson}
+   538→                            moduleName={currentModule?.title || ''}
+   539→                            onMarkComplete={handleMarkComplete}
+   540→                            isCompleted={lessonProgressState[currentLesson.id] === 'completed'}
+   541→                            initialPosition={resumePositions[currentLesson.id] || 0}
+   542→                            chapters={demoChapters}
+   543→                            compact
+   544→                            totalDuration={currentLesson.videoDuration || 300}
+   545→                            onProgress={(progress, currentTime) => {
+   546→                              resumePositions[currentLesson.id] = currentTime;
+   547→                            }}
+   548→                          />
+   549→                        </div>
+   550→                        {/* Lesson Info Sidebar */}
+   551→                        <div className="md:w-1/2 p-4 md:p-6 flex flex-col justify-center">
+   552→                          <div className="flex items-center gap-2 mb-2">
+   553→                            {inProgressLesson ? (
+   554→                              <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px]">
+   555→                                <Play className="h-3 w-3 mr-1" /> In Progress
+   556→                              </Badge>
+   557→                            ) : (
+   558→                              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
+   559→                                Up Next
+   560→                              </Badge>
+   561→                            )}
+   562→                            <Badge variant="secondary" className="text-[10px]">
+   563→                              {currentModule?.title}
+   564→                            </Badge>
+   565→                          </div>
+   566→                          <h3 className="font-semibold text-foreground text-lg mb-2">{currentLesson.title}</h3>
+   567→                          {currentLesson.description && (
+   568→                            <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{currentLesson.description}</p>
+   569→                          )}
+   570→                          <div className="flex items-center gap-3 text-xs text-muted-foreground mb-4">
+   571→                            <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatDuration(currentLesson.videoDuration)}</span>
+   572→                            <span className="flex items-center gap-1">
+   573→                              <ContentTypeIcon type={currentLesson.contentType} className="h-3 w-3" />
+   574→                              {currentLesson.contentType.charAt(0).toUpperCase() + currentLesson.contentType.slice(1).replace('_', ' ')}
+   575→                            </span>
+   576→                          </div>
+   577→                          <Button
+   578→                            onClick={() => handleLessonClick(currentLesson)}
+   579→                            className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+   580→                          >
+   581→                            <Play className="h-4 w-4" fill="currentColor" />
+   582→                            {inProgressLesson ? 'Continue Lesson' : 'Start Lesson'}
+   583→                          </Button>
+   584→                        </div>
+   585→                      </div>
+   586→                    </CardContent>
+   587→                  </Card>
+   588→                );
+   589→              })()}
+   590→
+   591→              {modules.length > 0 ? (
+   592→                modules.map((mod, idx) => (
+   593→                  <ModuleSection key={mod.id} module={mod} moduleIndex={idx} onLessonClick={handleLessonClick} progressMap={lessonProgressState} />
+   594→                ))
+   595→              ) : (
+   596→                <Card>
+   597→                  <CardContent className="p-8 text-center">
+   598→                    <BookOpen className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+   599→                    <p className="text-muted-foreground">No curriculum content available yet.</p>
+   600→                  </CardContent>
+   601→                </Card>
+   602→              )}
+   603→            </div>
+   604→          </TabsContent>
+   605→
+   606→          {/* ─── Tab 2: Community ──────────────────────────── */}
+   607→          <TabsContent value="community" className="mt-6">
+   608→            <div className="space-y-4">
+   609→              <div className="flex items-center justify-between">
+   610→                <div>
+   611→                  <h3 className="font-semibold text-foreground">Course Discussions</h3>
+   612→                  <p className="text-sm text-muted-foreground">Ask questions and share insights with fellow learners</p>
+   613→                </div>
+   614→                <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+   615→                  <Send className="h-3.5 w-3.5" />
+   616→                  Ask a Question
+   617→                </Button>
+   618→              </div>
+   619→
+   620→              <div className="space-y-3">
+   621→                {discussionThreads.map((thread) => (
+   622→                  <Card key={thread.id} className="hover:shadow-sm transition-shadow cursor-pointer">
+   623→                    <CardContent className="p-4">
+   624→                      <div className="flex items-start gap-3">
+   625→                        <Avatar className="h-9 w-9 shrink-0">
+   626→                          <AvatarFallback className="text-xs bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
+   627→                            {thread.avatar}
+   628→                          </AvatarFallback>
+   629→                        </Avatar>
+   630→                        <div className="flex-1 min-w-0">
+   631→                          <div className="flex items-center gap-2 mb-1">
+   632→                            <span className="text-sm font-medium text-foreground">{thread.author}</span>
+   633→                            <span className="text-xs text-muted-foreground">· {thread.time}</span>
+   634→                          </div>
+   635→                          <h4 className="text-sm font-semibold text-foreground mb-1">{thread.title}</h4>
+   636→                          <p className="text-xs text-muted-foreground line-clamp-2">{thread.content}</p>
+   637→                          <div className="flex items-center gap-4 mt-2">
+   638→                            <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+   639→                              <ThumbsUp className="h-3 w-3" /> {thread.likes}
+   640→                            </button>
+   641→                            <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+   642→                              <MessageSquare className="h-3 w-3" /> {thread.replies} replies
+   643→                            </button>
+   644→                          </div>
+   645→                        </div>
+   646→                      </div>
+   647→                    </CardContent>
+   648→                  </Card>
+   649→                ))}
+   650→              </div>
+   651→
+   652→              <Button variant="outline" className="w-full">View All Discussions</Button>
+   653→            </div>
+   654→          </TabsContent>
+   655→
+   656→          {/* ─── Tab 3: Resources ─────────────────────────── */}
+   657→          <TabsContent value="resources" className="mt-6">
+   658→            <div className="space-y-4">
+   659→              <div>
+   660→                <h3 className="font-semibold text-foreground">Course Resources</h3>
+   661→                <p className="text-sm text-muted-foreground">Downloadable files, links, and code repositories</p>
+   662→              </div>
+   663→
+   664→              {/* Downloads */}
+   665→              <Card>
+   666→                <CardHeader className="pb-3">
+   667→                  <CardTitle className="text-sm flex items-center gap-2">
+   668→                    <Download className="h-4 w-4 text-emerald-600" />
+   669→                    Downloadable Files
+   670→                  </CardTitle>
+   671→                </CardHeader>
+   672→                <CardContent className="space-y-2">
+   673→                  {courseResources.filter(r => r.type === 'pdf').map((res) => (
+   674→                    <div key={res.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+   675→                      <div className="flex items-center gap-3">
+   676→                        <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/20">
+   677→                          <FileText className="h-4 w-4 text-red-600" />
+   678→                        </div>
+   679→                        <div>
+   680→                          <p className="text-sm font-medium text-foreground">{res.title}</p>
+   681→                          <p className="text-xs text-muted-foreground">PDF · {res.size}</p>
+   682→                        </div>
+   683→                      </div>
+   684→                      <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs">
+   685→                        <Download className="h-3 w-3" /> Download
+   686→                      </Button>
+   687→                    </div>
+   688→                  ))}
+   689→                </CardContent>
+   690→              </Card>
+   691→
+   692→              {/* External Links */}
+   693→              <Card>
+   694→                <CardHeader className="pb-3">
+   695→                  <CardTitle className="text-sm flex items-center gap-2">
+   696→                    <ExternalLink className="h-4 w-4 text-violet-600" />
+   697→                    External Links
+   698→                  </CardTitle>
+   699→                </CardHeader>
+   700→                <CardContent className="space-y-2">
+   701→                  {courseResources.filter(r => r.type === 'link').map((res) => (
+   702→                    <div key={res.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+   703→                      <div className="flex items-center gap-3">
+   704→                        <div className="p-2 rounded-lg bg-violet-100 dark:bg-violet-900/20">
+   705→                          <ExternalLink className="h-4 w-4 text-violet-600" />
+   706→                        </div>
+   707→                        <div>
+   708→                          <p className="text-sm font-medium text-foreground">{res.title}</p>
+   709→                          <p className="text-xs text-muted-foreground">{res.url}</p>
+   710→                        </div>
+   711→                      </div>
+   712→                      <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs">
+   713→                        Visit <ExternalLink className="h-3 w-3" />
+   714→                      </Button>
+   715→                    </div>
+   716→                  ))}
+   717→                </CardContent>
+   718→              </Card>
+   719→
+   720→              {/* Code Repos */}
+   721→              <Card>
+   722→                <CardHeader className="pb-3">
+   723→                  <CardTitle className="text-sm flex items-center gap-2">
+   724→                    <GitBranch className="h-4 w-4 text-amber-600" />
+   725→                    Code Repositories
+   726→                  </CardTitle>
+   727→                </CardHeader>
+   728→                <CardContent className="space-y-2">
+   729→                  {courseResources.filter(r => r.type === 'repo').map((res) => (
+   730→                    <div key={res.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+   731→                      <div className="flex items-center gap-3">
+   732→                        <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/20">
+   733→                          <GitBranch className="h-4 w-4 text-amber-600" />
+   734→                        </div>
+   735→                        <div>
+   736→                          <p className="text-sm font-medium text-foreground">{res.title}</p>
+   737→                          <p className="text-xs text-muted-foreground">{res.url}</p>
+   738→                        </div>
+   739→                      </div>
+   740→                      <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs">
+   741→                        <GitBranch className="h-3 w-3" /> Clone
+   742→                      </Button>
+   743→                    </div>
+   744→                  ))}
+   745→                </CardContent>
+   746→              </Card>
+   747→            </div>
+   748→          </TabsContent>
+   749→
+   750→          {/* ─── Tab 4: Reviews ───────────────────────────── */}
+   751→          <TabsContent value="reviews" className="mt-6">
+   752→            <div className="space-y-6">
+   753→              {/* Overall Rating */}
+   754→              <Card>
+   755→                <CardContent className="p-6">
+   756→                  <div className="flex flex-col md:flex-row items-center gap-6">
+   757→                    <div className="text-center">
+   758→                      <p className="text-5xl font-bold text-foreground">{course.avgRating}</p>
+   759→                      <div className="flex items-center gap-0.5 mt-1">
+   760→                        {[1, 2, 3, 4, 5].map((star) => (
+   761→                          <Star
+   762→                            key={star}
+   763→                            className={cn(
+   764→                              'h-5 w-5',
+   765→                              star <= Math.round(course.avgRating)
+   766→                                ? 'fill-amber-400 text-amber-400'
+   767→                                : 'text-muted-foreground/30'
+   768→                            )}
+   769→                          />
+   770→                        ))}
+   771→                      </div>
+   772→                      <p className="text-sm text-muted-foreground mt-1">{course.totalRatings} ratings</p>
+   773→                    </div>
+   774→
+   775→                    {/* Rating Distribution */}
+   776→                    <div className="flex-1 w-full space-y-1.5">
+   777→                      {ratingDistribution.map((dist) => (
+   778→                        <div key={dist.stars} className="flex items-center gap-2">
+   779→                          <span className="text-xs text-muted-foreground w-8 text-right">{dist.stars}★</span>
+   780→                          <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden">
+   781→                            <div
+   782→                              className="h-full bg-amber-400 rounded-full"
+   783→                              style={{ width: `${(dist.count / totalReviews) * 100}%` }}
+   784→                            />
+   785→                          </div>
+   786→                          <span className="text-xs text-muted-foreground w-8">{dist.count}</span>
+   787→                        </div>
+   788→                      ))}
+   789→                    </div>
+   790→                  </div>
+   791→                </CardContent>
+   792→              </Card>
+   793→
+   794→              {/* Individual Reviews */}
+   795→              <div className="space-y-3">
+   796→                <h3 className="font-semibold text-foreground">Recent Reviews</h3>
+   797→                {courseReviews.map((review) => (
+   798→                  <Card key={review.id}>
+   799→                    <CardContent className="p-4">
+   800→                      <div className="flex items-start gap-3">
+   801→                        <Avatar className="h-9 w-9 shrink-0">
+   802→                          <AvatarFallback className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+   803→                            {review.avatar}
+   804→                          </AvatarFallback>
+   805→                        </Avatar>
+   806→                        <div className="flex-1 min-w-0">
+   807→                          <div className="flex items-center gap-2 mb-1">
+   808→                            <span className="text-sm font-medium text-foreground">{review.author}</span>
+   809→                            <span className="text-xs text-muted-foreground">· {review.date}</span>
+   810→                          </div>
+   811→                          <div className="flex items-center gap-0.5 mb-2">
+   812→                            {[1, 2, 3, 4, 5].map((star) => (
+   813→                              <Star
+   814→                                key={star}
+   815→                                className={cn(
+   816→                                  'h-3.5 w-3.5',
+   817→                                  star <= review.rating
+   818→                                    ? 'fill-amber-400 text-amber-400'
+   819→                                    : 'text-muted-foreground/30'
+   820→                                )}
+   821→                              />
+   822→                            ))}
+   823→                          </div>
+   824→                          <p className="text-sm text-muted-foreground leading-relaxed">{review.content}</p>
+   825→                          <div className="flex items-center gap-3 mt-3">
+   826→                            <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+   827→                              <ThumbsUp className="h-3 w-3" /> Helpful
+   828→                            </button>
+   829→                          </div>
+   830→                        </div>
+   831→                      </div>
+   832→                    </CardContent>
+   833→                  </Card>
+   834→                ))}
+   835→              </div>
+   836→
+   837→              <Button variant="outline" className="w-full">Load More Reviews</Button>
+   838→            </div>
+   839→          </TabsContent>
+   840→        </Tabs>
+   841→      </motion.div>
+   842→    </motion.div>
+   843→  );
+   844→}
+   845→

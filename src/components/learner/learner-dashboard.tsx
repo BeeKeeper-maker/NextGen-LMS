@@ -1,13 +1,12 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
+import { useEffect, useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '@/store/app-store';
 import { learnerKPIs, demoEnrollments, demoCourses, leaderboardData } from '@/lib/mock-data';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import {
   BookOpen,
   GraduationCap,
@@ -19,7 +18,6 @@ import {
   Trophy,
   Clock,
   CheckCircle2,
-  Download,
   Sparkles,
   ArrowRight,
   Zap,
@@ -31,7 +29,8 @@ import {
   Users,
   BarChart3,
   Lightbulb,
-  PartyPopper,
+  Timer,
+  Gift,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DashboardKPI } from '@/types';
@@ -49,17 +48,80 @@ function getKPIIcon(iconName: string) {
   return iconMap[iconName] || Star;
 }
 
-// Color map for KPI cards
+// Color map for KPI cards - enhanced with glassmorphism gradients
 function getKPIColor(iconName: string) {
-  const colorMap: Record<string, { bg: string; text: string; border: string; gradient: string; ring: string }> = {
-    'book-open': { bg: 'bg-emerald-500/10', text: 'text-emerald-500', border: 'border-emerald-500/20', gradient: 'from-emerald-500/10 to-emerald-500/5', ring: '#10b981' },
-    'graduation-cap': { bg: 'bg-violet-500/10', text: 'text-violet-500', border: 'border-violet-500/20', gradient: 'from-violet-500/10 to-violet-500/5', ring: '#8b5cf6' },
-    flame: { bg: 'bg-orange-500/10', text: 'text-orange-500', border: 'border-orange-500/20', gradient: 'from-orange-500/10 to-orange-500/5', ring: '#f97316' },
-    star: { bg: 'bg-yellow-500/10', text: 'text-yellow-500', border: 'border-yellow-500/20', gradient: 'from-yellow-500/10 to-yellow-500/5', ring: '#eab308' },
-    award: { bg: 'bg-emerald-500/10', text: 'text-emerald-500', border: 'border-emerald-500/20', gradient: 'from-emerald-500/10 to-emerald-500/5', ring: '#10b981' },
-    'message-circle': { bg: 'bg-sky-500/10', text: 'text-sky-500', border: 'border-sky-500/20', gradient: 'from-sky-500/10 to-sky-500/5', ring: '#0ea5e9' },
+  const colorMap: Record<string, { bg: string; text: string; border: string; gradient: string; ring: string; meshGradient: string; shimmerFrom: string; shimmerTo: string }> = {
+    'book-open': {
+      bg: 'bg-emerald-500/10',
+      text: 'text-emerald-500',
+      border: 'border-emerald-500/20',
+      gradient: 'from-emerald-500/10 to-emerald-500/5',
+      ring: '#10b981',
+      meshGradient: 'from-emerald-500/20 via-teal-500/10 to-emerald-600/5',
+      shimmerFrom: 'from-emerald-400/30',
+      shimmerTo: 'to-emerald-300/5',
+    },
+    'graduation-cap': {
+      bg: 'bg-violet-500/10',
+      text: 'text-violet-500',
+      border: 'border-violet-500/20',
+      gradient: 'from-violet-500/10 to-violet-500/5',
+      ring: '#8b5cf6',
+      meshGradient: 'from-violet-500/20 via-purple-500/10 to-violet-600/5',
+      shimmerFrom: 'from-violet-400/30',
+      shimmerTo: 'to-violet-300/5',
+    },
+    flame: {
+      bg: 'bg-orange-500/10',
+      text: 'text-orange-500',
+      border: 'border-orange-500/20',
+      gradient: 'from-orange-500/10 to-orange-500/5',
+      ring: '#f97316',
+      meshGradient: 'from-orange-500/20 via-amber-500/10 to-orange-600/5',
+      shimmerFrom: 'from-orange-400/30',
+      shimmerTo: 'to-orange-300/5',
+    },
+    star: {
+      bg: 'bg-yellow-500/10',
+      text: 'text-yellow-500',
+      border: 'border-yellow-500/20',
+      gradient: 'from-yellow-500/10 to-yellow-500/5',
+      ring: '#eab308',
+      meshGradient: 'from-yellow-500/20 via-amber-400/10 to-yellow-600/5',
+      shimmerFrom: 'from-yellow-400/30',
+      shimmerTo: 'to-yellow-300/5',
+    },
+    award: {
+      bg: 'bg-teal-500/10',
+      text: 'text-teal-500',
+      border: 'border-teal-500/20',
+      gradient: 'from-teal-500/10 to-teal-500/5',
+      ring: '#14b8a6',
+      meshGradient: 'from-teal-500/20 via-cyan-500/10 to-teal-600/5',
+      shimmerFrom: 'from-teal-400/30',
+      shimmerTo: 'to-teal-300/5',
+    },
+    'message-circle': {
+      bg: 'bg-sky-500/10',
+      text: 'text-sky-500',
+      border: 'border-sky-500/20',
+      gradient: 'from-sky-500/10 to-sky-500/5',
+      ring: '#0ea5e9',
+      meshGradient: 'from-sky-500/20 via-blue-500/10 to-sky-600/5',
+      shimmerFrom: 'from-sky-400/30',
+      shimmerTo: 'to-sky-300/5',
+    },
   };
-  return colorMap[iconName] || { bg: 'bg-slate-500/10', text: 'text-slate-500', border: 'border-slate-500/20', gradient: 'from-slate-500/10 to-slate-500/5', ring: '#64748b' };
+  return colorMap[iconName] || {
+    bg: 'bg-slate-500/10',
+    text: 'text-slate-500',
+    border: 'border-slate-500/20',
+    gradient: 'from-slate-500/10 to-slate-500/5',
+    ring: '#64748b',
+    meshGradient: 'from-slate-500/20 via-slate-400/10 to-slate-600/5',
+    shimmerFrom: 'from-slate-400/30',
+    shimmerTo: 'to-slate-300/5',
+  };
 }
 
 // Course color accent by category
@@ -127,7 +189,7 @@ function getMotivationalMessage(streakDays: number) {
 }
 
 // Animated progress bar with shimmer
-function AnimatedProgress({ value, className }: { value: number; className?: string }) {
+function AnimatedProgress({ value, className, barColor = 'from-emerald-500 to-emerald-400' }: { value: number; className?: string; barColor?: string }) {
   const [animatedValue, setAnimatedValue] = useState(0);
 
   useEffect(() => {
@@ -138,7 +200,7 @@ function AnimatedProgress({ value, className }: { value: number; className?: str
   return (
     <div className={cn('relative h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700', className)}>
       <motion.div
-        className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 overflow-hidden"
+        className={cn('absolute inset-y-0 left-0 rounded-full bg-gradient-to-r overflow-hidden', barColor)}
         initial={{ width: 0 }}
         animate={{ width: `${animatedValue}%` }}
         transition={{ duration: 1, ease: 'easeOut', delay: 0.2 }}
@@ -168,7 +230,6 @@ function AnimatedCounter({ value, duration = 1.5 }: { value: string; duration?: 
     const el = displayRef.current;
     if (!el) return;
 
-    // Extract numeric part
     const numericMatch = value.match(/[\d,]+/);
     if (!numericMatch) {
       el.textContent = value;
@@ -188,7 +249,6 @@ function AnimatedCounter({ value, duration = 1.5 }: { value: string; duration?: 
     const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / (duration * 1000), 1);
-      // Ease out cubic
       const eased = 1 - Math.pow(1 - progress, 3);
       const current = Math.round(eased * target);
       const formatted = current.toLocaleString();
@@ -265,7 +325,35 @@ function ConfettiParticle({ delay, x, color, size }: { delay: number; x: number;
   );
 }
 
-// ─── Streak Fire Effect (Enhanced) ────────────────
+// ─── Floating Geometric Shape ─────────────────────
+function FloatingShape({ type, className, delay, duration }: { type: 'circle' | 'square' | 'triangle' | 'diamond'; className?: string; delay?: number; duration?: number }) {
+  const shapeClass = cn(
+    'absolute opacity-[0.07] dark:opacity-[0.05]',
+    type === 'circle' && 'rounded-full',
+    type === 'square' && 'rounded-lg rotate-12',
+    type === 'diamond' && 'rounded-md rotate-45',
+    className,
+  );
+
+  return (
+    <motion.div
+      className={shapeClass}
+      initial={{ y: 0, rotate: type === 'square' ? 12 : type === 'diamond' ? 45 : 0 }}
+      animate={{
+        y: [-10, 10, -10],
+        rotate: type === 'square' ? [12, 24, 12] : type === 'diamond' ? [45, 55, 45] : [0, 5, 0],
+      }}
+      transition={{
+        duration: duration || 6,
+        repeat: Infinity,
+        ease: 'easeInOut',
+        delay: delay || 0,
+      }}
+    />
+  );
+}
+
+// ─── Streak Fire Effect (Enhanced with pulsing glow) ────────────
 function StreakFireBadge({ days }: { days: number }) {
   const showConfetti = days >= 7 && days % 7 === 0;
   const confettiColors = ['#f97316', '#eab308', '#ef4444', '#8b5cf6', '#10b981', '#0ea5e9'];
@@ -274,10 +362,10 @@ function StreakFireBadge({ days }: { days: number }) {
     <div className="relative inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-1 dark:bg-orange-950/40">
       <motion.div
         animate={{
-          scale: [1, 1.25, 1],
+          scale: [1, 1.3, 1],
           filter: [
             'brightness(1) drop-shadow(0 0 0px transparent)',
-            'brightness(1.4) drop-shadow(0 0 10px rgba(249, 115, 22, 0.7))',
+            'brightness(1.5) drop-shadow(0 0 14px rgba(249, 115, 22, 0.8))',
             'brightness(1) drop-shadow(0 0 0px transparent)',
           ],
         }}
@@ -288,10 +376,10 @@ function StreakFireBadge({ days }: { days: number }) {
       <span className="text-sm font-semibold text-orange-700 dark:text-orange-300">
         {days} day streak
       </span>
-      {/* Glow effect behind badge */}
+      {/* Pulsing glow effect behind badge */}
       <motion.div
-        className="absolute inset-0 rounded-full bg-orange-400/20 blur-md -z-10"
-        animate={{ opacity: [0.3, 0.7, 0.3] }}
+        className="absolute inset-0 rounded-full bg-orange-400/20 blur-lg -z-10"
+        animate={{ opacity: [0.2, 0.6, 0.2], scale: [1, 1.05, 1] }}
         transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
       />
       {/* Confetti on milestone */}
@@ -338,7 +426,6 @@ function DailyGoalRing({ percentage, minutes, goal }: { percentage: number; minu
       <CardContent className="flex flex-col items-center pb-4">
         <div className="relative">
           <svg width="100" height="100" className="-rotate-90">
-            {/* Background circle */}
             <circle
               cx="50"
               cy="50"
@@ -348,7 +435,6 @@ function DailyGoalRing({ percentage, minutes, goal }: { percentage: number; minu
               strokeWidth="6"
               className="text-slate-200 dark:text-slate-700"
             />
-            {/* Progress circle */}
             <motion.circle
               cx="50"
               cy="50"
@@ -365,7 +451,7 @@ function DailyGoalRing({ percentage, minutes, goal }: { percentage: number; minu
             <defs>
               <linearGradient id="goalGradient" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" stopColor="#10b981" />
-                <stop offset="100%" stopColor="#8b5cf6" />
+                <stop offset="100%" stopColor="#14b8a6" />
               </linearGradient>
             </defs>
           </svg>
@@ -443,9 +529,11 @@ const activityItems = [
     icon: CheckCircle2,
     color: 'text-emerald-500',
     bgColor: 'bg-emerald-500',
+    bgCircle: 'bg-emerald-100 dark:bg-emerald-950/40',
     title: 'Completed Lesson: Server Components Architecture',
     detail: 'Advanced React & Next.js Masterclass',
     time: new Date(Date.now() - 7200000).toISOString(),
+    expandedDetail: 'You completed this lesson in 18 minutes. Great pace! Your average for this course is 22 minutes per lesson.',
   },
   {
     id: 'act-2',
@@ -453,9 +541,11 @@ const activityItems = [
     icon: Trophy,
     color: 'text-yellow-500',
     bgColor: 'bg-yellow-500',
+    bgCircle: 'bg-yellow-100 dark:bg-yellow-950/40',
     title: 'Earned Achievement: Streak Starter 🔥',
     detail: '+25 points earned',
     time: new Date(Date.now() - 18000000).toISOString(),
+    expandedDetail: 'You maintained a 7-day learning streak! This achievement is earned by only 34% of learners.',
   },
   {
     id: 'act-3',
@@ -463,9 +553,11 @@ const activityItems = [
     icon: MessageCircle,
     color: 'text-sky-500',
     bgColor: 'bg-sky-500',
+    bgCircle: 'bg-sky-100 dark:bg-sky-950/40',
     title: 'Posted in Community: How do you handle state management in large Next.js apps?',
     detail: '12 replies',
     time: new Date(Date.now() - 86400000).toISOString(),
+    expandedDetail: 'Your post received 12 replies and 8 likes. It was marked as helpful by 3 community members.',
   },
   {
     id: 'act-4',
@@ -473,9 +565,11 @@ const activityItems = [
     icon: Zap,
     color: 'text-violet-500',
     bgColor: 'bg-violet-500',
+    bgCircle: 'bg-violet-100 dark:bg-violet-950/40',
     title: 'Quiz Score: 92% on React Fundamentals',
     detail: 'Advanced React & Next.js',
     time: new Date(Date.now() - 90000000).toISOString(),
+    expandedDetail: 'You scored 23/25 correct answers. You missed questions on Suspense boundaries and error boundaries.',
   },
   {
     id: 'act-5',
@@ -483,9 +577,11 @@ const activityItems = [
     icon: Play,
     color: 'text-emerald-500',
     bgColor: 'bg-emerald-500',
+    bgCircle: 'bg-emerald-100 dark:bg-emerald-950/40',
     title: 'Started Lesson: Prompt Engineering Mastery',
     detail: 'AI-Powered Full Stack Development',
     time: new Date(Date.now() - 172800000).toISOString(),
+    expandedDetail: 'You spent 8 minutes on this lesson so far. Estimated 15 minutes remaining.',
   },
   {
     id: 'act-6',
@@ -493,9 +589,11 @@ const activityItems = [
     icon: Sparkles,
     color: 'text-orange-500',
     bgColor: 'bg-orange-500',
+    bgCircle: 'bg-orange-100 dark:bg-orange-950/40',
     title: 'Reached 1,000 points milestone!',
     detail: 'Keep going for 2,500!',
     time: new Date(Date.now() - 259200000).toISOString(),
+    expandedDetail: 'You\'ve joined the top 20% of point earners! Next milestone at 2,500 points unlocks the Scholar badge.',
   },
 ];
 
@@ -540,7 +638,7 @@ function KPICircularProgress({ value, color, size = 48, strokeWidth = 4 }: { val
   );
 }
 
-// Helper: get KPI percentage for circular progress (deterministic based on KPI data)
+// Helper: get KPI percentage for circular progress
 function getKPIPercentage(kpi: DashboardKPI): number {
   const valueMap: Record<string, number> = {
     'Courses Enrolled': 67,
@@ -594,24 +692,31 @@ function StarRating({ rating, size = 12 }: { rating: number; size?: number }) {
   );
 }
 
-// ─── Resume Button with Play Animation ────────────
+// ─── Resume Button with Gradient Glow ────────────
 function ResumeButton() {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
     <Button
       size="sm"
-      className="h-8 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 text-xs px-3 shadow-sm shadow-emerald-600/20"
+      className="relative h-8 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 text-xs px-3 shadow-sm shadow-emerald-600/20 overflow-hidden"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
+      {/* Gradient glow on hover */}
+      <motion.div
+        className="absolute inset-0 bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-500 opacity-0"
+        animate={{ opacity: isHovered ? 0.3 : 0 }}
+        transition={{ duration: 0.3 }}
+      />
       <motion.div
         animate={isHovered ? { scale: [1, 1.3, 1], rotate: [0, -10, 0] } : { scale: 1, rotate: 0 }}
         transition={{ duration: 0.4 }}
+        className="relative"
       >
         <Play className="h-3 w-3" />
       </motion.div>
-      Resume
+      <span className="relative">Resume</span>
     </Button>
   );
 }
@@ -631,10 +736,10 @@ function Section({ children, delay = 0 }: { children: React.ReactNode; delay?: n
 
 // Leaderboard rank badge colors
 function getRankBadgeStyle(rank: number) {
-  if (rank === 1) return { bg: 'bg-gradient-to-br from-yellow-400 to-yellow-600', text: 'text-yellow-900', icon: '🥇' };
-  if (rank === 2) return { bg: 'bg-gradient-to-br from-slate-300 to-slate-400', text: 'text-slate-700', icon: '🥈' };
-  if (rank === 3) return { bg: 'bg-gradient-to-br from-amber-500 to-amber-700', text: 'text-amber-900', icon: '🥉' };
-  return { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-500 dark:text-slate-400', icon: '' };
+  if (rank === 1) return { bg: 'bg-gradient-to-br from-yellow-400 to-amber-600', text: 'text-yellow-900', icon: '🥇', shadow: 'shadow-lg shadow-yellow-500/30' };
+  if (rank === 2) return { bg: 'bg-gradient-to-br from-slate-300 to-slate-500', text: 'text-slate-700', icon: '🥈', shadow: 'shadow-lg shadow-slate-400/30' };
+  if (rank === 3) return { bg: 'bg-gradient-to-br from-amber-500 to-amber-700', text: 'text-amber-900', icon: '🥉', shadow: 'shadow-lg shadow-amber-500/30' };
+  return { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-500 dark:text-slate-400', icon: '', shadow: '' };
 }
 
 // Avatar initial colors (deterministic based on name)
@@ -668,7 +773,7 @@ function getPointChange(rank: number): { change: number; direction: 'up' | 'down
   return changes[rank] || { change: 0, direction: 'same' };
 }
 
-// Next lesson for enrolled courses (deterministic based on course modules)
+// Next lesson for enrolled courses
 function getNextLesson(enrollment: { course?: { modules?: { lessons?: { title: string; id: string }[] }[] }; progress: number }) {
   const modules = enrollment.course?.modules;
   if (!modules || modules.length === 0) return null;
@@ -680,7 +785,7 @@ function getNextLesson(enrollment: { course?: { modules?: { lessons?: { title: s
   return null;
 }
 
-// Count total and completed lessons (deterministic based on progress)
+// Count total and completed lessons
 function getLessonCounts(enrollment: { progress: number; course?: { modules?: { lessons?: unknown[] }[] } }) {
   const modules = enrollment.course?.modules;
   let total = 0;
@@ -689,15 +794,238 @@ function getLessonCounts(enrollment: { progress: number; course?: { modules?: { 
       if (mod.lessons) total += mod.lessons.length;
     }
   }
-  if (total === 0) total = 10; // fallback
+  if (total === 0) total = 10;
   const completed = Math.round((enrollment.progress / 100) * total);
   return { total, completed };
+}
+
+// ─── Daily Challenge Widget ────────────────────────
+function DailyChallengeWidget() {
+  const [challengeStarted, setChallengeStarted] = useState(false);
+  const [challengeProgress, setChallengeProgress] = useState(0);
+  const challengeGoal = 2;
+
+  useEffect(() => {
+    if (challengeStarted && challengeProgress < challengeGoal) {
+      const timer = setTimeout(() => setChallengeProgress(1), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [challengeStarted, challengeProgress]);
+
+  // Time remaining calculation
+  const now = new Date();
+  const endOfDay = new Date(now);
+  endOfDay.setHours(23, 59, 59, 999);
+  const remainingMs = endOfDay.getTime() - now.getTime();
+  const remainingHours = Math.floor(remainingMs / 3600000);
+  const remainingMins = Math.floor((remainingMs % 3600000) / 60000);
+
+  return (
+    <Card className="relative overflow-hidden border-0">
+      {/* Animated gradient border */}
+      <div className="absolute inset-0 rounded-lg overflow-hidden">
+        <motion.div
+          className="absolute inset-0"
+          style={{
+            background: 'conic-gradient(from 0deg, #10b981, #14b8a6, #8b5cf6, #f97316, #eab308, #10b981)',
+          }}
+          animate={{ rotate: [0, 360] }}
+          transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+        />
+      </div>
+      <div className="relative m-[2px] rounded-[10px] bg-white dark:bg-slate-900">
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <motion.div
+                className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600"
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <Zap className="h-4 w-4 text-white" />
+              </motion.div>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50">Daily Challenge</h3>
+                <p className="text-xs text-muted-foreground">Complete {challengeGoal} lessons today</p>
+              </div>
+            </div>
+            <Badge className="bg-gradient-to-r from-yellow-500 to-amber-500 text-white border-0 text-xs gap-1">
+              <Gift className="h-3 w-3" />
+              +50 XP
+            </Badge>
+          </div>
+
+          {/* Progress indicator */}
+          <div className="mb-3">
+            <div className="flex items-center justify-between text-xs mb-1.5">
+              <span className="text-muted-foreground">Progress</span>
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">{challengeProgress}/{challengeGoal}</span>
+            </div>
+            <AnimatedProgress value={(challengeProgress / challengeGoal) * 100} barColor="from-emerald-500 to-teal-400" />
+          </div>
+
+          {/* Time remaining */}
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
+            <Timer className="h-3 w-3" />
+            <span>{remainingHours}h {remainingMins}m remaining</span>
+          </div>
+
+          {/* Start/Continue Challenge button */}
+          <Button
+            className="w-full gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 relative overflow-hidden"
+            onClick={() => setChallengeStarted(true)}
+          >
+            {/* Glow effect */}
+            <motion.div
+              className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0"
+              animate={{ x: ['-100%', '100%'] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+            />
+            <span className="relative">
+              {challengeStarted ? (challengeProgress >= challengeGoal ? 'Challenge Complete! 🎉' : 'Continue Challenge') : 'Start Challenge'}
+            </span>
+            {!challengeStarted && <ArrowRight className="h-3 w-3 relative" />}
+          </Button>
+        </CardContent>
+      </div>
+    </Card>
+  );
+}
+
+// ─── Weekly Learning Stats Card ────────────────────
+function WeeklyLearningStats() {
+  const dailyMinutes = [45, 30, 60, 25, 50, 15, 35]; // Mon-Sun
+  const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const maxMinutes = Math.max(...dailyMinutes);
+  const totalMinutes = dailyMinutes.reduce((sum, m) => sum + m, 0);
+  const totalHours = (totalMinutes / 60).toFixed(1);
+  const weekIncrease = 12;
+
+  return (
+    <Card className="border-border dark:border-slate-800 h-full">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-teal-500" />
+            This Week
+          </CardTitle>
+          <Badge variant="secondary" className="text-xs gap-1 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-0">
+            <TrendingUp className="h-3 w-3" />
+            +{weekIncrease}%
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Mini bar chart */}
+        <div className="flex items-end gap-1.5 h-24">
+          {dailyMinutes.map((mins, i) => {
+            const heightPercent = maxMinutes > 0 ? (mins / maxMinutes) * 100 : 0;
+            const isToday = i === new Date().getDay() - 1 || (new Date().getDay() === 0 && i === 6);
+            return (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                <motion.div
+                  className={cn(
+                    'w-full rounded-t-sm transition-all',
+                    isToday
+                      ? 'bg-gradient-to-t from-emerald-600 to-emerald-400'
+                      : 'bg-slate-200 dark:bg-slate-700'
+                  )}
+                  initial={{ height: 0 }}
+                  animate={{ height: `${Math.max(heightPercent, 8)}%` }}
+                  transition={{ duration: 0.6, delay: 0.1 * i, ease: 'easeOut' }}
+                />
+                <span className={cn(
+                  'text-[9px]',
+                  isToday ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-muted-foreground'
+                )}>
+                  {dayLabels[i]}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Stats summary */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">Total learned</span>
+            <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">{totalHours} hours</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">vs last week</span>
+            <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">+{weekIncrease}% more</span>
+          </div>
+        </div>
+
+        {/* Streak continuity */}
+        <div className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 p-2.5">
+          <Flame className="h-4 w-4 text-orange-500 shrink-0" />
+          <div>
+            <p className="text-xs font-medium text-slate-900 dark:text-slate-50">7-day streak active</p>
+            <p className="text-[10px] text-muted-foreground">Keep going to maintain it!</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── XP Progress Bar with shimmer ──────────────────
+function XPProgressBar({ current, max }: { current: number; max: number }) {
+  const percentage = Math.min((current / max) * 100, 100);
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-emerald-200 font-medium">Level {Math.floor(current / 500) + 1}</span>
+        <span className="text-emerald-200/70">{current.toLocaleString()} / {max.toLocaleString()} XP</span>
+      </div>
+      <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-white/10">
+        <motion.div
+          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-300 overflow-hidden"
+          initial={{ width: 0 }}
+          animate={{ width: `${percentage}%` }}
+          transition={{ duration: 1.2, ease: 'easeOut', delay: 0.5 }}
+        >
+          <div className="absolute inset-0">
+            <motion.div
+              className="absolute inset-y-0 w-10 bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-[-20deg]"
+              animate={{ x: ['-100%', '500%'] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'linear', delay: 2 }}
+            />
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
+// ─── KPI Card Shimmer Effect ───────────────────────
+function KPIShimmer({ className }: { className?: string }) {
+  return (
+    <motion.div
+      className={cn('absolute inset-0 overflow-hidden rounded-lg', className)}
+      initial={{ opacity: 0 }}
+      whileHover={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+    >
+      <motion.div
+        className="absolute inset-y-0 w-16 bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-[-20deg]"
+        animate={{ x: ['-100%', '500%'] }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+      />
+    </motion.div>
+  );
 }
 
 export function LearnerDashboard() {
   const { currentUser } = useAppStore();
   const [showAllActivities, setShowAllActivities] = useState(false);
+  const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
   const [hoveredRecommendation, setHoveredRecommendation] = useState<string | null>(null);
+  const [hoveredCourse, setHoveredCourse] = useState<string | null>(null);
+  const [leaderboardPeriod, setLeaderboardPeriod] = useState<'weekly' | 'monthly'>('weekly');
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const firstName = currentUser?.name?.split(' ')[0] || 'Learner';
   const streakDays = currentUser?.streakDays || 7;
@@ -719,83 +1047,136 @@ export function LearnerDashboard() {
 
   // Leaderboard top 5
   const topFive = leaderboardData.slice(0, 5);
+  const maxLeaderboardPoints = topFive.length > 0 ? topFive[0].points : 1;
 
   // Daily goal data
   const dailyMinutes = 22;
   const dailyGoal = 30;
   const dailyPercent = Math.round((dailyMinutes / dailyGoal) * 100);
+  const dailyLessonsCompleted = 3;
+  const dailyLessonsGoal = 5;
 
   const greeting = getTimeGreeting();
   const motivationalMessage = getMotivationalMessage(streakDays);
 
+  // Estimated time to complete based on progress
+  function getEstimatedTime(enrollment: { progress: number; course?: { durationHours?: number } }) {
+    const totalHours = enrollment.course?.durationHours || 10;
+    const remainingHours = totalHours * (1 - enrollment.progress / 100);
+    if (remainingHours < 1) return `${Math.round(remainingHours * 60)}m`;
+    return `${remainingHours.toFixed(1)}h`;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:p-8">
-        {/* ============ WELCOME HEADER (ENHANCED) ============ */}
+
+        {/* ============ WELCOME HERO (ENHANCED - Gradient Mesh) ============ */}
         <Section delay={0}>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <motion.h1
-                className="text-2xl font-bold text-slate-900 dark:text-slate-50 sm:text-3xl"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5 }}
-              >
-                {greeting}, {firstName}! 👋
-              </motion.h1>
-              <motion.p
-                className="mt-1 text-sm text-muted-foreground max-w-md"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3, duration: 0.5 }}
-              >
-                {motivationalMessage}
-              </motion.p>
-              <div className="mt-2 flex items-center gap-3">
-                <StreakFireBadge days={streakDays} />
-                <div className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 dark:bg-emerald-950/40">
-                  <TrendingUp className="h-4 w-4 text-emerald-500" />
-                  <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
-                    340 pts this week
-                  </span>
+          <div className="relative overflow-hidden rounded-2xl">
+            {/* Gradient mesh background */}
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700" />
+            {/* Mesh overlay pattern */}
+            <div className="absolute inset-0 opacity-30">
+              <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top_left,rgba(255,255,255,0.15),transparent_50%)]" />
+              <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(ellipse_at_bottom_right,rgba(255,255,255,0.1),transparent_50%)]" />
+              <div className="absolute top-1/2 left-1/2 w-full h-full bg-[radial-gradient(ellipse_at_center,rgba(20,184,166,0.2),transparent_50%)]" />
+            </div>
+
+            {/* Floating geometric shapes */}
+            <FloatingShape type="circle" className="w-20 h-20 bg-white top-4 right-20" delay={0} duration={7} />
+            <FloatingShape type="square" className="w-14 h-14 bg-white top-12 right-60" delay={1} duration={8} />
+            <FloatingShape type="diamond" className="w-10 h-10 bg-white bottom-8 right-32" delay={2} duration={6} />
+            <FloatingShape type="circle" className="w-8 h-8 bg-white bottom-16 right-80" delay={0.5} duration={9} />
+            <FloatingShape type="square" className="w-6 h-6 bg-white top-20 right-96" delay={1.5} duration={7} />
+
+            {/* Content */}
+            <div className="relative z-10 p-6 sm:p-8">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <motion.h1
+                    className="text-2xl font-bold text-white sm:text-3xl"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.5 }}
+                  >
+                    {greeting}, {firstName}! 👋
+                  </motion.h1>
+                  <motion.p
+                    className="mt-1 text-sm text-emerald-100/90 max-w-md"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3, duration: 0.5 }}
+                  >
+                    {motivationalMessage}
+                  </motion.p>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <StreakFireBadge days={streakDays} />
+                    <div className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 backdrop-blur-sm">
+                      <TrendingUp className="h-4 w-4 text-emerald-200" />
+                      <span className="text-sm font-medium text-white">
+                        340 pts this week
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* XP Progress Bar */}
+                  <div className="mt-4 max-w-xs">
+                    <XPProgressBar current={1250} max={2000} />
+                  </div>
+
+                  {/* Daily Goal mini progress indicator */}
+                  <div className="mt-3 flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 backdrop-blur-sm">
+                      <Target className="h-3.5 w-3.5 text-emerald-200" />
+                      <span className="text-xs font-medium text-white">
+                        {dailyLessonsCompleted}/{dailyLessonsGoal} lessons today
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {/* Mini daily goal indicator in header */}
+                  <motion.div
+                    className="hidden sm:flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-3 py-2 backdrop-blur-sm"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.4 }}
+                  >
+                    <MiniProgressRing percentage={dailyPercent} size={32} strokeWidth={3} color="#ffffff" />
+                    <div>
+                      <p className="text-xs font-medium text-white">Daily Goal</p>
+                      <p className="text-[10px] text-emerald-200/70">{dailyMinutes}/{dailyGoal} min</p>
+                    </div>
+                  </motion.div>
+                  {mostRecentEnrollment && (
+                    <Button
+                      size="lg"
+                      className="relative gap-2 bg-white text-emerald-700 hover:bg-emerald-50 shadow-lg shadow-emerald-900/30 overflow-hidden group"
+                      onClick={() => {}}
+                    >
+                      {/* Gradient glow on hover */}
+                      <motion.div
+                        className="absolute inset-0 bg-gradient-to-r from-emerald-400/20 via-teal-400/30 to-emerald-400/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                      />
+                      <motion.div
+                        className="relative flex items-center gap-2"
+                        whileHover={{ x: 2 }}
+                        transition={{ type: 'spring', stiffness: 400 }}
+                      >
+                        <Play className="h-4 w-4" />
+                        Resume Learning
+                      </motion.div>
+                    </Button>
+                  )}
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-3">
-              {/* Mini daily goal indicator in header */}
-              <motion.div
-                className="hidden sm:flex items-center gap-2 rounded-xl bg-white dark:bg-slate-900 border border-border px-3 py-2 shadow-sm"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.4 }}
-              >
-                <MiniProgressRing percentage={dailyPercent} size={32} strokeWidth={3} color="#10b981" />
-                <div>
-                  <p className="text-xs font-medium text-foreground">Daily Goal</p>
-                  <p className="text-[10px] text-muted-foreground">{dailyMinutes}/{dailyGoal} min</p>
-                </div>
-              </motion.div>
-              {mostRecentEnrollment && (
-                <Button
-                  size="lg"
-                  className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20"
-                  onClick={() => {}}
-                >
-                  <motion.div
-                    className="flex items-center gap-2"
-                    whileHover={{ x: 2 }}
-                    transition={{ type: 'spring', stiffness: 400 }}
-                  >
-                    <Play className="h-4 w-4" />
-                    Resume Learning
-                  </motion.div>
-                </Button>
-              )}
             </div>
           </div>
         </Section>
 
-        {/* ============ KPI STATS ROW (ENHANCED) ============ */}
+        {/* ============ KPI STATS ROW (ENHANCED - Glassmorphism) ============ */}
         <Section delay={0.05}>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {learnerKPIs.map((kpi: DashboardKPI, i: number) => {
@@ -805,20 +1186,41 @@ export function LearnerDashboard() {
               return (
                 <motion.div
                   key={kpi.label}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.3, delay: 0.05 * i }}
+                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.06 * i, type: 'spring', stiffness: 200 }}
+                  whileHover={{ y: -4, transition: { duration: 0.2 } }}
                 >
                   <Card className={cn(
-                    'relative overflow-hidden border transition-shadow hover:shadow-md group',
+                    'relative overflow-hidden border transition-all duration-300 group cursor-pointer',
+                    'hover:shadow-xl hover:shadow-slate-200/50 dark:hover:shadow-slate-900/50',
+                    'backdrop-blur-sm',
                     colors.border
                   )}>
-                    {/* Subtle gradient background */}
-                    <div className={cn('absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-100 transition-opacity duration-300', colors.gradient)} />
+                    {/* Gradient mesh background */}
+                    <div className={cn('absolute inset-0 bg-gradient-to-br opacity-50 group-hover:opacity-80 transition-opacity duration-300', colors.meshGradient)} />
+                    {/* Shimmer effect */}
+                    <KPIShimmer />
+                    {/* Sparkle on icon background */}
+                    <div className="absolute top-0 right-0 w-16 h-16 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                      <motion.div
+                        className="absolute top-2 right-2"
+                        animate={{ rotate: [0, 360], scale: [1, 1.2, 1] }}
+                        transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+                      >
+                        <Sparkles className={cn('h-4 w-4', colors.text)} />
+                      </motion.div>
+                    </div>
                     <CardContent className="relative p-4">
                       <div className="mb-3 flex items-center justify-between">
-                        <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg', colors.bg)}>
+                        <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg relative', colors.bg)}>
                           <Icon className={cn('h-4 w-4', colors.text)} />
+                          {/* Icon shimmer */}
+                          <motion.div
+                            className="absolute inset-0 rounded-lg"
+                            animate={{ boxShadow: [`0 0 0px ${colors.ring}00`, `0 0 8px ${colors.ring}40`, `0 0 0px ${colors.ring}00`] }}
+                            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', delay: i * 0.3 }}
+                          />
                         </div>
                         {/* Circular progress indicator */}
                         <div className="relative">
@@ -867,15 +1269,28 @@ export function LearnerDashboard() {
                 <Play className="h-5 w-5 text-emerald-500" />
                 Continue Learning
               </h2>
-              <Badge variant="secondary" className="text-xs">
-                {activeEnrollments.length} active
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs">
+                  {activeEnrollments.length} active
+                </Badge>
+                <Button variant="ghost" size="sm" className="text-xs gap-1 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 group">
+                  View All Courses
+                  <motion.span
+                    animate={{ x: [0, 4, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                  >
+                    <ArrowRight className="h-3 w-3" />
+                  </motion.span>
+                </Button>
+              </div>
             </div>
-            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin">
+            <div ref={scrollContainerRef} className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin">
               {activeEnrollments.map((enrollment, i) => {
                 const nextLesson = getNextLesson(enrollment);
                 const { total, completed } = getLessonCounts(enrollment);
                 const courseColor = getCourseColor(enrollment.course?.category);
+                const isHovered = hoveredCourse === enrollment.id;
+                const estimatedTime = getEstimatedTime(enrollment);
 
                 return (
                   <motion.div
@@ -884,13 +1299,15 @@ export function LearnerDashboard() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.4, delay: 0.1 * i }}
                     className="min-w-[300px] sm:min-w-[340px]"
+                    onMouseEnter={() => setHoveredCourse(enrollment.id)}
+                    onMouseLeave={() => setHoveredCourse(null)}
                   >
                     <TiltCard>
-                      <Card className="overflow-hidden border-border dark:border-slate-800 hover:shadow-lg transition-shadow group">
+                      <Card className="overflow-hidden border-border dark:border-slate-800 hover:shadow-xl transition-all duration-300 group relative">
                         {/* Course colored header with gradient overlay */}
                         <div className="relative">
                           <div className={cn(
-                            'bg-gradient-to-r p-4 h-24 flex items-end',
+                            'bg-gradient-to-r p-4 h-24 flex items-end transition-all duration-300',
                             getCourseAccent(enrollment.course?.category)
                           )}>
                             {/* Gradient overlay pattern */}
@@ -899,6 +1316,28 @@ export function LearnerDashboard() {
                             <div className="absolute top-3 right-3 opacity-20">
                               <BookOpen className="h-16 w-16 text-white" />
                             </div>
+                            {/* Mini play button overlay on hover */}
+                            <AnimatePresence>
+                              {isHovered && (
+                                <motion.div
+                                  className="absolute inset-0 flex items-center justify-center bg-black/20 z-20"
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 1 }}
+                                  exit={{ opacity: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                >
+                                  <motion.div
+                                    className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg backdrop-blur-sm"
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    exit={{ scale: 0 }}
+                                    transition={{ type: 'spring', stiffness: 300 }}
+                                  >
+                                    <Play className="h-5 w-5 text-emerald-600 ml-0.5" />
+                                  </motion.div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                             <div className="relative flex w-full items-center justify-between z-10">
                               <div className="flex items-center gap-2">
                                 <Badge className="bg-white/20 text-white border-0 text-xs backdrop-blur-sm">
@@ -928,13 +1367,13 @@ export function LearnerDashboard() {
                             {enrollment.course?.title}
                           </h3>
 
-                          {/* Mini curriculum progress bar */}
+                          {/* Mini curriculum progress bar with shimmer */}
                           <div className="space-y-1">
                             <div className="flex items-center justify-between text-[11px]">
                               <span className="text-muted-foreground">{completed} of {total} lessons</span>
                               <span className="font-semibold text-emerald-600 dark:text-emerald-400">{enrollment.progress}%</span>
                             </div>
-                            <AnimatedProgress value={enrollment.progress} />
+                            <AnimatedProgress value={enrollment.progress} barColor="from-emerald-500 to-teal-400" />
                           </div>
 
                           {/* Next lesson preview */}
@@ -949,10 +1388,16 @@ export function LearnerDashboard() {
                           )}
 
                           <div className="flex items-center justify-between">
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Clock className="h-3 w-3" />
-                              {getRelativeTime(enrollment.lastAccessedAt)}
-                            </span>
+                            <div className="flex items-center gap-3">
+                              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Clock className="h-3 w-3" />
+                                {getRelativeTime(enrollment.lastAccessedAt)}
+                              </span>
+                              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Timer className="h-3 w-3" />
+                                ~{estimatedTime} left
+                              </span>
+                            </div>
                             <ResumeButton />
                           </div>
                         </CardContent>
@@ -1053,16 +1498,32 @@ export function LearnerDashboard() {
           </Section>
         )}
 
+        {/* ============ DAILY CHALLENGE + WEEKLY STATS ROW ============ */}
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <Section delay={0.17}>
+            <DailyChallengeWidget />
+          </Section>
+          <Section delay={0.19}>
+            <WeeklyLearningStats />
+          </Section>
+        </div>
+
         {/* ============ MIDDLE ROW: ACTIVITY FEED + LEADERBOARD + DAILY GOAL ============ */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Activity Feed (ENHANCED - Timeline style) */}
+          {/* Activity Feed (ENHANCED - Timeline style with expandable details) */}
           <Section delay={0.2}>
             <Card className="border-border dark:border-slate-800 h-full">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-yellow-500" />
-                  Recent Activity
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-yellow-500" />
+                    Recent Activity
+                  </CardTitle>
+                  <Button variant="ghost" size="sm" className="text-xs gap-1 text-muted-foreground h-6 px-2">
+                    View All
+                    <ArrowRight className="h-3 w-3" />
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-0">
                 <div className="max-h-96 overflow-y-auto scrollbar-thin">
@@ -1070,48 +1531,87 @@ export function LearnerDashboard() {
                     {(showAllActivities ? activityItems : activityItems.slice(0, 4)).map((activity, i) => {
                       const ActivityIcon = activity.icon;
                       const isLast = i === (showAllActivities ? activityItems.length - 1 : 3);
+                      const isExpanded = expandedActivity === activity.id;
                       return (
                         <motion.div
                           key={activity.id}
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ duration: 0.3, delay: 0.05 * i }}
-                          className="relative flex items-start gap-3 py-3"
+                          className="relative"
                         >
-                          {/* Timeline dot and line */}
-                          <div className="flex flex-col items-center shrink-0">
-                            <div className={cn(
-                              'flex h-8 w-8 items-center justify-center rounded-full z-10',
-                              'bg-slate-100 dark:bg-slate-800 ring-2 ring-white dark:ring-slate-900'
-                            )}>
-                              <ActivityIcon className={cn('h-4 w-4', activity.color)} />
-                            </div>
-                            {/* Connecting line */}
-                            {!isLast && (
-                              <div className="w-0.5 flex-1 bg-slate-200 dark:bg-slate-700 mt-1" />
-                            )}
-                          </div>
-                          {/* Activity colored type indicator */}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 mb-0.5">
-                              <div className={cn('h-1.5 w-1.5 rounded-full', activity.bgColor)} />
-                              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                                {activity.type}
-                              </span>
-                            </div>
-                            <p className="text-sm text-slate-900 dark:text-slate-100 line-clamp-2">
-                              {activity.title}
-                            </p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <p className="text-xs text-muted-foreground">{getRelativeTime(activity.time)}</p>
-                              {activity.detail && (
-                                <>
-                                  <span className="text-xs text-muted-foreground">·</span>
-                                  <p className="text-xs text-muted-foreground">{activity.detail}</p>
-                                </>
+                          <div
+                            className="relative flex items-start gap-3 py-3 cursor-pointer group"
+                            onClick={() => setExpandedActivity(isExpanded ? null : activity.id)}
+                          >
+                            {/* Timeline dot and animated line */}
+                            <div className="flex flex-col items-center shrink-0">
+                              <motion.div
+                                className={cn(
+                                  'flex h-8 w-8 items-center justify-center rounded-full z-10',
+                                  activity.bgCircle,
+                                  'ring-2 ring-white dark:ring-slate-900'
+                                )}
+                                whileHover={{ scale: 1.1 }}
+                              >
+                                <ActivityIcon className={cn('h-4 w-4', activity.color)} />
+                              </motion.div>
+                              {/* Animated connecting line */}
+                              {!isLast && (
+                                <motion.div
+                                  className="w-0.5 flex-1 bg-slate-200 dark:bg-slate-700 mt-1 origin-top"
+                                  initial={{ scaleY: 0 }}
+                                  animate={{ scaleY: 1 }}
+                                  transition={{ duration: 0.5, delay: 0.2 + i * 0.1 }}
+                                />
                               )}
                             </div>
+                            {/* Activity content */}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <div className={cn('h-1.5 w-1.5 rounded-full', activity.bgColor)} />
+                                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                                  {activity.type}
+                                </span>
+                                {/* Relative time badge */}
+                                <Badge variant="secondary" className="text-[9px] h-4 px-1.5 ml-auto shrink-0">
+                                  {getRelativeTime(activity.time)}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-slate-900 dark:text-slate-100 line-clamp-2">
+                                {activity.title}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                {activity.detail && (
+                                  <p className="text-xs text-muted-foreground">{activity.detail}</p>
+                                )}
+                              </div>
+                              {/* Expand indicator */}
+                              <motion.span
+                                className="text-[10px] text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5 inline-flex items-center gap-0.5"
+                                animate={{ rotate: isExpanded ? 180 : 0 }}
+                              >
+                                <ChevronRight className="h-3 w-3" />
+                                {isExpanded ? 'Hide details' : 'Show details'}
+                              </motion.span>
+                            </div>
                           </div>
+                          {/* Expandable details */}
+                          <AnimatePresence>
+                            {isExpanded && activity.expandedDetail && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="overflow-hidden ml-11 mb-2"
+                              >
+                                <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 px-3 py-2 text-xs text-muted-foreground border border-slate-100 dark:border-slate-700">
+                                  {activity.expandedDetail}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </motion.div>
                       );
                     })}
@@ -1131,7 +1631,7 @@ export function LearnerDashboard() {
             </Card>
           </Section>
 
-          {/* Leaderboard Preview (ENHANCED) */}
+          {/* Leaderboard Preview (ENHANCED with score bars and period toggle) */}
           <Section delay={0.25}>
             <Card className="border-border dark:border-slate-800 h-full">
               <CardHeader className="pb-2">
@@ -1140,7 +1640,31 @@ export function LearnerDashboard() {
                     <Trophy className="h-4 w-4 text-yellow-500" />
                     Leaderboard
                   </CardTitle>
-                  <Badge variant="secondary" className="text-xs">This Week</Badge>
+                  {/* Weekly/Monthly toggle */}
+                  <div className="flex items-center rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5">
+                    <button
+                      className={cn(
+                        'px-2 py-0.5 text-[10px] font-medium rounded-md transition-all',
+                        leaderboardPeriod === 'weekly'
+                          ? 'bg-white dark:bg-slate-700 text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                      onClick={() => setLeaderboardPeriod('weekly')}
+                    >
+                      Weekly
+                    </button>
+                    <button
+                      className={cn(
+                        'px-2 py-0.5 text-[10px] font-medium rounded-md transition-all',
+                        leaderboardPeriod === 'monthly'
+                          ? 'bg-white dark:bg-slate-700 text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                      onClick={() => setLeaderboardPeriod('monthly')}
+                    >
+                      Monthly
+                    </button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-0">
@@ -1151,25 +1675,27 @@ export function LearnerDashboard() {
                     const avatarGradient = getAvatarColor(entry.name);
                     const initials = getInitials(entry.name);
                     const pointChange = getPointChange(entry.rank);
+                    const scorePercent = maxLeaderboardPoints > 0 ? (entry.points / maxLeaderboardPoints) * 100 : 0;
 
                     return (
                       <motion.div
                         key={entry.rank}
-                        initial={{ opacity: 0, x: 20 }}
+                        initial={{ opacity: 0, x: 30 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.3, delay: 0.08 * i }}
+                        transition={{ duration: 0.4, delay: 0.1 * i, type: 'spring', stiffness: 150 }}
                         className={cn(
-                          'flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors',
+                          'relative flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all duration-200',
                           isCurrentUser
-                            ? 'bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/30 dark:border-emerald-800'
+                            ? 'bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20 border border-emerald-500/30 dark:border-emerald-800'
                             : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
                         )}
                       >
-                        {/* Rank badge */}
+                        {/* Rank badge with gradient and shadow */}
                         <div className={cn(
                           'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
                           rankStyle.bg,
-                          rankStyle.text
+                          rankStyle.text,
+                          rankStyle.shadow
                         )}>
                           {entry.rank <= 3 ? rankStyle.icon : entry.rank}
                         </div>
@@ -1180,7 +1706,7 @@ export function LearnerDashboard() {
                         )}>
                           {initials}
                         </div>
-                        {/* Name & details */}
+                        {/* Name & score bar */}
                         <div className="min-w-0 flex-1">
                           <p className={cn(
                             'text-sm font-medium truncate',
@@ -1191,9 +1717,24 @@ export function LearnerDashboard() {
                               <span className="ml-1.5 text-xs font-normal text-emerald-500">(You)</span>
                             )}
                           </p>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span>{entry.points.toLocaleString()} pts</span>
-                            <span>·</span>
+                          {/* Score bar */}
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                              <motion.div
+                                className={cn(
+                                  'h-full rounded-full',
+                                  isCurrentUser
+                                    ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                                    : 'bg-gradient-to-r from-slate-400 to-slate-300 dark:from-slate-500 dark:to-slate-400'
+                                )}
+                                initial={{ width: 0 }}
+                                animate={{ width: `${scorePercent}%` }}
+                                transition={{ duration: 0.8, delay: 0.3 + i * 0.1, ease: 'easeOut' }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-muted-foreground shrink-0">{entry.points.toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                             <span className="flex items-center gap-0.5">
                               <Flame className="h-3 w-3 text-orange-400" />
                               {entry.streak}
@@ -1252,7 +1793,7 @@ export function LearnerDashboard() {
 
               {/* Streak Card (Enhanced) */}
               <Card className="border-border dark:border-slate-800 overflow-hidden">
-                <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 p-4 text-white">
+                <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-4 text-white">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
                       <Flame className="h-5 w-5" />
@@ -1300,7 +1841,7 @@ export function LearnerDashboard() {
           </Section>
         </div>
 
-        {/* ============ RECOMMENDED COURSES (ENHANCED) ============ */}
+        {/* ============ RECOMMENDED COURSES (ENHANCED - Horizontal Scrollable) ============ */}
         {recommendedCourses.length > 0 && (
           <Section delay={0.35}>
             <div className="flex items-center justify-between mb-4">
@@ -1312,7 +1853,7 @@ export function LearnerDashboard() {
                 Browse All <ArrowRight className="h-3 w-3" />
               </Button>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin">
               {recommendedCourses.map((course, i) => {
                 const difficultyStyle = getDifficultyStyle(course.level);
                 const isHovered = hoveredRecommendation === course.id;
@@ -1321,14 +1862,15 @@ export function LearnerDashboard() {
                 return (
                   <motion.div
                     key={course.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, x: 30 }}
+                    animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.4, delay: 0.1 * i }}
+                    className="min-w-[280px] sm:min-w-[320px]"
                     onMouseEnter={() => setHoveredRecommendation(course.id)}
                     onMouseLeave={() => setHoveredRecommendation(null)}
                   >
                     <TiltCard>
-                      <Card className="overflow-hidden border-border dark:border-slate-800 hover:shadow-lg transition-shadow group cursor-pointer relative">
+                      <Card className="overflow-hidden border-border dark:border-slate-800 hover:shadow-xl transition-all duration-300 group cursor-pointer relative">
                         {/* Course colored header */}
                         <div className="relative">
                           <div className={cn(
@@ -1341,7 +1883,6 @@ export function LearnerDashboard() {
                             </div>
                             <div className="relative z-10 flex w-full items-center justify-between">
                               <div className="flex items-center gap-2">
-                                {/* Difficulty indicator */}
                                 <Badge className={cn('border-0 text-xs gap-1', difficultyStyle.bg, difficultyStyle.text)}>
                                   <span className={cn('h-1.5 w-1.5 rounded-full', difficultyStyle.dot)} />
                                   {course.level}

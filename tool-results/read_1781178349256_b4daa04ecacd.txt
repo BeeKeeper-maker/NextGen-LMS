@@ -1,0 +1,880 @@
+     1→'use client';
+     2→
+     3→import { useState, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Search, Plus, Edit3, Trash2, Eye, Download, Ban,
+     7→  Award, FileText, Image as ImageIcon, Calendar, QrCode, PenTool,
+     8→  Type, Palette, Settings2, Save, X, CheckCircle2,
+     9→  ChevronLeft, GripVertical, Sparkles, Shield, Layout,
+    10→  Clock, User, BookOpen, Hash,
+    11→} from 'lucide-react';
+    12→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+    13→import { Button } from '@/components/ui/button';
+    14→import { Input } from '@/components/ui/input';
+    15→import { Textarea } from '@/components/ui/textarea';
+    16→import { Badge } from '@/components/ui/badge';
+    17→import { Switch } from '@/components/ui/switch';
+    18→import { Label } from '@/components/ui/label';
+    19→import { Separator } from '@/components/ui/separator';
+    20→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    21→import {
+    22→  Dialog,
+    23→  DialogContent,
+    24→  DialogDescription,
+    25→  DialogHeader,
+    26→  DialogTitle,
+    27→  DialogFooter,
+    28→} from '@/components/ui/dialog';
+    29→import {
+    30→  Select,
+    31→  SelectContent,
+    32→  SelectItem,
+    33→  SelectTrigger,
+    34→  SelectValue,
+    35→} from '@/components/ui/select';
+    36→import {
+    37→  Table,
+    38→  TableBody,
+    39→  TableCell,
+    40→  TableHead,
+    41→  TableHeader,
+    42→  TableRow,
+    43→} from '@/components/ui/table';
+    44→import {
+    45→  Tooltip,
+    46→  TooltipContent,
+    47→  TooltipProvider,
+    48→  TooltipTrigger,
+    49→} from '@/components/ui/tooltip';
+    50→import { demoCourses } from '@/lib/mock-data';
+    51→import type { Certificate, CertificateAward } from '@/types';
+    52→
+    53→// ---- Mock Certificate Templates ----
+    54→interface CertTemplate extends Certificate {
+    55→  elements: CertElement[];
+    56→  bg_color: string;
+    57→  font_family: string;
+    58→  width: number;
+    59→  height: number;
+    60→}
+    61→
+    62→interface CertElement {
+    63→  id: string;
+    64→  type: 'text' | 'image' | 'date' | 'qr_code' | 'signature_line';
+    65→  label: string;
+    66→  x: number;
+    67→  y: number;
+    68→  fontSize?: number;
+    69→  fontWeight?: string;
+    70→  color?: string;
+    71→  value: string;
+    72→}
+    73→
+    74→const defaultElements: CertElement[] = [
+    75→  { id: 'el-1', type: 'text', label: 'Header', x: 50, y: 10, fontSize: 28, fontWeight: 'bold', color: '#1e293b', value: 'Certificate of Completion' },
+    76→  { id: 'el-2', type: 'text', label: 'Subheader', x: 50, y: 22, fontSize: 14, fontWeight: 'normal', color: '#64748b', value: 'This is to certify that' },
+    77→  { id: 'el-3', type: 'text', label: 'Recipient Name', x: 50, y: 35, fontSize: 24, fontWeight: 'bold', color: '#059669', value: '{{recipient_name}}' },
+    78→  { id: 'el-4', type: 'text', label: 'Course Label', x: 50, y: 48, fontSize: 12, fontWeight: 'normal', color: '#64748b', value: 'has successfully completed the course' },
+    79→  { id: 'el-5', type: 'text', label: 'Course Name', x: 50, y: 58, fontSize: 20, fontWeight: 'bold', color: '#7c3aed', value: '{{course_name}}' },
+    80→  { id: 'el-6', type: 'date', label: 'Issue Date', x: 30, y: 75, fontSize: 12, fontWeight: 'normal', color: '#475569', value: '{{issue_date}}' },
+    81→  { id: 'el-7', type: 'text', label: 'Verification', x: 70, y: 75, fontSize: 10, fontWeight: 'normal', color: '#94a3b8', value: 'Verification: {{verification_code}}' },
+    82→  { id: 'el-8', type: 'signature_line', label: 'Signature Line', x: 70, y: 85, fontSize: 12, fontWeight: 'normal', color: '#475569', value: 'Instructor Signature' },
+    83→  { id: 'el-9', type: 'qr_code', label: 'QR Code', x: 88, y: 72, fontSize: 12, fontWeight: 'normal', color: '#000', value: 'QR Verification' },
+    84→  { id: 'el-10', type: 'image', label: 'Tenant Logo', x: 50, y: 5, fontSize: 12, fontWeight: 'normal', color: '#000', value: 'NextGen LMS' },
+    85→];
+    86→
+    87→const demoTemplates: CertTemplate[] = [
+    88→  {
+    89→    id: 'cert-tpl-1',
+    90→    tenantId: 'demo-tenant-1',
+    91→    name: 'Classic Completion Certificate',
+    92→    template: 'classic',
+    93→    backgroundUrl: '',
+    94→    isActive: true,
+    95→    bg_color: '#fefefe',
+    96→    font_family: 'Georgia, serif',
+    97→    width: 800,
+    98→    height: 600,
+    99→    elements: defaultElements,
+   100→  },
+   101→  {
+   102→    id: 'cert-tpl-2',
+   103→    tenantId: 'demo-tenant-1',
+   104→    name: 'Modern Achievement Award',
+   105→    template: 'modern',
+   106→    backgroundUrl: '',
+   107→    isActive: true,
+   108→    bg_color: '#f8fafc',
+   109→    font_family: 'system-ui, sans-serif',
+   110→    width: 800,
+   111→    height: 600,
+   112→    elements: defaultElements.map(el => ({
+   113→      ...el,
+   114→      color: el.type === 'text' && el.label === 'Header' ? '#7c3aed' : el.color,
+   115→      value: el.label === 'Header' ? 'Achievement Award' : el.value,
+   116→    })),
+   117→  },
+   118→  {
+   119→    id: 'cert-tpl-3',
+   120→    tenantId: 'demo-tenant-1',
+   121→    name: 'Professional Certification',
+   122→    template: 'professional',
+   123→    backgroundUrl: '',
+   124→    isActive: false,
+   125→    bg_color: '#0f172a',
+   126→    font_family: 'system-ui, sans-serif',
+   127→    width: 800,
+   128→    height: 600,
+   129→    elements: defaultElements.map(el => ({
+   130→      ...el,
+   131→      color: el.label === 'Header' ? '#f8fafc' :
+   132→             el.label === 'Recipient Name' ? '#10b981' :
+   133→             el.label === 'Course Name' ? '#a78bfa' :
+   134→             el.color?.startsWith('#64748b') ? '#94a3b8' :
+   135→             el.color?.startsWith('#475569') ? '#94a3b8' :
+   136→             el.color,
+   137→      value: el.label === 'Header' ? 'Professional Certification' : el.value,
+   138→    })),
+   139→  },
+   140→];
+   141→
+   142→// ---- Mock Issued Certificates ----
+   143→const demoIssuedCerts: (CertificateAward & { recipientName: string; courseName: string; certName: string })[] = [
+   144→  {
+   145→    id: 'award-1', userId: 'user-2', certificateId: 'cert-tpl-1', tenantId: 'demo-tenant-1', courseId: 'course-1',
+   146→    verificationCode: 'NG-LMS-2024-A1B2C3', issuedAt: '2024-09-15T00:00:00Z',
+   147→    recipientName: 'Emma Rodriguez', courseName: 'Advanced React & Next.js Masterclass', certName: 'Classic Completion Certificate',
+   148→  },
+   149→  {
+   150→    id: 'award-2', userId: 'user-3', certificateId: 'cert-tpl-1', tenantId: 'demo-tenant-1', courseId: 'course-2',
+   151→    verificationCode: 'NG-LMS-2024-D4E5F6', issuedAt: '2024-09-20T00:00:00Z',
+   152→    recipientName: 'David Park', courseName: 'AI-Powered Full Stack Development', certName: 'Classic Completion Certificate',
+   153→  },
+   154→  {
+   155→    id: 'award-3', userId: 'user-5', certificateId: 'cert-tpl-2', tenantId: 'demo-tenant-1', courseId: 'course-4',
+   156→    verificationCode: 'NG-LMS-2024-G7H8I9', issuedAt: '2024-10-01T00:00:00Z',
+   157→    recipientName: 'Lisa Wang', courseName: 'Data Visualization & Analytics', certName: 'Modern Achievement Award',
+   158→  },
+   159→  {
+   160→    id: 'award-4', userId: 'user-6', certificateId: 'cert-tpl-1', tenantId: 'demo-tenant-1', courseId: 'course-1',
+   161→    verificationCode: 'NG-LMS-2024-J0K1L2', issuedAt: '2024-10-05T00:00:00Z',
+   162→    recipientName: 'Alex Johnson', courseName: 'Advanced React & Next.js Masterclass', certName: 'Classic Completion Certificate',
+   163→  },
+   164→  {
+   165→    id: 'award-5', userId: 'user-7', certificateId: 'cert-tpl-2', tenantId: 'demo-tenant-1', courseId: 'course-3',
+   166→    verificationCode: 'NG-LMS-2024-M3N4O5', issuedAt: '2024-10-10T00:00:00Z',
+   167→    recipientName: 'Jordan Lee', courseName: 'System Design for Senior Engineers', certName: 'Modern Achievement Award',
+   168→  },
+   169→  {
+   170→    id: 'award-6', userId: 'user-8', certificateId: 'cert-tpl-1', tenantId: 'demo-tenant-1', courseId: 'course-5',
+   171→    verificationCode: 'NG-LMS-2024-P6Q7R8', issuedAt: '2024-10-12T00:00:00Z',
+   172→    recipientName: 'Priya Sharma', courseName: 'UX/UI Design Principles', certName: 'Classic Completion Certificate',
+   173→  },
+   174→];
+   175→
+   176→// ---- Element palette icon ----
+   177→function ElementIcon({ type }: { type: CertElement['type'] }) {
+   178→  switch (type) {
+   179→    case 'text': return <Type className="h-4 w-4" />;
+   180→    case 'image': return <ImageIcon className="h-4 w-4" />;
+   181→    case 'date': return <Calendar className="h-4 w-4" />;
+   182→    case 'qr_code': return <QrCode className="h-4 w-4" />;
+   183→    case 'signature_line': return <PenTool className="h-4 w-4" />;
+   184→    default: return <FileText className="h-4 w-4" />;
+   185→  }
+   186→}
+   187→
+   188→// ==========================
+   189→// CERTIFICATE TEMPLATES LIST
+   190→// ==========================
+   191→function TemplatesList({
+   192→  templates,
+   193→  onEdit,
+   194→  onCreateNew,
+   195→}: {
+   196→  templates: CertTemplate[];
+   197→  onEdit: (t: CertTemplate) => void;
+   198→  onCreateNew: () => void;
+   199→}) {
+   200→  const [search, setSearch] = useState('');
+   201→
+   202→  const filtered = templates.filter(t =>
+   203→    t.name.toLowerCase().includes(search.toLowerCase())
+   204→  );
+   205→
+   206→  return (
+   207→    <div className="space-y-6">
+   208→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+   209→        <div>
+   210→          <h2 className="text-2xl font-bold text-foreground">Certificate Templates</h2>
+   211→          <p className="text-muted-foreground text-sm mt-1">Design and manage certificate templates for your courses</p>
+   212→        </div>
+   213→        <Button onClick={onCreateNew} className="bg-violet-600 hover:bg-violet-700 text-white gap-2">
+   214→          <Plus className="h-4 w-4" /> Create Template
+   215→        </Button>
+   216→      </div>
+   217→
+   218→      <div className="relative max-w-md">
+   219→        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   220→        <Input placeholder="Search templates..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+   221→      </div>
+   222→
+   223→      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+   224→        {filtered.map((template, idx) => (
+   225→          <motion.div
+   226→            key={template.id}
+   227→            initial={{ opacity: 0, y: 12 }}
+   228→            animate={{ opacity: 1, y: 0 }}
+   229→            transition={{ delay: idx * 0.08 }}
+   230→          >
+   231→            <Card className="overflow-hidden group hover:shadow-lg transition-shadow h-full flex flex-col shadow-sm">
+   232→              {/* Certificate preview thumbnail */}
+   233→              <div
+   234→                className="h-48 relative overflow-hidden"
+   235→                style={{
+   236→                  background: template.bg_color === '#0f172a'
+   237→                    ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)'
+   238→                    : template.bg_color === '#fefefe'
+   239→                    ? 'linear-gradient(135deg, #fefefe 0%, #f1f5f9 100%)'
+   240→                    : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+   241→                }}
+   242→              >
+   243→                {/* Decorative border */}
+   244→                <div className="absolute inset-3 border-2 border-dashed rounded-md" style={{
+   245→                  borderColor: template.bg_color === '#0f172a' ? '#334155' : '#cbd5e1',
+   246→                }}>
+   247→                  <div className="absolute inset-1 border rounded-sm" style={{
+   248→                    borderColor: template.bg_color === '#0f172a' ? '#475569' : '#e2e8f0',
+   249→                  }} />
+   250→                </div>
+   251→                {/* Preview text overlay */}
+   252→                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
+   253→                  <div className="mb-1 opacity-60">
+   254→                    <Award className={`h-6 w-6 ${template.bg_color === '#0f172a' ? 'text-amber-400' : 'text-violet-500'}`} />
+   255→                  </div>
+   256→                  <div className={`text-xs font-bold mb-0.5 ${template.bg_color === '#0f172a' ? 'text-slate-100' : 'text-slate-800'}`}
+   257→                    style={{ fontFamily: template.font_family }}>
+   258→                    {template.elements.find(e => e.label === 'Header')?.value ?? 'Certificate'}
+   259→                  </div>
+   260→                  <div className={`text-[8px] ${template.bg_color === '#0f172a' ? 'text-emerald-400' : 'text-emerald-600'} font-semibold`}>
+   261→                    John Doe
+   262→                  </div>
+   263→                  <div className={`text-[7px] ${template.bg_color === '#0f172a' ? 'text-violet-400' : 'text-violet-600'} font-medium mt-0.5`}>
+   264→                    Course Name
+   265→                  </div>
+   266→                </div>
+   267→
+   268→                {/* Status badge */}
+   269→                <div className="absolute top-3 right-3">
+   270→                  {template.isActive ? (
+   271→                    <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">Active</Badge>
+   272→                  ) : (
+   273→                    <Badge variant="outline" className="text-[10px] text-muted-foreground">Inactive</Badge>
+   274→                  )}
+   275→                </div>
+   276→              </div>
+   277→
+   278→              <CardContent className="p-4 flex-1 flex flex-col">
+   279→                <h3 className="font-semibold text-foreground mb-1">{template.name}</h3>
+   280→                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+   281→                  <Badge variant="outline" className="text-[10px]">{template.template}</Badge>
+   282→                  <span>{template.width}×{template.height}</span>
+   283→                  <span>{template.elements.length} elements</span>
+   284→                </div>
+   285→                <div className="flex items-center gap-2 mt-auto">
+   286→                  <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => onEdit(template)}>
+   287→                    <Edit3 className="h-3.5 w-3.5" /> Edit
+   288→                  </Button>
+   289→                  <TooltipProvider>
+   290→                    <Tooltip>
+   291→                      <TooltipTrigger asChild>
+   292→                        <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => { /* sample download */ }}>
+   293→                          <Download className="h-3.5 w-3.5" /> Sample
+   294→                        </Button>
+   295→                      </TooltipTrigger>
+   296→                      <TooltipContent>Download Sample</TooltipContent>
+   297→                    </Tooltip>
+   298→                  </TooltipProvider>
+   299→                  <TooltipProvider>
+   300→                    <Tooltip>
+   301→                      <TooltipTrigger asChild>
+   302→                        <Button size="sm" variant="outline" className="h-8 w-8 p-0">
+   303→                          <Eye className="h-3.5 w-3.5" />
+   304→                        </Button>
+   305→                      </TooltipTrigger>
+   306→                      <TooltipContent>Preview</TooltipContent>
+   307→                    </Tooltip>
+   308→                  </TooltipProvider>
+   309→                </div>
+   310→              </CardContent>
+   311→            </Card>
+   312→          </motion.div>
+   313→        ))}
+   314→      </div>
+   315→    </div>
+   316→  );
+   317→}
+   318→
+   319→// ==========================
+   320→// CERTIFICATE BUILDER
+   321→// ==========================
+   322→function CertificateBuilder({
+   323→  template,
+   324→  onBack,
+   325→  onSave,
+   326→}: {
+   327→  template: CertTemplate;
+   328→  onBack: () => void;
+   329→  onSave: (t: CertTemplate) => void;
+   330→}) {
+   331→  const [form, setForm] = useState<CertTemplate>({ ...template, elements: template.elements.map(e => ({ ...e })) });
+   332→  const [selectedElement, setSelectedElement] = useState<string | null>(null);
+   333→  const [dragType, setDragType] = useState<CertElement['type'] | null>(null);
+   334→
+   335→  const updateField = useCallback(<K extends keyof CertTemplate>(key: K, value: CertTemplate[K]) => {
+   336→    setForm(prev => ({ ...prev, [key]: value }));
+   337→  }, []);
+   338→
+   339→  const updateElement = (id: string, updates: Partial<CertElement>) => {
+   340→    setForm(prev => ({
+   341→      ...prev,
+   342→      elements: prev.elements.map(el => el.id === id ? { ...el, ...updates } : el),
+   343→    }));
+   344→  };
+   345→
+   346→  const addElement = (type: CertElement['type']) => {
+   347→    const labels: Record<string, string> = { text: 'Text Block', image: 'Image', date: 'Date', qr_code: 'QR Code', signature_line: 'Signature Line' };
+   348→    const newEl: CertElement = {
+   349→      id: `el-${Date.now()}`,
+   350→      type,
+   351→      label: labels[type] ?? type,
+   352→      x: 50,
+   353→      y: 50,
+   354→      fontSize: 14,
+   355→      fontWeight: 'normal',
+   356→      color: '#1e293b',
+   357→      value: type === 'text' ? 'New Text' : type === 'date' ? '{{issue_date}}' : type === 'qr_code' ? 'QR Code' : type === 'signature_line' ? 'Signature' : 'Image',
+   358→    };
+   359→    setForm(prev => ({ ...prev, elements: [...prev.elements, newEl] }));
+   360→    setSelectedElement(newEl.id);
+   361→  };
+   362→
+   363→  const removeElement = (id: string) => {
+   364→    setForm(prev => ({ ...prev, elements: prev.elements.filter(el => el.id !== id) }));
+   365→    if (selectedElement === id) setSelectedElement(null);
+   366→  };
+   367→
+   368→  const paletteItems: { type: CertElement['type']; icon: React.ReactNode; label: string }[] = [
+   369→    { type: 'text', icon: <Type className="h-4 w-4" />, label: 'Text' },
+   370→    { type: 'image', icon: <ImageIcon className="h-4 w-4" />, label: 'Image' },
+   371→    { type: 'date', icon: <Calendar className="h-4 w-4" />, label: 'Date' },
+   372→    { type: 'qr_code', icon: <QrCode className="h-4 w-4" />, label: 'QR Code' },
+   373→    { type: 'signature_line', icon: <PenTool className="h-4 w-4" />, label: 'Signature' },
+   374→  ];
+   375→
+   376→  const selectedEl = form.elements.find(el => el.id === selectedElement);
+   377→  const isDark = form.bg_color === '#0f172a';
+   378→
+   379→  return (
+   380→    <div className="space-y-4">
+   381→      {/* Header */}
+   382→      <div className="flex items-center justify-between">
+   383→        <div className="flex items-center gap-3">
+   384→          <Button variant="ghost" size="icon" onClick={onBack}>
+   385→            <ChevronLeft className="h-5 w-5" />
+   386→          </Button>
+   387→          <div>
+   388→            <h2 className="text-2xl font-bold text-foreground">Certificate Builder</h2>
+   389→            <p className="text-sm text-muted-foreground">{form.name || 'New Template'}</p>
+   390→          </div>
+   391→        </div>
+   392→        <div className="flex items-center gap-2">
+   393→          <Button variant="outline" onClick={onBack} className="gap-2">
+   394→            <X className="h-4 w-4" /> Cancel
+   395→          </Button>
+   396→          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={() => onSave(form)}>
+   397→            <Save className="h-4 w-4" /> Save Template
+   398→          </Button>
+   399→        </div>
+   400→      </div>
+   401→
+   402→      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4" style={{ minHeight: '600px' }}>
+   403→        {/* Left panel: Element palette + element list */}
+   404→        <div className="lg:col-span-3 space-y-4">
+   405→          {/* Settings */}
+   406→          <Card className="shadow-sm">
+   407→            <CardHeader className="pb-3">
+   408→              <CardTitle className="text-sm flex items-center gap-2">
+   409→                <Settings2 className="h-4 w-4 text-violet-600" /> Template Settings
+   410→              </CardTitle>
+   411→            </CardHeader>
+   412→            <CardContent className="space-y-3">
+   413→              <div className="space-y-1">
+   414→                <Label className="text-xs">Template Name</Label>
+   415→                <Input value={form.name} onChange={e => updateField('name', e.target.value)} className="h-8 text-sm" />
+   416→              </div>
+   417→              <div className="space-y-1">
+   418→                <Label className="text-xs">Background</Label>
+   419→                <Select value={form.bg_color} onValueChange={v => updateField('bg_color', v)}>
+   420→                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+   421→                  <SelectContent>
+   422→                    <SelectItem value="#fefefe">White (Classic)</SelectItem>
+   423→                    <SelectItem value="#f8fafc">Light Gray (Modern)</SelectItem>
+   424→                    <SelectItem value="#0f172a">Dark (Professional)</SelectItem>
+   425→                  </SelectContent>
+   426→                </Select>
+   427→              </div>
+   428→              <div className="space-y-1">
+   429→                <Label className="text-xs">Font</Label>
+   430→                <Select value={form.font_family} onValueChange={v => updateField('font_family', v)}>
+   431→                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+   432→                  <SelectContent>
+   433→                    <SelectItem value="Georgia, serif">Georgia (Serif)</SelectItem>
+   434→                    <SelectItem value="system-ui, sans-serif">System UI (Sans)</SelectItem>
+   435→                    <SelectItem value="'Courier New', monospace">Courier (Mono)</SelectItem>
+   436→                  </SelectContent>
+   437→                </Select>
+   438→              </div>
+   439→              <div className="flex items-center justify-between">
+   440→                <Label className="text-xs">Active</Label>
+   441→                <Switch checked={form.isActive} onCheckedChange={v => updateField('isActive', v)} />
+   442→              </div>
+   443→            </CardContent>
+   444→          </Card>
+   445→
+   446→          {/* Element palette */}
+   447→          <Card>
+   448→            <CardHeader className="pb-3">
+   449→              <CardTitle className="text-sm flex items-center gap-2">
+   450→                <Layout className="h-4 w-4 text-emerald-600" /> Add Elements
+   451→              </CardTitle>
+   452→            </CardHeader>
+   453→            <CardContent>
+   454→              <div className="grid grid-cols-2 gap-2">
+   455→                {paletteItems.map(item => (
+   456→                  <Button
+   457→                    key={item.type}
+   458→                    variant="outline"
+   459→                    size="sm"
+   460→                    className="flex items-center gap-1.5 h-9 text-xs"
+   461→                    onClick={() => addElement(item.type)}
+   462→                  >
+   463→                    {item.icon} {item.label}
+   464→                  </Button>
+   465→                ))}
+   466→              </div>
+   467→            </CardContent>
+   468→          </Card>
+   469→
+   470→          {/* Element list */}
+   471→          <Card>
+   472→            <CardHeader className="pb-3">
+   473→              <CardTitle className="text-sm">Elements ({form.elements.length})</CardTitle>
+   474→            </CardHeader>
+   475→            <CardContent className="max-h-64 overflow-y-auto space-y-1">
+   476→              {form.elements.map(el => (
+   477→                <div
+   478→                  key={el.id}
+   479→                  onClick={() => setSelectedElement(el.id)}
+   480→                  className={`flex items-center gap-2 p-2 rounded-md cursor-pointer text-xs transition-colors ${
+   481→                    selectedElement === el.id
+   482→                      ? 'bg-violet-100 dark:bg-violet-950/30 border border-violet-300 dark:border-violet-700'
+   483→                      : 'hover:bg-muted/50'
+   484→                  }`}
+   485→                >
+   486→                  <GripVertical className="h-3 w-3 text-muted-foreground shrink-0" />
+   487→                  <ElementIcon type={el.type} />
+   488→                  <span className="flex-1 truncate">{el.label}</span>
+   489→                  <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 text-red-500" onClick={e => { e.stopPropagation(); removeElement(el.id); }}>
+   490→                    <Trash2 className="h-3 w-3" />
+   491→                  </Button>
+   492→                </div>
+   493→              ))}
+   494→            </CardContent>
+   495→          </Card>
+   496→
+   497→          {/* Selected element properties */}
+   498→          {selectedEl && (
+   499→            <Card>
+   500→              <CardHeader className="pb-3">
+   501→                <CardTitle className="text-sm flex items-center gap-2">
+   502→                  <Edit3 className="h-4 w-4 text-amber-600" /> Element Properties
+   503→                </CardTitle>
+   504→              </CardHeader>
+   505→              <CardContent className="space-y-3">
+   506→                <div className="space-y-1">
+   507→                  <Label className="text-xs">Label</Label>
+   508→                  <Input value={selectedEl.label} onChange={e => updateElement(selectedEl.id, { label: e.target.value })} className="h-8 text-sm" />
+   509→                </div>
+   510→                <div className="space-y-1">
+   511→                  <Label className="text-xs">Value</Label>
+   512→                  <Input value={selectedEl.value} onChange={e => updateElement(selectedEl.id, { value: e.target.value })} className="h-8 text-sm" />
+   513→                </div>
+   514→                <div className="grid grid-cols-2 gap-2">
+   515→                  <div className="space-y-1">
+   516→                    <Label className="text-xs">Position X (%)</Label>
+   517→                    <Input type="number" min={0} max={100} value={selectedEl.x} onChange={e => updateElement(selectedEl.id, { x: Number(e.target.value) })} className="h-8 text-sm" />
+   518→                  </div>
+   519→                  <div className="space-y-1">
+   520→                    <Label className="text-xs">Position Y (%)</Label>
+   521→                    <Input type="number" min={0} max={100} value={selectedEl.y} onChange={e => updateElement(selectedEl.id, { y: Number(e.target.value) })} className="h-8 text-sm" />
+   522→                  </div>
+   523→                </div>
+   524→                <div className="grid grid-cols-2 gap-2">
+   525→                  <div className="space-y-1">
+   526→                    <Label className="text-xs">Font Size</Label>
+   527→                    <Input type="number" min={8} max={72} value={selectedEl.fontSize ?? 14} onChange={e => updateElement(selectedEl.id, { fontSize: Number(e.target.value) })} className="h-8 text-sm" />
+   528→                  </div>
+   529→                  <div className="space-y-1">
+   530→                    <Label className="text-xs">Weight</Label>
+   531→                    <Select value={selectedEl.fontWeight ?? 'normal'} onValueChange={v => updateElement(selectedEl.id, { fontWeight: v })}>
+   532→                      <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+   533→                      <SelectContent>
+   534→                        <SelectItem value="normal">Normal</SelectItem>
+   535→                        <SelectItem value="bold">Bold</SelectItem>
+   536→                      </SelectContent>
+   537→                    </Select>
+   538→                  </div>
+   539→                </div>
+   540→                <div className="space-y-1">
+   541→                  <Label className="text-xs">Color</Label>
+   542→                  <div className="flex items-center gap-2">
+   543→                    <input type="color" value={selectedEl.color ?? '#1e293b'} onChange={e => updateElement(selectedEl.id, { color: e.target.value })} className="h-8 w-8 rounded border cursor-pointer" />
+   544→                    <Input value={selectedEl.color ?? '#1e293b'} onChange={e => updateElement(selectedEl.id, { color: e.target.value })} className="h-8 text-sm flex-1" />
+   545→                  </div>
+   546→                </div>
+   547→              </CardContent>
+   548→            </Card>
+   549→          )}
+   550→        </div>
+   551→
+   552→        {/* Right panel: Certificate Preview */}
+   553→        <div className="lg:col-span-9">
+   554→          <Card className="h-full">
+   555→            <CardHeader className="pb-3">
+   556→              <CardTitle className="text-sm flex items-center gap-2">
+   557→                <Eye className="h-4 w-4 text-emerald-600" /> Live Preview
+   558→              </CardTitle>
+   559→            </CardHeader>
+   560→            <CardContent className="flex items-center justify-center p-6 bg-slate-100 dark:bg-slate-900/50 rounded-b-lg min-h-[500px]">
+   561→              <div
+   562→                className="relative shadow-2xl rounded-lg overflow-hidden"
+   563→                style={{
+   564→                  width: '100%',
+   565→                  maxWidth: `${form.width}px`,
+   566→                  aspectRatio: `${form.width}/${form.height}`,
+   567→                  background: form.bg_color === '#0f172a'
+   568→                    ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)'
+   569→                    : form.bg_color === '#fefefe'
+   570→                    ? 'linear-gradient(135deg, #fefefe 0%, #fafbfc 50%, #f1f5f9 100%)'
+   571→                    : 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%)',
+   572→                  fontFamily: form.font_family,
+   573→                }}
+   574→              >
+   575→                {/* Decorative border */}
+   576→                <div className="absolute inset-4 border-2 rounded-sm" style={{ borderColor: isDark ? '#334155' : '#c7d2da' }}>
+   577→                  <div className="absolute inset-1.5 border rounded-sm" style={{ borderColor: isDark ? '#475569' : '#d4dce4' }} />
+   578→                  {/* Corner ornaments */}
+   579→                  {['top-0 left-0', 'top-0 right-0', 'bottom-0 left-0', 'bottom-0 right-0'].map((pos, i) => (
+   580→                    <div key={i} className={`absolute ${pos} w-6 h-6`}>
+   581→                      <div className={`w-full h-full ${isDark ? 'text-amber-500/40' : 'text-violet-400/50'}`}>
+   582→                        <Sparkles className="h-4 w-4 absolute" style={{ [pos.includes('left') ? 'left' : 'right']: '4px', [pos.includes('top') ? 'top' : 'bottom']: '4px' }} />
+   583→                      </div>
+   584→                    </div>
+   585→                  ))}
+   586→                </div>
+   587→
+   588→                {/* Decorative line at top */}
+   589→                <div className="absolute top-10 left-16 right-16 h-0.5" style={{
+   590→                  background: isDark ? 'linear-gradient(to right, transparent, #7c3aed, #10b981, transparent)' : 'linear-gradient(to right, transparent, #7c3aed, #10b981, transparent)',
+   591→                  opacity: 0.5,
+   592→                }} />
+   593→
+   594→                {/* Elements */}
+   595→                {form.elements.map(el => {
+   596→                  const isSelected = selectedElement === el.id;
+   597→                  return (
+   598→                    <div
+   599→                      key={el.id}
+   600→                      className={`absolute cursor-pointer transition-all ${isSelected ? 'ring-2 ring-violet-500 ring-offset-1 rounded' : 'hover:ring-1 hover:ring-violet-300 hover:rounded'}`}
+   601→                      style={{
+   602→                        left: `${el.x}%`,
+   603→                        top: `${el.y}%`,
+   604→                        transform: 'translate(-50%, -50%)',
+   605→                        fontSize: `${(el.fontSize ?? 14) * 0.65}px`,
+   606→                        fontWeight: el.fontWeight ?? 'normal',
+   607→                        color: el.color ?? '#1e293b',
+   608→                        textAlign: 'center',
+   609→                        maxWidth: '80%',
+   610→                        whiteSpace: el.type === 'text' ? 'pre-wrap' : 'nowrap',
+   611→                      }}
+   612→                      onClick={() => setSelectedElement(el.id)}
+   613→                    >
+   614→                      {el.type === 'image' && (
+   615→                        <div className="flex flex-col items-center gap-1">
+   616→                          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`}>
+   617→                            <Shield className={`h-6 w-6 ${isDark ? 'text-amber-400' : 'text-violet-600'}`} />
+   618→                          </div>
+   619→                          <span className="text-[8px]" style={{ color: isDark ? '#94a3b8' : '#94a3b8' }}>{el.value}</span>
+   620→                        </div>
+   621→                      )}
+   622→                      {el.type === 'qr_code' && (
+   623→                        <div className="flex flex-col items-center gap-1">
+   624→                          <div className={`w-10 h-10 rounded border ${isDark ? 'border-slate-600 bg-slate-800' : 'border-slate-300 bg-white'} flex items-center justify-center`}>
+   625→                            <QrCode className={`h-7 w-7 ${isDark ? 'text-slate-300' : 'text-slate-700'}`} />
+   626→                          </div>
+   627→                          <span className="text-[7px]" style={{ color: isDark ? '#64748b' : '#94a3b8' }}>Verify</span>
+   628→                        </div>
+   629→                      )}
+   630→                      {el.type === 'signature_line' && (
+   631→                        <div className="flex flex-col items-center gap-1 min-w-[100px]">
+   632→                          <div className="w-20 h-0.5" style={{ backgroundColor: isDark ? '#475569' : '#94a3b8' }} />
+   633→                          <span className="text-[8px]" style={{ color: isDark ? '#64748b' : '#64748b' }}>{el.value}</span>
+   634→                        </div>
+   635→                      )}
+   636→                      {el.type === 'date' && (
+   637→                        <div className="flex items-center gap-1">
+   638→                          <Calendar className="h-3 w-3 opacity-50" style={{ color: el.color }} />
+   639→                          <span>{el.value.includes('{{') ? new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : el.value}</span>
+   640→                        </div>
+   641→                      )}
+   642→                      {el.type === 'text' && <span>{el.value.includes('{{recipient_name}}') ? 'Jane Doe' : el.value.includes('{{course_name}}') ? 'Advanced Course Title' : el.value.includes('{{verification_code}}') ? 'NG-LMS-2024-ABC123' : el.value.includes('{{issue_date}}') ? new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : el.value}</span>}
+   643→                    </div>
+   644→                  );
+   645→                })}
+   646→
+   647→                {/* Decorative line at bottom */}
+   648→                <div className="absolute bottom-10 left-16 right-16 h-0.5" style={{
+   649→                  background: isDark ? 'linear-gradient(to right, transparent, #7c3aed, #10b981, transparent)' : 'linear-gradient(to right, transparent, #7c3aed, #10b981, transparent)',
+   650→                  opacity: 0.5,
+   651→                }} />
+   652→              </div>
+   653→            </CardContent>
+   654→          </Card>
+   655→        </div>
+   656→      </div>
+   657→    </div>
+   658→  );
+   659→}
+   660→
+   661→// ==========================
+   662→// ISSUED CERTIFICATES TABLE
+   663→// ==========================
+   664→function IssuedCertificatesTable() {
+   665→  const [search, setSearch] = useState('');
+   666→  const [certs] = useState(demoIssuedCerts);
+   667→
+   668→  const filtered = certs.filter(c =>
+   669→    c.recipientName.toLowerCase().includes(search.toLowerCase()) ||
+   670→    c.courseName.toLowerCase().includes(search.toLowerCase()) ||
+   671→    c.verificationCode.toLowerCase().includes(search.toLowerCase())
+   672→  );
+   673→
+   674→  return (
+   675→    <div className="space-y-4">
+   676→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+   677→        <div>
+   678→          <h2 className="text-2xl font-bold text-foreground">Issued Certificates</h2>
+   679→          <p className="text-muted-foreground text-sm mt-1">Track and manage all issued certificates</p>
+   680→        </div>
+   681→        <div className="flex items-center gap-3">
+   682→          <div className="relative">
+   683→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   684→            <Input placeholder="Search certificates..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 w-64" />
+   685→          </div>
+   686→        </div>
+   687→      </div>
+   688→
+   689→      {/* Stats row */}
+   690→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+   691→        {[
+   692→          { label: 'Total Issued', value: certs.length, icon: Award, color: 'text-violet-600' },
+   693→          { label: 'This Month', value: 3, icon: Calendar, color: 'text-emerald-600' },
+   694→          { label: 'Active', value: certs.length, icon: CheckCircle2, color: 'text-amber-600' },
+   695→          { label: 'Templates', value: demoTemplates.length, icon: FileText, color: 'text-rose-600' },
+   696→        ].map((stat, i) => (
+   697→          <motion.div key={stat.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
+   698→            <Card>
+   699→              <CardContent className="p-4 flex items-center gap-3">
+   700→                <div className={`p-2 rounded-lg bg-muted ${stat.color}`}>
+   701→                  <stat.icon className="h-5 w-5" />
+   702→                </div>
+   703→                <div>
+   704→                  <div className="text-2xl font-bold">{stat.value}</div>
+   705→                  <div className="text-xs text-muted-foreground">{stat.label}</div>
+   706→                </div>
+   707→              </CardContent>
+   708→            </Card>
+   709→          </motion.div>
+   710→        ))}
+   711→      </div>
+   712→
+   713→      <Card>
+   714→        <CardContent className="p-0">
+   715→          <div className="overflow-x-auto">
+   716→            <Table>
+   717→              <TableHeader>
+   718→                <TableRow>
+   719→                  <TableHead>Recipient</TableHead>
+   720→                  <TableHead>Course</TableHead>
+   721→                  <TableHead>Certificate</TableHead>
+   722→                  <TableHead>Issued Date</TableHead>
+   723→                  <TableHead>Verification Code</TableHead>
+   724→                  <TableHead className="text-right">Actions</TableHead>
+   725→                </TableRow>
+   726→              </TableHeader>
+   727→              <TableBody>
+   728→                {filtered.length === 0 ? (
+   729→                  <TableRow>
+   730→                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+   731→                      No certificates found
+   732→                    </TableCell>
+   733→                  </TableRow>
+   734→                ) : (
+   735→                  filtered.map((cert, idx) => (
+   736→                    <motion.tr
+   737→                      key={cert.id}
+   738→                      initial={{ opacity: 0, y: 6 }}
+   739→                      animate={{ opacity: 1, y: 0 }}
+   740→                      transition={{ delay: idx * 0.05 }}
+   741→                      className="border-b transition-colors hover:bg-muted/50"
+   742→                    >
+   743→                      <TableCell>
+   744→                        <div className="flex items-center gap-2">
+   745→                          <div className="h-8 w-8 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center text-violet-700 dark:text-violet-400 text-xs font-bold">
+   746→                            {cert.recipientName.split(' ').map(n => n[0]).join('')}
+   747→                          </div>
+   748→                          <span className="font-medium text-sm">{cert.recipientName}</span>
+   749→                        </div>
+   750→                      </TableCell>
+   751→                      <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{cert.courseName}</TableCell>
+   752→                      <TableCell>
+   753→                        <Badge variant="outline" className="text-xs gap-1">
+   754→                          <Award className="h-3 w-3" /> {cert.certName}
+   755→                        </Badge>
+   756→                      </TableCell>
+   757→                      <TableCell className="text-sm text-muted-foreground">
+   758→                        {new Date(cert.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+   759→                      </TableCell>
+   760→                      <TableCell>
+   761→                        <code className="text-xs bg-muted px-2 py-1 rounded font-mono">{cert.verificationCode}</code>
+   762→                      </TableCell>
+   763→                      <TableCell className="text-right">
+   764→                        <div className="flex items-center justify-end gap-1">
+   765→                          <TooltipProvider>
+   766→                            <Tooltip>
+   767→                              <TooltipTrigger asChild>
+   768→                                <Button variant="ghost" size="icon" className="h-8 w-8">
+   769→                                  <Download className="h-4 w-4" />
+   770→                                </Button>
+   771→                              </TooltipTrigger>
+   772→                              <TooltipContent>Download PDF</TooltipContent>
+   773→                            </Tooltip>
+   774→                          </TooltipProvider>
+   775→                          <TooltipProvider>
+   776→                            <Tooltip>
+   777→                              <TooltipTrigger asChild>
+   778→                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600">
+   779→                                  <Ban className="h-4 w-4" />
+   780→                                </Button>
+   781→                              </TooltipTrigger>
+   782→                              <TooltipContent>Revoke</TooltipContent>
+   783→                            </Tooltip>
+   784→                          </TooltipProvider>
+   785→                        </div>
+   786→                      </TableCell>
+   787→                    </motion.tr>
+   788→                  ))
+   789→                )}
+   790→              </TableBody>
+   791→            </Table>
+   792→          </div>
+   793→        </CardContent>
+   794→      </Card>
+   795→    </div>
+   796→  );
+   797→}
+   798→
+   799→// ==========================
+   800→// MAIN COMPONENT
+   801→// ==========================
+   802→export function AdminCertificates() {
+   803→  const [templates, setTemplates] = useState<CertTemplate[]>(demoTemplates);
+   804→  const [activeTab, setActiveTab] = useState('templates');
+   805→  const [editingTemplate, setEditingTemplate] = useState<CertTemplate | null>(null);
+   806→
+   807→  const handleEdit = (t: CertTemplate) => {
+   808→    setEditingTemplate({ ...t, elements: t.elements.map(e => ({ ...e })) });
+   809→    setActiveTab('builder');
+   810→  };
+   811→
+   812→  const handleCreateNew = () => {
+   813→    const newTemplate: CertTemplate = {
+   814→      id: `cert-tpl-${Date.now()}`,
+   815→      tenantId: 'demo-tenant-1',
+   816→      name: '',
+   817→      template: 'custom',
+   818→      backgroundUrl: '',
+   819→      isActive: false,
+   820→      bg_color: '#fefefe',
+   821→      font_family: 'Georgia, serif',
+   822→      width: 800,
+   823→      height: 600,
+   824→      elements: [...defaultElements],
+   825→    };
+   826→    setEditingTemplate(newTemplate);
+   827→    setActiveTab('builder');
+   828→  };
+   829→
+   830→  const handleSave = (t: CertTemplate) => {
+   831→    const idx = templates.findIndex(x => x.id === t.id);
+   832→    if (idx >= 0) {
+   833→      const updated = [...templates];
+   834→      updated[idx] = t;
+   835→      setTemplates(updated);
+   836→    } else {
+   837→      setTemplates(prev => [...prev, t]);
+   838→    }
+   839→    setEditingTemplate(null);
+   840→    setActiveTab('templates');
+   841→  };
+   842→
+   843→  const handleBackFromBuilder = () => {
+   844→    setEditingTemplate(null);
+   845→    setActiveTab('templates');
+   846→  };
+   847→
+   848→  return (
+   849→    <div className="p-6">
+   850→      <Tabs value={activeTab} onValueChange={setActiveTab}>
+   851→        <TabsList className="mb-6">
+   852→          <TabsTrigger value="templates" className="gap-1.5">
+   853→            <Award className="h-4 w-4" /> Templates
+   854→          </TabsTrigger>
+   855→          <TabsTrigger value="builder" className="gap-1.5" disabled={!editingTemplate}>
+   856→            <Layout className="h-4 w-4" /> Builder
+   857→          </TabsTrigger>
+   858→          <TabsTrigger value="issued" className="gap-1.5">
+   859→            <FileText className="h-4 w-4" /> Issued
+   860→          </TabsTrigger>
+   861→        </TabsList>
+   862→
+   863→        <AnimatePresence mode="wait">
+   864→          <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
+   865→            {activeTab === 'templates' && (
+   866→              <TemplatesList templates={templates} onEdit={handleEdit} onCreateNew={handleCreateNew} />
+   867→            )}
+   868→            {activeTab === 'builder' && editingTemplate && (
+   869→              <CertificateBuilder template={editingTemplate} onBack={handleBackFromBuilder} onSave={handleSave} />
+   870→            )}
+   871→            {activeTab === 'issued' && (
+   872→              <IssuedCertificatesTable />
+   873→            )}
+   874→          </motion.div>
+   875→        </AnimatePresence>
+   876→      </Tabs>
+   877→    </div>
+   878→  );
+   879→}
+   880→

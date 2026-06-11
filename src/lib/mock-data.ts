@@ -504,6 +504,212 @@ export const leaderboardData = [
   { rank: 10, name: 'Nina Kovac', points: 1100, streak: 3, coursesCompleted: 1, avatar: '' },
 ];
 
+// ─── Course Review Data ────────────────────────────────────
+export interface CourseReview {
+  id: string;
+  courseId: string;
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  rating: number;
+  title: string;
+  content: string;
+  date: string;
+  helpfulCount: number;
+  isHelpful: boolean;
+  courseProgress: number;
+  isVerifiedPurchase: boolean;
+  tags: string[];
+  status: 'published' | 'flagged' | 'hidden';
+  instructorReply?: {
+    instructorName: string;
+    content: string;
+    date: string;
+  };
+  isOwnReview?: boolean;
+}
+
+export const reviewTags = [
+  'Great Content',
+  'Well Structured',
+  'Practical',
+  'Beginner Friendly',
+  'Advanced',
+  'Life Changing',
+] as const;
+
+export const courseReviews: CourseReview[] = [
+  {
+    id: 'rev-1', courseId: 'course-1', userId: 'user-2', userName: 'Emma Rodriguez', userAvatar: 'ER',
+    rating: 5, title: 'Absolutely Incredible Course!', content: 'This course completely transformed how I think about React architecture. The Server Components section alone was worth the investment. Sarah explains complex concepts in such a clear and engaging way that even advanced topics feel approachable. The hands-on projects really solidify the learning and I found myself immediately applying these patterns at work.',
+    date: '2024-10-14T10:30:00Z', helpfulCount: 24, isHelpful: false, courseProgress: 100, isVerifiedPurchase: true,
+    tags: ['Great Content', 'Life Changing', 'Well Structured'], status: 'published',
+    instructorReply: { instructorName: 'Sarah Mitchell', content: 'Thank you so much, Emma! It means the world to me that the course had such a positive impact. Your final project was outstanding!', date: '2024-10-15T08:00:00Z' },
+  },
+  {
+    id: 'rev-2', courseId: 'course-1', userId: 'user-1', userName: 'Mike Chen', userAvatar: 'MC',
+    rating: 5, title: 'Best React Course I\'ve Ever Taken', content: 'I\'ve taken multiple React courses over the years, and this one stands head and shoulders above the rest. The instructor explains complex concepts in a way that\'s easy to follow. The hands-on projects really solidify the learning. The TypeScript integration section was particularly valuable for my daily work.',
+    date: '2024-10-10T15:45:00Z', helpfulCount: 18, isHelpful: true, courseProgress: 85, isVerifiedPurchase: true,
+    tags: ['Great Content', 'Practical'], status: 'published',
+  },
+  {
+    id: 'rev-3', courseId: 'course-1', userId: 'user-6', userName: 'Priya Sharma', userAvatar: 'PS',
+    rating: 4, title: 'Great Content, Minor Gaps in Testing', content: 'Great content overall. The TypeScript patterns section was excellent and I learned a lot about the App Router architecture. Would have liked more content on testing patterns and CI/CD integration, but still very much worth the investment for any serious React developer.',
+    date: '2024-10-05T09:20:00Z', helpfulCount: 12, isHelpful: false, courseProgress: 72, isVerifiedPurchase: true,
+    tags: ['Well Structured', 'Advanced'], status: 'published',
+  },
+  {
+    id: 'rev-4', courseId: 'course-1', userId: 'user-7', userName: 'Alex Johnson', userAvatar: 'AJ',
+    rating: 5, title: 'Game-Changer for My Career', content: 'This course is a game-changer. I went from struggling with React concepts to building production apps confidently. The community support is amazing too. Within a month of completing this course, I landed a senior frontend role. The patterns taught here are exactly what companies are looking for.',
+    date: '2024-09-28T14:00:00Z', helpfulCount: 31, isHelpful: false, courseProgress: 100, isVerifiedPurchase: true,
+    tags: ['Life Changing', 'Practical', 'Great Content'], status: 'published',
+    instructorReply: { instructorName: 'Sarah Mitchell', content: 'Congratulations on the new role, Alex! That\'s exactly the kind of outcome I design the course for. Keep building amazing things!', date: '2024-09-29T10:00:00Z' },
+  },
+  {
+    id: 'rev-5', courseId: 'course-1', userId: 'user-8', userName: 'Tom Wilson', userAvatar: 'TW',
+    rating: 4, title: 'Comprehensive Deep Dive', content: 'Very comprehensive course. The App Router deep-dive was particularly helpful. Some sections could be a bit more beginner-friendly, but the depth is appreciated. The module on advanced patterns with TypeScript generics was eye-opening.',
+    date: '2024-09-20T11:30:00Z', helpfulCount: 8, isHelpful: false, courseProgress: 60, isVerifiedPurchase: true,
+    tags: ['Advanced', 'Well Structured'], status: 'published',
+  },
+  {
+    id: 'rev-6', courseId: 'course-2', userId: 'user-1', userName: 'Mike Chen', userAvatar: 'MC',
+    rating: 5, title: 'AI Development Made Accessible', content: 'This course demystified AI integration for me. The section on building autonomous agents was mind-blowing. Sarah breaks down complex concepts like vector databases and embeddings into digestible pieces. I\'ve already implemented RAG in my project at work!',
+    date: '2024-10-12T16:00:00Z', helpfulCount: 22, isHelpful: true, courseProgress: 100, isVerifiedPurchase: true,
+    tags: ['Life Changing', 'Practical', 'Great Content'], status: 'published',
+    instructorReply: { instructorName: 'Sarah Mitchell', content: 'So glad you found the RAG implementation useful, Mike! Your project was one of the best in the cohort.', date: '2024-10-13T09:00:00Z' },
+  },
+  {
+    id: 'rev-7', courseId: 'course-2', userId: 'user-3', userName: 'David Park', userAvatar: 'DP',
+    rating: 5, title: 'Essential for Modern Full-Stack', content: 'As an instructor myself, I appreciate the pedagogical approach here. Every concept is introduced with practical examples. The LLM integration patterns are production-ready and the prompt engineering section saved me weeks of trial and error.',
+    date: '2024-10-08T13:20:00Z', helpfulCount: 15, isHelpful: false, courseProgress: 90, isVerifiedPurchase: true,
+    tags: ['Practical', 'Well Structured', 'Advanced'], status: 'published',
+  },
+  {
+    id: 'rev-8', courseId: 'course-2', userId: 'user-9', userName: 'Jordan Lee', userAvatar: 'JL',
+    rating: 4, title: 'Solid AI Foundation', content: 'Great course for getting started with AI integration. The prompt engineering module was excellent and the hands-on labs are well designed. I wish there was more coverage of fine-tuning and training custom models, but as an integration-focused course, it delivers.',
+    date: '2024-10-01T10:45:00Z', helpfulCount: 9, isHelpful: false, courseProgress: 65, isVerifiedPurchase: true,
+    tags: ['Great Content', 'Beginner Friendly'], status: 'published',
+  },
+  {
+    id: 'rev-9', courseId: 'course-3', userId: 'user-7', userName: 'Alex Johnson', userAvatar: 'AJ',
+    rating: 5, title: 'FAANG-Level Preparation', content: 'This course is exactly what you need for system design interviews. The distributed systems patterns are explained with real-world examples from companies like Netflix and Uber. I aced my system design round at a top tech company after taking this course.',
+    date: '2024-10-11T08:30:00Z', helpfulCount: 28, isHelpful: true, courseProgress: 100, isVerifiedPurchase: true,
+    tags: ['Life Changing', 'Advanced', 'Practical'], status: 'published',
+  },
+  {
+    id: 'rev-10', courseId: 'course-3', userId: 'user-5', userName: 'Lisa Wang', userAvatar: 'LW',
+    rating: 4, title: 'Thorough but Demanding', content: 'Very thorough coverage of system design concepts. The microservices architecture section was outstanding. Fair warning: this course is intense. You need solid engineering fundamentals before diving in. The case studies are excellent and directly applicable to real interviews.',
+    date: '2024-09-25T17:15:00Z', helpfulCount: 14, isHelpful: false, courseProgress: 80, isVerifiedPurchase: true,
+    tags: ['Advanced', 'Well Structured'], status: 'published',
+  },
+  {
+    id: 'rev-11', courseId: 'course-4', userId: 'user-4', userName: 'Nina Kovac', userAvatar: 'NK',
+    rating: 5, title: 'Beautiful Visualizations Made Easy', content: 'I never thought I could create such stunning data visualizations. The D3.js sections are incredibly well-structured, and the Recharts integration patterns saved me so much time. My analytics dashboards at work now look absolutely professional.',
+    date: '2024-10-09T12:00:00Z', helpfulCount: 16, isHelpful: false, courseProgress: 100, isVerifiedPurchase: true,
+    tags: ['Great Content', 'Practical', 'Well Structured'], status: 'published',
+  },
+  {
+    id: 'rev-12', courseId: 'course-4', userId: 'user-8', userName: 'Tom Wilson', userAvatar: 'TW',
+    rating: 4, title: 'Great for Dashboard Builders', content: 'Solid course for anyone building analytics dashboards. The real-world datasets make the exercises feel authentic. Would love to see more on real-time data streaming visualizations in a future update.',
+    date: '2024-10-03T09:00:00Z', helpfulCount: 7, isHelpful: false, courseProgress: 55, isVerifiedPurchase: true,
+    tags: ['Practical', 'Beginner Friendly'], status: 'published',
+  },
+  {
+    id: 'rev-13', courseId: 'course-5', userId: 'user-9', userName: 'Jordan Lee', userAvatar: 'JL',
+    rating: 5, title: 'Design Thinking Transformed', content: 'As a developer, I was skeptical about a design course. But this changed my perspective entirely. The Figma workflows are practical and the design system creation section has improved my frontend work dramatically. I now collaborate much better with our design team.',
+    date: '2024-10-07T14:30:00Z', helpfulCount: 19, isHelpful: true, courseProgress: 100, isVerifiedPurchase: true,
+    tags: ['Life Changing', 'Beginner Friendly', 'Practical'], status: 'published',
+  },
+  {
+    id: 'rev-14', courseId: 'course-5', userId: 'user-6', userName: 'Priya Sharma', userAvatar: 'PS',
+    rating: 4, title: 'Good Introduction to UX/UI', content: 'A well-structured introduction to UX/UI principles. The Figma tutorials are clear and the design system module is valuable. I would have liked more advanced interaction design patterns, but as a beginner course, it covers the essentials thoroughly.',
+    date: '2024-09-30T16:45:00Z', helpfulCount: 10, isHelpful: false, courseProgress: 70, isVerifiedPurchase: true,
+    tags: ['Beginner Friendly', 'Well Structured'], status: 'published',
+  },
+  {
+    id: 'rev-15', courseId: 'course-6', userId: 'user-3', userName: 'David Park', userAvatar: 'DP',
+    rating: 5, title: 'DevOps Mastery Achieved', content: 'The Kubernetes and Docker sections are incredibly detailed. The CI/CD pipeline examples are production-ready and I\'ve already implemented several patterns from this course. The cloud architecture module covers AWS and GCP equally well.',
+    date: '2024-10-06T11:00:00Z', helpfulCount: 13, isHelpful: false, courseProgress: 88, isVerifiedPurchase: true,
+    tags: ['Advanced', 'Practical', 'Great Content'], status: 'published',
+  },
+  {
+    id: 'rev-16', courseId: 'course-1', userId: 'user-10', userName: 'Sam Taylor', userAvatar: 'ST',
+    rating: 3, title: 'Good but Needs Updates', content: 'The core content is strong, but some sections feel outdated with the rapid pace of React changes. The Server Components section needs an update for the latest patterns. Still, the foundational knowledge is solid and worth the time investment.',
+    date: '2024-09-15T08:00:00Z', helpfulCount: 5, isHelpful: false, courseProgress: 45, isVerifiedPurchase: true,
+    tags: ['Well Structured'], status: 'published',
+  },
+  {
+    id: 'rev-17', courseId: 'course-2', userId: 'user-10', userName: 'Sam Taylor', userAvatar: 'ST',
+    rating: 2, title: 'Not Enough Depth on Fine-Tuning', content: 'The course covers AI integration basics well, but I was expecting more on fine-tuning and training custom models. The prompt engineering section is good but feels like it only scratches the surface. Would not recommend for experienced ML practitioners.',
+    date: '2024-09-10T07:30:00Z', helpfulCount: 3, isHelpful: false, courseProgress: 30, isVerifiedPurchase: true,
+    tags: ['Beginner Friendly'], status: 'published',
+  },
+  {
+    id: 'rev-18', courseId: 'course-3', userId: 'user-11', userName: 'Chris Adams', userAvatar: 'CA',
+    rating: 1, title: 'Too Theoretical', content: 'I was expecting hands-on system design exercises but found the course too theoretical. The concepts are explained well but without practical implementation, it\'s hard to internalize. Needs more interactive workshops.',
+    date: '2024-08-20T19:00:00Z', helpfulCount: 2, isHelpful: false, courseProgress: 20, isVerifiedPurchase: false,
+    tags: [], status: 'flagged',
+  },
+  {
+    id: 'rev-19', courseId: 'course-1', userId: 'demo-learner-1', userName: 'You', userAvatar: 'YO',
+    rating: 5, title: 'Excellent Learning Experience', content: 'I\'m still working through this course but I can already tell it\'s one of the best investments I\'ve made in my education. The progression from fundamentals to advanced patterns is perfectly paced. Each lesson builds on the last in a way that makes complex topics feel natural.',
+    date: '2024-10-13T20:00:00Z', helpfulCount: 6, isHelpful: false, courseProgress: 68, isVerifiedPurchase: true,
+    tags: ['Great Content', 'Well Structured'], status: 'published', isOwnReview: true,
+  },
+  {
+    id: 'rev-20', courseId: 'course-6', userId: 'user-11', userName: 'Chris Adams', userAvatar: 'CA',
+    rating: 4, title: 'Solid Cloud Architecture Guide', content: 'Comprehensive coverage of cloud-native patterns. The Kubernetes section is particularly strong with real-world deployment examples. The multi-cloud approach covering both AWS and GCP is a smart differentiator for this course.',
+    date: '2024-09-18T13:00:00Z', helpfulCount: 8, isHelpful: false, courseProgress: 75, isVerifiedPurchase: true,
+    tags: ['Practical', 'Advanced'], status: 'published',
+  },
+];
+
+// Review rating distribution per course
+export const reviewRatingDistribution: Record<string, { stars: number; count: number; percentage: number }[]> = {
+  'course-1': [
+    { stars: 5, count: 186, percentage: 59.6 },
+    { stars: 4, count: 89, percentage: 28.5 },
+    { stars: 3, count: 24, percentage: 7.7 },
+    { stars: 2, count: 9, percentage: 2.9 },
+    { stars: 1, count: 4, percentage: 1.3 },
+  ],
+  'course-2': [
+    { stars: 5, count: 128, percentage: 64.6 },
+    { stars: 4, count: 45, percentage: 22.7 },
+    { stars: 3, count: 16, percentage: 8.1 },
+    { stars: 2, count: 6, percentage: 3.0 },
+    { stars: 1, count: 3, percentage: 1.5 },
+  ],
+  'course-3': [
+    { stars: 5, count: 98, percentage: 62.8 },
+    { stars: 4, count: 38, percentage: 24.4 },
+    { stars: 3, count: 12, percentage: 7.7 },
+    { stars: 2, count: 5, percentage: 3.2 },
+    { stars: 1, count: 3, percentage: 1.9 },
+  ],
+  'course-4': [
+    { stars: 5, count: 82, percentage: 57.7 },
+    { stars: 4, count: 38, percentage: 26.8 },
+    { stars: 3, count: 14, percentage: 9.9 },
+    { stars: 2, count: 5, percentage: 3.5 },
+    { stars: 1, count: 3, percentage: 2.1 },
+  ],
+  'course-5': [
+    { stars: 5, count: 112, percentage: 55.2 },
+    { stars: 4, count: 58, percentage: 28.6 },
+    { stars: 3, count: 22, percentage: 10.8 },
+    { stars: 2, count: 8, percentage: 3.9 },
+    { stars: 1, count: 3, percentage: 1.5 },
+  ],
+  'course-6': [
+    { stars: 5, count: 52, percentage: 58.4 },
+    { stars: 4, count: 22, percentage: 24.7 },
+    { stars: 3, count: 9, percentage: 10.1 },
+    { stars: 2, count: 4, percentage: 4.5 },
+    { stars: 1, count: 2, percentage: 2.2 },
+  ],
+};
+
 // Currency options for checkout
 export const supportedCurrencies = [
   { code: 'USD', symbol: '$', name: 'US Dollar', rate: 1, flag: '🇺🇸' },
@@ -624,4 +830,76 @@ export const demoCalendarEvents = [
     attendees: 12,
     maxAttendees: 20,
   },
+];
+
+// ============================================================
+// BULK OPERATIONS MOCK DATA
+// ============================================================
+
+export interface BulkUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: 'active' | 'inactive';
+  coursesEnrolled: number;
+  lastActive: string;
+}
+
+export const bulkUsers: BulkUser[] = [
+  { id: 'bu-1', name: 'Mike Chen', email: 'mike.chen@example.com', role: 'learner', status: 'active', coursesEnrolled: 3, lastActive: '2 hours ago' },
+  { id: 'bu-2', name: 'Emma Rodriguez', email: 'emma.r@example.com', role: 'learner', status: 'active', coursesEnrolled: 5, lastActive: '1 hour ago' },
+  { id: 'bu-3', name: 'David Park', email: 'david.park@example.com', role: 'instructor', status: 'active', coursesEnrolled: 2, lastActive: '30 min ago' },
+  { id: 'bu-4', name: 'Lisa Wang', email: 'lisa.wang@example.com', role: 'content_creator', status: 'active', coursesEnrolled: 4, lastActive: '3 hours ago' },
+  { id: 'bu-5', name: 'Jordan Lee', email: 'jordan.lee@example.com', role: 'learner', status: 'active', coursesEnrolled: 2, lastActive: '5 hours ago' },
+  { id: 'bu-6', name: 'Sophia Martinez', email: 'sophia.m@example.com', role: 'learner', status: 'active', coursesEnrolled: 6, lastActive: '15 min ago' },
+  { id: 'bu-7', name: 'Alex Kim', email: 'alex.kim@example.com', role: 'learner', status: 'inactive', coursesEnrolled: 1, lastActive: '2 weeks ago' },
+  { id: 'bu-8', name: 'Rachel Green', email: 'rachel.g@example.com', role: 'learner', status: 'active', coursesEnrolled: 3, lastActive: '4 hours ago' },
+  { id: 'bu-9', name: 'Tom Wilson', email: 'tom.w@example.com', role: 'learner', status: 'active', coursesEnrolled: 2, lastActive: '1 day ago' },
+  { id: 'bu-10', name: 'Priya Sharma', email: 'priya.s@example.com', role: 'instructor', status: 'active', coursesEnrolled: 1, lastActive: '6 hours ago' },
+  { id: 'bu-11', name: 'James Johnson', email: 'james.j@example.com', role: 'learner', status: 'active', coursesEnrolled: 4, lastActive: '45 min ago' },
+  { id: 'bu-12', name: 'Nina Patel', email: 'nina.p@example.com', role: 'learner', status: 'inactive', coursesEnrolled: 0, lastActive: '1 month ago' },
+  { id: 'bu-13', name: 'Carlos Ruiz', email: 'carlos.r@example.com', role: 'learner', status: 'active', coursesEnrolled: 3, lastActive: '2 days ago' },
+  { id: 'bu-14', name: 'Aisha Mohammed', email: 'aisha.m@example.com', role: 'learner', status: 'active', coursesEnrolled: 5, lastActive: '20 min ago' },
+  { id: 'bu-15', name: 'Ben Taylor', email: 'ben.t@example.com', role: 'content_creator', status: 'active', coursesEnrolled: 2, lastActive: '8 hours ago' },
+];
+
+export interface BulkEmailRecord {
+  id: string;
+  subject: string;
+  recipients: number;
+  sentDate: string;
+  openRate: number;
+  clickRate: number;
+  status: 'sent' | 'partial' | 'failed';
+}
+
+export const bulkEmailHistory: BulkEmailRecord[] = [
+  { id: 'email-1', subject: 'Welcome to NextGen Academy!', recipients: 245, sentDate: '2024-10-14', openRate: 68.2, clickRate: 24.5, status: 'sent' },
+  { id: 'email-2', subject: 'New Course Launch: DevOps & Cloud', recipients: 1890, sentDate: '2024-10-12', openRate: 52.1, clickRate: 18.3, status: 'sent' },
+  { id: 'email-3', subject: 'Your Weekly Learning Summary', recipients: 3245, sentDate: '2024-10-10', openRate: 41.7, clickRate: 12.8, status: 'sent' },
+  { id: 'email-4', subject: 'Course Completion Reminder', recipients: 156, sentDate: '2024-10-08', openRate: 59.3, clickRate: 31.2, status: 'partial' },
+  { id: 'email-5', subject: 'Special Offer: 30% Off All Courses', recipients: 4120, sentDate: '2024-10-05', openRate: 73.4, clickRate: 28.9, status: 'sent' },
+  { id: 'email-6', subject: 'Live Cohort Starting Tomorrow', recipients: 45, sentDate: '2024-10-03', openRate: 82.1, clickRate: 44.3, status: 'sent' },
+];
+
+export interface BulkCertificateRecord {
+  id: string;
+  userName: string;
+  email: string;
+  courseName: string;
+  issuedDate: string;
+  verificationCode: string;
+  status: 'issued' | 'revoked' | 'pending';
+}
+
+export const bulkCertificateRecords: BulkCertificateRecord[] = [
+  { id: 'cert-r-1', userName: 'Emma Rodriguez', email: 'emma.r@example.com', courseName: 'Advanced React & Next.js Masterclass', issuedDate: '2024-10-14', verificationCode: 'CERT-2024-001', status: 'issued' },
+  { id: 'cert-r-2', userName: 'Jordan Lee', email: 'jordan.lee@example.com', courseName: 'Data Visualization & Analytics', issuedDate: '2024-10-13', verificationCode: 'CERT-2024-002', status: 'issued' },
+  { id: 'cert-r-3', userName: 'Sophia Martinez', email: 'sophia.m@example.com', courseName: 'AI-Powered Full Stack Development', issuedDate: '2024-10-12', verificationCode: 'CERT-2024-003', status: 'issued' },
+  { id: 'cert-r-4', userName: 'Rachel Green', email: 'rachel.g@example.com', courseName: 'UX/UI Design Principles', issuedDate: '2024-10-11', verificationCode: 'CERT-2024-004', status: 'revoked' },
+  { id: 'cert-r-5', userName: 'James Johnson', email: 'james.j@example.com', courseName: 'System Design for Senior Engineers', issuedDate: '2024-10-10', verificationCode: 'CERT-2024-005', status: 'issued' },
+  { id: 'cert-r-6', userName: 'Aisha Mohammed', email: 'aisha.m@example.com', courseName: 'Advanced React & Next.js Masterclass', issuedDate: '2024-10-09', verificationCode: 'CERT-2024-006', status: 'issued' },
+  { id: 'cert-r-7', userName: 'Carlos Ruiz', email: 'carlos.r@example.com', courseName: 'DevOps & Cloud Architecture', issuedDate: '2024-10-08', verificationCode: 'CERT-2024-007', status: 'pending' },
+  { id: 'cert-r-8', userName: 'Mike Chen', email: 'mike.chen@example.com', courseName: 'AI-Powered Full Stack Development', issuedDate: '2024-10-07', verificationCode: 'CERT-2024-008', status: 'issued' },
 ];

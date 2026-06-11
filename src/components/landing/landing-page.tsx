@@ -45,60 +45,81 @@ import {
   TrendingUp,
   UserPlus,
   Trophy,
+  BookOpen,
+  Lightbulb,
+  Target,
+  Rocket,
+  Crown,
+  Minus,
 } from 'lucide-react';
 import { motion, AnimatePresence, useInView, useScroll, useTransform } from 'framer-motion';
 
 // ============================================================
-// Feature Definitions
+// Feature Definitions (with category and tooltip)
 // ============================================================
 const features = [
-  { icon: Sparkles, title: 'AI Content Generation', description: 'Generate course outlines, quizzes, and lesson content with advanced AI. Save hours of creation time.' },
-  { icon: Bot, title: 'AI Tutoring Assistant', description: '24/7 intelligent tutor that answers student questions, explains concepts, and adapts to learning styles.' },
-  { icon: Users, title: 'Integrated Community', description: 'Built-in discussions, live cohorts, and peer learning. No need for separate community tools.' },
-  { icon: ClipboardCheck, title: 'Assessment Engine', description: 'Quizzes, assignments, peer reviews, and coding challenges with auto-grading and analytics.' },
-  { icon: Award, title: 'Auto Certificates', description: 'Automatically issue branded certificates on course completion with verification codes.' },
-  { icon: Globe, title: 'Multi-Currency Checkout', description: 'Sell in 50+ currencies with localized pricing. Support for Stripe, PayPal, and more.' },
-  { icon: Palette, title: 'White-Label Branding', description: 'Full brand customization — colors, fonts, domain, and logos. Your platform, your identity.' },
-  { icon: BarChart3, title: 'Advanced Analytics', description: 'Deep insights into learner engagement, revenue trends, and completion funnels.' },
-  { icon: Video, title: 'Live Cohorts', description: 'Schedule and run live sessions with built-in video, chat, and attendance tracking.' },
-  { icon: Shield, title: 'RBAC Governance', description: 'Role-based access control for admins, instructors, creators, and learners.' },
-  { icon: DollarSign, title: 'Zero Transaction Fees', description: 'Keep 100% of your revenue. No hidden fees, no transaction taxes on any plan.' },
-  { icon: Languages, title: 'Global i18n', description: 'Multi-language support for global audiences. Localize your entire platform with ease.' },
+  { icon: Sparkles, title: 'AI Content Generation', description: 'Generate course outlines, quizzes, and lesson content with advanced AI. Save hours of creation time.', category: 'AI', featured: true, tooltip: 'Powered by GPT-4 with custom training on educational content' },
+  { icon: Bot, title: 'AI Tutoring Assistant', description: '24/7 intelligent tutor that answers student questions, explains concepts, and adapts to learning styles.', category: 'AI', featured: false, tooltip: 'Context-aware AI that references your specific course material' },
+  { icon: Users, title: 'Integrated Community', description: 'Built-in discussions, live cohorts, and peer learning. No need for separate community tools.', category: 'Community', featured: false, tooltip: 'Forums, threads, DMs, and live events all in one place' },
+  { icon: ClipboardCheck, title: 'Assessment Engine', description: 'Quizzes, assignments, peer reviews, and coding challenges with auto-grading and analytics.', category: 'Analytics', featured: false, tooltip: '15+ question types with AI-powered auto-grading' },
+  { icon: Award, title: 'Auto Certificates', description: 'Automatically issue branded certificates on course completion with verification codes.', category: 'Analytics', featured: false, tooltip: 'Customizable templates with QR code verification' },
+  { icon: Globe, title: 'Multi-Currency Checkout', description: 'Sell in 50+ currencies with localized pricing. Support for Stripe, PayPal, and more.', category: 'Commerce', featured: false, tooltip: 'Dynamic currency conversion with PPP pricing support' },
+  { icon: Palette, title: 'White-Label Branding', description: 'Full brand customization — colors, fonts, domain, and logos. Your platform, your identity.', category: 'Commerce', featured: false, tooltip: 'Custom CSS, domain mapping, and complete visual control' },
+  { icon: BarChart3, title: 'Advanced Analytics', description: 'Deep insights into learner engagement, revenue trends, and completion funnels.', category: 'Analytics', featured: false, tooltip: 'Real-time dashboards with exportable reports' },
+  { icon: Video, title: 'Live Cohorts', description: 'Schedule and run live sessions with built-in video, chat, and attendance tracking.', category: 'Community', featured: false, tooltip: 'HD video with breakout rooms and recording' },
+  { icon: Shield, title: 'RBAC Governance', description: 'Role-based access control for admins, instructors, creators, and learners.', category: 'Analytics', featured: false, tooltip: 'Granular permissions with audit trails' },
+  { icon: DollarSign, title: 'Zero Transaction Fees', description: 'Keep 100% of your revenue. No hidden fees, no transaction taxes on any plan.', category: 'Commerce', featured: false, tooltip: 'No processing fees, no hidden charges, ever' },
+  { icon: Languages, title: 'Global i18n', description: 'Multi-language support for global audiences. Localize your entire platform with ease.', category: 'Community', featured: false, tooltip: '40+ languages with automatic detection' },
 ];
 
 // ============================================================
-// Testimonials
+// Testimonials (with star ratings and role badges)
 // ============================================================
 const testimonials = [
   {
     name: 'Dr. Sarah Chen',
     role: 'CEO, TechAcademy',
+    company: 'TechAcademy',
     quote: 'NextGen LMS transformed our online education business. The AI tutoring alone increased student engagement by 40%. Zero transaction fees saved us over $15K in the first year.',
     avatar: 'SC',
+    rating: 5,
+    badge: 'Enterprise',
   },
   {
     name: 'Marcus Johnson',
     role: 'Course Creator, 50K+ Students',
+    company: 'Independent',
     quote: 'I switched from Kajabi and never looked back. The built-in community features and assessment engine are game-changers. My students love the interactive experience.',
     avatar: 'MJ',
+    rating: 5,
+    badge: 'Professional',
   },
   {
     name: 'Priya Sharma',
     role: 'Head of Learning, Fortune 500',
+    company: 'Fortune 500',
     quote: 'The white-label branding and SSO integration made it seamless to deploy across our organization. The analytics give us insights we never had before.',
     avatar: 'PS',
+    rating: 5,
+    badge: 'Enterprise',
   },
   {
     name: 'Alex Rivera',
     role: 'Solo Creator, $200K+ Revenue',
+    company: 'Independent',
     quote: 'As a solo creator, the AI content generation saves me 10+ hours per week. The zero transaction fees mean I keep more of what I earn. Absolute no-brainer.',
     avatar: 'AR',
+    rating: 5,
+    badge: 'Professional',
   },
   {
     name: 'Emma Thompson',
     role: 'Director, Online University',
+    company: 'Online University',
     quote: 'We migrated 200+ courses to NextGen LMS. The multi-currency checkout and certificate automation made scaling globally effortless. The support team is phenomenal.',
     avatar: 'ET',
+    rating: 5,
+    badge: 'Enterprise',
   },
 ];
 
@@ -243,6 +264,38 @@ function TypingText({ text, speed = 35, delay = 0 }: { text: string; speed?: num
 }
 
 // ============================================================
+// Rotating Text Component (for hero subtitle cycling)
+// ============================================================
+function RotatingText({ phrases, interval = 3000 }: { phrases: string[]; interval?: number }) {
+  const [index, setIndex] = useState(0);
+  const [direction, setDirection] = useState(1);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDirection(1);
+      setIndex((prev) => (prev + 1) % phrases.length);
+    }, interval);
+    return () => clearInterval(timer);
+  }, [phrases.length, interval]);
+
+  return (
+    <AnimatePresence mode="wait" custom={direction}>
+      <motion.span
+        key={phrases[index]}
+        custom={direction}
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: -20, opacity: 0 }}
+        transition={{ duration: 0.4, ease: 'easeInOut' }}
+        className="inline-block bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 bg-clip-text text-transparent font-semibold"
+      >
+        {phrases[index]}
+      </motion.span>
+    </AnimatePresence>
+  );
+}
+
+// ============================================================
 // Animated Grid Background
 // ============================================================
 function GridBackground() {
@@ -272,6 +325,80 @@ function GrainOverlay() {
         </filter>
         <rect width="100%" height="100%" filter="url(#grain)" />
       </svg>
+    </div>
+  );
+}
+
+// ============================================================
+// Constellation Particles — dots connected with lines
+// ============================================================
+const constellationData = Array.from({ length: 18 }, (_, i) => ({
+  id: i,
+  x: ((i * 17 + 5) % 95) + 2,
+  y: ((i * 23 + 11) % 90) + 5,
+  size: ((i * 3 + 2) % 3) + 2,
+  duration: 8 + ((i * 7 + 3) % 8),
+  delay: ((i * 5 + 1) % 6),
+  driftX: ((i * 13 % 7) - 3) * 8,
+  driftY: ((i * 11 % 5) - 2) * 6,
+}));
+
+// Pre-compute constellation lines (deterministic, no state needed)
+const constellationLines = constellationData.flatMap((p1, i) =>
+  constellationData.slice(i + 1).flatMap((p2) => {
+    const dx = p1.x - p2.x;
+    const dy = p1.y - p2.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 25) {
+      return [{ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, opacity: Math.max(0, 1 - dist / 25) * 0.15 }];
+    }
+    return [];
+  })
+);
+
+function ConstellationParticles() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {/* SVG lines layer */}
+      <svg className="absolute inset-0 w-full h-full">
+        {constellationLines.map((line, i) => (
+          <line
+            key={`line-${i}`}
+            x1={`${line.x1}%`}
+            y1={`${line.y1}%`}
+            x2={`${line.x2}%`}
+            y2={`${line.y2}%`}
+            stroke="currentColor"
+            strokeWidth="0.5"
+            className="text-emerald-500"
+            style={{ opacity: line.opacity }}
+          />
+        ))}
+      </svg>
+      {/* Dots layer */}
+      {constellationData.map((p) => (
+        <motion.div
+          key={p.id}
+          className="absolute rounded-full bg-emerald-400/30 shadow-[0_0_4px_rgba(52,211,153,0.3)]"
+          style={{
+            width: p.size,
+            height: p.size,
+            left: `${p.x}%`,
+            top: `${p.y}%`,
+          }}
+          animate={{
+            x: [0, p.driftX, 0],
+            y: [0, p.driftY, 0],
+            opacity: [0.3, 0.7, 0.3],
+          }}
+          transition={{
+            duration: p.duration,
+            repeat: Infinity,
+            delay: p.delay,
+            ease: 'easeInOut',
+          }}
+        />
+      ))}
     </div>
   );
 }
@@ -346,9 +473,24 @@ function ParallaxOrbs() {
 }
 
 // ============================================================
-// Floating Dashboard Mockup (Hero)
+// Floating Dashboard Mockup (Hero) — with 3D perspective tilt on mouse move
 // ============================================================
 function DashboardMockup() {
+  const mockupRef = useRef<HTMLDivElement>(null);
+  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!mockupRef.current) return;
+    const rect = mockupRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width - 0.5;
+    const y = (e.clientY - rect.top) / rect.height - 0.5;
+    setTilt({ rotateX: -y * 6, rotateY: x * 6 });
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setTilt({ rotateX: 0, rotateY: 0 });
+  }, []);
+
   return (
     <motion.div
       className="relative mx-auto mt-12 max-w-4xl"
@@ -361,67 +503,85 @@ function DashboardMockup() {
         transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
         className="relative"
       >
-        {/* Glow effect behind mockup */}
-        <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/20 via-violet-500/20 to-emerald-500/20 rounded-2xl blur-2xl" />
+        <div
+          ref={mockupRef}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          style={{
+            perspective: 1200,
+          }}
+        >
+          <motion.div
+            animate={{
+              rotateX: tilt.rotateX,
+              rotateY: tilt.rotateY,
+            }}
+            transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+            style={{ transformStyle: 'preserve-3d' }}
+          >
+            {/* Glow effect behind mockup */}
+            <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/20 via-violet-500/20 to-emerald-500/20 rounded-2xl blur-2xl" />
 
-        {/* Mockup Card */}
-        <div className="relative rounded-xl border border-border/60 bg-card/90 backdrop-blur-sm shadow-2xl overflow-hidden">
-          {/* Window chrome */}
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border/40 bg-muted/30">
-            <div className="flex gap-1.5">
-              <div className="h-3 w-3 rounded-full bg-red-400" />
-              <div className="h-3 w-3 rounded-full bg-yellow-400" />
-              <div className="h-3 w-3 rounded-full bg-green-400" />
-            </div>
-            <div className="flex-1 flex justify-center">
-              <div className="h-6 w-64 rounded-md bg-muted/60 flex items-center justify-center">
-                <span className="text-[10px] text-muted-foreground">academy.nextgen-lms.com/dashboard</span>
+            {/* Mockup Card */}
+            <div className="relative rounded-xl border border-border/60 bg-card/90 backdrop-blur-sm shadow-2xl overflow-hidden">
+              {/* Window chrome */}
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-border/40 bg-muted/30">
+                <div className="flex gap-1.5">
+                  <div className="h-3 w-3 rounded-full bg-red-400" />
+                  <div className="h-3 w-3 rounded-full bg-yellow-400" />
+                  <div className="h-3 w-3 rounded-full bg-green-400" />
+                </div>
+                <div className="flex-1 flex justify-center">
+                  <div className="h-6 w-64 rounded-md bg-muted/60 flex items-center justify-center">
+                    <span className="text-[10px] text-muted-foreground">academy.nextgen-lms.com/dashboard</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          {/* Dashboard content mockup */}
-          <div className="p-4 space-y-3">
-            {/* Sidebar + main */}
-            <div className="flex gap-3">
-              {/* Mini sidebar */}
-              <div className="w-12 shrink-0 space-y-2">
-                <div className="h-8 w-8 rounded-lg bg-emerald-500/20 mx-auto" />
-                {[1, 2, 3, 4].map((n) => (
-                  <div key={n} className="h-6 w-8 rounded bg-muted/60 mx-auto" />
-                ))}
-              </div>
-              {/* Main area */}
-              <div className="flex-1 space-y-3">
-                {/* KPI row */}
-                <div className="grid grid-cols-4 gap-2">
-                  {[
-                    { label: 'Revenue', value: '$47.8K', color: 'bg-emerald-500/10' },
-                    { label: 'Learners', value: '3,847', color: 'bg-violet-500/10' },
-                    { label: 'Completion', value: '72.4%', color: 'bg-amber-500/10' },
-                    { label: 'Engagement', value: '89.3%', color: 'bg-sky-500/10' },
-                  ].map((kpi) => (
-                    <div key={kpi.label} className={`rounded-lg ${kpi.color} p-2.5`}>
-                      <p className="text-[9px] text-muted-foreground">{kpi.label}</p>
-                      <p className="text-sm font-bold text-foreground">{kpi.value}</p>
+              {/* Dashboard content mockup */}
+              <div className="p-4 space-y-3">
+                {/* Sidebar + main */}
+                <div className="flex gap-3">
+                  {/* Mini sidebar */}
+                  <div className="w-12 shrink-0 space-y-2">
+                    <div className="h-8 w-8 rounded-lg bg-emerald-500/20 mx-auto" />
+                    {[1, 2, 3, 4].map((n) => (
+                      <div key={n} className="h-6 w-8 rounded bg-muted/60 mx-auto" />
+                    ))}
+                  </div>
+                  {/* Main area */}
+                  <div className="flex-1 space-y-3">
+                    {/* KPI row */}
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        { label: 'Revenue', value: '$47.8K', color: 'bg-emerald-500/10' },
+                        { label: 'Learners', value: '3,847', color: 'bg-violet-500/10' },
+                        { label: 'Completion', value: '72.4%', color: 'bg-amber-500/10' },
+                        { label: 'Engagement', value: '89.3%', color: 'bg-sky-500/10' },
+                      ].map((kpi) => (
+                        <div key={kpi.label} className={`rounded-lg ${kpi.color} p-2.5`}>
+                          <p className="text-[9px] text-muted-foreground">{kpi.label}</p>
+                          <p className="text-sm font-bold text-foreground">{kpi.value}</p>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-                {/* Chart area */}
-                <div className="h-20 rounded-lg bg-muted/30 border border-border/30 flex items-end p-2 gap-0.5">
-                  {[40, 65, 45, 80, 55, 90, 70, 85, 60, 95, 75, 88].map((h, i) => (
-                    <motion.div
-                      key={i}
-                      className="flex-1 rounded-t bg-gradient-to-t from-emerald-500 to-emerald-400"
-                      initial={{ height: 0 }}
-                      animate={{ height: `${h}%` }}
-                      transition={{ duration: 0.6, delay: 1 + i * 0.05, ease: 'easeOut' }}
-                    />
-                  ))}
+                    {/* Chart area */}
+                    <div className="h-20 rounded-lg bg-muted/30 border border-border/30 flex items-end p-2 gap-0.5">
+                      {[40, 65, 45, 80, 55, 90, 70, 85, 60, 95, 75, 88].map((h, i) => (
+                        <motion.div
+                          key={i}
+                          className="flex-1 rounded-t bg-gradient-to-t from-emerald-500 to-emerald-400"
+                          initial={{ height: 0 }}
+                          animate={{ height: `${h}%` }}
+                          transition={{ duration: 0.6, delay: 1 + i * 0.05, ease: 'easeOut' }}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       </motion.div>
     </motion.div>
@@ -562,7 +722,7 @@ function SavingsCalculator() {
   const animatedSavings = useAnimatedCounter(savings, 600);
 
   return (
-    <Card className="border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50/50 to-slate-50/50 dark:from-emerald-950/30 dark:to-slate-950/30">
+    <Card className="border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50/50 to-slate-50/50 dark:from-emerald-950/30 dark:to-slate-950/30 h-full">
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <DollarSign className="h-5 w-5 text-emerald-600" />
@@ -694,6 +854,15 @@ function GlowBorderCard({ children, highlighted }: { children: React.ReactNode; 
       />
       {/* Radial gradient glow behind popular card */}
       <div className="absolute -inset-8 rounded-3xl bg-gradient-radial from-emerald-500/15 via-emerald-500/5 to-transparent pointer-events-none" />
+      {/* Gradient shine sweep */}
+      <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+        <motion.div
+          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+          animate={{ x: ['-100%', '200%'] }}
+          transition={{ duration: 3, repeat: Infinity, ease: 'linear', repeatDelay: 4 }}
+          style={{ width: '50%' }}
+        />
+      </div>
       <div className="relative rounded-xl">{children}</div>
     </div>
   );
@@ -1188,7 +1357,7 @@ function CommunityPreview() {
 // ============================================================
 // Animated Star Rating
 // ============================================================
-function AnimatedStars({ delay = 0 }: { delay?: number }) {
+function AnimatedStars({ delay = 0, rating = 5 }: { delay?: number; rating?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true });
 
@@ -1201,7 +1370,7 @@ function AnimatedStars({ delay = 0 }: { delay?: number }) {
           animate={isInView ? { opacity: 1, scale: 1, rotate: 0 } : {}}
           transition={{ duration: 0.3, delay: delay + j * 0.08, ease: 'backOut' }}
         >
-          <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+          <Star className={`h-3.5 w-3.5 ${j < rating ? 'fill-amber-400 text-amber-400' : 'fill-none text-muted-foreground/30'}`} />
         </motion.div>
       ))}
     </div>
@@ -1227,7 +1396,7 @@ function DotPatternBackground() {
 }
 
 // ============================================================
-// Enhanced Testimonials Carousel
+// Enhanced Testimonials Carousel (with dots, animated quotes, role badges)
 // ============================================================
 function TestimonialCarousel() {
   const [current, setCurrent] = useState(0);
@@ -1280,7 +1449,7 @@ function TestimonialCarousel() {
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
-      {/* Desktop: show 3 at a time, mobile: 1 */}
+      {/* Desktop: show all at a time */}
       <div className="hidden lg:grid lg:grid-cols-3 gap-6">
         {testimonials.map((testimonial, i) => (
           <motion.div
@@ -1290,21 +1459,37 @@ function TestimonialCarousel() {
             transition={{ delay: i * 0.1 }}
             whileHover={{ y: -4, transition: { duration: 0.2 } }}
           >
-            <Card className="h-full border-border/60 hover:shadow-lg transition-shadow">
+            <Card className="h-full border-border/60 hover:shadow-lg transition-shadow bg-gradient-to-br from-white/80 to-emerald-50/30 dark:from-card dark:to-emerald-950/10">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 text-sm font-bold">
                     {testimonial.avatar}
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm font-semibold text-foreground">{testimonial.name}</p>
                     <p className="text-xs text-muted-foreground">{testimonial.role}</p>
                   </div>
+                  <Badge className={`text-[9px] px-1.5 py-0 ${
+                    testimonial.badge === 'Enterprise'
+                      ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'
+                      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                  }`}>
+                    {testimonial.badge}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent>
-                <AnimatedStars delay={i * 0.15} />
-                <p className="text-sm text-muted-foreground leading-relaxed">&ldquo;{testimonial.quote}&rdquo;</p>
+                <AnimatedStars delay={i * 0.15} rating={testimonial.rating} />
+                {/* Animated quote marks */}
+                <motion.span
+                  className="absolute top-3 right-4 text-4xl font-serif text-emerald-200 dark:text-emerald-800/40 select-none"
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: i * 0.1 + 0.3, duration: 0.5, ease: 'backOut' }}
+                >
+                  &ldquo;
+                </motion.span>
+                <p className="text-sm text-muted-foreground leading-relaxed relative z-10">&ldquo;{testimonial.quote}&rdquo;</p>
               </CardContent>
             </Card>
           </motion.div>
@@ -1313,7 +1498,7 @@ function TestimonialCarousel() {
 
       {/* Mobile: carousel with single testimonial */}
       <div className="lg:hidden">
-        <div className="relative overflow-hidden min-h-[260px]">
+        <div className="relative overflow-hidden min-h-[280px]">
           <AnimatePresence initial={false} custom={direction} mode="wait">
             <motion.div
               key={current}
@@ -1324,28 +1509,36 @@ function TestimonialCarousel() {
               exit="exit"
               transition={{ duration: 0.4, ease: 'easeInOut' }}
             >
-              <Card className="border-border/60">
+              <Card className="border-border/60 bg-gradient-to-br from-white/80 to-emerald-50/30 dark:from-card dark:to-emerald-950/10">
                 <CardHeader className="pb-3">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 text-sm font-bold">
                       {testimonials[current].avatar}
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <p className="text-sm font-semibold text-foreground">{testimonials[current].name}</p>
                       <p className="text-xs text-muted-foreground">{testimonials[current].role}</p>
                     </div>
+                    <Badge className={`text-[9px] px-1.5 py-0 ${
+                      testimonials[current].badge === 'Enterprise'
+                        ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'
+                        : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                    }`}>
+                      {testimonials[current].badge}
+                    </Badge>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <AnimatedStars delay={0.1} />
-                  <p className="text-sm text-muted-foreground leading-relaxed">&ldquo;{testimonials[current].quote}&rdquo;</p>
+                <CardContent className="relative">
+                  <AnimatedStars delay={0.1} rating={testimonials[current].rating} />
+                  <span className="absolute top-0 right-4 text-4xl font-serif text-emerald-200 dark:text-emerald-800/40 select-none">&ldquo;</span>
+                  <p className="text-sm text-muted-foreground leading-relaxed relative z-10">&ldquo;{testimonials[current].quote}&rdquo;</p>
                 </CardContent>
               </Card>
             </motion.div>
           </AnimatePresence>
         </div>
 
-        {/* Navigation */}
+        {/* Navigation with dots indicator */}
         <div className="flex items-center justify-center gap-4 mt-6">
           <button
             onClick={prev}
@@ -1536,13 +1729,310 @@ function PulsingIconContainer({ icon: Icon, index }: { icon: React.ElementType; 
 
   return (
     <motion.div
-      className={`relative h-10 w-10 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg`}
+      className={`relative h-10 w-10 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow`}
       animate={{ scale: [1, 1.05, 1] }}
       transition={{ duration: 3, repeat: Infinity, delay: index * 0.3, ease: 'easeInOut' }}
     >
       <Icon className="h-5 w-5 text-white" />
       <div className={`absolute inset-0 rounded-lg bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-40 blur-md transition-opacity duration-300`} />
     </motion.div>
+  );
+}
+
+// ============================================================
+// Category Badge Colors
+// ============================================================
+const categoryColors: Record<string, string> = {
+  AI: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+  Commerce: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+  Community: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  Analytics: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+};
+
+// ============================================================
+// Feature Tooltip
+// ============================================================
+function FeatureTooltip({ text }: { text: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative inline-block">
+      <button
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        className="h-4 w-4 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-[8px] ml-1 hover:bg-muted-foreground/20 transition-colors"
+        aria-label="More info"
+      >
+        ?
+      </button>
+      <AnimatePresence>
+        {show && (
+          <motion.div
+            initial={{ opacity: 0, y: 5, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 5, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-56 px-3 py-2 rounded-lg bg-popover border border-border shadow-lg text-xs text-popover-foreground"
+          >
+            {text}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-border" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ============================================================
+// Connecting Lines Between Features (Desktop)
+// ============================================================
+function ConnectingLines() {
+  return (
+    <div className="hidden lg:block absolute inset-0 pointer-events-none overflow-hidden">
+      <svg className="w-full h-full" style={{ opacity: 0.06 }}>
+        {/* Diagonal lines connecting feature grid cells */}
+        <line x1="33%" y1="25%" x2="66%" y2="50%" stroke="currentColor" strokeWidth="1" className="text-emerald-500" />
+        <line x1="66%" y1="25%" x2="33%" y2="50%" stroke="currentColor" strokeWidth="1" className="text-emerald-500" />
+        <line x1="33%" y1="50%" x2="66%" y2="75%" stroke="currentColor" strokeWidth="1" className="text-emerald-500" />
+        <line x1="66%" y1="50%" x2="33%" y2="75%" stroke="currentColor" strokeWidth="1" className="text-emerald-500" />
+      </svg>
+    </div>
+  );
+}
+
+// ============================================================
+// Animated Price Counter
+// ============================================================
+function AnimatedPrice({ target, isInView }: { target: number; isInView: boolean }) {
+  const [count, setCount] = useState(0);
+  const hasAnimated = useRef(false);
+
+  useEffect(() => {
+    if (!isInView || hasAnimated.current) return;
+    hasAnimated.current = true;
+
+    const duration = 1200;
+    const startTime = performance.now();
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.round(target * eased));
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }, [target, isInView]);
+
+  return <span>{count}</span>;
+}
+
+// ============================================================
+// Animated Checkmark (for comparison table)
+// ============================================================
+function AnimatedCheckmark({ delay = 0, isInView }: { delay?: number; isInView: boolean }) {
+  const [drawn, setDrawn] = useState(false);
+
+  useEffect(() => {
+    if (!isInView) return;
+    const timer = setTimeout(() => setDrawn(true), delay);
+    return () => clearTimeout(timer);
+  }, [delay, isInView]);
+
+  return (
+    <motion.svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      className="mx-auto"
+      initial={{ scale: 0 }}
+      animate={drawn ? { scale: 1 } : { scale: 0 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+    >
+      <motion.path
+        d="M3 8.5L6.5 12L13 4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        initial={{ pathLength: 0 }}
+        animate={drawn ? { pathLength: 1 } : { pathLength: 0 }}
+        transition={{ duration: 0.5, delay: delay / 1000, ease: 'easeOut' }}
+        className="text-emerald-500"
+      />
+    </motion.svg>
+  );
+}
+
+// ============================================================
+// Comparison Cell Helper (color-coded)
+// ============================================================
+function ComparisonCell({ value, isNextgen = false, isInView = false, rowIndex = 0 }: { value: string | boolean; isNextgen?: boolean; isInView?: boolean; rowIndex?: number }) {
+  if (typeof value === 'boolean') {
+    if (value) {
+      return <AnimatedCheckmark delay={rowIndex * 80} isInView={isInView} />;
+    }
+    return (
+      <motion.div
+        initial={{ scale: 0 }}
+        animate={isInView ? { scale: 1 } : { scale: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 20, delay: rowIndex * 0.05 }}
+      >
+        <X className="h-4 w-4 mx-auto text-red-400" />
+      </motion.div>
+    );
+  }
+  // String value — check for "Limited" or "Partial"
+  const isAmber = typeof value === 'string' && (value === 'Limited' || value === 'Partial' || value === 'Toxic mechanics');
+  return (
+    <motion.span
+      initial={{ opacity: 0 }}
+      animate={isInView ? { opacity: 1 } : { opacity: 0 }}
+      transition={{ delay: rowIndex * 0.05, duration: 0.3 }}
+      className={`text-xs font-medium ${
+        isNextgen ? 'text-emerald-700 dark:text-emerald-300' :
+        isAmber ? 'text-amber-600 dark:text-amber-400' :
+        'text-muted-foreground'
+      }`}
+    >
+      {value}
+    </motion.span>
+  );
+}
+
+// ============================================================
+// Feature Tooltip for Comparison Table
+// ============================================================
+function ComparisonFeatureTooltip({ text }: { text: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative inline-block ml-1">
+      <button
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        className="h-3.5 w-3.5 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-[7px] hover:bg-muted-foreground/20 transition-colors"
+        aria-label={`Info about ${text}`}
+      >
+        i
+      </button>
+      <AnimatePresence>
+        {show && (
+          <motion.div
+            initial={{ opacity: 0, y: 5, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 5, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="absolute bottom-full left-0 mb-2 z-50 w-52 px-3 py-2 rounded-lg bg-popover border border-border shadow-lg text-xs text-popover-foreground"
+          >
+            {text}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ============================================================
+// Countdown Timer (for CTA section)
+// ============================================================
+function CountdownTimer() {
+  const [timeLeft, setTimeLeft] = useState({ hours: 23, minutes: 45, seconds: 30 });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        let { hours, minutes, seconds } = prev;
+        seconds--;
+        if (seconds < 0) {
+          seconds = 59;
+          minutes--;
+        }
+        if (minutes < 0) {
+          minutes = 59;
+          hours--;
+        }
+        if (hours < 0) {
+          hours = 23;
+          minutes = 59;
+          seconds = 59;
+        }
+        return { hours, minutes, seconds };
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const pad = (n: number) => n.toString().padStart(2, '0');
+
+  return (
+    <div className="flex items-center justify-center gap-2 mt-6">
+      <span className="text-sm text-slate-400">Special offer ends in:</span>
+      <div className="flex gap-1">
+        {[
+          { value: pad(timeLeft.hours), label: 'h' },
+          { value: pad(timeLeft.minutes), label: 'm' },
+          { value: pad(timeLeft.seconds), label: 's' },
+        ].map((unit, i) => (
+          <div key={unit.label} className="flex items-center gap-1">
+            <motion.div
+              className="bg-white/10 rounded-md px-2 py-1 min-w-[32px] text-center"
+              key={`${unit.label}-${unit.value}`}
+              initial={{ y: -4, opacity: 0.5 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.2 }}
+            >
+              <span className="text-lg font-bold text-white font-mono">{unit.value}</span>
+              <span className="text-[10px] text-slate-400 ml-0.5">{unit.label}</span>
+            </motion.div>
+            {i < 2 && <span className="text-white/40 font-bold">:</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Social Proof Animated Counter
+// ============================================================
+function SocialProofCounter() {
+  const ref = useRef<HTMLDivElement>(null);
+  const isInView = useInView(ref, { once: true });
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    if (!isInView) return;
+    const target = 10000;
+    const duration = 2000;
+    const startTime = performance.now();
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.round(target * eased));
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }, [isInView]);
+
+  return (
+    <div ref={ref} className="flex items-center justify-center gap-2 mt-4">
+      <div className="flex -space-x-1.5">
+        {['bg-emerald-500', 'bg-violet-500', 'bg-amber-500', 'bg-sky-500'].map((color, i) => (
+          <div key={i} className={`h-5 w-5 rounded-full ${color} border border-white/20`} />
+        ))}
+      </div>
+      <p className="text-sm text-slate-300">
+        Join <span className="font-bold text-white">{count.toLocaleString()}+</span> creators
+      </p>
+    </div>
   );
 }
 
@@ -1597,6 +2087,15 @@ export function LandingPage() {
   const [showAllFeatures, setShowAllFeatures] = useState(false);
   const [isAnnual, setIsAnnual] = useState(false);
   const [email, setEmail] = useState('');
+  const [subscribed, setSubscribed] = useState(false);
+
+  // Pricing section in-view for animated counters
+  const pricingRef = useRef<HTMLDivElement>(null);
+  const pricingInView = useInView(pricingRef, { once: true, margin: '-100px' });
+
+  // Comparison section in-view for animated checkmarks
+  const comparisonRef = useRef<HTMLDivElement>(null);
+  const comparisonInView = useInView(comparisonRef, { once: true, margin: '-50px' });
 
   const scrollTo = useCallback((id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
@@ -1689,6 +2188,9 @@ export function LandingPage() {
           {/* Grid background */}
           <GridBackground />
 
+          {/* Constellation particles (dots + lines) */}
+          <ConstellationParticles />
+
           {/* Floating particles */}
           <FloatingParticles />
 
@@ -1702,13 +2204,30 @@ export function LandingPage() {
               variants={staggerContainer}
             >
               <motion.div variants={fadeInUp}>
-                <Badge variant="secondary" className="mb-6 px-4 py-1.5 text-sm font-medium bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
+                {/* Launching v3.0 floating badge with pulse */}
+                <motion.div
+                  className="inline-flex items-center gap-2 mb-4"
+                  animate={{ y: [0, -3, 0] }}
+                  transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <Badge variant="secondary" className="px-4 py-1.5 text-sm font-medium bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800 relative overflow-hidden">
+                    <motion.div
+                      className="absolute inset-0 bg-emerald-400/20"
+                      animate={{ opacity: [0, 0.5, 0], scale: [0.95, 1.05, 0.95] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                    <Rocket className="h-3.5 w-3.5 mr-1.5 relative z-10" />
+                    <span className="relative z-10">Launching v3.0</span>
+                  </Badge>
+                </motion.div>
+
+                <Badge variant="secondary" className="mb-2 px-4 py-1.5 text-sm font-medium bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
                   <Zap className="h-3.5 w-3.5 mr-1.5" />
                   Now with AI-Powered Course Generation
                 </Badge>
               </motion.div>
 
-              {/* Hero heading with glowing gradient pulse behind it */}
+              {/* Hero heading with rotating text */}
               <div className="relative inline-block">
                 {/* Glowing pulse behind heading */}
                 <motion.div
@@ -1724,9 +2243,8 @@ export function LandingPage() {
                   variants={fadeInUp}
                   className="relative text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-foreground max-w-5xl mx-auto leading-[1.1]"
                 >
-                  AI-Powered Architecture.{' '}
-                  <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Integrated Communities.</span>{' '}
-                  Zero Transaction Taxation.
+                  <RotatingText phrases={['AI-Powered Architecture', 'Integrated Communities', 'Zero Transaction Fees']} />{' '}
+                  <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">for Modern Learning.</span>
                 </motion.h1>
               </div>
 
@@ -1799,7 +2317,7 @@ export function LandingPage() {
               </motion.div>
             </motion.div>
 
-            {/* Floating Dashboard Mockup */}
+            {/* Floating Dashboard Mockup with 3D tilt */}
             <DashboardMockup />
           </div>
         </section>
@@ -1814,6 +2332,9 @@ export function LandingPage() {
         <section id="features" className="py-20 sm:py-28 bg-muted/30 relative">
           {/* Mesh gradient background */}
           <MeshGradientBackground />
+
+          {/* Connecting lines between features */}
+          <ConnectingLines />
 
           <motion.div
             initial="hidden"
@@ -1857,8 +2378,23 @@ export function LandingPage() {
                               {/* Gradient overlay on hover */}
                               <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-r from-emerald-500/5 via-transparent to-violet-500/5 pointer-events-none" />
                               <CardHeader className="pb-3 relative">
-                                <PulsingIconContainer icon={Icon} index={idx} />
-                                <CardTitle className="text-base font-semibold mt-2">{feature.title}</CardTitle>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <PulsingIconContainer icon={Icon} index={idx} />
+                                  {/* Category badge */}
+                                  <Badge className={`text-[9px] px-1.5 py-0 ${categoryColors[feature.category] || 'bg-muted text-muted-foreground'}`}>
+                                    {feature.category}
+                                  </Badge>
+                                  {/* Featured badge */}
+                                  {feature.featured && (
+                                    <Badge className="text-[9px] px-1.5 py-0 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 gap-0.5">
+                                      <Trophy className="h-2.5 w-2.5" /> Featured
+                                    </Badge>
+                                  )}
+                                </div>
+                                <CardTitle className="text-base font-semibold mt-2 flex items-center">
+                                  {feature.title}
+                                  <FeatureTooltip text={feature.tooltip} />
+                                </CardTitle>
                               </CardHeader>
                               <CardContent className="relative">
                                 <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
@@ -1906,7 +2442,7 @@ export function LandingPage() {
         <LiveDashboardPreview />
 
         {/* ============ PRICING SECTION ============ */}
-        <section id="pricing" className="py-20 sm:py-28">
+        <section id="pricing" ref={pricingRef} className="py-20 sm:py-28">
           <motion.div
             initial="hidden"
             whileInView="visible"
@@ -1946,7 +2482,7 @@ export function LandingPage() {
                   <span className={`text-sm font-medium ${isAnnual ? 'text-foreground' : 'text-muted-foreground'}`}>
                     Annual
                     <Badge className="ml-1.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-[10px] px-1.5 py-0 relative">
-                      2 months free
+                      Save 17%
                       <SparkleParticles />
                     </Badge>
                   </span>
@@ -1974,14 +2510,29 @@ export function LandingPage() {
                     >
                       {pricingPlans.map((plan) => {
                         const annualPrice = isAnnual ? Math.round(plan.price * 10 / 12) : plan.price;
+                        const savingsPercent = isAnnual ? Math.round((1 - annualPrice / plan.price) * 100) : 0;
                         return (
                           <motion.div key={plan.id} variants={fadeInUp} whileHover={{ scale: 1.03, y: -4 }} transition={{ duration: 0.2 }}>
                             <GlowBorderCard highlighted={plan.highlighted}>
                               <Card className={`h-full relative ${plan.highlighted ? 'border-emerald-500 border-2 shadow-xl z-10 bg-card' : 'border-border/60'}`}>
                                 {plan.highlighted && (
                                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                                    <Badge className="bg-emerald-600 text-white hover:bg-emerald-700 px-3 py-0.5">
-                                      Most Popular
+                                    {/* Floating ribbon */}
+                                    <motion.div
+                                      animate={{ y: [0, -2, 0] }}
+                                      transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                                    >
+                                      <Badge className="bg-emerald-600 text-white hover:bg-emerald-700 px-4 py-0.5 shadow-lg shadow-emerald-500/30">
+                                        <Crown className="h-3 w-3 mr-1" /> Most Popular
+                                      </Badge>
+                                    </motion.div>
+                                  </div>
+                                )}
+                                {/* Save X% badge on annual */}
+                                {isAnnual && savingsPercent > 0 && (
+                                  <div className="absolute top-3 right-3">
+                                    <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 text-[10px] px-1.5 py-0">
+                                      Save {savingsPercent}%
                                     </Badge>
                                   </div>
                                 )}
@@ -1989,14 +2540,16 @@ export function LandingPage() {
                                   <CardTitle className="text-lg">{plan.name}</CardTitle>
                                   <CardDescription className="text-sm min-h-[40px]">{plan.description}</CardDescription>
                                   <div className="mt-4">
-                                    <span className="text-4xl font-bold text-foreground">${annualPrice}</span>
+                                    <span className="text-4xl font-bold text-foreground">
+                                      ${pricingInView ? <AnimatedPrice target={annualPrice} isInView={pricingInView} /> : annualPrice}
+                                    </span>
                                     <span className="text-muted-foreground">{isAnnual ? '/mo (billed annually)' : plan.period}</span>
                                   </div>
                                 </CardHeader>
                                 <CardContent className="pb-2">
                                   <ul className="space-y-3">
                                     {plan.features.map((feature) => (
-                                      <li key={feature} className="flex items-start gap-2.5">
+                                      <li key={feature} className="flex items-start gap-2.5 group/feature">
                                         <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
                                         <span className="text-sm text-muted-foreground">{feature}</span>
                                       </li>
@@ -2040,7 +2593,7 @@ export function LandingPage() {
         <CommunityPreview />
 
         {/* ============ COMPETITOR COMPARISON ============ */}
-        <section id="comparison" className="py-20 sm:py-28">
+        <section id="comparison" ref={comparisonRef} className="py-20 sm:py-28">
           <motion.div
             initial="hidden"
             whileInView="visible"
@@ -2075,8 +2628,14 @@ export function LandingPage() {
                   <thead>
                     <tr className="border-b border-border bg-muted/50">
                       <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Feature</th>
-                      <th className="text-center py-4 px-4 text-sm font-semibold bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                      <th className="text-center py-4 px-4 text-sm font-semibold bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 relative">
                         NextGen
+                        {/* Winner badge */}
+                        <div className="absolute -top-0.5 right-2">
+                          <Badge className="text-[8px] px-1 py-0 bg-emerald-600 text-white">
+                            <Trophy className="h-2 w-2 mr-0.5" /> Winner
+                          </Badge>
+                        </div>
                       </th>
                       <th className="text-center py-4 px-4 text-sm font-semibold text-muted-foreground">Kajabi</th>
                       <th className="text-center py-4 px-4 text-sm font-semibold text-muted-foreground">Teachable</th>
@@ -2086,16 +2645,25 @@ export function LandingPage() {
                   </thead>
                   <tbody>
                     {competitorComparison.map((row, i) => (
-                      <tr key={row.feature} className={i % 2 === 0 ? 'bg-card' : 'bg-muted/20'}>
-                        <td className="py-3 px-4 text-sm font-medium text-foreground">{row.feature}</td>
-                        <td className="py-3 px-4 text-center bg-emerald-50/50 dark:bg-emerald-950/30">
-                          <ComparisonCell value={row.nextgen} isNextgen />
+                      <motion.tr
+                        key={row.feature}
+                        className={`${i % 2 === 0 ? 'bg-card' : 'bg-muted/20'} hover:bg-muted/40 transition-colors`}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={comparisonInView ? { opacity: 1, x: 0 } : {}}
+                        transition={{ duration: 0.3, delay: i * 0.05 }}
+                      >
+                        <td className="py-3 px-4 text-sm font-medium text-foreground flex items-center">
+                          {row.feature}
+                          <ComparisonFeatureTooltip text={`Compare ${row.feature} across platforms`} />
                         </td>
-                        <td className="py-3 px-4 text-center"><ComparisonCell value={row.kajabi} /></td>
-                        <td className="py-3 px-4 text-center"><ComparisonCell value={row.teachable} /></td>
-                        <td className="py-3 px-4 text-center"><ComparisonCell value={row.skool} /></td>
-                        <td className="py-3 px-4 text-center"><ComparisonCell value={row.mightyNetworks} /></td>
-                      </tr>
+                        <td className="py-3 px-4 text-center bg-emerald-50/50 dark:bg-emerald-950/30">
+                          <ComparisonCell value={row.nextgen} isNextgen isInView={comparisonInView} rowIndex={i} />
+                        </td>
+                        <td className="py-3 px-4 text-center"><ComparisonCell value={row.kajabi} isInView={comparisonInView} rowIndex={i} /></td>
+                        <td className="py-3 px-4 text-center"><ComparisonCell value={row.teachable} isInView={comparisonInView} rowIndex={i} /></td>
+                        <td className="py-3 px-4 text-center"><ComparisonCell value={row.skool} isInView={comparisonInView} rowIndex={i} /></td>
+                        <td className="py-3 px-4 text-center"><ComparisonCell value={row.mightyNetworks} isInView={comparisonInView} rowIndex={i} /></td>
+                      </motion.tr>
                     ))}
                   </tbody>
                 </table>
@@ -2227,9 +2795,20 @@ export function LandingPage() {
               animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.5, 0.3] }}
               transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
             />
+            {/* Additional flowing mesh gradients */}
+            <motion.div
+              className="absolute top-[20%] left-[30%] h-[300px] w-[300px] rounded-full bg-emerald-600/8 blur-3xl"
+              animate={{ x: [0, 40, 0], y: [0, -30, 0], scale: [1, 1.2, 1] }}
+              transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <motion.div
+              className="absolute bottom-[10%] right-[20%] h-[250px] w-[250px] rounded-full bg-teal-500/6 blur-3xl"
+              animate={{ x: [0, -30, 0], y: [0, 20, 0], scale: [1, 1.15, 1] }}
+              transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
+            />
           </div>
 
-          {/* Floating geometric shapes with parallax */}
+          {/* Floating geometric shapes with learning-related icons */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             {/* Circles */}
             <motion.div
@@ -2247,6 +2826,35 @@ export function LandingPage() {
               animate={{ y: [0, -25, 0], x: [0, 10, 0] }}
               transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
             />
+            {/* Floating learning icons */}
+            <motion.div
+              className="absolute top-[15%] left-[25%] text-emerald-400/10"
+              animate={{ y: [0, -15, 0], rotate: [0, 10, 0] }}
+              transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <BookOpen className="h-8 w-8" />
+            </motion.div>
+            <motion.div
+              className="absolute top-[40%] left-[8%] text-violet-400/10"
+              animate={{ y: [0, 12, 0], x: [0, -8, 0] }}
+              transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <Lightbulb className="h-6 w-6" />
+            </motion.div>
+            <motion.div
+              className="absolute bottom-[25%] right-[10%] text-emerald-400/10"
+              animate={{ y: [0, -18, 0], rotate: [0, -15, 0] }}
+              transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <Target className="h-7 w-7" />
+            </motion.div>
+            <motion.div
+              className="absolute bottom-[15%] left-[15%] text-amber-400/8"
+              animate={{ y: [0, 10, 0], x: [0, 12, 0] }}
+              transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <GraduationCap className="h-8 w-8" />
+            </motion.div>
             {/* Squares */}
             <motion.div
               className="absolute bottom-[20%] left-[20%] h-10 w-10 rounded-sm border border-violet-500/10 rotate-45"
@@ -2291,6 +2899,15 @@ export function LandingPage() {
             <motion.p variants={fadeInUp} className="mt-6 text-lg text-slate-300 max-w-2xl mx-auto">
               Join thousands of creators who are building profitable, engaging learning experiences with zero transaction fees.
             </motion.p>
+
+            {/* Countdown Timer */}
+            <motion.div variants={fadeInUp}>
+              <CountdownTimer />
+            </motion.div>
+
+            {/* Social proof counter */}
+            <SocialProofCounter />
+
             <motion.div variants={fadeInUp} className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
               <motion.div
                 whileHover={{ scale: 1.05 }}
@@ -2320,7 +2937,10 @@ export function LandingPage() {
       </main>
 
       {/* ============ FOOTER ============ */}
-      <footer className="border-t border-border bg-card mt-auto">
+      <footer className="border-t border-border bg-card mt-auto relative">
+        {/* Gradient top border */}
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
           {/* Trusted by teams */}
           <div className="mb-10 text-center">
@@ -2351,34 +2971,53 @@ export function LandingPage() {
               <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
                 The next-generation learning management system for creators, educators, and organizations. AI-powered, community-integrated, and zero transaction fees.
               </p>
+              {/* Social media icons with hover animations */}
               <div className="flex gap-3 mt-4">
-                {[Twitter, Linkedin, Github, Youtube].map((Icon, i) => (
-                  <button
+                {[
+                  { Icon: Twitter, hoverColor: 'hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/40' },
+                  { Icon: Linkedin, hoverColor: 'hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40' },
+                  { Icon: Github, hoverColor: 'hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800' },
+                  { Icon: Youtube, hoverColor: 'hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40' },
+                ].map(({ Icon, hoverColor }, i) => (
+                  <motion.button
                     key={i}
-                    className="h-9 w-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    className={`h-9 w-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground transition-colors ${hoverColor}`}
+                    whileHover={{ scale: 1.15, rotate: 5 }}
+                    whileTap={{ scale: 0.95 }}
                     aria-label="Social media"
                   >
                     <Icon className="h-4 w-4" />
-                  </button>
+                  </motion.button>
                 ))}
               </div>
 
               {/* Newsletter Signup */}
               <div className="mt-6">
                 <p className="text-sm font-medium text-foreground mb-2">Stay updated</p>
-                <div className="flex gap-2 max-w-sm">
-                  <Input
-                    type="email"
-                    placeholder="Enter your email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="h-9 text-sm"
-                  />
-                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 gap-1.5">
-                    <Mail className="h-3.5 w-3.5" />
-                    Subscribe
-                  </Button>
-                </div>
+                {subscribed ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400"
+                  >
+                    <Check className="h-4 w-4" />
+                    <span>Thanks for subscribing!</span>
+                  </motion.div>
+                ) : (
+                  <div className="flex gap-2 max-w-sm">
+                    <Input
+                      type="email"
+                      placeholder="Enter your email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="h-9 text-sm"
+                    />
+                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 gap-1.5" onClick={() => { if (email) setSubscribed(true); }}>
+                      <Mail className="h-3.5 w-3.5" />
+                      Subscribe
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2431,23 +3070,5 @@ export function LandingPage() {
       {/* ============ BACK TO TOP BUTTON ============ */}
       <BackToTopButton />
     </div>
-  );
-}
-
-// ============================================================
-// Comparison Cell Helper
-// ============================================================
-function ComparisonCell({ value, isNextgen = false }: { value: string | boolean; isNextgen?: boolean }) {
-  if (typeof value === 'boolean') {
-    return value ? (
-      <Check className={`h-4 w-4 mx-auto ${isNextgen ? 'text-emerald-600 dark:text-emerald-400' : 'text-emerald-500'}`} />
-    ) : (
-      <X className="h-4 w-4 mx-auto text-red-400" />
-    );
-  }
-  return (
-    <span className={`text-xs font-medium ${isNextgen ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground'}`}>
-      {value}
-    </span>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -122,10 +122,14 @@ import {
   FolderDown,
   Server,
   BookOpen,
+  ArrowRight,
+  Filter,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAppStore, type NotificationCategory, type DigestFrequency } from '@/store/app-store';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
+import { Slider } from '@/components/ui/slider';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -143,6 +147,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import type {
+  ExportDataSource,
+  ExportFormat,
+  ExportDateRange,
+  ExportColumn,
+  ExportSummary,
+  ImportValidationResult,
+  ImportResult,
+  ColumnMapping,
+} from '@/types';
 
 // ============================================================
 // Tab 1: General Settings
@@ -3416,94 +3430,72 @@ function ApiKeysSettings() {
 }
 
 // ============================================================
-// Tab 10: Notification Preferences
+// Tab 10: Notification Preferences (Enhanced)
 // ============================================================
 
-interface NotificationToggle {
-  id: string;
-  label: string;
-  description: string;
-  enabled: boolean;
-}
-
-interface NotificationChannel {
-  id: string;
-  label: string;
-  icon: React.ElementType;
-  enabled: boolean;
-  frequency?: string;
-  sound?: boolean;
-  premium?: boolean;
-}
+const CATEGORY_LABELS: Record<NotificationCategory, { label: string; icon: React.ElementType; description: string }> = {
+  enrollments: { label: 'Enrollments', icon: Users, description: 'New student enrollments' },
+  completions: { label: 'Completions', icon: CheckCircle2, description: 'Course completions & milestones' },
+  assessments: { label: 'Assessments', icon: FileText, description: 'Quiz & assignment submissions' },
+  community: { label: 'Community', icon: MessageSquare, description: 'Discussions, mentions & replies' },
+  system: { label: 'System', icon: Server, description: 'Platform updates & maintenance' },
+  cohorts: { label: 'Cohorts', icon: Calendar, description: 'Live cohort reminders & updates' },
+};
 
 function NotificationPreferences() {
-  // Email notification preferences
-  const [emailToggles, setEmailToggles] = useState<NotificationToggle[]>([
-    { id: 'enrollment', label: 'New Enrollment Notifications', description: 'Get notified when a student enrolls in a course', enabled: true },
-    { id: 'completion', label: 'Course Completion Notifications', description: 'Receive alerts when students complete courses', enabled: true },
-    { id: 'payment', label: 'Payment & Receipt Notifications', description: 'Get notified about payments, refunds, and receipts', enabled: true },
-    { id: 'community', label: 'Community Activity', description: 'Mentions, replies, and comments on your posts', enabled: false },
-    { id: 'assessment', label: 'Assessment Submissions', description: 'Notifications when students submit assessments', enabled: true },
-    { id: 'cohort-15', label: 'Live Cohort Reminders (15 min)', description: 'Reminder 15 minutes before a live cohort starts', enabled: true },
-    { id: 'cohort-1h', label: 'Live Cohort Reminders (1 hour)', description: 'Reminder 1 hour before a live cohort starts', enabled: true },
-    { id: 'cohort-1d', label: 'Live Cohort Reminders (1 day)', description: 'Reminder 1 day before a live cohort starts', enabled: false },
-    { id: 'weekly-digest', label: 'Weekly Digest Email', description: 'A weekly summary of platform activity and metrics', enabled: true },
-    { id: 'monthly-analytics', label: 'Monthly Analytics Report', description: 'Monthly report on platform performance and growth', enabled: false },
-    { id: 'platform-updates', label: 'Platform Updates & Announcements', description: 'Stay informed about new features and maintenance', enabled: true },
-  ]);
+  const { notificationPreferences, updateNotificationPreferences } = useAppStore();
+  const prefs = notificationPreferences;
 
-  // Push notification preferences
-  const [pushToggles, setPushToggles] = useState<NotificationToggle[]>([
-    { id: 'push-enrollment', label: 'Enrollment Alerts', description: 'Push notification for new enrollments', enabled: true },
-    { id: 'push-cohort', label: 'Cohort Starting Soon', description: 'Push notification when live cohorts are about to start', enabled: true },
-    { id: 'push-message', label: 'Direct Messages', description: 'Push notification for new direct messages', enabled: true },
-    { id: 'push-assessment', label: 'Assessment Deadlines', description: 'Push notification for upcoming assessment deadlines', enabled: false },
-    { id: 'push-payment', label: 'Payment Alerts', description: 'Push notification for new payments', enabled: true },
-  ]);
+  // Master channel toggles
+  const [emailMaster, setEmailMaster] = useState(true);
+  const [pushMaster, setPushMaster] = useState(true);
+  const [inAppMaster, setInAppMaster] = useState(true);
 
-  const [browserNotifPermission, setBrowserNotifPermission] = useState<'default' | 'granted' | 'denied'>('default');
-  const [mobileNotifEnabled, setMobileNotifEnabled] = useState(false);
+  // In-App enabled per category (not in store, managed locally)
+  const [inAppEnabled, setInAppEnabled] = useState<Record<NotificationCategory, boolean>>({
+    enrollments: true,
+    completions: true,
+    assessments: true,
+    community: true,
+    system: true,
+    cohorts: true,
+  });
 
-  // Notification schedule
-  const [quietHoursEnabled, setQuietHoursEnabled] = useState(false);
-  const [quietStart, setQuietStart] = useState('22:00');
-  const [quietEnd, setQuietEnd] = useState('07:00');
-  const [digestFrequency, setDigestFrequency] = useState('realtime');
+  // Digest time
   const [digestTime, setDigestTime] = useState('09:00');
 
-  // Per-channel settings
-  const [channels, setChannels] = useState<NotificationChannel[]>([
-    { id: 'email', label: 'Email', icon: Mail, enabled: true, frequency: 'immediate' },
-    { id: 'in-app', label: 'In-App', icon: Bell, enabled: true, sound: true },
-    { id: 'push', label: 'Push', icon: BellRing, enabled: true, sound: true },
-    { id: 'sms', label: 'SMS', icon: Phone, enabled: false, premium: true },
-  ]);
+  // Sound settings
+  const [notificationSound, setNotificationSound] = useState('default');
+  const [soundVolume, setSoundVolume] = useState(80);
 
-  const toggleEmail = (id: string) => {
-    setEmailToggles((prev) => prev.map((t) => (t.id === id ? { ...t, enabled: !t.enabled } : t)));
+  const handleToggleEmailCategory = (category: NotificationCategory) => {
+    const updated = { ...prefs.emailEnabled, [category]: !prefs.emailEnabled[category] };
+    updateNotificationPreferences({ emailEnabled: updated });
   };
 
-  const togglePush = (id: string) => {
-    setPushToggles((prev) => prev.map((t) => (t.id === id ? { ...t, enabled: !t.enabled } : t)));
+  const handleTogglePushCategory = (category: NotificationCategory) => {
+    const updated = { ...prefs.pushEnabled, [category]: !prefs.pushEnabled[category] };
+    updateNotificationPreferences({ pushEnabled: updated });
   };
 
-  const toggleChannel = (id: string) => {
-    setChannels((prev) => prev.map((c) => (c.id === id ? { ...c, enabled: !c.enabled } : c)));
+  const handleToggleInAppCategory = (category: NotificationCategory) => {
+    setInAppEnabled((prev) => ({ ...prev, [category]: !prev[category] }));
   };
 
-  const updateChannelFrequency = (id: string, frequency: string) => {
-    setChannels((prev) => prev.map((c) => (c.id === id ? { ...c, frequency } : c)));
+  const handleDigestFrequencyChange = (freq: DigestFrequency) => {
+    updateNotificationPreferences({ digestFrequency: freq });
   };
 
-  const updateChannelSound = (id: string) => {
-    setChannels((prev) => prev.map((c) => (c.id === id ? { ...c, sound: !c.sound } : c)));
+  const handleQuietHoursToggle = () => {
+    updateNotificationPreferences({ quietHours: { ...prefs.quietHours, enabled: !prefs.quietHours.enabled } });
   };
 
-  const requestBrowserPermission = () => {
-    setBrowserNotifPermission('granted');
-    toast.success('Browser notifications enabled!', {
-      description: 'You will now receive push notifications in your browser.',
-    });
+  const handleQuietHoursStart = (start: string) => {
+    updateNotificationPreferences({ quietHours: { ...prefs.quietHours, start } });
+  };
+
+  const handleQuietHoursEnd = (end: string) => {
+    updateNotificationPreferences({ quietHours: { ...prefs.quietHours, end } });
   };
 
   const handleSave = () => {
@@ -3512,155 +3504,161 @@ function NotificationPreferences() {
     });
   };
 
+  const previewSound = () => {
+    toast.info(`Playing "${notificationSound}" sound`, {
+      description: 'This is a preview of your notification sound.',
+    });
+  };
+
+  // Compute quiet hours timeline
+  const quietStartHour = parseInt(prefs.quietHours.start.split(':')[0] || '22', 10);
+  const quietEndHour = parseInt(prefs.quietHours.end.split(':')[0] || '8', 10);
+
   return (
     <div className="space-y-6">
-      {/* Email Notification Preferences */}
+      {/* Master Channel Toggles */}
       <Card className="shadow-sm hover:shadow-md transition-shadow backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-              <Mail className="h-5 w-5 text-white" />
+              <Bell className="h-5 w-5 text-white" />
             </div>
             <div>
-              <CardTitle className="text-lg">Email Notifications</CardTitle>
-              <CardDescription>Choose which email notifications you want to receive</CardDescription>
+              <CardTitle className="text-lg">Notification Channels</CardTitle>
+              <CardDescription>Enable or disable notification delivery channels</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-1">
-          {/* Enrollment & Course Section */}
-          <div className="py-2">
-            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Enrollment & Courses</h4>
-            <div className="space-y-1">
-              {emailToggles.filter(t => ['enrollment', 'completion', 'assessment'].includes(t.id)).map((toggle) => (
-                <div key={toggle.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="space-y-0.5">
-                    <Label className="text-sm font-medium">{toggle.label}</Label>
-                    <p className="text-xs text-muted-foreground">{toggle.description}</p>
-                  </div>
-                  <Switch checked={toggle.enabled} onCheckedChange={() => toggleEmail(toggle.id)} />
-                </div>
-              ))}
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-muted/30">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                <Mail className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Email Notifications</Label>
+                <p className="text-xs text-muted-foreground">Receive notifications via email</p>
+              </div>
             </div>
+            <Switch checked={emailMaster} onCheckedChange={setEmailMaster} />
           </div>
-          <Separator />
-          {/* Payment & Community Section */}
-          <div className="py-2">
-            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Payments & Community</h4>
-            <div className="space-y-1">
-              {emailToggles.filter(t => ['payment', 'community'].includes(t.id)).map((toggle) => (
-                <div key={toggle.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="space-y-0.5">
-                    <Label className="text-sm font-medium">{toggle.label}</Label>
-                    <p className="text-xs text-muted-foreground">{toggle.description}</p>
-                  </div>
-                  <Switch checked={toggle.enabled} onCheckedChange={() => toggleEmail(toggle.id)} />
-                </div>
-              ))}
+          <div className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-muted/30">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center">
+                <BellRing className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Push Notifications</Label>
+                <p className="text-xs text-muted-foreground">Receive push notifications on your devices</p>
+              </div>
             </div>
+            <Switch checked={pushMaster} onCheckedChange={setPushMaster} />
           </div>
-          <Separator />
-          {/* Live Cohort Reminders Section */}
-          <div className="py-2">
-            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Live Cohort Reminders</h4>
-            <div className="space-y-1">
-              {emailToggles.filter(t => t.id.startsWith('cohort')).map((toggle) => (
-                <div key={toggle.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="space-y-0.5">
-                    <Label className="text-sm font-medium">{toggle.label}</Label>
-                    <p className="text-xs text-muted-foreground">{toggle.description}</p>
-                  </div>
-                  <Switch checked={toggle.enabled} onCheckedChange={() => toggleEmail(toggle.id)} />
-                </div>
-              ))}
+          <div className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-muted/30">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                <MessageSquare className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">In-App Notifications</Label>
+                <p className="text-xs text-muted-foreground">Show notifications within the platform</p>
+              </div>
             </div>
-          </div>
-          <Separator />
-          {/* Reports & Updates Section */}
-          <div className="py-2">
-            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Reports & Updates</h4>
-            <div className="space-y-1">
-              {emailToggles.filter(t => ['weekly-digest', 'monthly-analytics', 'platform-updates'].includes(t.id)).map((toggle) => (
-                <div key={toggle.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="space-y-0.5">
-                    <Label className="text-sm font-medium">{toggle.label}</Label>
-                    <p className="text-xs text-muted-foreground">{toggle.description}</p>
-                  </div>
-                  <Switch checked={toggle.enabled} onCheckedChange={() => toggleEmail(toggle.id)} />
-                </div>
-              ))}
-            </div>
+            <Switch checked={inAppMaster} onCheckedChange={setInAppMaster} />
           </div>
         </CardContent>
       </Card>
 
-      {/* Push Notification Preferences */}
+      {/* Category Preferences Table */}
       <Card className="shadow-sm hover:shadow-md transition-shadow backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center">
-              <BellRing className="h-5 w-5 text-white" />
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+              <ToggleLeft className="h-5 w-5 text-white" />
             </div>
             <div>
-              <CardTitle className="text-lg">Push Notifications</CardTitle>
-              <CardDescription>Configure push notification preferences for your devices</CardDescription>
+              <CardTitle className="text-lg">Category Preferences</CardTitle>
+              <CardDescription>Fine-tune notifications per category and channel</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Browser Permission */}
-          <div className="p-4 rounded-lg border border-border/50 bg-muted/30 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-sm font-medium">Browser Notifications</Label>
-                <p className="text-xs text-muted-foreground">Allow notifications in your browser</p>
-              </div>
-              {browserNotifPermission === 'granted' ? (
-                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                  <CheckCircle2 className="h-3 w-3 mr-1" /> Enabled
-                </Badge>
-              ) : browserNotifPermission === 'denied' ? (
-                <Badge variant="destructive">Blocked</Badge>
-              ) : (
-                <Button size="sm" variant="outline" onClick={requestBrowserPermission} className="gap-2">
-                  <Bell className="h-3.5 w-3.5" /> Enable
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {/* Mobile Notification Toggle */}
-          <div className="p-4 rounded-lg border border-border/50 bg-muted/30 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-sm font-medium">Mobile Notifications</Label>
-                <p className="text-xs text-muted-foreground">Receive push notifications on your mobile device</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">Requires Mobile App</Badge>
-                <Switch checked={mobileNotifEnabled} onCheckedChange={setMobileNotifEnabled} />
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Push toggles */}
-          <div className="space-y-1">
-            {pushToggles.map((toggle) => (
-              <div key={toggle.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-medium">{toggle.label}</Label>
-                  <p className="text-xs text-muted-foreground">{toggle.description}</p>
-                </div>
-                <Switch checked={toggle.enabled} onCheckedChange={() => togglePush(toggle.id)} />
-              </div>
-            ))}
+        <CardContent>
+          <div className="rounded-lg border border-border/50 overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[220px]">Category</TableHead>
+                  <TableHead className="text-center w-24">
+                    <div className="flex flex-col items-center gap-1">
+                      <Mail className="h-3.5 w-3.5" />
+                      <span className="text-[10px]">Email</span>
+                    </div>
+                  </TableHead>
+                  <TableHead className="text-center w-24">
+                    <div className="flex flex-col items-center gap-1">
+                      <BellRing className="h-3.5 w-3.5" />
+                      <span className="text-[10px]">Push</span>
+                    </div>
+                  </TableHead>
+                  <TableHead className="text-center w-24">
+                    <div className="flex flex-col items-center gap-1">
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      <span className="text-[10px]">In-App</span>
+                    </div>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(Object.keys(CATEGORY_LABELS) as NotificationCategory[]).map((category) => {
+                  const info = CATEGORY_LABELS[category];
+                  const IconComp = info.icon;
+                  return (
+                    <TableRow key={category}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center">
+                            <IconComp className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">{info.label}</p>
+                            <p className="text-[11px] text-muted-foreground">{info.description}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Switch
+                          checked={emailMaster && prefs.emailEnabled[category]}
+                          disabled={!emailMaster}
+                          onCheckedChange={() => handleToggleEmailCategory(category)}
+                          className="mx-auto"
+                        />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Switch
+                          checked={pushMaster && prefs.pushEnabled[category]}
+                          disabled={!pushMaster}
+                          onCheckedChange={() => handleTogglePushCategory(category)}
+                          className="mx-auto"
+                        />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Switch
+                          checked={inAppMaster && inAppEnabled[category]}
+                          disabled={!inAppMaster}
+                          onCheckedChange={() => handleToggleInAppCategory(category)}
+                          className="mx-auto"
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>
 
-      {/* Notification Schedule */}
+      {/* Digest Settings */}
       <Card className="shadow-sm hover:shadow-md transition-shadow backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -3668,78 +3666,36 @@ function NotificationPreferences() {
               <Clock className="h-5 w-5 text-white" />
             </div>
             <div>
-              <CardTitle className="text-lg">Notification Schedule</CardTitle>
-              <CardDescription>Control when and how often you receive notifications</CardDescription>
+              <CardTitle className="text-lg">Digest Settings</CardTitle>
+              <CardDescription>Control how often you receive notification digests</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
-          {/* Quiet Hours */}
-          <div className="p-4 rounded-lg border border-border/50 bg-muted/30 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-sm font-medium">Quiet Hours (Do Not Disturb)</Label>
-                <p className="text-xs text-muted-foreground">Mute all notifications during specified hours</p>
-              </div>
-              <Switch checked={quietHoursEnabled} onCheckedChange={setQuietHoursEnabled} />
-            </div>
-            {quietHoursEnabled && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { value: 'realtime' as DigestFrequency, label: 'Real-time', desc: 'Instant delivery' },
+              { value: 'daily' as DigestFrequency, label: 'Daily', desc: 'Once per day' },
+              { value: 'weekly' as DigestFrequency, label: 'Weekly', desc: 'Once per week' },
+              { value: 'off' as DigestFrequency, label: 'Off', desc: 'No digests' },
+            ].map((option) => (
+              <button
+                key={option.value}
+                onClick={() => handleDigestFrequencyChange(option.value)}
+                className={`p-3 rounded-lg border text-left transition-all ${
+                  prefs.digestFrequency === option.value
+                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 ring-1 ring-emerald-500'
+                    : 'border-border/50 hover:border-border'
+                }`}
               >
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">From</Label>
-                  <Input
-                    type="time"
-                    value={quietStart}
-                    onChange={(e) => setQuietStart(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">To</Label>
-                  <Input
-                    type="time"
-                    value={quietEnd}
-                    onChange={(e) => setQuietEnd(e.target.value)}
-                  />
-                </div>
-              </motion.div>
-            )}
-          </div>
-
-          {/* Digest Frequency */}
-          <div className="p-4 rounded-lg border border-border/50 bg-muted/30 space-y-3">
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">Digest Frequency</Label>
-              <p className="text-xs text-muted-foreground">How often you want to receive notification digests</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[
-                { value: 'realtime', label: 'Real-time', desc: 'Instant delivery' },
-                { value: 'daily', label: 'Daily Digest', desc: 'Once per day' },
-                { value: 'weekly', label: 'Weekly Digest', desc: 'Once per week' },
-              ].map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => setDigestFrequency(option.value)}
-                  className={`p-3 rounded-lg border text-left transition-all ${
-                    digestFrequency === option.value
-                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 ring-1 ring-emerald-500'
-                      : 'border-border/50 hover:border-border'
-                  }`}
-                >
-                  <p className="text-sm font-medium">{option.label}</p>
-                  <p className="text-xs text-muted-foreground">{option.desc}</p>
-                </button>
-              ))}
-            </div>
+                <p className="text-sm font-medium">{option.label}</p>
+                <p className="text-xs text-muted-foreground">{option.desc}</p>
+              </button>
+            ))}
           </div>
 
           {/* Preferred Digest Time */}
-          {digestFrequency !== 'realtime' && (
+          {(prefs.digestFrequency === 'daily' || prefs.digestFrequency === 'weekly') && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -3747,8 +3703,8 @@ function NotificationPreferences() {
               className="p-4 rounded-lg border border-border/50 bg-muted/30 space-y-3"
             >
               <div className="space-y-1">
-                <Label className="text-sm font-medium">Preferred Digest Time</Label>
-                <p className="text-xs text-muted-foreground">When you want to receive your {digestFrequency} digest</p>
+                <Label className="text-sm font-medium">Delivery Time</Label>
+                <p className="text-xs text-muted-foreground">When you want to receive your {prefs.digestFrequency} digest</p>
               </div>
               <Input
                 type="time"
@@ -3758,84 +3714,215 @@ function NotificationPreferences() {
               />
             </motion.div>
           )}
+
+          {/* Digest Preview Card */}
+          {(prefs.digestFrequency === 'daily' || prefs.digestFrequency === 'weekly') && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-4 rounded-lg border border-border/50 bg-muted/30 space-y-3"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                <Label className="text-sm font-medium">Digest Preview</Label>
+              </div>
+              <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+                <div className="flex items-center gap-2 border-b border-border pb-2">
+                  <div className="h-6 w-6 rounded bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                    <Bell className="h-3 w-3 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold">NextGen Academy — {prefs.digestFrequency === 'daily' ? 'Daily' : 'Weekly'} Digest</p>
+                    <p className="text-[10px] text-muted-foreground">Delivered at {digestTime} • America/New_York</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[11px] text-muted-foreground">You have 3 new notifications:</p>
+                  <div className="flex items-center gap-2 p-1.5 rounded bg-muted/50">
+                    <Users className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-[11px]">2 new enrollments in Advanced React</span>
+                  </div>
+                  <div className="flex items-center gap-2 p-1.5 rounded bg-muted/50">
+                    <CheckCircle2 className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-[11px]">5 course completions this week</span>
+                  </div>
+                  <div className="flex items-center gap-2 p-1.5 rounded bg-muted/50">
+                    <MessageSquare className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-[11px]">1 new community discussion</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Per-Channel Settings */}
+      {/* Quiet Hours */}
       <Card className="shadow-sm hover:shadow-md transition-shadow backdrop-blur-sm bg-card/80 border-border/50">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-              <MessageSquare className="h-5 w-5 text-white" />
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-slate-600 to-gray-700 flex items-center justify-center">
+              <Moon className="h-5 w-5 text-white" />
             </div>
             <div>
-              <CardTitle className="text-lg">Channel Settings</CardTitle>
-              <CardDescription>Fine-tune notification delivery per channel</CardDescription>
+              <CardTitle className="text-lg">Quiet Hours</CardTitle>
+              <CardDescription>Pause notifications during specific hours</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {channels.map((channel) => (
-            <div key={channel.id} className="p-4 rounded-lg border border-border/50 bg-muted/30">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <channel.icon className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <Label className="text-sm font-medium">{channel.label}</Label>
-                      {channel.premium && (
-                        <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0">
-                          <Crown className="h-2.5 w-2.5 mr-0.5" /> Premium
-                        </Badge>
-                      )}
-                    </div>
+        <CardContent className="space-y-5">
+          <div className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-muted/30">
+            <div className="space-y-0.5">
+              <Label className="text-sm font-medium">Enable Quiet Hours</Label>
+              <p className="text-xs text-muted-foreground">Mute all notifications during specified hours</p>
+            </div>
+            <Switch checked={prefs.quietHours.enabled} onCheckedChange={handleQuietHoursToggle} />
+          </div>
+
+          {prefs.quietHours.enabled && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Start Time</Label>
+                  <Input
+                    type="time"
+                    value={prefs.quietHours.start}
+                    onChange={(e) => handleQuietHoursStart(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">End Time</Label>
+                  <Input
+                    type="time"
+                    value={prefs.quietHours.end}
+                    onChange={(e) => handleQuietHoursEnd(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Visual Timeline */}
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Quiet Hours Timeline</Label>
+                <div className="relative h-10 rounded-lg border border-border/50 bg-background overflow-hidden">
+                  {Array.from({ length: 24 }).map((_, hour) => {
+                    const isQuiet = quietStartHour > quietEndHour
+                      ? hour >= quietStartHour || hour < quietEndHour
+                      : hour >= quietStartHour && hour < quietEndHour;
+                    return (
+                      <div
+                        key={hour}
+                        className={`absolute top-0 bottom-0 border-r border-border/20 last:border-r-0 ${
+                          isQuiet ? 'bg-slate-200 dark:bg-slate-700' : 'bg-transparent'
+                        }`}
+                        style={{ left: `${(hour / 24) * 100}%`, width: `${(1 / 24) * 100}%` }}
+                      />
+                    );
+                  })}
+                  {/* Hour labels */}
+                  <div className="absolute inset-0 flex items-center">
+                    {[0, 6, 12, 18].map((hour) => (
+                      <span
+                        key={hour}
+                        className="absolute text-[9px] text-muted-foreground font-mono"
+                        style={{ left: `${(hour / 24) * 100 + 0.5}%` }}
+                      >
+                        {hour.toString().padStart(2, '0')}
+                      </span>
+                    ))}
+                  </div>
+                  {/* Quiet indicator */}
+                  <div className="absolute top-0 right-2 bottom-0 flex items-center">
+                    <Moon className="h-3 w-3 text-slate-500" />
                   </div>
                 </div>
-                <Switch checked={channel.enabled} onCheckedChange={() => toggleChannel(channel.id)} />
+                <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <div className="h-2 w-2 rounded-sm bg-slate-200 dark:bg-slate-700" />
+                    <span>Quiet</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="h-2 w-2 rounded-sm bg-transparent border border-border" />
+                    <span>Active</span>
+                  </div>
+                </div>
               </div>
-              {channel.enabled && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="ml-8 space-y-3"
-                >
-                  {channel.frequency !== undefined && (
-                    <div className="flex items-center gap-3">
-                      <Label className="text-xs text-muted-foreground w-20">Frequency</Label>
-                      <Select value={channel.frequency} onValueChange={(val) => updateChannelFrequency(channel.id, val)}>
-                        <SelectTrigger className="w-40 h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="immediate">Immediate</SelectItem>
-                          <SelectItem value="hourly">Hourly</SelectItem>
-                          <SelectItem value="daily">Daily</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  {channel.sound !== undefined && (
-                    <div className="flex items-center gap-3">
-                      <Label className="text-xs text-muted-foreground w-20">Sound</Label>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={channel.sound}
-                          onCheckedChange={() => updateChannelSound(channel.id)}
-                          className="scale-75"
-                        />
-                        {channel.sound ? (
-                          <Volume2 className="h-3.5 w-3.5 text-muted-foreground" />
-                        ) : (
-                          <VolumeX className="h-3.5 w-3.5 text-muted-foreground" />
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </motion.div>
-              )}
+
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Globe className="h-3 w-3" />
+                <span>Timezone: America/New_York (EST)</span>
+              </div>
+            </motion.div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Sound Settings */}
+      <Card className="shadow-sm hover:shadow-md transition-shadow backdrop-blur-sm bg-card/80 border-border/50">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center">
+              <Volume2 className="h-5 w-5 text-white" />
             </div>
-          ))}
+            <div>
+              <CardTitle className="text-lg">Sound Settings</CardTitle>
+              <CardDescription>Configure notification sounds and volume</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* Sound Selector */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Notification Sound</Label>
+            <div className="flex items-center gap-3">
+              <Select value={notificationSound} onValueChange={setNotificationSound}>
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="default">Default</SelectItem>
+                  <SelectItem value="chime">Chime</SelectItem>
+                  <SelectItem value="ding">Ding</SelectItem>
+                  <SelectItem value="pop">Pop</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" onClick={previewSound} className="gap-2" disabled={notificationSound === 'none'}>
+                <Volume2 className="h-3.5 w-3.5" /> Preview
+              </Button>
+            </div>
+          </div>
+
+          {/* Volume Slider */}
+          {notificationSound !== 'none' && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="space-y-3"
+            >
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Volume</Label>
+                <span className="text-xs text-muted-foreground">{soundVolume}%</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <VolumeX className="h-4 w-4 text-muted-foreground shrink-0" />
+                <Slider
+                  value={[soundVolume]}
+                  onValueChange={(val) => setSoundVolume(val[0])}
+                  min={0}
+                  max={100}
+                  step={5}
+                  className="flex-1"
+                />
+                <Volume2 className="h-4 w-4 text-muted-foreground shrink-0" />
+              </div>
+            </motion.div>
+          )}
         </CardContent>
       </Card>
 
@@ -3888,10 +3975,14 @@ function TwoFactorAuth() {
   const [twoFAEnabled, setTwoFAEnabled] = useState(false);
   const [enabledDate, setEnabledDate] = useState('2024-11-15');
   const [lastVerified, setLastVerified] = useState('2025-03-01');
-  const [setupStep, setSetupStep] = useState(0); // 0=not started, 1=choose method, 2=QR code, 3=verify, 4=recovery codes
-  const [selectedMethod, setSelectedMethod] = useState<'app' | 'sms' | 'email'>('app');
+  const [setupStep, setSetupStep] = useState(0); // 0=not started, 1=choose method, 2=verify setup, 3=backup codes
+  const [selectedMethod, setSelectedMethod] = useState<'app' | 'sms'>('app');
   const [verificationCode, setVerificationCode] = useState(['', '', '', '', '', '']);
   const [showRecoveryCodes, setShowRecoveryCodes] = useState(false);
+  const [requireAdmin2FA, setRequireAdmin2FA] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(true);
+  const [securityLogFilter, setSecurityLogFilter] = useState('all');
+  const [smsCodeSent, setSmsCodeSent] = useState(false);
 
   // Recovery codes
   const [recoveryCodes] = useState([
@@ -3914,6 +4005,7 @@ function TwoFactorAuth() {
     { id: '1', device: 'MacBook Pro 16"', browser: 'Chrome 122', ip: '192.168.1.105', location: 'San Francisco, US', lastActivity: 'Active now', isCurrent: true },
     { id: '2', device: 'iPhone 15 Pro', browser: 'Safari Mobile', ip: '10.0.0.42', location: 'San Francisco, US', lastActivity: '1 hour ago', isCurrent: false },
     { id: '3', device: 'Windows Desktop', browser: 'Firefox 123', ip: '172.16.0.88', location: 'Austin, US', lastActivity: '1 week ago', isCurrent: false },
+    { id: '4', device: 'Samsung Galaxy S24', browser: 'Chrome Mobile', ip: '203.0.113.42', location: 'Chicago, US', lastActivity: '2 weeks ago', isCurrent: false },
   ]);
 
   // Security log
@@ -3945,7 +4037,7 @@ function TwoFactorAuth() {
     if (newCode.every((c) => c !== '') && newCode.join('').length === 6) {
       setTimeout(() => {
         setTwoFAEnabled(true);
-        setSetupStep(4);
+        setSetupStep(3);
         toast.success('2FA enabled successfully!', {
           description: 'Your account is now protected with two-factor authentication.',
         });
@@ -4032,22 +4124,20 @@ function TwoFactorAuth() {
             </div>
             {twoFAEnabled ? (
               <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-3 py-1 text-sm">
-                <span className="relative flex h-2 w-2 mr-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                </span>
-                Enabled
+                <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
+                Protected
               </Badge>
             ) : (
-              <Badge variant="outline" className="text-amber-600 border-amber-300 dark:text-amber-400 dark:border-amber-700">
-                <ShieldAlert className="h-3 w-3 mr-1" /> Disabled
+              <Badge variant="outline" className="text-amber-600 border-amber-300 dark:text-amber-400 dark:border-amber-700 px-3 py-1 text-sm">
+                <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
+                Not Protected
               </Badge>
             )}
           </div>
         </CardHeader>
         <CardContent>
           {twoFAEnabled ? (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-4 rounded-lg border border-border/50 bg-muted/30">
                   <p className="text-xs text-muted-foreground mb-1">Enabled On</p>
@@ -4058,6 +4148,30 @@ function TwoFactorAuth() {
                   <p className="text-sm font-medium">{new Date(lastVerified).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                 </div>
               </div>
+
+              <Separator />
+
+              {/* 2FA Policy Settings */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold">2FA Settings</h4>
+                <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">Require 2FA for all admin actions</Label>
+                    <p className="text-xs text-muted-foreground">Prompt for 2FA on every sensitive admin operation</p>
+                  </div>
+                  <Switch checked={requireAdmin2FA} onCheckedChange={setRequireAdmin2FA} />
+                </div>
+                <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">Remember device for 30 days</Label>
+                    <p className="text-xs text-muted-foreground">Skip 2FA on trusted devices for 30 days after verification</p>
+                  </div>
+                  <Switch checked={rememberDevice} onCheckedChange={setRememberDevice} />
+                </div>
+              </div>
+
+              <Separator />
+
               <div className="flex flex-wrap gap-3">
                 <Button
                   variant="outline"
@@ -4067,9 +4181,21 @@ function TwoFactorAuth() {
                 >
                   <Key className="h-3.5 w-3.5" /> View Recovery Codes
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    toast.success('Backup codes regenerated!', {
+                      description: 'New backup codes have been generated. Previous codes are no longer valid.',
+                    });
+                  }}
+                  className="gap-2"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" /> Regenerate Backup Codes
+                </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20">
+                    <Button variant="outline" size="sm" className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-800">
                       <ShieldAlert className="h-3.5 w-3.5" /> Disable 2FA
                     </Button>
                   </AlertDialogTrigger>
@@ -4086,6 +4212,7 @@ function TwoFactorAuth() {
                         onClick={() => {
                           setTwoFAEnabled(false);
                           setSetupStep(0);
+                          setVerificationCode(['', '', '', '', '', '']);
                           toast.info('2FA has been disabled', { description: 'Your account is less secure without 2FA.' });
                         }}
                         className="bg-red-600 hover:bg-red-700"
@@ -4130,17 +4257,24 @@ function TwoFactorAuth() {
             <CardDescription>Follow these steps to secure your account</CardDescription>
             {/* Progress Steps */}
             <div className="flex items-center gap-2 mt-4">
-              {[1, 2, 3, 4].map((step) => (
-                <React.Fragment key={step}>
-                  <div className={`flex items-center justify-center h-8 w-8 rounded-full text-xs font-bold transition-all ${
-                    setupStep >= step
-                      ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md'
-                      : 'bg-muted text-muted-foreground'
-                  }`}>
-                    {setupStep > step ? <Check className="h-4 w-4" /> : step}
+              {[
+                { step: 1, label: 'Choose Method' },
+                { step: 2, label: 'Verify Setup' },
+                { step: 3, label: 'Backup Codes' },
+              ].map((s, idx) => (
+                <React.Fragment key={s.step}>
+                  <div className="flex items-center gap-2">
+                    <div className={`flex items-center justify-center h-8 w-8 rounded-full text-xs font-bold transition-all ${
+                      setupStep >= s.step
+                        ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md'
+                        : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {setupStep > s.step ? <Check className="h-4 w-4" /> : s.step}
+                    </div>
+                    <span className={`text-xs hidden sm:inline ${setupStep >= s.step ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>{s.label}</span>
                   </div>
-                  {step < 4 && (
-                    <div className={`h-0.5 flex-1 transition-all ${setupStep > step ? 'bg-emerald-500' : 'bg-muted'}`} />
+                  {idx < 2 && (
+                    <div className={`h-0.5 flex-1 transition-all ${setupStep > s.step ? 'bg-emerald-500' : 'bg-muted'}`} />
                   )}
                 </React.Fragment>
               ))}
@@ -4151,26 +4285,40 @@ function TwoFactorAuth() {
             {setupStep === 1 && (
               <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
                 <p className="text-sm text-muted-foreground">Choose how you want to receive your second factor:</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {[
-                    { value: 'app' as const, label: 'Authenticator App', desc: 'Google Authenticator, Authy, etc.', icon: Smartphone },
-                    { value: 'sms' as const, label: 'SMS', desc: 'Receive codes via text message', icon: Phone },
-                    { value: 'email' as const, label: 'Email', desc: 'Receive codes via email', icon: Mail },
-                  ].map((method) => (
-                    <button
-                      key={method.value}
-                      onClick={() => setSelectedMethod(method.value)}
-                      className={`p-4 rounded-lg border text-left transition-all ${
-                        selectedMethod === method.value
-                          ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 ring-1 ring-emerald-500'
-                          : 'border-border/50 hover:border-border'
-                      }`}
-                    >
-                      <method.icon className={`h-6 w-6 mb-2 ${selectedMethod === method.value ? 'text-emerald-600' : 'text-muted-foreground'}`} />
-                      <p className="text-sm font-medium">{method.label}</p>
-                      <p className="text-xs text-muted-foreground">{method.desc}</p>
-                    </button>
-                  ))}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setSelectedMethod('app')}
+                    className={`p-5 rounded-lg border text-left transition-all relative ${
+                      selectedMethod === 'app'
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 ring-1 ring-emerald-500'
+                        : 'border-border/50 hover:border-border'
+                    }`}
+                  >
+                    {selectedMethod === 'app' && (
+                      <Badge className="absolute top-2 right-2 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 text-[10px] px-1.5 py-0">
+                        Recommended
+                      </Badge>
+                    )}
+                    <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mb-3">
+                      <QrCode className="h-6 w-6 text-white" />
+                    </div>
+                    <p className="text-sm font-semibold">Authenticator App</p>
+                    <p className="text-xs text-muted-foreground mt-1">Use Google Authenticator, Authy, or 1Password to generate verification codes. More secure and works offline.</p>
+                  </button>
+                  <button
+                    onClick={() => setSelectedMethod('sms')}
+                    className={`p-5 rounded-lg border text-left transition-all ${
+                      selectedMethod === 'sms'
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 ring-1 ring-emerald-500'
+                        : 'border-border/50 hover:border-border'
+                    }`}
+                  >
+                    <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center mb-3">
+                      <Phone className="h-6 w-6 text-white" />
+                    </div>
+                    <p className="text-sm font-semibold">SMS Verification</p>
+                    <p className="text-xs text-muted-foreground mt-1">Receive verification codes via text message to your phone. Requires cellular connectivity.</p>
+                  </button>
                 </div>
                 <div className="flex justify-between pt-2">
                   <Button variant="outline" onClick={() => setSetupStep(0)} className="gap-2">
@@ -4183,109 +4331,101 @@ function TwoFactorAuth() {
               </motion.div>
             )}
 
-            {/* Step 2: QR Code / Setup */}
+            {/* Step 2: Verify Setup */}
             {setupStep === 2 && (
-              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
                 {selectedMethod === 'app' ? (
                   <>
                     <p className="text-sm text-muted-foreground">
-                      Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
+                      Scan this QR code with your authenticator app, then enter the 6-digit code below to verify.
                     </p>
-                    <div className="flex justify-center py-4">
-                      <div className="h-48 w-48 rounded-xl border-2 border-dashed border-border bg-muted/30 flex items-center justify-center relative overflow-hidden">
-                        {/* Simulated QR code */}
-                        <QrCode className="h-24 w-24 text-muted-foreground/60" />
+                    <div className="flex justify-center py-2">
+                      <div className="h-44 w-44 rounded-xl border-2 border-dashed border-border bg-muted/30 flex items-center justify-center relative overflow-hidden">
+                        <QrCode className="h-20 w-20 text-muted-foreground/60" />
                         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-transparent to-emerald-500/5" />
                       </div>
                     </div>
                     <div className="p-3 rounded-lg bg-muted/50 text-center">
                       <p className="text-xs text-muted-foreground mb-1">Manual entry key</p>
-                      <code className="text-sm font-mono bg-background px-3 py-1 rounded border">
-                        JBSW Y3DP EHPK 3PXP
-                      </code>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="ml-2 h-7 text-xs gap-1"
-                        onClick={() => {
-                          navigator.clipboard?.writeText('JBSWY3DPEHPK3PXP');
-                          toast.success('Key copied!');
-                        }}
-                      >
-                        <Copy className="h-3 w-3" /> Copy
-                      </Button>
+                      <div className="flex items-center justify-center gap-2">
+                        <code className="text-sm font-mono bg-background px-3 py-1 rounded border">
+                          JBSW Y3DP EHPK 3PXP
+                        </code>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => {
+                            navigator.clipboard?.writeText('JBSWY3DPEHPK3PXP');
+                            toast.success('Key copied!');
+                          }}
+                        >
+                          <Copy className="h-3 w-3" /> Copy
+                        </Button>
+                      </div>
                     </div>
                   </>
-                ) : selectedMethod === 'sms' ? (
-                  <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">Enter your phone number to receive verification codes via SMS.</p>
-                    <div className="space-y-2">
-                      <Label>Phone Number</Label>
-                      <Input placeholder="+1 (555) 000-0000" />
-                    </div>
-                    <Button variant="outline" className="gap-2" onClick={() => toast.success('Verification code sent!')}>
-                      <Send className="h-3.5 w-3.5" /> Send Test Code
-                    </Button>
-                  </div>
                 ) : (
                   <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">Verification codes will be sent to your registered email address.</p>
-                    <div className="p-4 rounded-lg bg-muted/50 flex items-center gap-3">
-                      <Mail className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm font-medium">admin@nextgen-lms.com</p>
-                        <p className="text-xs text-muted-foreground">Verified email address</p>
+                    <p className="text-sm text-muted-foreground">Enter your phone number and verify with the code sent via SMS.</p>
+                    <div className="space-y-2">
+                      <Label>Phone Number</Label>
+                      <div className="flex gap-2">
+                        <Input placeholder="+1 (555) 000-0000" className="flex-1" />
+                        <Button
+                          variant="outline"
+                          className="gap-2 shrink-0"
+                          onClick={() => {
+                            setSmsCodeSent(true);
+                            toast.success('Verification code sent to your phone!');
+                          }}
+                        >
+                          <Send className="h-3.5 w-3.5" /> Send Code
+                        </Button>
                       </div>
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500 ml-auto" />
                     </div>
                   </div>
                 )}
+
+                <Separator />
+
+                {/* Verification Code Input */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">
+                    Enter the 6-digit code from your {selectedMethod === 'app' ? 'authenticator app' : 'SMS message'}
+                  </Label>
+                  <div className="flex justify-center gap-3 py-2">
+                    {verificationCode.map((digit, index) => (
+                      <Input
+                        key={index}
+                        ref={(el) => { codeInputRefs.current[index] = el; }}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleCodeChange(index, e.target.value.replace(/\D/g, ''))}
+                        onKeyDown={(e) => handleCodeKeyDown(index, e)}
+                        className="h-14 w-12 text-center text-xl font-bold rounded-lg border-2 focus:border-emerald-500 focus:ring-emerald-500/20"
+                      />
+                    ))}
+                  </div>
+                  {selectedMethod === 'sms' && smsCodeSent && (
+                    <p className="text-xs text-center text-muted-foreground">
+                      Didn&apos;t receive the code?{' '}
+                      <button className="text-emerald-600 hover:underline" onClick={() => toast.success('Code resent!')}>
+                        Resend
+                      </button>
+                    </p>
+                  )}
+                </div>
                 <div className="flex justify-between pt-2">
                   <Button variant="outline" onClick={() => setSetupStep(1)} className="gap-2">
-                    <ArrowLeft className="h-3.5 w-3.5" /> Back
-                  </Button>
-                  <Button onClick={() => setSetupStep(3)} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-                    Continue <ChevronDown className="h-3.5 w-3.5 rotate-[-90deg]" />
-                  </Button>
-                </div>
-              </motion.div>
-            )}
-
-            {/* Step 3: Verify Code */}
-            {setupStep === 3 && (
-              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Enter the 6-digit verification code from your {selectedMethod === 'app' ? 'authenticator app' : selectedMethod === 'sms' ? 'SMS message' : 'email'}.
-                </p>
-                <div className="flex justify-center gap-3 py-4">
-                  {verificationCode.map((digit, index) => (
-                    <Input
-                      key={index}
-                      ref={(el) => { codeInputRefs.current[index] = el; }}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={digit}
-                      onChange={(e) => handleCodeChange(index, e.target.value.replace(/\D/g, ''))}
-                      onKeyDown={(e) => handleCodeKeyDown(index, e)}
-                      className="h-14 w-12 text-center text-xl font-bold rounded-lg border-2 focus:border-emerald-500 focus:ring-emerald-500/20"
-                    />
-                  ))}
-                </div>
-                <p className="text-xs text-center text-muted-foreground">
-                  Didn&apos;t receive the code?{' '}
-                  <button className="text-emerald-600 hover:underline" onClick={() => toast.success('Code resent!')}>
-                    Resend
-                  </button>
-                </p>
-                <div className="flex justify-between pt-2">
-                  <Button variant="outline" onClick={() => setSetupStep(2)} className="gap-2">
                     <ArrowLeft className="h-3.5 w-3.5" /> Back
                   </Button>
                   <Button
                     onClick={() => {
                       setTwoFAEnabled(true);
-                      setSetupStep(4);
+                      setSetupStep(3);
                       toast.success('2FA enabled successfully!', {
                         description: 'Your account is now protected with two-factor authentication.',
                       });
@@ -4293,22 +4433,22 @@ function TwoFactorAuth() {
                     disabled={verificationCode.some((c) => c === '')}
                     className="gap-2 bg-emerald-600 hover:bg-emerald-700"
                   >
-                    Verify & Enable <ShieldCheck className="h-3.5 w-3.5" />
+                    Verify <ShieldCheck className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </motion.div>
             )}
 
-            {/* Step 4: Recovery Codes */}
-            {setupStep === 4 && (
+            {/* Step 3: Backup Codes */}
+            {setupStep === 3 && (
               <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
                 <div className="p-4 rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-900/10">
                   <div className="flex items-start gap-3">
                     <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
                     <div>
-                      <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Save your recovery codes</p>
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Store these in a safe place</p>
                       <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-                        Store these codes in a safe place. You can use them to sign in if you lose access to your authentication device. Each code can only be used once.
+                        You can use these backup codes to sign in if you lose access to your authentication device. Each code can only be used once.
                       </p>
                     </div>
                   </div>
@@ -4330,11 +4470,8 @@ function TwoFactorAuth() {
                   <Button variant="outline" size="sm" onClick={copyAllRecoveryCodes} className="gap-2">
                     <Copy className="h-3.5 w-3.5" /> Copy All
                   </Button>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <Download className="h-3.5 w-3.5" /> Download as PDF
-                  </Button>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <Printer className="h-3.5 w-3.5" /> Print
+                  <Button variant="outline" size="sm" className="gap-2" onClick={() => toast.success('Codes downloaded!')}>
+                    <Download className="h-3.5 w-3.5" /> Download Codes
                   </Button>
                 </div>
                 <div className="flex justify-end pt-2">
@@ -4393,11 +4530,8 @@ function TwoFactorAuth() {
               <Button variant="outline" size="sm" onClick={copyAllRecoveryCodes} className="gap-2">
                 <Copy className="h-3.5 w-3.5" /> Copy All
               </Button>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Download className="h-3.5 w-3.5" /> Download as PDF
-              </Button>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Printer className="h-3.5 w-3.5" /> Print
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => toast.success('Codes downloaded!')}>
+                <Download className="h-3.5 w-3.5" /> Download Codes
               </Button>
             </div>
           </CardContent>
@@ -4572,14 +4706,34 @@ function TwoFactorAuth() {
             <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-rose-500 to-red-600 flex items-center justify-center">
               <FileText className="h-5 w-5 text-white" />
             </div>
-            <div>
+            <div className="flex-1">
               <CardTitle className="text-lg">Security Log</CardTitle>
               <CardDescription>Recent security events on your account</CardDescription>
             </div>
+            <Select value={securityLogFilter} onValueChange={setSecurityLogFilter}>
+              <SelectTrigger className="w-40 h-8 text-xs">
+                <SelectValue placeholder="Filter events" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Events</SelectItem>
+                <SelectItem value="Login">Login</SelectItem>
+                <SelectItem value="2FA">2FA Events</SelectItem>
+                <SelectItem value="Password">Password Changes</SelectItem>
+                <SelectItem value="Session">Session Events</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent className="space-y-2 max-h-96 overflow-y-auto">
-          {securityLog.map((entry) => (
+          {securityLog
+            .filter((entry) => {
+              if (securityLogFilter === 'all') return true;
+              if (securityLogFilter === '2FA') return entry.eventType.includes('2FA');
+              if (securityLogFilter === 'Password') return entry.eventType.includes('Password');
+              if (securityLogFilter === 'Session') return entry.eventType.includes('Session');
+              return entry.eventType.includes(securityLogFilter);
+            })
+            .map((entry) => (
             <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-colors">
               <div className={`h-2.5 w-2.5 rounded-full mt-1.5 flex-shrink-0 ${getStatusColor(entry.status)}`} />
               <div className="flex-1 min-w-0">
@@ -5913,6 +6067,1227 @@ function DataPrivacySettings() {
 }
 
 // ============================================================
+// Tab: Data Export / Import
+// ============================================================
+
+const DATA_SOURCE_CONFIG: Record<ExportDataSource, {
+  icon: React.ElementType;
+  name: string;
+  description: string;
+  estimatedRows: number;
+  columns: ExportColumn[];
+}> = {
+  courses: {
+    icon: BookOpen,
+    name: 'Courses',
+    description: 'Course content, modules, and lessons',
+    estimatedRows: 1250,
+    columns: [
+      { key: 'id', label: 'ID', selected: true },
+      { key: 'title', label: 'Title', selected: true },
+      { key: 'slug', label: 'Slug', selected: true },
+      { key: 'category', label: 'Category', selected: true },
+      { key: 'level', label: 'Level', selected: true },
+      { key: 'language', label: 'Language', selected: false },
+      { key: 'price', label: 'Price', selected: true },
+      { key: 'enrollmentCount', label: 'Enrollments', selected: true },
+      { key: 'avgRating', label: 'Avg Rating', selected: false },
+      { key: 'completionRate', label: 'Completion Rate', selected: true },
+      { key: 'isPublished', label: 'Published', selected: false },
+      { key: 'createdAt', label: 'Created At', selected: true },
+    ],
+  },
+  users_enrollments: {
+    icon: Users,
+    name: 'Users & Enrollments',
+    description: 'User accounts and course enrollments',
+    estimatedRows: 5480,
+    columns: [
+      { key: 'id', label: 'ID', selected: true },
+      { key: 'name', label: 'Name', selected: true },
+      { key: 'email', label: 'Email', selected: true },
+      { key: 'role', label: 'Role', selected: true },
+      { key: 'status', label: 'Status', selected: true },
+      { key: 'enrolledAt', label: 'Enrolled At', selected: true },
+      { key: 'progress', label: 'Progress', selected: true },
+      { key: 'courseId', label: 'Course ID', selected: false },
+      { key: 'courseTitle', label: 'Course Title', selected: true },
+      { key: 'completedAt', label: 'Completed At', selected: false },
+    ],
+  },
+  assessments: {
+    icon: FileText,
+    name: 'Assessments',
+    description: 'Quizzes, assignments, and submissions',
+    estimatedRows: 3120,
+    columns: [
+      { key: 'id', label: 'ID', selected: true },
+      { key: 'title', label: 'Title', selected: true },
+      { key: 'type', label: 'Type', selected: true },
+      { key: 'passingScore', label: 'Passing Score', selected: true },
+      { key: 'maxAttempts', label: 'Max Attempts', selected: false },
+      { key: 'timeLimit', label: 'Time Limit', selected: false },
+      { key: 'isPublished', label: 'Published', selected: false },
+      { key: 'courseId', label: 'Course ID', selected: true },
+      { key: 'avgScore', label: 'Avg Score', selected: true },
+      { key: 'totalAttempts', label: 'Total Attempts', selected: true },
+    ],
+  },
+  analytics: {
+    icon: Activity,
+    name: 'Analytics',
+    description: 'Platform events, metrics, and usage data',
+    estimatedRows: 12500,
+    columns: [
+      { key: 'id', label: 'ID', selected: true },
+      { key: 'date', label: 'Date', selected: true },
+      { key: 'eventType', label: 'Event Type', selected: true },
+      { key: 'userId', label: 'User ID', selected: true },
+      { key: 'sessionId', label: 'Session ID', selected: false },
+      { key: 'pageViews', label: 'Page Views', selected: true },
+      { key: 'avgSessionDuration', label: 'Avg Session Duration', selected: true },
+    ],
+  },
+  community: {
+    icon: MessageSquare,
+    name: 'Community',
+    description: 'Posts, comments, and reactions',
+    estimatedRows: 8750,
+    columns: [
+      { key: 'id', label: 'ID', selected: true },
+      { key: 'title', label: 'Title', selected: true },
+      { key: 'type', label: 'Type', selected: true },
+      { key: 'authorName', label: 'Author', selected: true },
+      { key: 'category', label: 'Category', selected: true },
+      { key: 'viewCount', label: 'Views', selected: false },
+      { key: 'likeCount', label: 'Likes', selected: false },
+      { key: 'commentCount', label: 'Comments', selected: false },
+      { key: 'createdAt', label: 'Created At', selected: true },
+    ],
+  },
+  certificates: {
+    icon: Crown,
+    name: 'Certificates',
+    description: 'Certificate templates and awards',
+    estimatedRows: 980,
+    columns: [
+      { key: 'id', label: 'ID', selected: true },
+      { key: 'name', label: 'Name', selected: true },
+      { key: 'template', label: 'Template', selected: true },
+      { key: 'isActive', label: 'Active', selected: false },
+      { key: 'issuedCount', label: 'Issued Count', selected: true },
+      { key: 'verificationCode', label: 'Verification Code', selected: true },
+      { key: 'issuedAt', label: 'Issued At', selected: true },
+    ],
+  },
+  all: {
+    icon: Database,
+    name: 'All Data',
+    description: 'Complete platform data export',
+    estimatedRows: 32080,
+    columns: [
+      { key: 'source', label: 'Data Source', selected: true },
+      { key: 'id', label: 'ID', selected: true },
+      { key: 'title', label: 'Title/Name', selected: true },
+      { key: 'type', label: 'Type', selected: true },
+      { key: 'status', label: 'Status', selected: true },
+      { key: 'createdAt', label: 'Created At', selected: true },
+    ],
+  },
+};
+
+const FORMAT_CONFIG: Record<ExportFormat, {
+  icon: React.ElementType;
+  name: string;
+  sizeMultiplier: number;
+}> = {
+  csv: { icon: FileText, name: 'CSV', sizeMultiplier: 1 },
+  json: { icon: FileJson, name: 'JSON', sizeMultiplier: 2 },
+  xlsx: { icon: FileSpreadsheet, name: 'XLSX', sizeMultiplier: 0.75 },
+};
+
+const DATE_RANGE_MULTIPLIER: Record<ExportDateRange, number> = {
+  '7d': 0.15,
+  '30d': 0.4,
+  '90d': 0.75,
+  custom: 0.5,
+  all: 1,
+};
+
+interface ExportHistoryEntry {
+  id: string;
+  date: string;
+  source: string;
+  format: ExportFormat;
+  rows: number;
+  size: string;
+  status: 'completed' | 'failed';
+}
+
+const INITIAL_EXPORT_HISTORY: ExportHistoryEntry[] = [
+  { id: 'exp_1', date: '2025-02-28 14:32', source: 'Courses', format: 'csv', rows: 1240, size: '2.3 MB', status: 'completed' },
+  { id: 'exp_2', date: '2025-02-25 09:15', source: 'Users & Enrollments', format: 'json', rows: 5480, size: '4.5 MB', status: 'completed' },
+  { id: 'exp_3', date: '2025-02-22 16:48', source: 'Analytics', format: 'xlsx', rows: 12500, size: '1.8 MB', status: 'completed' },
+  { id: 'exp_4', date: '2025-02-20 11:22', source: 'Community', format: 'csv', rows: 8750, size: '15.2 MB', status: 'failed' },
+  { id: 'exp_5', date: '2025-02-15 08:05', source: 'All Data', format: 'json', rows: 32080, size: '48.7 MB', status: 'completed' },
+];
+
+function DataExportImport() {
+  // === EXPORT STATE ===
+  const [exportSource, setExportSource] = useState<ExportDataSource>('courses');
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('csv');
+  const [exportDateRange, setExportDateRange] = useState<ExportDateRange>('30d');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [exportColumns, setExportColumns] = useState<Record<ExportDataSource, ExportColumn[]>>(() => {
+    const cols: Record<string, ExportColumn[]> = {};
+    (Object.keys(DATA_SOURCE_CONFIG) as ExportDataSource[]).forEach(source => {
+      cols[source] = DATA_SOURCE_CONFIG[source].columns.map(c => ({ ...c }));
+    });
+    return cols as Record<ExportDataSource, ExportColumn[]>;
+  });
+  const [expandedSources, setExpandedSources] = useState<Set<ExportDataSource>>(new Set(['courses']));
+  const [exportProgress, setExportProgress] = useState(0);
+  const [isExporting, setIsExporting] = useState(false);
+
+  // === IMPORT STATE ===
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importSource, setImportSource] = useState<ExportDataSource>('courses');
+  const [isDragActive, setIsDragActive] = useState(false);
+  const [columnMappings, setColumnMappings] = useState<ColumnMapping[]>([]);
+  const [validationResult, setValidationResult] = useState<ImportValidationResult | null>(null);
+  const [importProgress, setImportProgress] = useState(0);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [showValidationDetails, setShowValidationDetails] = useState(false);
+
+  // === EXPORT HISTORY STATE ===
+  const [exportHistory, setExportHistory] = useState<ExportHistoryEntry[]>(INITIAL_EXPORT_HISTORY);
+  const [historySourceFilter, setHistorySourceFilter] = useState('all');
+  const [historyStatusFilter, setHistoryStatusFilter] = useState('all');
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // === COMPUTED VALUES ===
+  const getExportSummary = useCallback((): ExportSummary => {
+    const config = DATA_SOURCE_CONFIG[exportSource];
+    const baseRows = config.estimatedRows;
+    const dateMultiplier = DATE_RANGE_MULTIPLIER[exportDateRange];
+    const rowCount = Math.round(baseRows * dateMultiplier);
+    const selectedCount = exportColumns[exportSource].filter(c => c.selected).length;
+    const formatMultiplier = FORMAT_CONFIG[exportFormat].sizeMultiplier;
+    const sizeBytes = rowCount * selectedCount * 32 * formatMultiplier;
+    let fileSizeEstimate: string;
+    if (sizeBytes < 1024) fileSizeEstimate = `${sizeBytes} B`;
+    else if (sizeBytes < 1024 * 1024) fileSizeEstimate = `${(sizeBytes / 1024).toFixed(1)} KB`;
+    else fileSizeEstimate = `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+    const estimatedTime = rowCount < 1000 ? '< 5s' : rowCount < 5000 ? '~10s' : rowCount < 15000 ? '~30s' : '~1 min';
+    return { rowCount, fileSizeEstimate, estimatedTime };
+  }, [exportSource, exportDateRange, exportFormat, exportColumns]);
+
+  const summary = useMemo(() => getExportSummary(), [getExportSummary]);
+
+  const filteredHistory = useMemo(() => {
+    return exportHistory.filter(entry => {
+      if (historySourceFilter !== 'all' && entry.source !== historySourceFilter) return false;
+      if (historyStatusFilter !== 'all' && entry.status !== historyStatusFilter) return false;
+      return true;
+    });
+  }, [exportHistory, historySourceFilter, historyStatusFilter]);
+
+  // === EXPORT HANDLERS ===
+  const toggleColumn = useCallback((source: ExportDataSource, key: string) => {
+    setExportColumns(prev => {
+      const updated = { ...prev };
+      updated[source] = updated[source].map(c =>
+        c.key === key ? { ...c, selected: !c.selected } : c
+      );
+      return updated;
+    });
+  }, []);
+
+  const selectAllColumns = useCallback((source: ExportDataSource) => {
+    setExportColumns(prev => {
+      const updated = { ...prev };
+      updated[source] = updated[source].map(c => ({ ...c, selected: true }));
+      return updated;
+    });
+  }, []);
+
+  const deselectAllColumns = useCallback((source: ExportDataSource) => {
+    setExportColumns(prev => {
+      const updated = { ...prev };
+      updated[source] = updated[source].map(c => ({ ...c, selected: false }));
+      return updated;
+    });
+  }, []);
+
+  const toggleExpanded = useCallback((source: ExportDataSource) => {
+    setExpandedSources(prev => {
+      const next = new Set(prev);
+      if (next.has(source)) next.delete(source);
+      else next.add(source);
+      return next;
+    });
+  }, []);
+
+  const handleExport = useCallback(async () => {
+    setIsExporting(true);
+    setExportProgress(0);
+    for (let i = 0; i <= 100; i += 5) {
+      await new Promise(r => setTimeout(r, 100));
+      setExportProgress(i);
+    }
+    const selectedColumns = exportColumns[exportSource].filter(c => c.selected);
+    let content: string;
+    let mimeType: string;
+    let extension: string;
+    if (exportFormat === 'csv') {
+      const headers = selectedColumns.map(c => c.label).join(',');
+      const rows = Array.from({ length: Math.min(summary.rowCount, 50) }, (_, i) =>
+        selectedColumns.map(c => `${c.key}_${i + 1}`).join(',')
+      );
+      content = [headers, ...rows].join('\n');
+      mimeType = 'text/csv';
+      extension = 'csv';
+    } else if (exportFormat === 'json') {
+      const data = Array.from({ length: Math.min(summary.rowCount, 50) }, (_, i) => {
+        const row: Record<string, string> = {};
+        selectedColumns.forEach(c => { row[c.key] = `${c.key}_${i + 1}`; });
+        return row;
+      });
+      content = JSON.stringify(data, null, 2);
+      mimeType = 'application/json';
+      extension = 'json';
+    } else {
+      const headers = selectedColumns.map(c => c.label).join('\t');
+      const rows = Array.from({ length: Math.min(summary.rowCount, 50) }, (_, i) =>
+        selectedColumns.map(c => `${c.key}_${i + 1}`).join('\t')
+      );
+      content = [headers, ...rows].join('\n');
+      mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      extension = 'xlsx';
+    }
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${exportSource}_export.${extension}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    const newHistoryEntry: ExportHistoryEntry = {
+      id: `exp_${Date.now()}`,
+      date: new Date().toLocaleString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ''),
+      source: DATA_SOURCE_CONFIG[exportSource].name,
+      format: exportFormat,
+      rows: summary.rowCount,
+      size: summary.fileSizeEstimate,
+      status: 'completed',
+    };
+    setExportHistory(prev => [newHistoryEntry, ...prev]);
+    setIsExporting(false);
+    setExportProgress(0);
+    toast.success('Export completed successfully!', {
+      description: `${summary.rowCount.toLocaleString()} rows exported as ${exportFormat.toUpperCase()}`,
+    });
+  }, [exportSource, exportFormat, exportColumns, summary]);
+
+  // === IMPORT HANDLERS ===
+  const processFile = useCallback((file: File) => {
+    const validExtensions = ['.csv', '.json', '.xlsx'];
+    const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    if (!validExtensions.includes(ext)) {
+      toast.error('Invalid file type', { description: 'Please upload a CSV, JSON, or XLSX file.' });
+      return;
+    }
+    setImportFile(file);
+    setImportResult(null);
+    setValidationResult(null);
+    setColumnMappings([]);
+    const mockColumns = ['id', 'name', 'title', 'email', 'status', 'created_at', 'type', 'category', 'score', 'progress'];
+    const targetFields = DATA_SOURCE_CONFIG[importSource].columns;
+    const mappings: ColumnMapping[] = mockColumns.map(col => {
+      const match = targetFields.find(tf =>
+        tf.key.toLowerCase() === col.toLowerCase() ||
+        tf.label.toLowerCase() === col.toLowerCase() ||
+        tf.key.toLowerCase().replace(/_/g, '') === col.toLowerCase().replace(/_/g, '')
+      );
+      return {
+        sourceColumn: col,
+        targetField: match ? match.key : '',
+        confirmed: !!match,
+      };
+    });
+    setColumnMappings(mappings);
+    setTimeout(() => {
+      setValidationResult({
+        totalRows: 245,
+        validRows: 230,
+        errors: [
+          { row: 12, column: 'email', message: 'Invalid email format' },
+          { row: 45, column: 'status', message: 'Unknown status value' },
+          { row: 89, column: 'id', message: 'Duplicate ID detected' },
+        ],
+        warnings: [
+          { row: 23, column: 'name', message: 'Name exceeds recommended length' },
+          { row: 67, column: 'created_at', message: 'Date format may need conversion' },
+        ],
+      });
+    }, 800);
+  }, [importSource]);
+
+  const handleFileDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragActive(false);
+    const file = e.dataTransfer.files[0];
+    if (file) processFile(file);
+  }, [processFile]);
+
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+  }, [processFile]);
+
+  const updateColumnMapping = useCallback((index: number, targetField: string) => {
+    setColumnMappings(prev => {
+      const updated = [...prev];
+      const targetFields = DATA_SOURCE_CONFIG[importSource].columns;
+      const match = targetFields.find(tf => tf.key === targetField);
+      updated[index] = {
+        ...updated[index],
+        targetField,
+        confirmed: !!match,
+      };
+      return updated;
+    });
+  }, [importSource]);
+
+  const handleImport = useCallback(async () => {
+    if (!validationResult || validationResult.errors.length > 5) return;
+    setIsImporting(true);
+    setImportProgress(0);
+    for (let i = 0; i <= 100; i += 4) {
+      await new Promise(r => setTimeout(r, 80));
+      setImportProgress(i);
+    }
+    setImportResult({
+      imported: validationResult.validRows,
+      skipped: validationResult.totalRows - validationResult.validRows,
+      failed: validationResult.errors.length,
+    });
+    setIsImporting(false);
+    setImportProgress(0);
+    toast.success('Import completed!', {
+      description: `${validationResult.validRows} rows imported successfully`,
+    });
+  }, [validationResult]);
+
+  const handleReDownload = useCallback((entry: ExportHistoryEntry) => {
+    toast.success('Download started', { description: `${entry.source} export (${entry.format.toUpperCase()})` });
+  }, []);
+
+  const resetImport = useCallback(() => {
+    setImportFile(null);
+    setColumnMappings([]);
+    setValidationResult(null);
+    setImportResult(null);
+    setImportProgress(0);
+    setIsImporting(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      {/* ========== DATA EXPORT SECTION ========== */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+        <Card className="shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
+                <Download className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Data Export</CardTitle>
+                <CardDescription>Export your platform data in various formats</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Source Selection */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Data Source</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {(Object.keys(DATA_SOURCE_CONFIG) as ExportDataSource[]).map(source => {
+                  const config = DATA_SOURCE_CONFIG[source];
+                  const Icon = config.icon;
+                  const isSelected = exportSource === source;
+                  return (
+                    <motion.button
+                      key={source}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setExportSource(source)}
+                      className={`relative flex flex-col items-start gap-2 rounded-xl border-2 p-4 text-left transition-all ${
+                        isSelected
+                          ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 shadow-md'
+                          : 'border-border hover:border-emerald-300 dark:hover:border-emerald-700 bg-card hover:shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                          isSelected ? 'bg-emerald-500 text-white' : 'bg-muted text-muted-foreground'
+                        }`}>
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <span className={`font-medium text-sm ${isSelected ? 'text-emerald-700 dark:text-emerald-300' : ''}`}>
+                          {config.name}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground line-clamp-2">{config.description}</p>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Hash className="h-3 w-3" />
+                        <span>{config.estimatedRows.toLocaleString()} rows</span>
+                      </div>
+                      {isSelected && (
+                        <motion.div
+                          layoutId="source-indicator"
+                          className="absolute top-2 right-2"
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                        >
+                          <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                        </motion.div>
+                      )}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Format Selection */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Export Format</Label>
+              <div className="flex flex-wrap gap-3">
+                {(['csv', 'json', 'xlsx'] as ExportFormat[]).map(format => {
+                  const config = FORMAT_CONFIG[format];
+                  const Icon = config.icon;
+                  const isSelected = exportFormat === format;
+                  const estimatedSize = (() => {
+                    const bytes = summary.rowCount * exportColumns[exportSource].filter(c => c.selected).length * 32 * config.sizeMultiplier;
+                    if (bytes < 1024) return `${bytes} B`;
+                    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+                    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+                  })();
+                  return (
+                    <motion.button
+                      key={format}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => setExportFormat(format)}
+                      className={`flex items-center gap-3 rounded-full border-2 px-5 py-3 transition-all ${
+                        isSelected
+                          ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 shadow-md'
+                          : 'border-border hover:border-emerald-300 dark:hover:border-emerald-700 bg-card'
+                      }`}
+                    >
+                      <Icon className={`h-4 w-4 ${isSelected ? 'text-emerald-600' : 'text-muted-foreground'}`} />
+                      <span className={`font-medium text-sm ${isSelected ? 'text-emerald-700 dark:text-emerald-300' : ''}`}>
+                        {config.name}
+                      </span>
+                      <Badge variant="secondary" className="text-xs font-normal">
+                        ~{estimatedSize}
+                      </Badge>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Date Range Selection */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Date Range</Label>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { value: '7d' as ExportDateRange, label: 'Last 7 Days' },
+                  { value: '30d' as ExportDateRange, label: 'Last 30 Days' },
+                  { value: '90d' as ExportDateRange, label: 'Last 90 Days' },
+                  { value: 'all' as ExportDateRange, label: 'All Time' },
+                  { value: 'custom' as ExportDateRange, label: 'Custom' },
+                ]).map(range => (
+                  <Button
+                    key={range.value}
+                    variant={exportDateRange === range.value ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setExportDateRange(range.value)}
+                    className={exportDateRange === range.value ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+                  >
+                    {range.value === '7d' && <Clock className="h-3.5 w-3.5 mr-1.5" />}
+                    {range.value === '30d' && <Calendar className="h-3.5 w-3.5 mr-1.5" />}
+                    {range.value === '90d' && <Timer className="h-3.5 w-3.5 mr-1.5" />}
+                    {range.value === 'all' && <Archive className="h-3.5 w-3.5 mr-1.5" />}
+                    {range.value === 'custom' && <Calendar className="h-3.5 w-3.5 mr-1.5" />}
+                    {range.label}
+                  </Button>
+                ))}
+              </div>
+              {exportDateRange === 'custom' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="flex flex-col sm:flex-row gap-3 mt-3"
+                >
+                  <div className="space-y-1.5 flex-1">
+                    <Label className="text-xs text-muted-foreground">From</Label>
+                    <Input
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-1.5 flex-1">
+                    <Label className="text-xs text-muted-foreground">To</Label>
+                    <Input
+                      type="date"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Column Selection */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Column Selection</Label>
+              <div className="space-y-2">
+                {(Object.keys(DATA_SOURCE_CONFIG) as ExportDataSource[]).map(source => {
+                  const config = DATA_SOURCE_CONFIG[source];
+                  const Icon = config.icon;
+                  const isExpanded = expandedSources.has(source);
+                  const columns = exportColumns[source];
+                  const selectedCount = columns.filter(c => c.selected).length;
+                  return (
+                    <div key={source} className="rounded-lg border border-border">
+                      <button
+                        onClick={() => toggleExpanded(source)}
+                        className="flex items-center justify-between w-full p-3 hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Icon className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium text-sm">{config.name}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {selectedCount}/{columns.length} selected
+                          </Badge>
+                        </div>
+                        {isExpanded ? (
+                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </button>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="border-t border-border p-3 space-y-3"
+                        >
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => selectAllColumns(source)}
+                              className="text-xs h-7"
+                            >
+                              Select All
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => deselectAllColumns(source)}
+                              className="text-xs h-7"
+                            >
+                              Deselect All
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {columns.map((col, idx) => (
+                              <div
+                                key={col.key}
+                                className="flex items-center gap-2 rounded-md border border-border/50 px-3 py-2 hover:bg-muted/30 transition-colors"
+                              >
+                                <div className="flex items-center gap-1 text-muted-foreground cursor-grab">
+                                  <Minus className="h-3 w-3" />
+                                </div>
+                                <Checkbox
+                                  id={`col-${source}-${col.key}`}
+                                  checked={col.selected}
+                                  onCheckedChange={() => toggleColumn(source, col.key)}
+                                />
+                                <label
+                                  htmlFor={`col-${source}-${col.key}`}
+                                  className="text-sm cursor-pointer flex-1"
+                                >
+                                  {col.label}
+                                </label>
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+                                  {idx + 1}
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Export Summary Preview */}
+            <div className="rounded-xl border border-border bg-muted/30 p-4">
+              <h4 className="font-medium text-sm mb-3">Export Summary</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
+                    <Hash className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Row Count</p>
+                    <p className="font-semibold text-sm">{summary.rowCount.toLocaleString()}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/40">
+                    <HardDrive className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">File Size</p>
+                    <p className="font-semibold text-sm">{summary.fileSizeEstimate}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/40">
+                    <Timer className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Estimated Time</p>
+                    <p className="font-semibold text-sm">{summary.estimatedTime}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Export Button */}
+            <div className="space-y-3">
+              {isExporting && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Exporting...</span>
+                    <span className="font-medium">{exportProgress}%</span>
+                  </div>
+                  <Progress value={exportProgress} className="h-2" />
+                </div>
+              )}
+              <Button
+                onClick={handleExport}
+                disabled={isExporting || exportColumns[exportSource].filter(c => c.selected).length === 0}
+                className="w-full h-12 text-base font-semibold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg hover:shadow-xl transition-all"
+                size="lg"
+              >
+                {isExporting ? (
+                  <>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    Exporting Data...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-5 w-5 mr-2" />
+                    Export {DATA_SOURCE_CONFIG[exportSource].name} Data
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* ========== DATA IMPORT SECTION ========== */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+        <Card className="shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white">
+                <CloudUpload className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Data Import</CardTitle>
+                <CardDescription>Import data from external sources into your platform</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Upload Area */}
+            <div
+              onDragOver={(e) => { e.preventDefault(); setIsDragActive(true); }}
+              onDragLeave={() => setIsDragActive(false)}
+              onDrop={handleFileDrop}
+              className={`relative flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed p-8 transition-all cursor-pointer ${
+                isDragActive
+                  ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30'
+                  : importFile
+                    ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
+                    : 'border-border hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-muted/30'
+              }`}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.json,.xlsx"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              {importFile ? (
+                <>
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40">
+                    <CheckCircle2 className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-medium">{importFile.name}</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {(importFile.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => { e.stopPropagation(); resetImport(); }}
+                    className="gap-1.5"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Remove File
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                    <CloudUpload className="h-7 w-7 text-muted-foreground" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-medium">Drag & drop your file here</p>
+                    <p className="text-sm text-muted-foreground mt-1">or click to browse</p>
+                  </div>
+                  <div className="flex items-center gap-4 mt-1">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <FileText className="h-3.5 w-3.5" />
+                      CSV
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <FileJson className="h-3.5 w-3.5" />
+                      JSON
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <FileSpreadsheet className="h-3.5 w-3.5" />
+                      XLSX
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" className="gap-1.5 mt-1">
+                    <Search className="h-3.5 w-3.5" />
+                    Browse Files
+                  </Button>
+                </>
+              )}
+            </div>
+
+            {/* Import Configuration */}
+            {importFile && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-4"
+              >
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Import Destination</Label>
+                  <Select value={importSource} onValueChange={(v) => setImportSource(v as ExportDataSource)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select destination" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(DATA_SOURCE_CONFIG) as ExportDataSource[])
+                        .filter(s => s !== 'all')
+                        .map(source => (
+                          <SelectItem key={source} value={source}>
+                            {DATA_SOURCE_CONFIG[source].name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Column Mapping */}
+                {columnMappings.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium">Column Mapping</Label>
+                      <Badge variant="secondary" className="text-xs">
+                        {columnMappings.filter(m => m.confirmed).length}/{columnMappings.length} matched
+                      </Badge>
+                    </div>
+                    <div className="rounded-lg border border-border overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[40%]">Source Column</TableHead>
+                            <TableHead className="w-[10%] text-center"></TableHead>
+                            <TableHead className="w-[40%]">Target Field</TableHead>
+                            <TableHead className="w-[10%] text-center">Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {columnMappings.map((mapping, idx) => (
+                            <TableRow key={mapping.sourceColumn}>
+                              <TableCell className="font-mono text-sm">{mapping.sourceColumn}</TableCell>
+                              <TableCell className="text-center">
+                                <ArrowRight className="h-4 w-4 text-muted-foreground mx-auto" />
+                              </TableCell>
+                              <TableCell>
+                                <Select
+                                  value={mapping.targetField}
+                                  onValueChange={(v) => updateColumnMapping(idx, v)}
+                                >
+                                  <SelectTrigger className="h-8 text-sm">
+                                    <SelectValue placeholder="Select field..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="_skip_">-- Skip --</SelectItem>
+                                    {DATA_SOURCE_CONFIG[importSource].columns.map(col => (
+                                      <SelectItem key={col.key} value={col.key}>
+                                        {col.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {mapping.targetField === '_skip_' ? (
+                                  <Badge variant="secondary" className="text-[10px]">Skip</Badge>
+                                ) : mapping.confirmed ? (
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-500 mx-auto" />
+                                ) : mapping.targetField ? (
+                                  <AlertTriangle className="h-4 w-4 text-amber-500 mx-auto" />
+                                ) : (
+                                  <XCircle className="h-4 w-4 text-red-400 mx-auto" />
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Validation Preview */}
+                {validationResult && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-3"
+                  >
+                    <Label className="text-sm font-medium">Validation Results</Label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="rounded-lg border border-border bg-card p-3 text-center">
+                        <p className="text-2xl font-bold">{validationResult.totalRows}</p>
+                        <p className="text-xs text-muted-foreground">Total Rows</p>
+                      </div>
+                      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-3 text-center">
+                        <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{validationResult.validRows}</p>
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400">Valid Rows</p>
+                      </div>
+                      <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-3 text-center">
+                        <p className="text-2xl font-bold text-red-600 dark:text-red-400">{validationResult.errors.length}</p>
+                        <p className="text-xs text-red-600 dark:text-red-400">Errors</p>
+                      </div>
+                      <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3 text-center">
+                        <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{validationResult.warnings.length}</p>
+                        <p className="text-xs text-amber-600 dark:text-amber-400">Warnings</p>
+                      </div>
+                    </div>
+
+                    {(validationResult.errors.length > 0 || validationResult.warnings.length > 0) && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowValidationDetails(!showValidationDetails)}
+                          className="gap-1.5 text-xs"
+                        >
+                          {showValidationDetails ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                          {showValidationDetails ? 'Hide' : 'Show'} Details
+                        </Button>
+                        {showValidationDetails && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="max-h-64 overflow-y-auto rounded-lg border border-border"
+                          >
+                            {validationResult.errors.length > 0 && (
+                              <div className="p-3 border-b border-border">
+                                <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2">Errors</p>
+                                {validationResult.errors.map((err, i) => (
+                                  <div key={i} className="flex items-start gap-2 py-1 text-xs">
+                                    <XCircle className="h-3.5 w-3.5 text-red-500 mt-0.5 shrink-0" />
+                                    <span>
+                                      <strong>Row {err.row}</strong>, Column &quot;{err.column}&quot;: {err.message}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {validationResult.warnings.length > 0 && (
+                              <div className="p-3">
+                                <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-2">Warnings</p>
+                                {validationResult.warnings.map((warn, i) => (
+                                  <div key={i} className="flex items-start gap-2 py-1 text-xs">
+                                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
+                                    <span>
+                                      <strong>Row {warn.row}</strong>, Column &quot;{warn.column}&quot;: {warn.message}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
+                      </>
+                    )}
+                  </motion.div>
+                )}
+
+                {/* Import Result */}
+                {importResult && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-4"
+                  >
+                    <div className="flex items-center gap-3 mb-3">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                      <span className="font-medium text-emerald-700 dark:text-emerald-300">Import Complete</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 text-center">
+                      <div>
+                        <p className="text-lg font-bold text-emerald-600">{importResult.imported}</p>
+                        <p className="text-xs text-emerald-600/70">Imported</p>
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-amber-600">{importResult.skipped}</p>
+                        <p className="text-xs text-amber-600/70">Skipped</p>
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-red-600">{importResult.failed}</p>
+                        <p className="text-xs text-red-600/70">Failed</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Import Progress & Button */}
+                {isImporting && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Importing...</span>
+                      <span className="font-medium">{importProgress}%</span>
+                    </div>
+                    <Progress value={importProgress} className="h-2" />
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <Button
+                    onClick={handleImport}
+                    disabled={
+                      isImporting ||
+                      !validationResult ||
+                      validationResult.errors.length > 5 ||
+                      !!importResult
+                    }
+                    className="flex-1 h-11 font-semibold bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 shadow-lg"
+                    size="lg"
+                  >
+                    {isImporting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Importing Data...
+                      </>
+                    ) : (
+                      <>
+                        <CloudUpload className="h-4 w-4 mr-2" />
+                        Import Data
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={resetImport}
+                    className="gap-1.5"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Reset
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* ========== EXPORT HISTORY ========== */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
+        <Card className="shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white">
+                  <Archive className="h-5 w-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Export History</CardTitle>
+                  <CardDescription>View and re-download past exports</CardDescription>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Select value={historySourceFilter} onValueChange={setHistorySourceFilter}>
+                  <SelectTrigger className="w-[160px] h-8 text-xs">
+                    <Filter className="h-3.5 w-3.5 mr-1.5" />
+                    <SelectValue placeholder="Source" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Sources</SelectItem>
+                    <SelectItem value="Courses">Courses</SelectItem>
+                    <SelectItem value="Users & Enrollments">Users & Enrollments</SelectItem>
+                    <SelectItem value="Assessments">Assessments</SelectItem>
+                    <SelectItem value="Analytics">Analytics</SelectItem>
+                    <SelectItem value="Community">Community</SelectItem>
+                    <SelectItem value="Certificates">Certificates</SelectItem>
+                    <SelectItem value="All Data">All Data</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={historyStatusFilter} onValueChange={setHistoryStatusFilter}>
+                  <SelectTrigger className="w-[120px] h-8 text-xs">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {filteredHistory.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Archive className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">No export history found</p>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Source</TableHead>
+                      <TableHead>Format</TableHead>
+                      <TableHead className="text-right">Rows</TableHead>
+                      <TableHead className="text-right">Size</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredHistory.map(entry => (
+                      <TableRow key={entry.id}>
+                        <TableCell className="text-sm text-muted-foreground">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="h-3.5 w-3.5" />
+                            {entry.date}
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-medium text-sm">{entry.source}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs font-mono">
+                            {entry.format.toUpperCase()}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right text-sm">{entry.rows.toLocaleString()}</TableCell>
+                        <TableCell className="text-right text-sm">{entry.size}</TableCell>
+                        <TableCell className="text-center">
+                          {entry.status === 'completed' ? (
+                            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-0 text-xs">
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              Completed
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border-0 text-xs">
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Failed
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {entry.status === 'completed' ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleReDownload(entry)}
+                                    className="h-8 gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                  >
+                                    <Download className="h-3.5 w-3.5" />
+                                    <span className="hidden sm:inline text-xs">Download</span>
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Download Again</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            <Button variant="ghost" size="sm" disabled className="h-8">
+                              <XCircle className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+    </div>
+  );
+}
+
+// ============================================================
 // Main Admin Settings Component
 // ============================================================
 export function AdminSettings() {
@@ -5927,6 +7302,7 @@ export function AdminSettings() {
     { value: 'billing', label: 'Billing', icon: CreditCard },
     { value: 'email-templates', label: 'Email Templates', icon: Mail },
     { value: 'webhooks', label: 'Webhooks', icon: Webhook },
+    { value: 'data-export', label: 'Data Export', icon: Download },
     { value: 'api-keys', label: 'API Keys', icon: Key },
     { value: 'notifications', label: 'Notifications', icon: Bell },
     { value: 'security', label: 'Security', icon: ShieldCheck },
@@ -5995,6 +7371,11 @@ export function AdminSettings() {
           <TabsContent value="webhooks">
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
               <WebhookSettings />
+            </motion.div>
+          </TabsContent>
+          <TabsContent value="data-export">
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+              <DataExportImport />
             </motion.div>
           </TabsContent>
           <TabsContent value="api-keys">

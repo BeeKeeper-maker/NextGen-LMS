@@ -26,6 +26,9 @@ import {
   Legend,
   ResponsiveContainer,
   ZAxis,
+  FunnelChart,
+  Funnel,
+  LabelList,
 } from 'recharts';
 import {
   DollarSign,
@@ -53,6 +56,14 @@ import {
   Brain,
   ArrowRight,
   Check,
+  Activity,
+  Radio,
+  Trophy,
+  MapPin,
+  Send,
+  Printer,
+  Mail,
+  Bell,
 } from 'lucide-react';
 
 import {
@@ -81,6 +92,25 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Progress } from '@/components/ui/progress';
+import {
   revenueData,
   dailyMetrics,
   demoCourses,
@@ -102,6 +132,7 @@ const dateRangeLabels: Record<DateRange, string> = {
 const revenueChartConfig: ChartConfig = {
   revenue: { label: 'Revenue', color: '#10B981' },
   prevRevenue: { label: 'Prev. Period', color: '#94A3B8' },
+  forecast: { label: 'Forecast', color: '#F59E0B' },
 };
 
 const activeUsersChartConfig: ChartConfig = {
@@ -152,6 +183,38 @@ const pieChartConfig: ChartConfig = {
   other: { label: 'Other', color: '#06B6D4' },
 };
 
+const revenueBreakdownConfig: ChartConfig = {
+  courseSales: { label: 'Course Sales', color: '#10B981' },
+  subscriptions: { label: 'Subscriptions', color: '#8B5CF6' },
+  certificates: { label: 'Certificates', color: '#F59E0B' },
+  other: { label: 'Other', color: '#06B6D4' },
+};
+
+const peakHoursConfig: ChartConfig = {
+  activity: { label: 'Activity Level', color: '#8B5CF6' },
+};
+
+const dropoffConfig: ChartConfig = {
+  rate: { label: 'Drop-off Rate', color: '#EF4444' },
+};
+
+const completionComparisonConfig: ChartConfig = {
+  thisMonth: { label: 'This Month', color: '#10B981' },
+  lastMonth: { label: 'Last Month', color: '#94A3B8' },
+};
+
+const assessmentDistConfig: ChartConfig = {
+  students: { label: 'Students', color: '#10B981' },
+};
+
+const funnelConfig: ChartConfig = {
+  count: { label: 'Learners', color: '#10B981' },
+};
+
+const sessionDistConfig: ChartConfig = {
+  sessions: { label: 'Sessions', color: '#8B5CF6' },
+};
+
 // ─── Mock data for geographic distribution ──────────────────
 const geographicData = [
   { country: 'USA', percentage: 35, flag: '🇺🇸', learners: 1347 },
@@ -167,6 +230,149 @@ const regionalPieData = [
   { name: 'Asia', value: 20, color: '#F59E0B' },
   { name: 'Other', value: 10, color: '#06B6D4' },
 ];
+
+// ─── New Market Data ────────────────────────────────────────
+const newMarketsData = [
+  { country: '🇧🇷 Brazil', growth: 34, learners: 189, potential: 'High' },
+  { country: '🇳🇬 Nigeria', growth: 52, learners: 94, potential: 'Very High' },
+  { country: '🇻🇳 Vietnam', growth: 28, learners: 156, potential: 'Medium' },
+  { country: '🇵🇭 Philippines', growth: 41, learners: 112, potential: 'High' },
+  { country: '🇪🇬 Egypt', growth: 47, learners: 78, potential: 'Very High' },
+];
+
+// ─── Region Comparison Data ─────────────────────────────────
+const regionComparisonData = [
+  { region: 'North America', learners: 1732, revenue: 215000, completion: 76, growth: 8.2 },
+  { region: 'Europe', learners: 924, revenue: 128000, completion: 72, growth: 12.5 },
+  { region: 'South Asia', learners: 577, revenue: 64000, completion: 68, growth: 24.3 },
+  { region: 'East Asia', learners: 412, revenue: 52000, completion: 81, growth: 15.1 },
+  { region: 'South America', learners: 289, revenue: 31000, completion: 64, growth: 31.7 },
+  { region: 'Africa', learners: 178, revenue: 18000, completion: 58, growth: 45.2 },
+  { region: 'Oceania', learners: 145, revenue: 22000, completion: 79, growth: 6.8 },
+];
+
+// ─── Revenue Breakdown Data ─────────────────────────────────
+const revenueBreakdownData = [
+  { name: 'Course Sales', value: 45, color: '#10B981', amount: 148500 },
+  { name: 'Subscriptions', value: 30, color: '#8B5CF6', amount: 99000 },
+  { name: 'Certificates', value: 15, color: '#F59E0B', amount: 49500 },
+  { name: 'Other', value: 10, color: '#06B6D4', amount: 33000 },
+];
+
+// ─── Revenue Forecast Data ──────────────────────────────────
+const revenueWithForecast = [
+  ...revenueData,
+  { month: 'Oct', revenue: 50200, forecast: 50200, enrollments: 275, completions: 188 },
+  { month: 'Nov', revenue: 53100, forecast: 53100, enrollments: 290, completions: 198 },
+  { month: 'Dec', revenue: 56400, forecast: 56400, enrollments: 308, completions: 210 },
+];
+
+// ─── Peak Hours Radar Data ──────────────────────────────────
+const peakHoursData = [
+  { hour: '6AM', activity: 15 },
+  { hour: '8AM', activity: 45 },
+  { hour: '10AM', activity: 88 },
+  { hour: '12PM', activity: 72 },
+  { hour: '2PM', activity: 85 },
+  { hour: '4PM', activity: 68 },
+  { hour: '6PM', activity: 52 },
+  { hour: '8PM', activity: 38 },
+  { hour: '10PM', activity: 20 },
+  { hour: '12AM', activity: 8 },
+];
+
+// ─── Session Duration Distribution ──────────────────────────
+const sessionDistData = [
+  { range: '< 5 min', sessions: 245 },
+  { range: '5-15 min', sessions: 890 },
+  { range: '15-30 min', sessions: 1240 },
+  { range: '30-60 min', sessions: 980 },
+  { range: '60-90 min', sessions: 420 },
+  { range: '90+ min', sessions: 180 },
+];
+
+// ─── Drop-off Points Data ──────────────────────────────────
+const dropoffData = [
+  { point: 'Module 1 Introduction', rate: 8 },
+  { point: 'Module 2 Basics', rate: 15 },
+  { point: 'Module 3 Intermediate', rate: 28 },
+  { point: 'Module 4 Advanced', rate: 42 },
+  { point: 'Module 5 Projects', rate: 35 },
+  { point: 'Final Assessment', rate: 22 },
+];
+
+// ─── Top Performers Data ────────────────────────────────────
+const topPerformersData = [
+  { name: 'Sarah Chen', score: 98, courses: 12, avatar: 'SC' },
+  { name: 'Alex Rivera', score: 96, courses: 10, avatar: 'AR' },
+  { name: 'Priya Patel', score: 95, courses: 11, avatar: 'PP' },
+  { name: 'James Wilson', score: 94, courses: 9, avatar: 'JW' },
+  { name: 'Yuki Tanaka', score: 93, courses: 8, avatar: 'YT' },
+];
+
+// ─── Completion Comparison Data ─────────────────────────────
+const completionComparisonData = [
+  { course: 'React & Next.js', thisMonth: 82, lastMonth: 75 },
+  { course: 'AI Full Stack', thisMonth: 78, lastMonth: 72 },
+  { course: 'System Design', thisMonth: 65, lastMonth: 60 },
+  { course: 'Data Viz', thisMonth: 71, lastMonth: 68 },
+  { course: 'UX/UI Design', thisMonth: 74, lastMonth: 70 },
+  { course: 'DevOps & Cloud', thisMonth: 69, lastMonth: 64 },
+];
+
+// ─── Assessment Score Distribution (Bell Curve) ─────────────
+const assessmentDistData = [
+  { score: '0-10', students: 2 },
+  { score: '10-20', students: 5 },
+  { score: '20-30', students: 12 },
+  { score: '30-40', students: 25 },
+  { score: '40-50', students: 58 },
+  { score: '50-60', students: 120 },
+  { score: '60-70', students: 210 },
+  { score: '70-80', students: 340 },
+  { score: '80-90', students: 285 },
+  { score: '90-100', students: 145 },
+];
+
+// ─── Learning Path Funnel Data ──────────────────────────────
+const learningPathFunnelData = [
+  { stage: 'Enrolled', count: 3847, fill: '#10B981' },
+  { stage: 'Started', count: 3215, fill: '#34D399' },
+  { stage: '50% Done', count: 2489, fill: '#6EE7B7' },
+  { stage: '75% Done', count: 1934, fill: '#A7F3D0' },
+  { stage: 'Completed', count: 1528, fill: '#D1FAE5' },
+  { stage: 'Certified', count: 1284, fill: '#ECFDF5' },
+];
+
+// ─── Time to Complete Distribution ──────────────────────────
+const timeToCompleteData = [
+  { range: '< 1 week', count: 45, color: '#10B981' },
+  { range: '1-2 weeks', count: 120, color: '#34D399' },
+  { range: '2-4 weeks', count: 210, color: '#6EE7B7' },
+  { range: '1-2 months', count: 180, color: '#F59E0B' },
+  { range: '2-3 months', count: 95, color: '#EF4444' },
+  { range: '3+ months', count: 40, color: '#DC2626' },
+];
+
+// ─── GitHub-Style Calendar Heatmap Data ─────────────────────
+const CAL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const CAL_DAYS = ['Mon', '', 'Wed', '', 'Fri', '', 'Sun'];
+
+function generateCalendarHeatmap(): { week: number; day: number; value: number }[] {
+  const data: { week: number; day: number; value: number }[] = [];
+  for (let w = 0; w < 53; w++) {
+    for (let d = 0; d < 7; d++) {
+      // Simulate more activity during weekdays and recent weeks
+      const isWeekday = d < 5;
+      const recencyBonus = w > 35 ? 1.3 : w > 20 ? 1.1 : 1;
+      const base = isWeekday ? 30 : 10;
+      data.push({ week: w, day: d, value: Math.floor((base + Math.random() * 50) * recencyBonus) });
+    }
+  }
+  return data;
+}
+
+const calendarHeatmapData = generateCalendarHeatmap();
 
 // ─── Mock data for learning outcomes ────────────────────────
 const beforeAfterData = [
@@ -216,15 +422,12 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i);
 function generateActivityHeatmap(): number[][] {
   return DAYS.map(() =>
     HOURS.map((hour) => {
-      // More activity during business hours (9-18)
       if (hour >= 9 && hour <= 18) {
         return Math.floor(30 + Math.random() * 70);
       }
-      // Moderate activity in evening (19-22)
       if (hour >= 19 && hour <= 22) {
         return Math.floor(10 + Math.random() * 30);
       }
-      // Low activity at night and early morning
       return Math.floor(Math.random() * 12);
     })
   );
@@ -341,6 +544,9 @@ const totalRevenue = revenueData.reduce((sum, d) => sum + d.revenue, 0);
 const avgDailyRevenue = Math.floor(totalRevenue / revenueData.length / 30);
 const bestDay = revenueData.reduce((best, d) => (d.revenue > best.revenue ? d : best), revenueData[0]);
 const mrrGrowth = ((revenueData[revenueData.length - 1].revenue - revenueData[0].revenue) / revenueData[0].revenue * 100).toFixed(1);
+const mrr = 47832;
+const arr = mrr * 12;
+const avgRevenuePerUser = Math.floor(totalRevenue / 3847);
 
 // ─── Animation variants ────────────────────────────────────
 const containerVariants = {
@@ -406,7 +612,6 @@ function ActivityHeatmap() {
     return 'bg-emerald-600 dark:bg-emerald-400/80';
   }
 
-  // Compute day totals for summary
   const dayTotals = DAYS.map((_, dayIdx) =>
     activityHeatmapData[dayIdx].reduce((sum, v) => sum + v, 0)
   );
@@ -420,7 +625,6 @@ function ActivityHeatmap() {
     <div className="space-y-4">
       <div className="overflow-x-auto pb-2">
         <div className="inline-flex flex-col gap-[3px] min-w-[700px]">
-          {/* Hour labels */}
           <div className="flex gap-[3px] pl-12">
             {HOURS.filter((_, i) => i % 3 === 0).map((hour) => (
               <div key={hour} className="flex-[3] text-[10px] text-muted-foreground text-center">
@@ -455,7 +659,6 @@ function ActivityHeatmap() {
                     onMouseLeave={() => setHoveredCell(null)}
                     whileHover={{ scale: 1.15 }}
                   >
-                    {/* Peak hour indicator */}
                     {hour === peakHourIdx && dayIdx === peakDayIdx && (
                       <div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                     )}
@@ -467,7 +670,6 @@ function ActivityHeatmap() {
         </div>
       </div>
 
-      {/* Tooltip */}
       <AnimatePresence>
         {hoveredCell && (
           <motion.div
@@ -492,7 +694,6 @@ function ActivityHeatmap() {
         )}
       </AnimatePresence>
 
-      {/* Legend */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>Less</span>
@@ -511,6 +712,74 @@ function ActivityHeatmap() {
             <span>Peak</span>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── GitHub-Style Calendar Heatmap ─────────────────────────
+function CalendarHeatmap() {
+  const [hoveredWeek, setHoveredWeek] = useState<number | null>(null);
+  const maxVal = Math.max(...calendarHeatmapData.map(d => d.value));
+
+  function getCalCellColor(value: number): string {
+    const intensity = value / maxVal;
+    if (intensity === 0) return 'bg-slate-100 dark:bg-slate-800';
+    if (intensity < 0.15) return 'bg-emerald-100 dark:bg-emerald-900/30';
+    if (intensity < 0.3) return 'bg-emerald-200 dark:bg-emerald-800/40';
+    if (intensity < 0.5) return 'bg-emerald-300 dark:bg-emerald-700/50';
+    if (intensity < 0.7) return 'bg-emerald-400 dark:bg-emerald-600/60';
+    if (intensity < 0.85) return 'bg-emerald-500 dark:bg-emerald-500/70';
+    return 'bg-emerald-600 dark:bg-emerald-400/80';
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="overflow-x-auto pb-2">
+        <div className="inline-flex flex-col gap-[2px] min-w-[700px]">
+          {/* Month labels */}
+          <div className="flex gap-[2px] pl-8 mb-1">
+            {CAL_MONTHS.map((month, i) => (
+              <div key={month} className="text-[10px] text-muted-foreground" style={{ width: `${(53 / 12) * 10}px` }}>
+                {i % 2 === 0 ? month : ''}
+              </div>
+            ))}
+          </div>
+          {/* Day rows */}
+          {CAL_DAYS.map((dayLabel, dayIdx) => (
+            <div key={dayIdx} className="flex items-center gap-[2px]">
+              <div className="w-7 text-[10px] text-muted-foreground shrink-0 text-right pr-1">
+                {dayLabel}
+              </div>
+              {Array.from({ length: 53 }, (_, weekIdx) => {
+                const cell = calendarHeatmapData.find(c => c.week === weekIdx && c.day === dayIdx);
+                const value = cell?.value ?? 0;
+                return (
+                  <motion.div
+                    key={`${dayIdx}-${weekIdx}`}
+                    className={cn(
+                      'w-[10px] h-[10px] rounded-[2px] cursor-pointer transition-colors duration-100',
+                      getCalCellColor(value),
+                      hoveredWeek === weekIdx && 'ring-1 ring-emerald-500 ring-offset-0.5 dark:ring-offset-background'
+                    )}
+                    onMouseEnter={() => setHoveredWeek(weekIdx)}
+                    onMouseLeave={() => setHoveredWeek(null)}
+                    whileHover={{ scale: 1.4 }}
+                    title={`${value} activities`}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Legend */}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span>Less</span>
+        {['bg-slate-100 dark:bg-slate-800', 'bg-emerald-100 dark:bg-emerald-900/30', 'bg-emerald-300 dark:bg-emerald-700/50', 'bg-emerald-500 dark:bg-emerald-500/70', 'bg-emerald-600 dark:bg-emerald-400/80'].map((color, i) => (
+          <div key={i} className={cn('w-3 h-3 rounded-[2px]', color)} />
+        ))}
+        <span>More</span>
       </div>
     </div>
   );
@@ -539,7 +808,6 @@ function GradientDivider() {
 function AnalyticsSkeleton() {
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* Header skeleton */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-2">
           <Skeleton className="h-8 w-56" />
@@ -550,7 +818,6 @@ function AnalyticsSkeleton() {
           <Skeleton className="h-9 w-20 rounded-lg" />
         </div>
       </div>
-      {/* Date range pills skeleton */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex gap-2">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -560,7 +827,6 @@ function AnalyticsSkeleton() {
         </div>
         <Skeleton className="h-5 w-52" />
       </div>
-      {/* Summary stats skeleton */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="rounded-xl border border-white/20 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-4 space-y-3">
@@ -570,7 +836,6 @@ function AnalyticsSkeleton() {
           </div>
         ))}
       </div>
-      {/* Main chart skeletons */}
       <div className="rounded-xl border border-white/20 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl overflow-hidden">
         <div className="p-6 space-y-2">
           <Skeleton className="h-6 w-40" />
@@ -580,7 +845,6 @@ function AnalyticsSkeleton() {
           <Skeleton className="h-[300px] w-full rounded-lg" />
         </div>
       </div>
-      {/* Secondary chart skeleton */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="rounded-xl border border-white/20 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-6 space-y-3">
           <Skeleton className="h-6 w-36" />
@@ -632,12 +896,25 @@ export function AdminAnalytics() {
   const [dateRange, setDateRange] = useState<DateRange>('30d');
   const [comparePrevious, setComparePrevious] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [liveMode, setLiveMode] = useState(false);
+  const [livePulse, setLivePulse] = useState(false);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
 
   // Simulate initial load
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 800);
     return () => clearTimeout(timer);
   }, []);
+
+  // Live mode pulse effect
+  useEffect(() => {
+    if (!liveMode) return;
+    const interval = setInterval(() => {
+      setLivePulse(prev => !prev);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [liveMode]);
 
   // Filter daily metrics based on date range
   const filteredMetrics = (() => {
@@ -672,11 +949,27 @@ export function AdminAnalytics() {
     >
       {/* ─── Header & Controls ─────────────────────────── */}
       <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Analytics Deep Dive</h1>
-          <p className="text-muted-foreground mt-1">
-            Comprehensive platform analytics and performance insights
-          </p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground">Analytics Deep Dive</h1>
+            <p className="text-muted-foreground mt-1">
+              Comprehensive platform analytics and performance insights
+            </p>
+          </div>
+          {/* Live Mode Badge */}
+          {liveMode && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-700"
+            >
+              <div className={cn(
+                'w-2 h-2 rounded-full bg-emerald-500 transition-opacity duration-500',
+                livePulse ? 'opacity-100' : 'opacity-40'
+              )} />
+              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">LIVE</span>
+            </motion.div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {/* Export Report Dropdown */}
@@ -703,7 +996,6 @@ export function AdminAnalytics() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {/* Share Dashboard Button */}
           <Button variant="outline" size="sm" className="gap-1.5">
             <Share2 className="h-4 w-4" />
             Share
@@ -711,33 +1003,67 @@ export function AdminAnalytics() {
         </div>
       </motion.div>
 
-      {/* Date Range Selector + Compare Toggle */}
+      {/* Date Range Selector + Compare Toggle + Live Mode */}
       <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex flex-wrap gap-2">
-          {(['7d', '30d', '90d', 'custom'] as DateRange[]).map((range) => (
-            <Button
-              key={range}
-              variant={dateRange === range ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setDateRange(range)}
-              className={cn(
-                'gap-1.5',
-                dateRange === range && 'bg-emerald-600 hover:bg-emerald-700 text-white'
-              )}
+        <div className="flex flex-wrap items-center gap-2">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={dateRange}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={{ duration: 0.2 }}
+              className="flex flex-wrap items-center gap-2"
             >
-              {range === 'custom' ? <Calendar className="h-3.5 w-3.5" /> : null}
-              {dateRangeLabels[range]}
-            </Button>
-          ))}
+              {(['7d', '30d', '90d', 'custom'] as DateRange[]).map((range) => (
+                <Button
+                  key={range}
+                  variant={dateRange === range ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setDateRange(range)}
+                  className={cn(
+                    'gap-1.5 transition-all',
+                    dateRange === range && 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  )}
+                >
+                  {range === 'custom' ? <Calendar className="h-3.5 w-3.5" /> : null}
+                  {dateRangeLabels[range]}
+                </Button>
+              ))}
+            </motion.div>
+          </AnimatePresence>
           <Badge variant="secondary" className="flex items-center gap-1 px-3 py-1.5">
             <Clock className="h-3 w-3" />
             Viewing: {dateRangeLabels[dateRange]}
           </Badge>
+          {/* Compare Badge */}
+          {comparePrevious && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+            >
+              <Badge className="bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300 border-violet-200 dark:border-violet-700 flex items-center gap-1 px-3 py-1.5">
+                <ArrowRight className="h-3 w-3" />
+                Comparing with previous period
+              </Badge>
+            </motion.div>
+          )}
         </div>
-        {/* Compare with previous period toggle */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Compare with previous period</span>
-          <Switch checked={comparePrevious} onCheckedChange={setComparePrevious} />
+        <div className="flex items-center gap-4">
+          {/* Live Mode Toggle */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <Radio className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Live Mode</span>
+            </div>
+            <Switch checked={liveMode} onCheckedChange={setLiveMode} />
+          </div>
+          {/* Compare with previous period toggle */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Compare</span>
+            <Switch checked={comparePrevious} onCheckedChange={setComparePrevious} />
+          </div>
         </div>
       </motion.div>
 
@@ -786,13 +1112,13 @@ export function AdminAnalytics() {
               </div>
               <div>
                 <CardTitle>Revenue Deep Dive</CardTitle>
-                <CardDescription>Revenue trends and key financial metrics</CardDescription>
+                <CardDescription>Revenue trends, breakdown, and key financial metrics</CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <ChartContainer config={comparePrevious ? revenueChartConfig : { revenue: { label: 'Revenue', color: '#10B981' } }} className="h-[300px] w-full">
-              <AreaChart data={comparePrevious ? comparisonRevenueData : revenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <ChartContainer config={comparePrevious ? revenueChartConfig : { revenue: { label: 'Revenue', color: '#10B981' }, forecast: { label: 'Forecast', color: '#F59E0B' } }} className="h-[300px] w-full">
+              <AreaChart data={revenueWithForecast} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
@@ -817,6 +1143,16 @@ export function AdminAnalytics() {
                     fill="url(#prevRevenueGradient)"
                   />
                 )}
+                {/* Forecast dashed line */}
+                <Line
+                  type="monotone"
+                  dataKey="forecast"
+                  stroke="#F59E0B"
+                  strokeWidth={2}
+                  strokeDasharray="8 4"
+                  dot={false}
+                  connectMissing={false}
+                />
                 <Area
                   type="monotone"
                   dataKey="revenue"
@@ -826,6 +1162,14 @@ export function AdminAnalytics() {
                 />
               </AreaChart>
             </ChartContainer>
+
+            {/* Forecast indicator */}
+            <div className="flex items-center gap-2 mt-3 p-2 px-3 rounded-lg bg-amber-50 dark:bg-amber-950/20">
+              <div className="w-6 h-0 border-t-2 border-dashed border-amber-500 shrink-0" />
+              <span className="text-sm text-amber-700 dark:text-amber-400">
+                <strong>Forecast:</strong> Projected revenue for Oct-Dec based on current growth trends
+              </span>
+            </div>
 
             {/* Revenue KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
@@ -844,16 +1188,28 @@ export function AdminAnalytics() {
               <motion.div whileHover={{ scale: 1.02, y: -2 }} className="p-4 rounded-lg border bg-gradient-to-br from-violet-50 to-white dark:from-violet-950/20 dark:to-background cursor-default transition-shadow hover:shadow-md">
                 <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
                   <TrendingUp className="h-4 w-4" />
-                  Avg Daily Revenue
+                  MRR / ARR
                 </div>
-                <p className="text-2xl font-bold text-foreground">
-                  <AnimatedCounter value={avgDailyRevenue} prefix="$" />
+                <p className="text-lg font-bold text-foreground">
+                  <AnimatedCounter value={mrr} prefix="$" /> / <AnimatedCounter value={arr} prefix="$" />
                 </p>
                 <div className="flex items-center gap-1 text-emerald-600 text-xs mt-1">
-                  <ArrowUpRight className="h-3 w-3" /> +8.3%
+                  <ArrowUpRight className="h-3 w-3" /> +{mrrGrowth}% MRR growth
                 </div>
               </motion.div>
               <motion.div whileHover={{ scale: 1.02, y: -2 }} className="p-4 rounded-lg border bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/20 dark:to-background cursor-default transition-shadow hover:shadow-md">
+                <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
+                  <Users className="h-4 w-4" />
+                  Avg Rev / User
+                </div>
+                <p className="text-2xl font-bold text-foreground">
+                  <AnimatedCounter value={avgRevenuePerUser} prefix="$" />
+                </p>
+                <div className="flex items-center gap-1 text-emerald-600 text-xs mt-1">
+                  <ArrowUpRight className="h-3 w-3" /> +6.8%
+                </div>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.02, y: -2 }} className="p-4 rounded-lg border bg-gradient-to-br from-sky-50 to-white dark:from-sky-950/20 dark:to-background cursor-default transition-shadow hover:shadow-md">
                 <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
                   <BarChart3 className="h-4 w-4" />
                   Best Month
@@ -861,20 +1217,81 @@ export function AdminAnalytics() {
                 <p className="text-2xl font-bold text-foreground">${bestDay.revenue.toLocaleString()}</p>
                 <div className="text-muted-foreground text-xs mt-1">{bestDay.month}</div>
               </motion.div>
-              <motion.div whileHover={{ scale: 1.02, y: -2 }} className="p-4 rounded-lg border bg-gradient-to-br from-sky-50 to-white dark:from-sky-950/20 dark:to-background cursor-default transition-shadow hover:shadow-md">
-                <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-                  <TrendingUp className="h-4 w-4" />
-                  MRR Growth
-                </div>
-                <p className="text-2xl font-bold text-foreground">+{mrrGrowth}%</p>
-                <div className="flex items-center gap-1 text-emerald-600 text-xs mt-1">
-                  <ArrowUpRight className="h-3 w-3" /> Period over period
-                </div>
-              </motion.div>
             </div>
           </CardContent>
         </GlassCard>
       </motion.div>
+
+      {/* ─── Revenue Breakdown Donut ────────────────────────── */}
+      <motion.div variants={itemVariants}>
+        <GlassCard className="overflow-hidden">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-violet-500/10">
+                <BarChart3 className="h-5 w-5 text-violet-600" />
+              </div>
+              <div>
+                <CardTitle>Revenue Breakdown</CardTitle>
+                <CardDescription>Revenue distribution by source</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ChartContainer config={revenueBreakdownConfig} className="h-[280px] w-full">
+                <PieChart>
+                  <Pie
+                    data={revenueBreakdownData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={70}
+                    outerRadius={110}
+                    paddingAngle={4}
+                    dataKey="value"
+                    nameKey="name"
+                    strokeWidth={2}
+                  >
+                    {revenueBreakdownData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
+                    ))}
+                  </Pie>
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                </PieChart>
+              </ChartContainer>
+              <div className="space-y-4">
+                {revenueBreakdownData.map((item) => (
+                  <motion.div
+                    key={item.name}
+                    whileHover={{ x: 4 }}
+                    className="flex items-center gap-4 p-3 rounded-lg border hover:shadow-md transition-all cursor-default"
+                  >
+                    <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-foreground">{item.name}</span>
+                        <span className="text-sm font-bold text-foreground">{item.value}%</span>
+                      </div>
+                      <div className="mt-1.5 h-2 rounded-full bg-muted overflow-hidden">
+                        <motion.div
+                          className="h-full rounded-full"
+                          style={{ backgroundColor: item.color }}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${item.value}%` }}
+                          transition={{ duration: 0.8, ease: 'easeOut' }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">${item.amount.toLocaleString()}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </GlassCard>
+      </motion.div>
+
+      <GradientDivider />
 
       {/* ─── Learner Engagement Analytics ──────────────────── */}
       <motion.div variants={itemVariants}>
@@ -985,6 +1402,20 @@ export function AdminAnalytics() {
                 </LineChart>
               </ChartContainer>
             </div>
+
+            {/* Session Duration Distribution */}
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">Session Duration Distribution</h3>
+              <ChartContainer config={sessionDistConfig} className="h-[220px] w-full">
+                <BarChart data={sessionDistData} layout="vertical" margin={{ top: 5, right: 10, left: 40, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis type="number" tickLine={false} axisLine={false} fontSize={11} />
+                  <YAxis type="category" dataKey="range" tickLine={false} axisLine={false} fontSize={11} width={70} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="sessions" fill="#8B5CF6" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ChartContainer>
+            </div>
           </CardContent>
         </GlassCard>
       </motion.div>
@@ -1043,6 +1474,85 @@ export function AdminAnalytics() {
         </GlassCard>
       </motion.div>
 
+      {/* ─── User Activity Calendar Heatmap (GitHub-style) ── */}
+      <motion.div variants={itemVariants}>
+        <GlassCard className="overflow-hidden">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-emerald-500/10">
+                <Activity className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <CardTitle>User Activity Calendar</CardTitle>
+                <CardDescription>GitHub-style contribution graph showing daily learning activity over the past year</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <CalendarHeatmap />
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-6 pt-4 border-t">
+              <motion.div whileHover={{ scale: 1.03 }} className="text-center p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border cursor-default">
+                <p className="text-lg font-bold text-foreground">
+                  <AnimatedCounter value={calendarHeatmapData.reduce((s, c) => s + c.value, 0)} />
+                </p>
+                <p className="text-xs text-muted-foreground">Total Activities (Year)</p>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.03 }} className="text-center p-3 rounded-lg bg-violet-50 dark:bg-violet-950/20 border cursor-default">
+                <p className="text-lg font-bold text-foreground">285</p>
+                <p className="text-xs text-muted-foreground">Active Days</p>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.03 }} className="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border cursor-default">
+                <p className="text-lg font-bold text-foreground">47</p>
+                <p className="text-xs text-muted-foreground">Longest Streak</p>
+              </motion.div>
+            </div>
+          </CardContent>
+        </GlassCard>
+      </motion.div>
+
+      {/* ─── Peak Hours Radar ─────────────────────────────── */}
+      <motion.div variants={itemVariants}>
+        <GlassCard className="overflow-hidden">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-violet-500/10">
+                <Clock className="h-5 w-5 text-violet-600" />
+              </div>
+              <div>
+                <CardTitle>Peak Hours Activity</CardTitle>
+                <CardDescription>Activity levels by hour of day — radial view of learning patterns</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={peakHoursConfig} className="h-[340px] w-full mx-auto max-w-[500px]">
+              <RadarChart cx="50%" cy="50%" outerRadius="70%" data={peakHoursData}>
+                <PolarGrid className="stroke-border" />
+                <PolarAngleAxis dataKey="hour" fontSize={11} />
+                <PolarRadiusAxis angle={90} domain={[0, 100]} fontSize={10} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Radar
+                  name="Activity Level"
+                  dataKey="activity"
+                  stroke="#8B5CF6"
+                  fill="#8B5CF6"
+                  fillOpacity={0.25}
+                  strokeWidth={2}
+                />
+              </RadarChart>
+            </ChartContainer>
+            <div className="flex items-center gap-2 mt-3 p-3 rounded-lg bg-violet-50 dark:bg-violet-950/20">
+              <Zap className="h-4 w-4 text-violet-600" />
+              <span className="text-sm text-violet-700 dark:text-violet-400">
+                <strong>Peak Activity:</strong> 10 AM with 88% activity index. Morning hours (8AM-12PM) show highest engagement.
+              </span>
+            </div>
+          </CardContent>
+        </GlassCard>
+      </motion.div>
+
+      <GradientDivider />
+
       {/* ─── Scatter Plot: Duration vs Completion ──────────── */}
       <motion.div variants={itemVariants}>
         <GlassCard className="overflow-hidden">
@@ -1086,7 +1596,6 @@ export function AdminAnalytics() {
                 <ZAxis type="number" dataKey="enrollment" range={[80, 600]} name="Enrollments" />
                 <Tooltip content={<ScatterTooltip />} />
                 <Legend />
-                {/* Trend Line */}
                 <Scatter
                   name="Trend Line"
                   data={trendLineData}
@@ -1111,14 +1620,12 @@ export function AdminAnalytics() {
                 ))}
               </ScatterChart>
             </ChartContainer>
-            {/* Trend line info */}
             <div className="flex items-center gap-2 mt-3 p-2 px-3 rounded-lg bg-red-50 dark:bg-red-950/20">
               <div className="w-6 h-0 border-t-2 border-dashed border-red-500 shrink-0" />
               <span className="text-sm text-red-700 dark:text-red-400">
                 <strong>Trend:</strong> Completion rate decreases by ~{Math.abs(Math.round((trendLine.y1 - trendLine.y2) / (trendLine.x2 - trendLine.x1) * 10) / 10)}% per additional hour of course duration.
               </span>
             </div>
-            {/* Insight */}
             <div className="flex items-center gap-2 mt-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20">
               <Zap className="h-4 w-4 text-amber-600" />
               <span className="text-sm text-amber-700 dark:text-amber-400">
@@ -1146,7 +1653,6 @@ export function AdminAnalytics() {
             </div>
           </CardHeader>
           <CardContent>
-            {/* Total revenue summary */}
             <div className="flex items-center justify-between mb-6 p-4 rounded-xl bg-gradient-to-r from-emerald-50 via-white to-violet-50 dark:from-emerald-950/20 dark:via-background dark:to-violet-950/20 border">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 rounded-xl bg-emerald-500/10">
@@ -1186,7 +1692,6 @@ export function AdminAnalytics() {
                     transition={{ delay: idx * 0.08, duration: 0.4 }}
                     className="flex items-center gap-3 group"
                   >
-                    {/* Rank badge */}
                     <div className={cn(
                       'w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0',
                       idx < 3
@@ -1221,7 +1726,6 @@ export function AdminAnalytics() {
                           transition={{ duration: 1, delay: idx * 0.1, ease: 'easeOut' }}
                         >
                           <div className="absolute inset-0 bg-gradient-to-r from-transparent to-white/10" />
-                          {/* Shimmer effect */}
                           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse" />
                         </motion.div>
                       </div>
@@ -1233,6 +1737,8 @@ export function AdminAnalytics() {
           </CardContent>
         </GlassCard>
       </motion.div>
+
+      <GradientDivider />
 
       {/* ─── Course Performance Matrix ─────────────────────── */}
       <motion.div variants={itemVariants}>
@@ -1301,11 +1807,139 @@ export function AdminAnalytics() {
                 </tbody>
               </table>
             </div>
-            {/* Legend */}
             <div className="flex items-center gap-4 mt-4 text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-emerald-500/30" /> Good</div>
               <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-yellow-500/30" /> Average</div>
               <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-red-500/30" /> Poor</div>
+            </div>
+          </CardContent>
+        </GlassCard>
+      </motion.div>
+
+      {/* ─── Drop-off Points & Top Performers ─────────────── */}
+      <motion.div variants={itemVariants}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Drop-off Points */}
+          <GlassCard className="overflow-hidden">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-red-500/10">
+                  <ArrowDownRight className="h-5 w-5 text-red-600" />
+                </div>
+                <div>
+                  <CardTitle>Drop-off Points</CardTitle>
+                  <CardDescription>Where students stop progressing</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={dropoffConfig} className="h-[260px] w-full">
+                <BarChart data={dropoffData} layout="vertical" margin={{ top: 5, right: 10, left: 50, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis type="number" tickLine={false} axisLine={false} fontSize={11} domain={[0, 50]} tickFormatter={(v: number) => `${v}%`} />
+                  <YAxis type="category" dataKey="point" tickLine={false} axisLine={false} fontSize={10} width={90} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="rate" fill="#EF4444" radius={[0, 4, 4, 0]}>
+                    {dropoffData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.rate > 30 ? '#EF4444' : entry.rate > 20 ? '#F59E0B' : '#10B981'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartContainer>
+              <div className="flex items-center gap-2 mt-3 p-2 px-3 rounded-lg bg-red-50 dark:bg-red-950/20">
+                <ArrowDownRight className="h-4 w-4 text-red-500" />
+                <span className="text-sm text-red-700 dark:text-red-400">
+                  <strong>Highest drop-off:</strong> Module 4 (Advanced) — 42% of students disengage
+                </span>
+              </div>
+            </CardContent>
+          </GlassCard>
+
+          {/* Top Performers */}
+          <GlassCard className="overflow-hidden">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-amber-500/10">
+                  <Trophy className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <CardTitle>Top Performers</CardTitle>
+                  <CardDescription>Highest scoring learners this period</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {topPerformersData.map((performer, idx) => (
+                  <motion.div
+                    key={performer.name}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.08 }}
+                    whileHover={{ x: 4 }}
+                    className="flex items-center gap-4 p-3 rounded-lg border hover:shadow-md transition-all cursor-default"
+                  >
+                    <div className={cn(
+                      'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0',
+                      idx === 0 ? 'bg-gradient-to-br from-amber-400 to-amber-500 text-white' :
+                      idx === 1 ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-white' :
+                      idx === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white' :
+                      'bg-muted text-muted-foreground'
+                    )}>
+                      #{idx + 1}
+                    </div>
+                    <Avatar className="h-9 w-9">
+                      <AvatarFallback className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold">
+                        {performer.avatar}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{performer.name}</p>
+                      <p className="text-xs text-muted-foreground">{performer.courses} courses completed</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-lg font-bold text-emerald-600">{performer.score}%</p>
+                      <p className="text-[10px] text-muted-foreground">avg score</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </CardContent>
+          </GlassCard>
+        </div>
+      </motion.div>
+
+      {/* ─── Completion Rate Comparison ───────────────────── */}
+      <motion.div variants={itemVariants}>
+        <GlassCard className="overflow-hidden">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-emerald-500/10">
+                <TrendingUp className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <CardTitle>Completion Rate Comparison</CardTitle>
+                <CardDescription>This month vs last month by course</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={completionComparisonConfig} className="h-[280px] w-full">
+              <BarChart data={completionComparisonData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="course" tickLine={false} axisLine={false} fontSize={11} />
+                <YAxis tickLine={false} axisLine={false} fontSize={11} domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <ChartLegend content={<ChartLegendContent />} />
+                <Bar dataKey="lastMonth" fill="#94A3B8" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="thisMonth" fill="#10B981" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ChartContainer>
+            <div className="flex items-center gap-2 mt-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20">
+              <ArrowUpRight className="h-4 w-4 text-emerald-600" />
+              <span className="text-sm text-emerald-700 dark:text-emerald-400">
+                <strong>Overall:</strong> Completion rates improved by an average of +4.5% across all courses this month.
+              </span>
             </div>
           </CardContent>
         </GlassCard>
@@ -1328,143 +1962,277 @@ export function AdminAnalytics() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Left: Stylized world map SVG + country list */}
-              <div className="space-y-6">
-                {/* Simplified World Map SVG */}
-                <div className="relative rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/50 dark:to-slate-900/50 p-6 overflow-hidden border border-slate-200/50 dark:border-slate-700/30">
-                  <svg viewBox="0 0 800 400" className="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
-                    {/* Background grid */}
-                    <defs>
-                      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeOpacity="0.05" strokeWidth="1" />
-                      </pattern>
-                    </defs>
-                    <rect width="800" height="400" fill="url(#grid)" />
+            <Tabs defaultValue="map" className="space-y-6">
+              <TabsList>
+                <TabsTrigger value="map">World Map</TabsTrigger>
+                <TabsTrigger value="grid">Grid Map</TabsTrigger>
+                <TabsTrigger value="table">Region Table</TabsTrigger>
+              </TabsList>
 
-                    {/* Americas */}
-                    <motion.ellipse
-                      cx="200" cy="200" rx="120" ry="140"
-                      fill="#10B981" fillOpacity="0.15" stroke="#10B981" strokeWidth="1.5" strokeOpacity="0.4"
-                      initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.6 }}
-                    />
-                    <text x="200" y="195" textAnchor="middle" fontSize="14" fontWeight="600" fill="#10B981">Americas</text>
-                    <text x="200" y="215" textAnchor="middle" fontSize="11" fillOpacity="0.7" fill="#10B981">45%</text>
+              <TabsContent value="map">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Left: Stylized world map SVG + country list */}
+                  <div className="space-y-6">
+                    <div className="relative rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/50 dark:to-slate-900/50 p-6 overflow-hidden border border-slate-200/50 dark:border-slate-700/30">
+                      <svg viewBox="0 0 800 400" className="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeOpacity="0.05" strokeWidth="1" />
+                          </pattern>
+                        </defs>
+                        <rect width="800" height="400" fill="url(#grid)" />
 
-                    {/* Europe */}
-                    <motion.ellipse
-                      cx="420" cy="140" rx="100" ry="80"
-                      fill="#8B5CF6" fillOpacity="0.15" stroke="#8B5CF6" strokeWidth="1.5" strokeOpacity="0.4"
-                      initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.6, delay: 0.1 }}
-                    />
-                    <text x="420" y="135" textAnchor="middle" fontSize="14" fontWeight="600" fill="#8B5CF6">Europe</text>
-                    <text x="420" y="155" textAnchor="middle" fontSize="11" fillOpacity="0.7" fill="#8B5CF6">25%</text>
+                        <motion.ellipse cx="200" cy="200" rx="120" ry="140"
+                          fill="#10B981" fillOpacity="0.15" stroke="#10B981" strokeWidth="1.5" strokeOpacity="0.4"
+                          initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.6 }}
+                        />
+                        <text x="200" y="195" textAnchor="middle" fontSize="14" fontWeight="600" fill="#10B981">Americas</text>
+                        <text x="200" y="215" textAnchor="middle" fontSize="11" fillOpacity="0.7" fill="#10B981">45%</text>
 
-                    {/* Asia */}
-                    <motion.ellipse
-                      cx="600" cy="200" rx="140" ry="130"
-                      fill="#F59E0B" fillOpacity="0.15" stroke="#F59E0B" strokeWidth="1.5" strokeOpacity="0.4"
-                      initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.6, delay: 0.2 }}
-                    />
-                    <text x="600" y="195" textAnchor="middle" fontSize="14" fontWeight="600" fill="#F59E0B">Asia</text>
-                    <text x="600" y="215" textAnchor="middle" fontSize="11" fillOpacity="0.7" fill="#F59E0B">20%</text>
+                        <motion.ellipse cx="420" cy="140" rx="100" ry="80"
+                          fill="#8B5CF6" fillOpacity="0.15" stroke="#8B5CF6" strokeWidth="1.5" strokeOpacity="0.4"
+                          initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.6, delay: 0.1 }}
+                        />
+                        <text x="420" y="135" textAnchor="middle" fontSize="14" fontWeight="600" fill="#8B5CF6">Europe</text>
+                        <text x="420" y="155" textAnchor="middle" fontSize="11" fillOpacity="0.7" fill="#8B5CF6">25%</text>
 
-                    {/* Other */}
-                    <motion.ellipse
-                      cx="400" cy="340" rx="80" ry="50"
-                      fill="#06B6D4" fillOpacity="0.15" stroke="#06B6D4" strokeWidth="1.5" strokeOpacity="0.4"
-                      initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.6, delay: 0.3 }}
-                    />
-                    <text x="400" y="335" textAnchor="middle" fontSize="14" fontWeight="600" fill="#06B6D4">Other</text>
-                    <text x="400" y="355" textAnchor="middle" fontSize="11" fillOpacity="0.7" fill="#06B6D4">10%</text>
+                        <motion.ellipse cx="600" cy="200" rx="140" ry="130"
+                          fill="#F59E0B" fillOpacity="0.15" stroke="#F59E0B" strokeWidth="1.5" strokeOpacity="0.4"
+                          initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.6, delay: 0.2 }}
+                        />
+                        <text x="600" y="195" textAnchor="middle" fontSize="14" fontWeight="600" fill="#F59E0B">Asia</text>
+                        <text x="600" y="215" textAnchor="middle" fontSize="11" fillOpacity="0.7" fill="#F59E0B">20%</text>
 
-                    {/* Connecting lines */}
-                    <line x1="200" y1="200" x2="420" y2="140" stroke="#64748B" strokeWidth="0.5" strokeDasharray="4 4" strokeOpacity="0.3" />
-                    <line x1="420" y1="140" x2="600" y2="200" stroke="#64748B" strokeWidth="0.5" strokeDasharray="4 4" strokeOpacity="0.3" />
-                  </svg>
-                </div>
+                        <motion.ellipse cx="400" cy="340" rx="80" ry="50"
+                          fill="#06B6D4" fillOpacity="0.15" stroke="#06B6D4" strokeWidth="1.5" strokeOpacity="0.4"
+                          initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.6, delay: 0.3 }}
+                        />
+                        <text x="400" y="335" textAnchor="middle" fontSize="14" fontWeight="600" fill="#06B6D4">Other</text>
+                        <text x="400" y="355" textAnchor="middle" fontSize="11" fillOpacity="0.7" fill="#06B6D4">10%</text>
 
-                {/* Top 5 countries with flags */}
-                <div className="space-y-3">
-                  <h3 className="text-sm font-medium text-muted-foreground">Top Countries</h3>
-                  {geographicData.map((geo) => (
-                    <motion.div
-                      key={geo.country}
-                      whileHover={{ x: 4 }}
-                      className="flex items-center gap-4 group"
-                    >
-                      <div className="flex items-center gap-2 w-28 shrink-0">
-                        <span className="text-lg">{geo.flag}</span>
-                        <span className="text-sm font-medium text-foreground group-hover:text-emerald-600 transition-colors">{geo.country}</span>
-                      </div>
-                      <div className="flex-1 relative">
-                        <div className="h-7 rounded-full bg-muted overflow-hidden">
-                          <motion.div
-                            className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${geo.percentage}%` }}
-                            transition={{ duration: 0.8, ease: 'easeOut' }}
-                          />
-                        </div>
-                      </div>
-                      <span className="text-sm font-semibold text-foreground w-12 text-right">{geo.percentage}%</span>
-                      <span className="text-xs text-muted-foreground w-16 text-right">{geo.learners?.toLocaleString()} learners</span>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
+                        <line x1="200" y1="200" x2="420" y2="140" stroke="#64748B" strokeWidth="0.5" strokeDasharray="4 4" strokeOpacity="0.3" />
+                        <line x1="420" y1="140" x2="600" y2="200" stroke="#64748B" strokeWidth="0.5" strokeDasharray="4 4" strokeOpacity="0.3" />
+                      </svg>
+                    </div>
 
-              {/* Right: Pie chart + summary stats */}
-              <div className="space-y-6">
-                <ChartContainer config={pieChartConfig} className="h-[280px] w-full">
-                  <PieChart>
-                    <Pie
-                      data={regionalPieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={4}
-                      dataKey="value"
-                      nameKey="name"
-                      strokeWidth={2}
-                    >
-                      {regionalPieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
+                    {/* Top 5 countries with flags */}
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-medium text-muted-foreground">Top Countries</h3>
+                      {geographicData.map((geo) => (
+                        <motion.div
+                          key={geo.country}
+                          whileHover={{ x: 4 }}
+                          className="flex items-center gap-4 group"
+                        >
+                          <div className="flex items-center gap-2 w-28 shrink-0">
+                            <span className="text-lg">{geo.flag}</span>
+                            <span className="text-sm font-medium text-foreground group-hover:text-emerald-600 transition-colors">{geo.country}</span>
+                          </div>
+                          <div className="flex-1 relative">
+                            <div className="h-7 rounded-full bg-muted overflow-hidden">
+                              <motion.div
+                                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400"
+                                initial={{ width: 0 }}
+                                animate={{ width: `${geo.percentage}%` }}
+                                transition={{ duration: 0.8, ease: 'easeOut' }}
+                              />
+                            </div>
+                          </div>
+                          <span className="text-sm font-semibold text-foreground w-12 text-right">{geo.percentage}%</span>
+                          <span className="text-xs text-muted-foreground w-16 text-right">{geo.learners?.toLocaleString()} learners</span>
+                        </motion.div>
                       ))}
-                    </Pie>
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <ChartLegend content={<ChartLegendContent />} />
-                  </PieChart>
-                </ChartContainer>
+                    </div>
+                  </div>
 
-                {/* Summary */}
-                <div className="grid grid-cols-2 gap-3">
-                  <motion.div whileHover={{ scale: 1.03, y: -2 }} className="text-center p-3 rounded-lg border bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/20 dark:to-background cursor-default transition-shadow hover:shadow-md">
-                    <p className="text-2xl font-bold text-foreground">
-                      <AnimatedCounter value={48} />
-                    </p>
-                    <p className="text-xs text-muted-foreground">Countries</p>
-                  </motion.div>
-                  <motion.div whileHover={{ scale: 1.03, y: -2 }} className="text-center p-3 rounded-lg border bg-gradient-to-br from-violet-50 to-white dark:from-violet-950/20 dark:to-background cursor-default transition-shadow hover:shadow-md">
-                    <p className="text-2xl font-bold text-foreground">
-                      <AnimatedCounter value={3847} />
-                    </p>
-                    <p className="text-xs text-muted-foreground">Total Learners</p>
-                  </motion.div>
-                  <motion.div whileHover={{ scale: 1.03, y: -2 }} className="text-center p-3 rounded-lg border bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/20 dark:to-background cursor-default transition-shadow hover:shadow-md">
-                    <p className="text-2xl font-bold text-foreground">
-                      <AnimatedCounter value={6} />
-                    </p>
-                    <p className="text-xs text-muted-foreground">Continents</p>
-                  </motion.div>
-                  <motion.div whileHover={{ scale: 1.03, y: -2 }} className="text-center p-3 rounded-lg border bg-gradient-to-br from-cyan-50 to-white dark:from-cyan-950/20 dark:to-background cursor-default transition-shadow hover:shadow-md">
-                    <p className="text-2xl font-bold text-foreground">35%</p>
-                    <p className="text-xs text-muted-foreground">Top Country</p>
-                  </motion.div>
+                  {/* Right: Pie chart + summary stats */}
+                  <div className="space-y-6">
+                    <ChartContainer config={pieChartConfig} className="h-[280px] w-full">
+                      <PieChart>
+                        <Pie
+                          data={regionalPieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={100}
+                          paddingAngle={4}
+                          dataKey="value"
+                          nameKey="name"
+                          strokeWidth={2}
+                        >
+                          {regionalPieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
+                          ))}
+                        </Pie>
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <ChartLegend content={<ChartLegendContent />} />
+                      </PieChart>
+                    </ChartContainer>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <motion.div whileHover={{ scale: 1.03, y: -2 }} className="text-center p-3 rounded-lg border bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/20 dark:to-background cursor-default transition-shadow hover:shadow-md">
+                        <p className="text-2xl font-bold text-foreground">
+                          <AnimatedCounter value={48} />
+                        </p>
+                        <p className="text-xs text-muted-foreground">Countries</p>
+                      </motion.div>
+                      <motion.div whileHover={{ scale: 1.03, y: -2 }} className="text-center p-3 rounded-lg border bg-gradient-to-br from-violet-50 to-white dark:from-violet-950/20 dark:to-background cursor-default transition-shadow hover:shadow-md">
+                        <p className="text-2xl font-bold text-foreground">
+                          <AnimatedCounter value={3847} />
+                        </p>
+                        <p className="text-xs text-muted-foreground">Total Learners</p>
+                      </motion.div>
+                      <motion.div whileHover={{ scale: 1.03, y: -2 }} className="text-center p-3 rounded-lg border bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/20 dark:to-background cursor-default transition-shadow hover:shadow-md">
+                        <p className="text-2xl font-bold text-foreground">
+                          <AnimatedCounter value={6} />
+                        </p>
+                        <p className="text-xs text-muted-foreground">Continents</p>
+                      </motion.div>
+                      <motion.div whileHover={{ scale: 1.03, y: -2 }} className="text-center p-3 rounded-lg border bg-gradient-to-br from-cyan-50 to-white dark:from-cyan-950/20 dark:to-background cursor-default transition-shadow hover:shadow-md">
+                        <p className="text-2xl font-bold text-foreground">35%</p>
+                        <p className="text-xs text-muted-foreground">Top Country</p>
+                      </motion.div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </TabsContent>
+
+              {/* Grid Map Tab */}
+              <TabsContent value="grid">
+                <div className="space-y-6">
+                  {/* Stylized Grid World Map */}
+                  <div className="rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/50 dark:to-slate-900/50 p-4 overflow-hidden border">
+                    <div className="grid grid-cols-12 gap-1" style={{ aspectRatio: '2/1' }}>
+                      {/* Simplified grid-based world map with colored cells */}
+                      {Array.from({ length: 72 }, (_, i) => {
+                        const row = Math.floor(i / 12);
+                        const col = i % 12;
+                        // Map grid cells to regions
+                        const isAmericas = (row >= 1 && row <= 4 && col >= 0 && col <= 3);
+                        const isEurope = (row >= 1 && row <= 3 && col >= 5 && col <= 7);
+                        const isAfrica = (row >= 3 && row <= 5 && col >= 5 && col <= 7);
+                        const isAsia = (row >= 1 && row <= 4 && col >= 8 && col <= 11);
+                        const isOceania = (row >= 4 && row <= 5 && col >= 9 && col <= 11);
+                        const isLand = isAmericas || isEurope || isAfrica || isAsia || isOceania;
+
+                        let color = '';
+                        let intensity = 0;
+                        if (isAmericas) { color = '#10B981'; intensity = 0.3 + Math.random() * 0.4; }
+                        else if (isEurope) { color = '#8B5CF6'; intensity = 0.2 + Math.random() * 0.5; }
+                        else if (isAfrica) { color = '#06B6D4'; intensity = 0.1 + Math.random() * 0.3; }
+                        else if (isAsia) { color = '#F59E0B'; intensity = 0.2 + Math.random() * 0.4; }
+                        else if (isOceania) { color = '#06B6D4'; intensity = 0.15 + Math.random() * 0.25; }
+
+                        return (
+                          <motion.div
+                            key={i}
+                            className="rounded-sm aspect-square"
+                            style={{
+                              backgroundColor: isLand ? color : 'transparent',
+                              opacity: isLand ? intensity : 0,
+                            }}
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ delay: i * 0.01, duration: 0.3 }}
+                            whileHover={{ scale: 1.3, opacity: 1 }}
+                          />
+                        );
+                      })}
+                    </div>
+                    {/* Region legend */}
+                    <div className="flex flex-wrap items-center justify-center gap-4 mt-4 text-xs">
+                      <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#10B981' }} /> Americas</div>
+                      <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#8B5CF6' }} /> Europe</div>
+                      <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#F59E0B' }} /> Asia</div>
+                      <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#06B6D4' }} /> Africa & Oceania</div>
+                    </div>
+                  </div>
+
+                  {/* New Markets */}
+                  <div>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      New & Emerging Markets
+                    </h3>
+                    <div className="space-y-2">
+                      {newMarketsData.map((market) => (
+                        <motion.div
+                          key={market.country}
+                          whileHover={{ x: 4 }}
+                          className="flex items-center gap-4 p-3 rounded-lg border hover:shadow-md transition-all cursor-default"
+                        >
+                          <span className="text-lg">{market.country}</span>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-foreground">{market.learners} learners</span>
+                              <Badge className={cn(
+                                'text-[10px] px-2 py-0.5',
+                                market.potential === 'Very High' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' :
+                                market.potential === 'High' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' :
+                                'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                              )}>
+                                {market.potential}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Progress value={market.growth} className="h-1.5 flex-1" />
+                              <span className="text-xs font-semibold text-emerald-600">+{market.growth}%</span>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Region Comparison Table Tab */}
+              <TabsContent value="table">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-3 px-3 font-medium text-muted-foreground">Region</th>
+                        <th className="text-right py-3 px-3 font-medium text-muted-foreground">Learners</th>
+                        <th className="text-right py-3 px-3 font-medium text-muted-foreground">Revenue</th>
+                        <th className="text-right py-3 px-3 font-medium text-muted-foreground">Completion</th>
+                        <th className="text-right py-3 px-3 font-medium text-muted-foreground">Growth</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {regionComparisonData.map((region, idx) => (
+                        <motion.tr
+                          key={region.region}
+                          className="border-b last:border-b-0 hover:bg-muted/30 transition-colors"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: idx * 0.05 }}
+                        >
+                          <td className="py-3 px-3 font-medium text-foreground">{region.region}</td>
+                          <td className="py-3 px-3 text-right">{region.learners.toLocaleString()}</td>
+                          <td className="py-3 px-3 text-right">${(region.revenue / 1000).toFixed(0)}k</td>
+                          <td className="py-3 px-3 text-right">
+                            <span className={cn(
+                              'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold',
+                              region.completion >= 75 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                              region.completion >= 65 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                              'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                            )}>
+                              {region.completion}%
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <span className="flex items-center justify-end gap-1 text-emerald-600 text-xs font-semibold">
+                              <ArrowUpRight className="h-3 w-3" /> +{region.growth}%
+                            </span>
+                          </td>
+                        </motion.tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </GlassCard>
       </motion.div>
@@ -1500,11 +2268,82 @@ export function AdminAnalytics() {
                   <Bar dataKey="after" fill="#10B981" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ChartContainer>
-              {/* Improvement summary */}
               <div className="flex items-center gap-2 mt-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20">
                 <ArrowUpRight className="h-4 w-4 text-emerald-600" />
                 <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
                   Average improvement: +44.5 points across all skills
+                </span>
+              </div>
+            </div>
+
+            {/* Assessment Score Distribution (Bell Curve) */}
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">Assessment Score Distribution</h3>
+              <ChartContainer config={assessmentDistConfig} className="h-[240px] w-full">
+                <AreaChart data={assessmentDistData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="bellGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis dataKey="score" tickLine={false} axisLine={false} fontSize={11} />
+                  <YAxis tickLine={false} axisLine={false} fontSize={11} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Area type="monotone" dataKey="students" stroke="#10B981" strokeWidth={2.5} fill="url(#bellGradient)" />
+                </AreaChart>
+              </ChartContainer>
+              <div className="flex items-center gap-2 mt-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20">
+                <Target className="h-4 w-4 text-emerald-600" />
+                <span className="text-sm text-emerald-700 dark:text-emerald-400">
+                  <strong>Bell Curve:</strong> Most students score between 70-90%. Mean score: 76.4% with a standard deviation of 14.2.
+                </span>
+              </div>
+            </div>
+
+            {/* Learning Path Completion Funnel */}
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">Learning Path Completion Funnel</h3>
+              <div className="space-y-2">
+                {learningPathFunnelData.map((stage, idx) => {
+                  const maxCount = learningPathFunnelData[0].count;
+                  const widthPct = (stage.count / maxCount) * 100;
+                  const dropoffPct = idx > 0
+                    ? ((learningPathFunnelData[idx - 1].count - stage.count) / learningPathFunnelData[idx - 1].count * 100).toFixed(1)
+                    : '0';
+                  return (
+                    <motion.div
+                      key={stage.stage}
+                      initial={{ opacity: 0, width: 0 }}
+                      animate={{ opacity: 1, width: '100%' }}
+                      transition={{ delay: idx * 0.1, duration: 0.5 }}
+                      className="flex items-center gap-4"
+                    >
+                      <span className="text-sm font-medium text-foreground w-24 shrink-0">{stage.stage}</span>
+                      <div className="flex-1 relative">
+                        <motion.div
+                          className="h-10 rounded-lg flex items-center justify-end pr-3"
+                          style={{ backgroundColor: stage.fill + '40', borderColor: stage.fill, borderWidth: 1 }}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${widthPct}%` }}
+                          transition={{ delay: idx * 0.1 + 0.2, duration: 0.6, ease: 'easeOut' }}
+                        >
+                          <span className="text-xs font-semibold text-foreground">{stage.count.toLocaleString()}</span>
+                        </motion.div>
+                      </div>
+                      {idx > 0 && (
+                        <span className="text-xs text-red-500 font-medium w-16 text-right shrink-0">-{dropoffPct}%</span>
+                      )}
+                      {idx === 0 && <span className="w-16 shrink-0" />}
+                    </motion.div>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-2 mt-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20">
+                <Zap className="h-4 w-4 text-amber-600" />
+                <span className="text-sm text-amber-700 dark:text-amber-400">
+                  <strong>Funnel Insight:</strong> Biggest drop-off occurs at 75% completion → certified stage (33.4%). Consider adding incentives at the 75% mark.
                 </span>
               </div>
             </div>
@@ -1575,7 +2414,7 @@ export function AdminAnalytics() {
               </div>
             </div>
 
-            {/* Skills Improvement Radar Chart (original, kept for compatibility) */}
+            {/* Skills Improvement Radar Chart */}
             <div>
               <h3 className="text-sm font-medium text-muted-foreground mb-3">Current Skills Radar</h3>
               <ChartContainer config={{ score: { label: 'Skill Score', color: '#8B5CF6' } }} className="h-[320px] w-full mx-auto max-w-[450px]">
@@ -1596,21 +2435,199 @@ export function AdminAnalytics() {
               </ChartContainer>
             </div>
 
-            {/* Completion Time Distribution */}
+            {/* Time to Complete Distribution */}
             <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-3">Course Completion Time Distribution</h3>
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">Time to Complete Distribution</h3>
               <ChartContainer config={completionDistConfig} className="h-[240px] w-full">
-                <BarChart data={completionDistData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+                <BarChart data={timeToCompleteData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="range" tickLine={false} axisLine={false} fontSize={11} />
                   <YAxis tickLine={false} axisLine={false} fontSize={11} />
                   <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="count" fill="#10B981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                    {timeToCompleteData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ChartContainer>
               <p className="text-xs text-muted-foreground mt-2">
                 Most learners complete courses within 2-4 weeks. Average completion time: 3.2 weeks.
               </p>
+            </div>
+          </CardContent>
+        </GlassCard>
+      </motion.div>
+
+      <GradientDivider />
+
+      {/* ─── Export & Sharing Section ─────────────────────────── */}
+      <motion.div variants={itemVariants}>
+        <GlassCard className="overflow-hidden">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-slate-500/10">
+                <FileText className="h-5 w-5 text-slate-600" />
+              </div>
+              <div>
+                <CardTitle>Export & Share</CardTitle>
+                <CardDescription>Download reports, share dashboards, and schedule automated reporting</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Schedule Report */}
+              <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
+                <DialogTrigger asChild>
+                  <motion.div whileHover={{ scale: 1.02, y: -2 }} className="cursor-pointer">
+                    <div className="p-6 rounded-xl border bg-gradient-to-br from-violet-50 to-white dark:from-violet-950/20 dark:to-background hover:shadow-lg transition-all text-center space-y-3">
+                      <div className="w-12 h-12 rounded-full bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center mx-auto">
+                        <Bell className="h-6 w-6 text-violet-600" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-foreground">Schedule Report</h3>
+                      <p className="text-xs text-muted-foreground">Set up automated weekly or monthly analytics reports</p>
+                    </div>
+                  </motion.div>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Schedule Report</DialogTitle>
+                    <DialogDescription>Configure automated report delivery to your inbox</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Frequency</label>
+                      <Select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select frequency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">Daily</SelectItem>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Report Type</label>
+                      <Select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select report type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="full">Full Dashboard</SelectItem>
+                          <SelectItem value="revenue">Revenue Only</SelectItem>
+                          <SelectItem value="engagement">Engagement Only</SelectItem>
+                          <SelectItem value="courses">Course Performance</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Email Recipients</label>
+                      <div className="flex items-center gap-2 p-3 rounded-lg border bg-muted/30">
+                        <Mail className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">admin@lms-platform.com</span>
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setScheduleDialogOpen(false)}>Cancel</Button>
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5" onClick={() => setScheduleDialogOpen(false)}>
+                      <Bell className="h-4 w-4" />
+                      Schedule
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Share Dashboard */}
+              <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+                <DialogTrigger asChild>
+                  <motion.div whileHover={{ scale: 1.02, y: -2 }} className="cursor-pointer">
+                    <div className="p-6 rounded-xl border bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/20 dark:to-background hover:shadow-lg transition-all text-center space-y-3">
+                      <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center mx-auto">
+                        <Share2 className="h-6 w-6 text-emerald-600" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-foreground">Share Dashboard</h3>
+                      <p className="text-xs text-muted-foreground">Generate a shareable link for team members and stakeholders</p>
+                    </div>
+                  </motion.div>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Share Dashboard</DialogTitle>
+                    <DialogDescription>Share this analytics dashboard with others</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Share Link</label>
+                      <div className="flex items-center gap-2 p-3 rounded-lg border bg-muted/30">
+                        <span className="text-sm text-muted-foreground flex-1 truncate">https://lms-platform.com/analytics/shared/abc123</span>
+                        <Button size="sm" variant="outline" className="shrink-0 gap-1">
+                          <Check className="h-3 w-3" />
+                          Copy
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Access Level</label>
+                      <Select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select access level" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="view">View Only</SelectItem>
+                          <SelectItem value="comment">Comment</SelectItem>
+                          <SelectItem value="edit">Edit</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch id="expiry" />
+                      <label htmlFor="expiry" className="text-sm text-muted-foreground">Link expires after 7 days</label>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setShareDialogOpen(false)}>Cancel</Button>
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5" onClick={() => setShareDialogOpen(false)}>
+                      <Send className="h-4 w-4" />
+                      Share
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Download PDF Report */}
+              <motion.div whileHover={{ scale: 1.02, y: -2 }} className="cursor-pointer" onClick={() => { /* no-op for demo */ }}>
+                <div className="p-6 rounded-xl border bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/20 dark:to-background hover:shadow-lg transition-all text-center space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center mx-auto">
+                    <Printer className="h-6 w-6 text-amber-600" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-foreground">Download PDF Report</h3>
+                  <p className="text-xs text-muted-foreground">Generate a comprehensive PDF report of all analytics data</p>
+                </div>
+              </motion.div>
+            </div>
+
+            {/* Quick action buttons */}
+            <div className="flex flex-wrap items-center gap-3 mt-6 pt-4 border-t">
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <Download className="h-4 w-4" />
+                Download CSV
+              </Button>
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <ImageIcon className="h-4 w-4" />
+                Export as PNG
+              </Button>
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <FileText className="h-4 w-4" />
+                Export as PDF
+              </Button>
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <Mail className="h-4 w-4" />
+                Email Report
+              </Button>
             </div>
           </CardContent>
         </GlassCard>

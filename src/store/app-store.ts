@@ -1,6 +1,21 @@
 import { create } from 'zustand';
 import type { AppView, AppMode, UserRole, User, Tenant, Notification } from '@/types';
 
+// Notification preference categories
+export type NotificationCategory = 'enrollments' | 'completions' | 'assessments' | 'community' | 'system' | 'cohorts';
+export type DigestFrequency = 'realtime' | 'daily' | 'weekly' | 'off';
+
+export interface NotificationPreferences {
+  emailEnabled: Record<NotificationCategory, boolean>;
+  pushEnabled: Record<NotificationCategory, boolean>;
+  digestFrequency: DigestFrequency;
+  quietHours: {
+    enabled: boolean;
+    start: string;
+    end: string;
+  };
+}
+
 interface AppState {
   // Navigation
   currentView: AppView;
@@ -20,6 +35,9 @@ interface AppState {
   notifications: Notification[];
   showNotifications: boolean;
   
+  // Notification Preferences
+  notificationPreferences: NotificationPreferences;
+  
   // Actions
   setView: (view: AppView) => void;
   setAppMode: (mode: AppMode) => void;
@@ -38,6 +56,10 @@ interface AppState {
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   addNotification: (notification: Notification) => void;
+  deleteNotification: (id: string) => void;
+  deleteNotifications: (ids: string[]) => void;
+  markNotificationsRead: (ids: string[]) => void;
+  updateNotificationPreferences: (prefs: Partial<NotificationPreferences>) => void;
 }
 
 const demoNotifications: Notification[] = [
@@ -48,7 +70,43 @@ const demoNotifications: Notification[] = [
   { id: 'notif-5', type: 'assessment', title: 'Quiz Submitted', message: 'Lisa Wang submitted the AI Integration assessment (Score: 94%)', timestamp: new Date(Date.now() - 28800000).toISOString(), read: true, icon: '📝' },
   { id: 'notif-6', type: 'system', title: 'Platform Update', message: 'New feature: AI Content Generation is now available for all Professional plans', timestamp: new Date(Date.now() - 86400000).toISOString(), read: true, icon: '🚀' },
   { id: 'notif-7', type: 'completion', title: 'Course Completed', message: 'Jordan Lee completed "Data Visualization & Analytics"', timestamp: new Date(Date.now() - 43200000).toISOString(), read: true, icon: '🎓' },
+  // Additional demo notifications (at least 15 total)
+  { id: 'notif-8', type: 'enrollment', title: 'New Enrollment', message: 'Sophia Martinez enrolled in Python for Data Science', timestamp: new Date(Date.now() - 10800000).toISOString(), read: false, icon: '👤' },
+  { id: 'notif-9', type: 'community', title: 'Mentioned You', message: '@Sarah was mentioned in "Tips for scaling LMS platforms"', timestamp: new Date(Date.now() - 18000000).toISOString(), read: false, icon: '💬' },
+  { id: 'notif-10', type: 'assessment', title: 'Assignment Graded', message: 'Peer review completed for UX Design Fundamentals assignment', timestamp: new Date(Date.now() - 50400000).toISOString(), read: true, icon: '📝' },
+  { id: 'notif-11', type: 'cohort', title: 'Cohort Starting Soon', message: 'Next.js 16 Deep Dive cohort begins tomorrow at 10 AM EST', timestamp: new Date(Date.now() - 90000000).toISOString(), read: true, icon: '🎥' },
+  { id: 'notif-12', type: 'system', title: 'Scheduled Maintenance', message: 'Platform maintenance window: Saturday 2-4 AM EST', timestamp: new Date(Date.now() - 172800000).toISOString(), read: true, icon: '🔧' },
+  { id: 'notif-13', type: 'completion', title: 'Course Milestone', message: '25 learners completed "Advanced React Patterns" this week!', timestamp: new Date(Date.now() - 129600000).toISOString(), read: true, icon: '🎓' },
+  { id: 'notif-14', type: 'enrollment', title: 'Enrollment Milestone', message: 'Your course "AI Integration" hit 500 enrollments! 🎉', timestamp: new Date(Date.now() - 216000000).toISOString(), read: true, icon: '👤' },
+  { id: 'notif-15', type: 'community', title: 'Popular Post', message: 'Your post "Building Accessible UIs" received 50+ reactions', timestamp: new Date(Date.now() - 259200000).toISOString(), read: true, icon: '💬' },
+  { id: 'notif-16', type: 'assessment', title: 'New Quiz Available', message: 'TypeScript Advanced Patterns quiz is now available for review', timestamp: new Date(Date.now() - 302400000).toISOString(), read: true, icon: '📝' },
+  { id: 'notif-17', type: 'achievement', title: 'Streak Record!', message: 'A learner hit a 30-day learning streak 🔥', timestamp: new Date(Date.now() - 345600000).toISOString(), read: true, icon: '🏆' },
 ];
+
+const defaultPreferences: NotificationPreferences = {
+  emailEnabled: {
+    enrollments: true,
+    completions: true,
+    assessments: true,
+    community: true,
+    system: true,
+    cohorts: true,
+  },
+  pushEnabled: {
+    enrollments: true,
+    completions: true,
+    assessments: false,
+    community: true,
+    system: true,
+    cohorts: true,
+  },
+  digestFrequency: 'realtime',
+  quietHours: {
+    enabled: false,
+    start: '22:00',
+    end: '08:00',
+  },
+};
 
 export const useAppStore = create<AppState>((set) => ({
   // Initial State
@@ -96,6 +154,7 @@ export const useAppStore = create<AppState>((set) => ({
   activeModal: null,
   notifications: demoNotifications,
   showNotifications: false,
+  notificationPreferences: defaultPreferences,
 
   // Actions
   setView: (view) => set({ currentView: view }),
@@ -170,5 +229,17 @@ export const useAppStore = create<AppState>((set) => ({
   })),
   addNotification: (notification) => set((s) => ({
     notifications: [notification, ...s.notifications],
+  })),
+  deleteNotification: (id) => set((s) => ({
+    notifications: s.notifications.filter(n => n.id !== id),
+  })),
+  deleteNotifications: (ids) => set((s) => ({
+    notifications: s.notifications.filter(n => !ids.includes(n.id)),
+  })),
+  markNotificationsRead: (ids) => set((s) => ({
+    notifications: s.notifications.map(n => ids.includes(n.id) ? { ...n, read: true } : n),
+  })),
+  updateNotificationPreferences: (prefs) => set((s) => ({
+    notificationPreferences: { ...s.notificationPreferences, ...prefs },
   })),
 }));

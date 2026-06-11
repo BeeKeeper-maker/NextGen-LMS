@@ -231,7 +231,7 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
           <div className="flex items-center gap-1.5 sm:gap-2">
             <motion.div
               animate={{
-                backgroundColor: currentStep >= step.num ? '#10B981' : 'transparent',
+                backgroundColor: currentStep >= step.num ? '#10B981' : 'rgba(0,0,0,0)',
                 borderColor: currentStep >= step.num ? '#10B981' : '#94a3b8',
                 scale: currentStep === step.num ? 1.1 : 1,
               }}

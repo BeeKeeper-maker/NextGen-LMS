@@ -1,0 +1,2002 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import { useState, useEffect, useRef, useCallback } from 'react';
+     4→     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→     5→import { useAppStore } from '@/store/app-store';
+     6→     6→import { demoCourses, demoEnrollments } from '@/lib/mock-data';
+     7→     7→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+     8→     8→import { Button } from '@/components/ui/button';
+     9→     9→import { Badge } from '@/components/ui/badge';
+    10→    10→import { Progress } from '@/components/ui/progress';
+    11→    11→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    12→    12→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    13→    13→import { Separator } from '@/components/ui/separator';
+    14→    14→import { Input } from '@/components/ui/input';
+    15→    15→import { Textarea } from '@/components/ui/textarea';
+    16→    16→import { VideoPlayer } from '@/components/shared/video-player';
+    17→    17→import type { Chapter } from '@/components/shared/video-player';
+    18→    18→import {
+    19→    19→  Play,
+    20→    20→  FileText,
+    21→    21→  Headphones,
+    22→    22→  Video,
+    23→    23→  Monitor,
+    24→    24→  Clock,
+    25→    25→  Star,
+    26→    26→  Users,
+    27→    27→  ChevronDown,
+    28→    28→  ChevronRight,
+    29→    29→  CheckCircle2,
+    30→    30→  Circle,
+    31→    31→  Eye,
+    32→    32→  MessageSquare,
+    33→    33→  Download,
+    34→    34→  ExternalLink,
+    35→    35→  GitBranch,
+    36→    36→  ThumbsUp,
+    37→    37→  ThumbsDown,
+    38→    38→  Send,
+    39→    39→  BookOpen,
+    40→    40→  Award,
+    41→    41→  Search,
+    42→    42→  Filter,
+    43→    43→  Pin,
+    44→    44→  Tag,
+    45→    45→  Flame,
+    46→    46→  TrendingUp,
+    47→    47→  TrendingDown,
+    48→    48→  Minus,
+    49→    49→  BarChart3,
+    50→    50→  Calendar,
+    51→    51→  Zap,
+    52→    52→  Target,
+    53→    53→  Trophy,
+    54→    54→  ArrowRight,
+    55→    55→  Copy,
+    56→    56→  Sparkles,
+    57→    57→  StickyNote,
+    58→    58→  Code2,
+    59→    59→  HelpCircle,
+    60→    60→  Bookmark,
+    61→    61→  Edit3,
+    62→    62→  Check,
+    63→    63→  X,
+    64→    64→  ChevronUp,
+    65→    65→  MessageCircle,
+    66→    66→  GraduationCap,
+    67→    67→  Globe,
+    68→    68→  Briefcase,
+    69→    69→  Heart,
+    70→    70→  Share2,
+    71→    71→  MoreHorizontal,
+    72→    72→  ArrowUpRight,
+    73→    73→  Loader2,
+    74→    74→  FileCode,
+    75→    75→  Notebook,
+    76→    76→  Timer,
+    77→    77→  Activity,
+    78→    78→  Milestone,
+    79→    79→} from 'lucide-react';
+    80→    80→import { cn } from '@/lib/utils';
+    81→    81→import type { Lesson, Module } from '@/types';
+    82→    82→
+    83→    83→// ─── Content type icon mapping ─────────────────────────────
+    84→    84→function ContentTypeIcon({ type, className }: { type: Lesson['contentType']; className?: string }) {
+    85→    85→  switch (type) {
+    86→    86→    case 'video':
+    87→    87→      return <Video className={className} />;
+    88→    88→    case 'text':
+    89→    89→      return <FileText className={className} />;
+    90→    90→    case 'audio':
+    91→    91→      return <Headphones className={className} />;
+    92→    92→    case 'document':
+    93→    93→      return <FileText className={className} />;
+    94→    94→    case 'live_session':
+    95→    95→      return <Monitor className={className} />;
+    96→    96→    default:
+    97→    97→      return <FileText className={className} />;
+    98→    98→  }
+    99→    99→}
+   100→   100→
+   101→   101→// ─── Format duration ───────────────────────────────────────
+   102→   102→function formatDuration(seconds?: number): string {
+   103→   103→  if (!seconds) return '';
+   104→   104→  const mins = Math.floor(seconds / 60);
+   105→   105→  if (mins < 60) return `${mins} min`;
+   106→   106→  const hours = Math.floor(mins / 60);
+   107→   107→  const remainMins = mins % 60;
+   108→   108→  return `${hours}h ${remainMins}m`;
+   109→   109→}
+   110→   110→
+   111→   111→// ─── Level color mapping ───────────────────────────────────
+   112→   112→function getLevelColor(level: string) {
+   113→   113→  const colors: Record<string, string> = {
+   114→   114→    beginner: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+   115→   115→    intermediate: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+   116→   116→    advanced: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+   117→   117→    expert: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+   118→   118→  };
+   119→   119→  return colors[level] || 'bg-slate-100 text-slate-700';
+   120→   120→}
+   121→   121→
+   122→   122→function getLevelAccent(level: string) {
+   123→   123→  const accents: Record<string, string> = {
+   124→   124→    beginner: 'from-emerald-600 to-emerald-800',
+   125→   125→    intermediate: 'from-amber-600 to-amber-800',
+   126→   126→    advanced: 'from-orange-600 to-orange-800',
+   127→   127→    expert: 'from-red-600 to-red-800',
+   128→   128→  };
+   129→   129→  return accents[level] || 'from-slate-600 to-slate-800';
+   130→   130→}
+   131→   131→
+   132→   132→// ─── Mock lesson progress ──────────────────────────────────
+   133→   133→const lessonProgressMap: Record<string, 'completed' | 'in_progress' | 'not_started'> = {
+   134→   134→  'les-1-1-1': 'completed',
+   135→   135→  'les-1-1-2': 'completed',
+   136→   136→  'les-1-1-3': 'in_progress',
+   137→   137→  'les-1-2-1': 'not_started',
+   138→   138→  'les-1-2-2': 'not_started',
+   139→   139→};
+   140→   140→
+   141→   141→// ─── Demo chapters for video player ────────────────────────────
+   142→   142→const demoChapters: Chapter[] = [
+   143→   143→  { time: 0, title: 'Introduction' },
+   144→   144→  { time: 45, title: 'Core Concepts' },
+   145→   145→  { time: 120, title: 'Setting Up the Environment' },
+   146→   146→  { time: 180, title: 'Building Your First Component' },
+   147→   147→  { time: 240, title: 'Summary & Key Takeaways' },
+   148→   148→];
+   149→   149→
+   150→   150→// ─── Resume positions for lessons (simulated) ─────────────────
+   151→   151→const resumePositions: Record<string, number> = {
+   152→   152→  'les-1-1-3': 120,
+   153→   153→  'les-1-2-1': 0,
+   154→   154→  'les-1-2-2': 0,
+   155→   155→};
+   156→   156→
+   157→   157→// ─── Enhanced Mock discussion threads with Q&A ────────────────
+   158→   158→interface DiscussionReply {
+   159→   159→  id: string;
+   160→   160→  author: string;
+   161→   161→  avatar: string;
+   162→   162→  content: string;
+   163→   163→  time: string;
+   164→   164→  upvotes: number;
+   165→   165→  downvotes: number;
+   166→   166→  isInstructor: boolean;
+   167→   167→  isAnswer: boolean;
+   168→   168→}
+   169→   169→
+   170→   170→interface DiscussionQuestion {
+   171→   171→  id: string;
+   172→   172→  author: string;
+   173→   173→  avatar: string;
+   174→   174→  title: string;
+   175→   175→  content: string;
+   176→   176→  lessonRef: string;
+   177→   177→  lessonId: string;
+   178→   178→  upvotes: number;
+   179→   179→  downvotes: number;
+   180→   180→  time: string;
+   181→   181→  isAnswered: boolean;
+   182→   182→  replies: DiscussionReply[];
+   183→   183→}
+   184→   184→
+   185→   185→const discussionQuestions: DiscussionQuestion[] = [
+   186→   186→  {
+   187→   187→    id: 'q-1',
+   188→   188→    author: 'Mike Chen',
+   189→   189→    avatar: 'MC',
+   190→   190→    title: 'How do Server Components interact with client state?',
+   191→   191→    content: 'I\'m confused about how Server Components can trigger client-side state updates. Can someone explain the data flow? I\'ve read the docs but still struggling with the mental model.',
+   192→   192→    lessonRef: 'Server Components Architecture',
+   193→   193→    lessonId: 'les-1-1-2',
+   194→   194→    upvotes: 24,
+   195→   195→    downvotes: 1,
+   196→   196→    time: '2 hours ago',
+   197→   197→    isAnswered: true,
+   198→   198→    replies: [
+   199→   199→      {
+   200→   200→        id: 'r-1-1',
+   201→   201→        author: 'Sarah Mitchell',
+   202→   202→        avatar: 'SM',
+   203→   203→        content: 'Great question! Server Components don\'t directly interact with client state. Instead, they pass data as props to Client Components. Think of it as a one-way data flow: Server → Client. You can use Server Actions to mutate data on the server, which then triggers a re-render.',
+   204→   204→        time: '1 hour ago',
+   205→   205→        upvotes: 18,
+   206→   206→        downvotes: 0,
+   207→   207→        isInstructor: true,
+   208→   208→        isAnswer: true,
+   209→   209→      },
+   210→   210→      {
+   211→   211→        id: 'r-1-2',
+   212→   212→        author: 'Emma Rodriguez',
+   213→   213→        avatar: 'ER',
+   214→   214→        content: 'This clicked for me when I started thinking of Server Components as "data fetchers" and Client Components as "interaction handlers". The pattern is: Server Component fetches → passes as props → Client Component handles events → Server Action mutates → revalidation.',
+   215→   215→        time: '45 min ago',
+   216→   216→        upvotes: 12,
+   217→   217→        downvotes: 0,
+   218→   218→        isInstructor: false,
+   219→   219→        isAnswer: false,
+   220→   220→      },
+   221→   221→    ],
+   222→   222→  },
+   223→   223→  {
+   224→   224→    id: 'q-2',
+   225→   225→    author: 'Emma Rodriguez',
+   226→   226→    avatar: 'ER',
+   227→   227→    title: 'Best pattern for loading states in App Router?',
+   228→   228→    content: 'What\'s the recommended way to handle loading.tsx vs Suspense boundaries for complex pages? I have a dashboard with multiple data sources and want to show progressive loading.',
+   229→   229→    lessonRef: 'App Router Architecture',
+   230→   230→    lessonId: 'les-1-2-1',
+   231→   231→    upvotes: 16,
+   232→   232→    downvotes: 0,
+   233→   233→    time: '5 hours ago',
+   234→   234→    isAnswered: false,
+   235→   235→    replies: [
+   236→   236→      {
+   237→   237→        id: 'r-2-1',
+   238→   238→        author: 'David Park',
+   239→   239→        avatar: 'DP',
+   240→   240→        content: 'For dashboards, I recommend using multiple Suspense boundaries with individual loading skeletons. This way each section loads independently. Don\'t rely solely on loading.tsx as it\'s page-level.',
+   241→   241→        time: '3 hours ago',
+   242→   242→        upvotes: 8,
+   243→   243→        downvotes: 0,
+   244→   244→        isInstructor: false,
+   245→   245→        isAnswer: false,
+   246→   246→      },
+   247→   247→    ],
+   248→   248→  },
+   249→   249→  {
+   250→   250→    id: 'q-3',
+   251→   251→    author: 'David Park',
+   252→   252→    avatar: 'DP',
+   253→   253→    title: 'TypeScript generic patterns for API routes',
+   254→   254→    content: 'I\'ve been experimenting with typed API routes. Here\'s my approach to type-safe server actions - has anyone found a better pattern for inferring return types?',
+   255→   255→    lessonRef: 'TypeScript Advanced Patterns',
+   256→   256→    lessonId: 'les-1-1-3',
+   257→   257→    upvotes: 31,
+   258→   258→    downvotes: 2,
+   259→   259→    time: '1 day ago',
+   260→   260→    isAnswered: true,
+   261→   261→    replies: [
+   262→   262→      {
+   263→   263→        id: 'r-3-1',
+   264→   264→        author: 'Sarah Mitchell',
+   265→   265→        avatar: 'SM',
+   266→   266→        content: 'Excellent question! I cover this in detail in Module 3. The key is using Zod for runtime validation + TypeScript inference. This gives you end-to-end type safety. Here\'s the pattern: `const schema = z.object({...}); type Input = z.infer<typeof schema>;`',
+   267→   267→        time: '20 hours ago',
+   268→   268→        upvotes: 22,
+   269→   269→        downvotes: 0,
+   270→   270→        isInstructor: true,
+   271→   271→        isAnswer: true,
+   272→   272→      },
+   273→   273→      {
+   274→   274→        id: 'r-3-2',
+   275→   275→        author: 'Alex Kim',
+   276→   276→        avatar: 'AK',
+   277→   277→        content: 'I\'ve been using tRPC-style patterns with server actions and it\'s been great. The type inference works beautifully.',
+   278→   278→        time: '18 hours ago',
+   279→   279→        upvotes: 5,
+   280→   280→        downvotes: 1,
+   281→   281→        isInstructor: false,
+   282→   282→        isAnswer: false,
+   283→   283→      },
+   284→   284→    ],
+   285→   285→  },
+   286→   286→  {
+   287→   287→    id: 'q-4',
+   288→   288→    author: 'Lisa Wang',
+   289→   289→    avatar: 'LW',
+   290→   290→    title: 'When should I use "use client" vs keeping components as Server Components?',
+   291→   291→    content: 'I\'m not sure about the boundary between server and client components. Is there a rule of thumb for when a component should be a client component?',
+   292→   292→    lessonRef: 'React 19 New Features Deep Dive',
+   293→   293→    lessonId: 'les-1-1-1',
+   294→   294→    upvotes: 19,
+   295→   295→    downvotes: 0,
+   296→   296→    time: '2 days ago',
+   297→   297→    isAnswered: false,
+   298→   298→    replies: [],
+   299→   299→  },
+   300→   300→  {
+   301→   301→    id: 'q-5',
+   302→   302→    author: 'Tom Williams',
+   303→   303→    avatar: 'TW',
+   304→   304→    title: 'Server Actions error handling best practices?',
+   305→   305→    content: 'How should I handle errors in Server Actions? Should I use try/catch or rely on error boundaries? What about validation errors vs server errors?',
+   306→   306→    lessonRef: 'Server Actions & Data Mutation',
+   307→   307→    lessonId: 'les-1-2-2',
+   308→   308→    upvotes: 11,
+   309→   309→    downvotes: 1,
+   310→   310→    time: '3 days ago',
+   311→   311→    isAnswered: false,
+   312→   312→    replies: [
+   313→   313→      {
+   314→   314→        id: 'r-5-1',
+   315→   315→        author: 'Sarah Mitchell',
+   316→   316→        avatar: 'SM',
+   317→   317→        content: 'For Server Actions, I recommend returning a result object: `{ success: boolean, data?: T, error?: string }`. This lets the client component handle both success and error states gracefully. Error boundaries are for unexpected errors, not validation.',
+   318→   318→        time: '2 days ago',
+   319→   319→        upvotes: 14,
+   320→   320→        downvotes: 0,
+   321→   321→        isInstructor: true,
+   322→   322→        isAnswer: false,
+   323→   323→      },
+   324→   324→    ],
+   325→   325→  },
+   326→   326→];
+   327→   327→
+   328→   328→// ─── Mock Notes Data ───────────────────────────────────────
+   329→   329→interface Note {
+   330→   330→  id: string;
+   331→   331→  lessonId: string;
+   332→   332→  lessonTitle: string;
+   333→   333→  content: string;
+   334→   334→  category: 'personal' | 'study_guide' | 'code_snippet' | 'question';
+   335→   335→  timestamp?: number;
+   336→   336→  createdAt: string;
+   337→   337→  updatedAt: string;
+   338→   338→}
+   339→   339→
+   340→   340→const mockNotes: Note[] = [
+   341→   341→  {
+   342→   342→    id: 'note-1',
+   343→   343→    lessonId: 'les-1-1-1',
+   344→   344→    lessonTitle: 'React 19 New Features Deep Dive',
+   345→   345→    content: '**Key Takeaways:**\n- React 19 introduces the `use()` hook for promises\n- Server Components are the default in Next.js\n- Actions replace traditional form handling\n\nThe `use()` hook is a game changer for data fetching patterns.',
+   346→   346→    category: 'study_guide',
+   347→   347→    timestamp: 45,
+   348→   348→    createdAt: '2024-10-15T10:30:00Z',
+   349→   349→    updatedAt: '2024-10-15T10:35:00Z',
+   350→   350→  },
+   351→   351→  {
+   352→   352→    id: 'note-2',
+   353→   353→    lessonId: 'les-1-1-1',
+   354→   354→    lessonTitle: 'React 19 New Features Deep Dive',
+   355→   355→    content: '```typescript\n// Server Component example\nasync function UserProfile({ id }: { id: string }) {\n  const user = await db.user.findUnique({ where: { id } });\n  return <div>{user.name}</div>;\n}\n```',
+   356→   356→    category: 'code_snippet',
+   357→   357→    timestamp: 120,
+   358→   358→    createdAt: '2024-10-15T11:00:00Z',
+   359→   359→    updatedAt: '2024-10-15T11:05:00Z',
+   360→   360→  },
+   361→   361→  {
+   362→   362→    id: 'note-3',
+   363→   363→    lessonId: 'les-1-1-2',
+   364→   364→    lessonTitle: 'Server Components Architecture',
+   365→   365→    content: 'Need to revisit: How does streaming work with Suspense boundaries? The instructor mentioned partial hydration - need to understand this better for the quiz.',
+   366→   366→    category: 'question',
+   367→   367→    createdAt: '2024-10-16T09:15:00Z',
+   368→   368→    updatedAt: '2024-10-16T09:20:00Z',
+   369→   369→  },
+   370→   370→  {
+   371→   371→    id: 'note-4',
+   372→   372→    lessonId: 'les-1-1-2',
+   373→   373→    lessonTitle: 'Server Components Architecture',
+   374→   374→    content: 'Server Components render on the server and send HTML to the client. They CANNOT:\n- Use useState, useEffect\n- Handle event listeners\n- Use browser-only APIs\n\nThey CAN:\n- Fetch data directly\n- Access server resources\n- Pass data to Client Components',
+   375→   375→    category: 'study_guide',
+   376→   376→    timestamp: 180,
+   377→   377→    createdAt: '2024-10-16T09:30:00Z',
+   378→   378→    updatedAt: '2024-10-16T09:35:00Z',
+   379→   379→  },
+   380→   380→  {
+   381→   381→    id: 'note-5',
+   382→   382→    lessonId: 'les-1-1-3',
+   383→   383→    lessonTitle: 'TypeScript Advanced Patterns',
+   384→   384→    content: 'My personal approach to generics: Start simple, add constraints only when needed. The KISS principle applies especially to TypeScript generics.',
+   385→   385→    category: 'personal',
+   386→   386→    createdAt: '2024-10-17T14:00:00Z',
+   387→   387→    updatedAt: '2024-10-17T14:05:00Z',
+   388→   388→  },
+   389→   389→];
+   390→   390→
+   391→   391→// ─── Mock Progress Timeline Data ───────────────────────────
+   392→   392→interface TimelineEvent {
+   393→   393→  id: string;
+   394→   394→  lessonId: string;
+   395→   395→  lessonTitle: string;
+   396→   396→  moduleName: string;
+   397→   397→  date: string;
+   398→   398→  timeSpent: number;
+   399→   399→  quizScore?: number;
+   400→   400→  type: 'completed' | 'started' | 'quiz';
+   401→   401→}
+   402→   402→
+   403→   403→const timelineEvents: TimelineEvent[] = [
+   404→   404→  { id: 'te-1', lessonId: 'les-1-1-1', lessonTitle: 'React 19 New Features Deep Dive', moduleName: 'Foundations of Modern React', date: '2024-10-14', timeSpent: 47, quizScore: 92, type: 'completed' },
+   405→   405→  { id: 'te-2', lessonId: 'les-1-1-1', lessonTitle: 'React 19 New Features Deep Dive', moduleName: 'Foundations of Modern React', date: '2024-10-14', timeSpent: 47, quizScore: 92, type: 'quiz' },
+   406→   406→  { id: 'te-3', lessonId: 'les-1-1-2', lessonTitle: 'Server Components Architecture', moduleName: 'Foundations of Modern React', date: '2024-10-16', timeSpent: 52, quizScore: 88, type: 'completed' },
+   407→   407→  { id: 'te-4', lessonId: 'les-1-1-2', lessonTitle: 'Server Components Architecture', moduleName: 'Foundations of Modern React', date: '2024-10-16', timeSpent: 52, quizScore: 88, type: 'quiz' },
+   408→   408→  { id: 'te-5', lessonId: 'les-1-1-3', lessonTitle: 'TypeScript Advanced Patterns', moduleName: 'Foundations of Modern React', date: '2024-10-17', timeSpent: 35, type: 'started' },
+   409→   409→];
+   410→   410→
+   411→   411→const weeklyActivity = [
+   412→   412→  { day: 'Mon', hours: 1.5 },
+   413→   413→  { day: 'Tue', hours: 2.0 },
+   414→   414→  { day: 'Wed', hours: 0.5 },
+   415→   415→  { day: 'Thu', hours: 1.8 },
+   416→   416→  { day: 'Fri', hours: 2.2 },
+   417→   417→  { day: 'Sat', hours: 0.8 },
+   418→   418→  { day: 'Sun', hours: 0 },
+   419→   419→];
+   420→   420→
+   421→   421→const milestones = [
+   422→   422→  { id: 'ms-1', title: 'First Lesson Completed', description: 'Completed your first lesson', icon: '🎯', date: 'Oct 14', achieved: true },
+   423→   423→  { id: 'ms-2', title: 'Quick Learner', description: 'Completed 2 lessons in one day', icon: '⚡', date: 'Oct 14', achieved: true },
+   424→   424→  { id: 'ms-3', title: 'Module Master', description: 'Complete all lessons in a module', icon: '🏆', date: '', achieved: false },
+   425→   425→  { id: 'ms-4', title: 'Quiz Ace', description: 'Score 95%+ on any quiz', icon: '🎓', date: '', achieved: false },
+   426→   426→  { id: 'ms-5', title: 'Streak Champion', description: 'Maintain a 7-day learning streak', icon: '🔥', date: '', achieved: false },
+   427→   427→  { id: 'ms-6', title: 'Course Graduate', description: 'Complete the entire course', icon: '🏅', date: '', achieved: false },
+   428→   428→];
+   429→   429→
+   430→   430→// ─── Mock resources ────────────────────────────────────────
+   431→   431→const courseResources = [
+   432→   432→  { id: 'res-1', title: 'React 19 Cheat Sheet', type: 'pdf', size: '2.4 MB' },
+   433→   433→  { id: 'res-2', title: 'Next.js App Router Diagram', type: 'pdf', size: '1.1 MB' },
+   434→   434→  { id: 'res-3', title: 'Course Code Repository', type: 'repo', url: 'github.com/nextgen-lms/react-masterclass' },
+   435→   435→  { id: 'res-4', title: 'TypeScript Best Practices Guide', type: 'pdf', size: '3.8 MB' },
+   436→   436→  { id: 'res-5', title: 'Official React Documentation', type: 'link', url: 'react.dev' },
+   437→   437→  { id: 'res-6', title: 'Next.js Documentation', type: 'link', url: 'nextjs.org/docs' },
+   438→   438→];
+   439→   439→
+   440→   440→// ─── Mock reviews ──────────────────────────────────────────
+   441→   441→const courseReviews = [
+   442→   442→  { id: 'rev-1', author: 'Sarah K.', avatar: 'SK', rating: 5, date: '2 weeks ago', content: 'Absolutely incredible course! The section on Server Components completely changed how I think about React architecture. Highly recommended for anyone serious about modern web development.' },
+   443→   443→  { id: 'rev-2', author: 'James L.', avatar: 'JL', rating: 5, date: '1 month ago', content: 'Best React course I\'ve ever taken. The instructor explains complex concepts in a way that\'s easy to follow. The hands-on projects really solidify the learning.' },
+   444→   444→  { id: 'rev-3', author: 'Priya S.', avatar: 'PS', rating: 4, date: '1 month ago', content: 'Great content overall. The TypeScript patterns section was excellent. Would have liked more content on testing patterns, but still very much worth the investment.' },
+   445→   445→  { id: 'rev-4', author: 'Alex M.', avatar: 'AM', rating: 5, date: '2 months ago', content: 'This course is a game-changer. I went from struggling with React concepts to building production apps confidently. The community support is amazing too.' },
+   446→   446→  { id: 'rev-5', author: 'Tom W.', avatar: 'TW', rating: 4, date: '3 months ago', content: 'Very comprehensive course. The App Router deep-dive was particularly helpful. Some sections could be a bit more beginner-friendly, but the depth is appreciated.' },
+   447→   447→];
+   448→   448→
+   449→   449→// ─── Rating distribution ───────────────────────────────────
+   450→   450→const ratingDistribution = [
+   451→   451→  { stars: 5, count: 186 },
+   452→   452→  { stars: 4, count: 89 },
+   453→   453→  { stars: 3, count: 24 },
+   454→   454→  { stars: 2, count: 9 },
+   455→   455→  { stars: 1, count: 4 },
+   456→   456→];
+   457→   457→const totalReviews = ratingDistribution.reduce((s, r) => s + r.count, 0);
+   458→   458→
+   459→   459→// ─── What You'll Learn ─────────────────────────────────────
+   460→   460→const whatYouLearn = [
+   461→   461→  { id: 'wyl-1', text: 'Build production-ready React 19 applications', completed: true },
+   462→   462→  { id: 'wyl-2', text: 'Master Server Components and streaming SSR', completed: true },
+   463→   463→  { id: 'wyl-3', text: 'Implement advanced TypeScript patterns', completed: false },
+   464→   464→  { id: 'wyl-4', text: 'Architect Next.js 16 App Router applications', completed: false },
+   465→   465→  { id: 'wyl-5', text: 'Build type-safe API routes with Server Actions', completed: false },
+   466→   466→  { id: 'wyl-6', text: 'Deploy and optimize for production', completed: false },
+   467→   467→  { id: 'wyl-7', text: 'Implement authentication and authorization patterns', completed: false },
+   468→   468→  { id: 'wyl-8', text: 'Master state management in modern React', completed: false },
+   469→   469→];
+   470→   470→
+   471→   471→// ─── Prerequisites ─────────────────────────────────────────
+   472→   472→const prerequisites = [
+   473→   473→  'Basic knowledge of HTML, CSS, and JavaScript',
+   474→   474→  'Familiarity with React fundamentals (components, props, state)',
+   475→   475→  'Basic understanding of TypeScript',
+   476→   476→  'Node.js installed on your machine',
+   477→   477→];
+   478→   478→
+   479→   479→// ─── Students Also Taking ──────────────────────────────────
+   480→   480→const studentsAlsoTaking = [
+   481→   481→  { id: 'sat-1', title: 'AI-Powered Full Stack Development', level: 'intermediate', rating: 4.9, students: 623, price: 149 },
+   482→   482→  { id: 'sat-2', title: 'UX/UI Design Principles', level: 'beginner', rating: 4.5, students: 567, price: 99 },
+   483→   483→  { id: 'sat-3', title: 'DevOps & Cloud Architecture', level: 'advanced', rating: 4.8, students: 298, price: 179 },
+   484→   484→];
+   485→   485→
+   486→   486→// ─── Instructor Profile ────────────────────────────────────
+   487→   487→const instructorProfile = {
+   488→   488→  name: 'Sarah Mitchell',
+   489→   489→  avatar: 'SM',
+   490→   490→  title: 'Senior Software Engineer & Educator',
+   491→   491→  bio: 'Former tech lead at Meta with 12+ years of experience in React and web performance. Published author, conference speaker, and passionate about making complex topics accessible.',
+   492→   492→  courses: 6,
+   493→   493→  students: 12847,
+   494→   494→  rating: 4.9,
+   495→   495→  otherCourses: ['AI-Powered Full Stack Development', 'System Design for Senior Engineers'],
+   496→   496→};
+   497→   497→
+   498→   498→// ─── Animation variants ────────────────────────────────────
+   499→   499→const containerVariants = {
+   500→   500→  hidden: { opacity: 0 },
+   501→   501→  visible: { opacity: 1, transition: { staggerChildren: 0.05 } },
+   502→   502→};
+   503→   503→
+   504→   504→const itemVariants = {
+   505→   505→  hidden: { opacity: 0, y: 12 },
+   506→   506→  visible: { opacity: 1, y: 0, transition: { duration: 0.35 } },
+   507→   507→};
+   508→   508→
+   509→   509→const tabContentVariants = {
+   510→   510→  hidden: { opacity: 0, x: 10 },
+   511→   511→  visible: { opacity: 1, x: 0, transition: { duration: 0.3 } },
+   512→   512→  exit: { opacity: 0, x: -10, transition: { duration: 0.2 } },
+   513→   513→};
+   514→   514→
+   515→   515→// ─── Glassmorphism card class ─────────────────────────────
+   516→   516→const glassCard = 'backdrop-blur-xl bg-white/70 dark:bg-slate-900/70 border border-white/20 dark:border-slate-700/30';
+   517→   517→
+   518→   518→// ─── Note Category Config ──────────────────────────────────
+   519→   519→const noteCategoryConfig: Record<Note['category'], { label: string; icon: React.ReactNode; color: string }> = {
+   520→   520→  personal: { label: 'Personal', icon: <StickyNote className="h-3.5 w-3.5" />, color: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
+   521→   521→  study_guide: { label: 'Study Guide', icon: <BookOpen className="h-3.5 w-3.5" />, color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+   522→   522→  code_snippet: { label: 'Code Snippet', icon: <Code2 className="h-3.5 w-3.5" />, color: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
+   523→   523→  question: { label: 'Question', icon: <HelpCircle className="h-3.5 w-3.5" />, color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+   524→   524→};
+   525→   525→
+   526→   526→// ─── Difficulty Meter Component ────────────────────────────
+   527→   527→function DifficultyMeter({ level }: { level: string }) {
+   528→   528→  const levelValues: Record<string, number> = {
+   529→   529→    beginner: 25,
+   530→   530→    intermediate: 50,
+   531→   531→    advanced: 75,
+   532→   532→    expert: 100,
+   533→   533→  };
+   534→   534→  const value = levelValues[level] || 25;
+   535→   535→  const gradientClass = level === 'beginner' ? 'from-emerald-400 to-emerald-600'
+   536→   536→    : level === 'intermediate' ? 'from-amber-400 to-amber-600'
+   537→   537→    : level === 'advanced' ? 'from-orange-400 to-orange-600'
+   538→   538→    : 'from-red-400 to-red-600';
+   539→   539→
+   540→   540→  return (
+   541→   541→    <div className="space-y-1.5">
+   542→   542→      <div className="flex items-center justify-between text-xs">
+   543→   543→        <span className="text-muted-foreground">Difficulty</span>
+   544→   544→        <span className={cn('font-semibold capitalize', getLevelColor(level).replace('bg-', 'text-').split(' ')[0])}>{level}</span>
+   545→   545→      </div>
+   546→   546→      <div className="h-2 rounded-full bg-muted overflow-hidden">
+   547→   547→        <motion.div
+   548→   548→          className={cn('h-full rounded-full bg-gradient-to-r', gradientClass)}
+   549→   549→          initial={{ width: 0 }}
+   550→   550→          animate={{ width: `${value}%` }}
+   551→   551→          transition={{ duration: 1, ease: 'easeOut' }}
+   552→   552→        />
+   553→   553→      </div>
+   554→   554→      <div className="flex justify-between text-[10px] text-muted-foreground">
+   555→   555→        <span>Easy</span>
+   556→   556→        <span>Expert</span>
+   557→   557→      </div>
+   558→   558→    </div>
+   559→   559→  );
+   560→   560→}
+   561→   561→
+   562→   562→// ─── Module Section Component (Enhanced) ───────────────────
+   563→   563→function ModuleSection({ module: mod, moduleIndex, onLessonClick, progressMap }: { module: Module; moduleIndex: number; onLessonClick: (lesson: Lesson) => void; progressMap: Record<string, 'completed' | 'in_progress' | 'not_started'> }) {
+   564→   564→  const [isOpen, setIsOpen] = useState(moduleIndex === 0);
+   565→   565→  const lessons = mod.lessons || [];
+   566→   566→  const completedLessons = lessons.filter(
+   567→   567→    (l) => progressMap[l.id] === 'completed'
+   568→   568→  ).length;
+   569→   569→  const totalDuration = lessons.reduce((sum, l) => sum + (l.videoDuration || 0), 0);
+   570→   570→  const moduleProgress = lessons.length > 0 ? Math.round((completedLessons / lessons.length) * 100) : 0;
+   571→   571→
+   572→   572→  return (
+   573→   573→    <motion.div
+   574→   574→      className={cn('rounded-xl overflow-hidden', glassCard)}
+   575→   575→      whileHover={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
+   576→   576→      transition={{ duration: 0.2 }}
+   577→   577→    >
+   578→   578→      {/* Module Header */}
+   579→   579→      <button
+   580→   580→        onClick={() => setIsOpen(!isOpen)}
+   581→   581→        className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors text-left"
+   582→   582→      >
+   583→   583→        <div className="flex items-center gap-3">
+   584→   584→          <motion.div
+   585→   585→            animate={{ rotate: isOpen ? 0 : 0 }}
+   586→   586→            transition={{ duration: 0.2 }}
+   587→   587→            className="text-muted-foreground"
+   588→   588→          >
+   589→   589→            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+   590→   590→          </motion.div>
+   591→   591→          <div>
+   592→   592→            <div className="flex items-center gap-2">
+   593→   593→              <span className="text-xs font-medium text-muted-foreground">Module {moduleIndex + 1}</span>
+   594→   594→              {mod.isPublished ? (
+   595→   595→                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Published</Badge>
+   596→   596→              ) : (
+   597→   597→                <Badge variant="outline" className="text-[10px] px-1.5 py-0">Draft</Badge>
+   598→   598→              )}
+   599→   599→            </div>
+   600→   600→            <h4 className="font-semibold text-foreground text-sm mt-0.5">{mod.title}</h4>
+   601→   601→          </div>
+   602→   602→        </div>
+   603→   603→        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+   604→   604→          <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {lessons.length} lessons</span>
+   605→   605→          {totalDuration > 0 && <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatDuration(totalDuration)}</span>}
+   606→   606→          {/* Module progress percentage */}
+   607→   607→          <div className="flex items-center gap-2">
+   608→   608→            <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+   609→   609→              <div
+   610→   610→                className={cn(
+   611→   611→                  'h-full rounded-full transition-all duration-500',
+   612→   612→                  moduleProgress === 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-400 to-amber-600'
+   613→   613→                )}
+   614→   614→                style={{ width: `${moduleProgress}%` }}
+   615→   615→              />
+   616→   616→            </div>
+   617→   617→            <span className="text-[10px] font-medium">{moduleProgress}%</span>
+   618→   618→          </div>
+   619→   619→          {completedLessons > 0 && (
+   620→   620→            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
+   621→   621→              {completedLessons}/{lessons.length} done
+   622→   622→            </Badge>
+   623→   623→          )}
+   624→   624→        </div>
+   625→   625→      </button>
+   626→   626→
+   627→   627→      {/* Module Lessons */}
+   628→   628→      <AnimatePresence>
+   629→   629→        {isOpen && (
+   630→   630→          <motion.div
+   631→   631→            initial={{ height: 0, opacity: 0 }}
+   632→   632→            animate={{ height: 'auto', opacity: 1 }}
+   633→   633→            exit={{ height: 0, opacity: 0 }}
+   634→   634→            transition={{ duration: 0.2 }}
+   635→   635→            className="overflow-hidden"
+   636→   636→          >
+   637→   637→            <div className="border-t border-white/10 dark:border-slate-700/20 bg-muted/10">
+   638→   638→              {lessons.map((lesson, lessonIdx) => {
+   639→   639→                const status = progressMap[lesson.id] || 'not_started';
+   640→   640→                const isNextUp = status === 'in_progress';
+   641→   641→                return (
+   642→   642→                  <div
+   643→   643→                    key={lesson.id}
+   644→   644→                    className={cn(
+   645→   645→                      'flex items-center justify-between p-3 pl-12 hover:bg-muted/30 transition-all duration-200',
+   646→   646→                      lessonIdx < lessons.length - 1 && 'border-b border-border/30',
+   647→   647→                      isNextUp && 'bg-amber-50/50 dark:bg-amber-900/10 border-l-2 border-l-amber-500'
+   648→   648→                    )}
+   649→   649→                  >
+   650→   650→                    <div className="flex items-center gap-3">
+   651→   651→                      {/* Status Icon with animated fill */}
+   652→   652→                      {status === 'completed' ? (
+   653→   653→                        <motion.div
+   654→   654→                          initial={{ scale: 0 }}
+   655→   655→                          animate={{ scale: 1 }}
+   656→   656→                          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+   657→   657→                        >
+   658→   658→                          <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+   659→   659→                        </motion.div>
+   660→   660→                      ) : status === 'in_progress' ? (
+   661→   661→                        <div className="h-5 w-5 rounded-full border-2 border-amber-500 border-t-transparent animate-spin shrink-0" />
+   662→   662→                      ) : (
+   663→   663→                        <Circle className="h-5 w-5 text-muted-foreground/40 shrink-0" />
+   664→   664→                      )}
+   665→   665→
+   666→   666→                      {/* Content Type Icon */}
+   667→   667→                      <ContentTypeIcon type={lesson.contentType} className="h-4 w-4 text-muted-foreground shrink-0" />
+   668→   668→
+   669→   669→                      {/* Lesson Info */}
+   670→   670→                      <div>
+   671→   671→                        <div className="flex items-center gap-2">
+   672→   672→                          <p className={cn(
+   673→   673→                            'text-sm font-medium',
+   674→   674→                            status === 'completed' ? 'text-muted-foreground line-through' : 'text-foreground'
+   675→   675→                          )}>
+   676→   676→                            {lesson.title}
+   677→   677→                          </p>
+   678→   678→                          {isNextUp && (
+   679→   679→                            <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[9px] px-1.5 py-0 gap-0.5">
+   680→   680→                              <Play className="h-2.5 w-2.5" /> Next Up
+   681→   681→                            </Badge>
+   682→   682→                          )}
+   683→   683→                        </div>
+   684→   684→                        <div className="flex items-center gap-2 mt-0.5">
+   685→   685→                          {lesson.videoDuration && (
+   686→   686→                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+   687→   687→                              <Clock className="h-3 w-3" /> {formatDuration(lesson.videoDuration)}
+   688→   688→                            </span>
+   689→   689→                          )}
+   690→   690→                          {lesson.isPreview && (
+   691→   691→                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-0.5">
+   692→   692→                              <Eye className="h-2.5 w-2.5" /> Preview
+   693→   693→                            </Badge>
+   694→   694→                          )}
+   695→   695→                          {/* Download icon for downloadable resources */}
+   696→   696→                          <Download className="h-3 w-3 text-muted-foreground/50 hover:text-muted-foreground cursor-pointer transition-colors" />
+   697→   697→                        </div>
+   698→   698→                      </div>
+   699→   699→                    </div>
+   700→   700→
+   701→   701→                    {/* Action Button */}
+   702→   702→                    <div>
+   703→   703→                      {status === 'completed' ? (
+   704→   704→                        <div className="flex items-center gap-2">
+   705→   705→                          <Badge variant="outline" className="text-emerald-600 border-emerald-500/30 dark:border-emerald-800 text-xs">
+   706→   706→                            Completed
+   707→   707→                          </Badge>
+   708→   708→                          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-emerald-600 hover:text-emerald-700" onClick={() => onLessonClick(lesson)}>
+   709→   709→                            <Play className="h-3 w-3" /> Rewatch
+   710→   710→                          </Button>
+   711→   711→                        </div>
+   712→   712→                      ) : status === 'in_progress' ? (
+   713→   713→                        <Button size="sm" className="h-8 text-xs gap-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-md shadow-amber-500/20" onClick={() => onLessonClick(lesson)}>
+   714→   714→                          <Play className="h-3 w-3" fill="currentColor" /> Resume
+   715→   715→                        </Button>
+   716→   716→                      ) : lesson.isPreview ? (
+   717→   717→                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onLessonClick(lesson)}>
+   718→   718→                          <Play className="h-3 w-3" /> Preview
+   719→   719→                        </Button>
+   720→   720→                      ) : (
+   721→   721→                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onLessonClick(lesson)}>
+   722→   722→                          <Play className="h-3 w-3" /> Start
+   723→   723→                        </Button>
+   724→   724→                      )}
+   725→   725→                    </div>
+   726→   726→                  </div>
+   727→   727→                );
+   728→   728→              })}
+   729→   729→            </div>
+   730→   730→          </motion.div>
+   731→   731→        )}
+   732→   732→      </AnimatePresence>
+   733→   733→    </motion.div>
+   734→   734→  );
+   735→   735→}
+   736→   736→
+   737→   737→// ─── Discussion Q&A Tab ────────────────────────────────────
+   738→   738→function DiscussionTab({ questions }: { questions: DiscussionQuestion[] }) {
+   739→   739→  const [sortBy, setSortBy] = useState<'recent' | 'upvoted' | 'unanswered'>('recent');
+   740→   740→  const [searchQuery, setSearchQuery] = useState('');
+   741→   741→  const [expandedQuestion, setExpandedQuestion] = useState<string | null>(null);
+   742→   742→  const [showAskForm, setShowAskForm] = useState(false);
+   743→   743→  const [askTitle, setAskTitle] = useState('');
+   744→   744→  const [askContent, setAskContent] = useState('');
+   745→   745→  const [replyContent, setReplyContent] = useState('');
+   746→   746→  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+   747→   747→
+   748→   748→  const unansweredCount = questions.filter(q => !q.isAnswered).length;
+   749→   749→
+   750→   750→  const sortedQuestions = [...questions].sort((a, b) => {
+   751→   751→    if (sortBy === 'recent') return 0;
+   752→   752→    if (sortBy === 'upvoted') return b.upvotes - a.upvotes;
+   753→   753→    if (sortBy === 'unanswered') return a.isAnswered === b.isAnswered ? 0 : a.isAnswered ? 1 : -1;
+   754→   754→    return 0;
+   755→   755→  });
+   756→   756→
+   757→   757→  const filteredQuestions = sortedQuestions.filter(q =>
+   758→   758→    q.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+   759→   759→    q.content.toLowerCase().includes(searchQuery.toLowerCase())
+   760→   760→  );
+   761→   761→
+   762→   762→  return (
+   763→   763→    <div className="space-y-4">
+   764→   764→      {/* Header */}
+   765→   765→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+   766→   766→        <div>
+   767→   767→          <div className="flex items-center gap-2">
+   768→   768→            <h3 className="font-semibold text-foreground">Lesson Discussions</h3>
+   769→   769→            {unansweredCount > 0 && (
+   770→   770→              <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px]">
+   771→   771→                {unansweredCount} unanswered
+   772→   772→              </Badge>
+   773→   773→            )}
+   774→   774→          </div>
+   775→   775→          <p className="text-sm text-muted-foreground">Ask questions and share insights with fellow learners</p>
+   776→   776→        </div>
+   777→   777→        <Button size="sm" className="gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20" onClick={() => setShowAskForm(!showAskForm)}>
+   778→   778→          <Send className="h-3.5 w-3.5" />
+   779→   779→          Ask a Question
+   780→   780→        </Button>
+   781→   781→      </div>
+   782→   782→
+   783→   783→      {/* Search and Sort */}
+   784→   784→      <div className="flex flex-col sm:flex-row gap-3">
+   785→   785→        <div className="relative flex-1">
+   786→   786→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   787→   787→          <Input
+   788→   788→            placeholder="Search discussions..."
+   789→   789→            value={searchQuery}
+   790→   790→            onChange={(e) => setSearchQuery(e.target.value)}
+   791→   791→            className="pl-9 h-9"
+   792→   792→          />
+   793→   793→        </div>
+   794→   794→        <div className="flex gap-1.5">
+   795→   795→          {[
+   796→   796→            { key: 'recent' as const, label: 'Most Recent' },
+   797→   797→            { key: 'upvoted' as const, label: 'Most Upvoted' },
+   798→   798→            { key: 'unanswered' as const, label: 'Unanswered' },
+   799→   799→          ].map((opt) => (
+   800→   800→            <Button
+   801→   801→              key={opt.key}
+   802→   802→              size="sm"
+   803→   803→              variant={sortBy === opt.key ? 'default' : 'outline'}
+   804→   804→              className={cn('text-xs h-9', sortBy === opt.key && 'bg-gradient-to-r from-slate-700 to-slate-800 dark:from-slate-600 dark:to-slate-700')}
+   805→   805→              onClick={() => setSortBy(opt.key)}
+   806→   806→            >
+   807→   807→              {opt.label}
+   808→   808→            </Button>
+   809→   809→          ))}
+   810→   810→        </div>
+   811→   811→      </div>
+   812→   812→
+   813→   813→      {/* Ask Question Form */}
+   814→   814→      <AnimatePresence>
+   815→   815→        {showAskForm && (
+   816→   816→          <motion.div
+   817→   817→            initial={{ height: 0, opacity: 0 }}
+   818→   818→            animate={{ height: 'auto', opacity: 1 }}
+   819→   819→            exit={{ height: 0, opacity: 0 }}
+   820→   820→            transition={{ duration: 0.2 }}
+   821→   821→            className="overflow-hidden"
+   822→   822→          >
+   823→   823→            <Card className={cn('border-emerald-200 dark:border-emerald-800/50', glassCard)}>
+   824→   824→              <CardContent className="p-4 space-y-3">
+   825→   825→                <Input
+   826→   826→                  placeholder="What's your question?"
+   827→   827→                  value={askTitle}
+   828→   828→                  onChange={(e) => setAskTitle(e.target.value)}
+   829→   829→                  className="font-medium"
+   830→   830→                />
+   831→   831→                <Textarea
+   832→   832→                  placeholder="Provide more details about your question... (Supports **bold**, *italic*, `code`)"
+   833→   833→                  value={askContent}
+   834→   834→                  onChange={(e) => setAskContent(e.target.value)}
+   835→   835→                  rows={4}
+   836→   836→                  className="resize-none"
+   837→   837→                />
+   838→   838→                <div className="flex items-center justify-between">
+   839→   839→                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   840→   840→                    <Tag className="h-3 w-3" />
+   841→   841→                    <span>Supports Markdown formatting</span>
+   842→   842→                  </div>
+   843→   843→                  <div className="flex items-center gap-2">
+   844→   844→                    <Button size="sm" variant="outline" onClick={() => setShowAskForm(false)}>Cancel</Button>
+   845→   845→                    <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowAskForm(false)}>
+   846→   846→                      <Send className="h-3 w-3" /> Post Question
+   847→   847→                    </Button>
+   848→   848→                  </div>
+   849→   849→                </div>
+   850→   850→              </CardContent>
+   851→   851→            </Card>
+   852→   852→          </motion.div>
+   853→   853→        )}
+   854→   854→      </AnimatePresence>
+   855→   855→
+   856→   856→      {/* Questions List */}
+   857→   857→      <div className="space-y-3">
+   858→   858→        <AnimatePresence mode="popLayout">
+   859→   859→          {filteredQuestions.map((question) => (
+   860→   860→            <motion.div
+   861→   861→              key={question.id}
+   862→   862→              layout
+   863→   863→              initial={{ opacity: 0, y: 10 }}
+   864→   864→              animate={{ opacity: 1, y: 0 }}
+   865→   865→              exit={{ opacity: 0, y: -10 }}
+   866→   866→            >
+   867→   867→              <Card className={cn(
+   868→   868→                'hover:shadow-md transition-all duration-200 cursor-pointer',
+   869→   869→                glassCard,
+   870→   870→                question.isAnswered && 'border-emerald-200 dark:border-emerald-800/40'
+   871→   871→              )}>
+   872→   872→                <CardContent className="p-4">
+   873→   873→                  <div className="flex items-start gap-3">
+   874→   874→                    {/* Vote column */}
+   875→   875→                    <div className="flex flex-col items-center gap-1 pt-1">
+   876→   876→                      <button className="p-1 rounded hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+   877→   877→                        <ChevronUp className="h-4 w-4" />
+   878→   878→                      </button>
+   879→   879→                      <span className="text-sm font-semibold text-foreground">{question.upvotes}</span>
+   880→   880→                      <button className="p-1 rounded hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+   881→   881→                        <ChevronDown className="h-4 w-4" />
+   882→   882→                      </button>
+   883→   883→                    </div>
+   884→   884→
+   885→   885→                    {/* Content */}
+   886→   886→                    <div className="flex-1 min-w-0" onClick={() => setExpandedQuestion(expandedQuestion === question.id ? null : question.id)}>
+   887→   887→                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+   888→   888→                        {question.isAnswered && (
+   889→   889→                          <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] gap-0.5">
+   890→   890→                            <CheckCircle2 className="h-3 w-3" /> Answered
+   891→   891→                          </Badge>
+   892→   892→                        )}
+   893→   893→                        <Badge variant="outline" className="text-[10px] gap-0.5">
+   894→   894→                          <BookOpen className="h-2.5 w-2.5" /> {question.lessonRef}
+   895→   895→                        </Badge>
+   896→   896→                      </div>
+   897→   897→                      <h4 className="text-sm font-semibold text-foreground mb-1">{question.title}</h4>
+   898→   898→                      <p className="text-xs text-muted-foreground line-clamp-2">{question.content}</p>
+   899→   899→                      <div className="flex items-center gap-3 mt-2">
+   900→   900→                        <div className="flex items-center gap-1.5">
+   901→   901→                          <Avatar className="h-5 w-5">
+   902→   902→                            <AvatarFallback className="text-[8px] bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
+   903→   903→                              {question.avatar}
+   904→   904→                            </AvatarFallback>
+   905→   905→                          </Avatar>
+   906→   906→                          <span className="text-xs font-medium text-foreground">{question.author}</span>
+   907→   907→                        </div>
+   908→   908→                        <span className="text-xs text-muted-foreground">· {question.time}</span>
+   909→   909→                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+   910→   910→                          <MessageCircle className="h-3 w-3" /> {question.replies.length}
+   911→   911→                        </span>
+   912→   912→                      </div>
+   913→   913→                    </div>
+   914→   914→                  </div>
+   915→   915→
+   916→   916→                  {/* Expanded Replies */}
+   917→   917→                  <AnimatePresence>
+   918→   918→                    {expandedQuestion === question.id && (
+   919→   919→                      <motion.div
+   920→   920→                        initial={{ height: 0, opacity: 0 }}
+   921→   921→                        animate={{ height: 'auto', opacity: 1 }}
+   922→   922→                        exit={{ height: 0, opacity: 0 }}
+   923→   923→                        transition={{ duration: 0.2 }}
+   924→   924→                        className="overflow-hidden"
+   925→   925→                      >
+   926→   926→                        <div className="mt-4 pt-4 border-t border-border/50 space-y-3">
+   927→   927→                          {question.replies.map((reply) => (
+   928→   928→                            <div key={reply.id} className={cn(
+   929→   929→                              'ml-8 p-3 rounded-lg',
+   930→   930→                              reply.isAnswer ? 'bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/30' : 'bg-muted/30'
+   931→   931→                            )}>
+   932→   932→                              <div className="flex items-center gap-2 mb-1.5">
+   933→   933→                                <Avatar className="h-6 w-6">
+   934→   934→                                  <AvatarFallback className={cn(
+   935→   935→                                    'text-[9px]',
+   936→   936→                                    reply.isInstructor
+   937→   937→                                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+   938→   938→                                      : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+   939→   939→                                  )}>
+   940→   940→                                    {reply.avatar}
+   941→   941→                                  </AvatarFallback>
+   942→   942→                                </Avatar>
+   943→   943→                                <span className="text-xs font-medium text-foreground">{reply.author}</span>
+   944→   944→                                {reply.isInstructor && (
+   945→   945→                                  <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[9px] px-1.5 py-0 gap-0.5">
+   946→   946→                                    <GraduationCap className="h-2.5 w-2.5" /> Instructor
+   947→   947→                                  </Badge>
+   948→   948→                                )}
+   949→   949→                                {reply.isAnswer && (
+   950→   950→                                  <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[9px] px-1.5 py-0 gap-0.5">
+   951→   951→                                    <CheckCircle2 className="h-2.5 w-2.5" /> Best Answer
+   952→   952→                                  </Badge>
+   953→   953→                                )}
+   954→   954→                                <span className="text-[10px] text-muted-foreground">· {reply.time}</span>
+   955→   955→                              </div>
+   956→   956→                              <p className="text-xs text-muted-foreground leading-relaxed ml-8">{reply.content}</p>
+   957→   957→                              <div className="flex items-center gap-3 mt-2 ml-8">
+   958→   958→                                <button className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+   959→   959→                                  <ThumbsUp className="h-3 w-3" /> {reply.upvotes}
+   960→   960→                                </button>
+   961→   961→                                <button className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+   962→   962→                                  <ThumbsDown className="h-3 w-3" /> {reply.downvotes}
+   963→   963→                                </button>
+   964→   964→                              </div>
+   965→   965→                            </div>
+   966→   966→                          ))}
+   967→   967→
+   968→   968→                          {/* Reply input */}
+   969→   969→                          <div className="ml-8 flex gap-2">
+   970→   970→                            <Input
+   971→   971→                              placeholder="Write a reply..."
+   972→   972→                              value={replyingTo === question.id ? replyContent : ''}
+   973→   973→                              onChange={(e) => { setReplyingTo(question.id); setReplyContent(e.target.value); }}
+   974→   974→                              className="h-8 text-xs"
+   975→   975→                              onFocus={() => setReplyingTo(question.id)}
+   976→   976→                            />
+   977→   977→                            <Button
+   978→   978→                              size="sm"
+   979→   979→                              className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-700 shrink-0"
+   980→   980→                              onClick={() => { setReplyContent(''); setReplyingTo(null); }}
+   981→   981→                            >
+   982→   982→                              <Send className="h-3 w-3" />
+   983→   983→                            </Button>
+   984→   984→                          </div>
+   985→   985→                        </div>
+   986→   986→                      </motion.div>
+   987→   987→                    )}
+   988→   988→                  </AnimatePresence>
+   989→   989→                </CardContent>
+   990→   990→              </Card>
+   991→   991→            </motion.div>
+   992→   992→          ))}
+   993→   993→        </AnimatePresence>
+   994→   994→      </div>
+   995→   995→
+   996→   996→      <Button variant="outline" className="w-full">View All Discussions</Button>
+   997→   997→    </div>
+   998→   998→  );
+   999→   999→}
+  1000→  1000→
+  1001→  1001→// ─── Notes Tab ─────────────────────────────────────────────
+  1002→  1002→function NotesTab({ notes: initialNotes, onJumpToTimestamp }: { notes: Note[]; onJumpToTimestamp?: (time: number) => void }) {
+  1003→  1003→  const [notes, setNotes] = useState(initialNotes);
+  1004→  1004→  const [selectedLesson, setSelectedLesson] = useState<string>('all');
+  1005→  1005→  const [searchQuery, setSearchQuery] = useState('');
+  1006→  1006→  const [selectedCategory, setSelectedCategory] = useState<Note['category'] | 'all'>('all');
+  1007→  1007→  const [editingNote, setEditingNote] = useState<string | null>(null);
+  1008→  1008→  const [editContent, setEditContent] = useState('');
+  1009→  1009→  const [newNoteContent, setNewNoteContent] = useState('');
+  1010→  1010→  const [newNoteCategory, setNewNoteCategory] = useState<Note['category']>('personal');
+  1011→  1011→  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  1012→  1012→  const [showAiSummary, setShowAiSummary] = useState(false);
+  1013→  1013→
+  1014→  1014→  // Group notes by lesson
+  1015→  1015→  const lessonsWithNotes = Array.from(new Set(notes.map(n => n.lessonId)));
+  1016→  1016→
+  1017→  1017→  const filteredNotes = notes.filter(n => {
+  1018→  1018→    if (selectedLesson !== 'all' && n.lessonId !== selectedLesson) return false;
+  1019→  1019→    if (selectedCategory !== 'all' && n.category !== selectedCategory) return false;
+  1020→  1020→    if (searchQuery && !n.content.toLowerCase().includes(searchQuery.toLowerCase()) && !n.lessonTitle.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+  1021→  1021→    return true;
+  1022→  1022→  });
+  1023→  1023→
+  1024→  1024→  const handleSaveNote = useCallback(() => {
+  1025→  1025→    setSaveStatus('saving');
+  1026→  1026→    setTimeout(() => {
+  1027→  1027→      setSaveStatus('saved');
+  1028→  1028→      setTimeout(() => setSaveStatus('idle'), 2000);
+  1029→  1029→    }, 800);
+  1030→  1030→  }, []);
+  1031→  1031→
+  1032→  1032→  const handleExportNotes = () => {
+  1033→  1033→    const text = filteredNotes.map(n =>
+  1034→  1034→      `--- ${n.lessonTitle} [${noteCategoryConfig[n.category].label}] ---\n${n.content}\n`
+  1035→  1035→    ).join('\n');
+  1036→  1036→    navigator.clipboard.writeText(text).catch(() => {});
+  1037→  1037→    setSaveStatus('saved');
+  1038→  1038→    setTimeout(() => setSaveStatus('idle'), 2000);
+  1039→  1039→  };
+  1040→  1040→
+  1041→  1041→  return (
+  1042→  1042→    <div className="space-y-4">
+  1043→  1043→      {/* Header */}
+  1044→  1044→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+  1045→  1045→        <div>
+  1046→  1046→          <h3 className="font-semibold text-foreground">My Notes</h3>
+  1047→  1047→          <p className="text-sm text-muted-foreground">{notes.length} notes across {lessonsWithNotes.length} lessons</p>
+  1048→  1048→        </div>
+  1049→  1049→        <div className="flex items-center gap-2">
+  1050→  1050→          {saveStatus === 'saving' && (
+  1051→  1051→            <motion.div
+  1052→  1052→              initial={{ opacity: 0, x: 10 }}
+  1053→  1053→              animate={{ opacity: 1, x: 0 }}
+  1054→  1054→              className="flex items-center gap-1 text-xs text-amber-600"
+  1055→  1055→            >
+  1056→  1056→              <Loader2 className="h-3 w-3 animate-spin" /> Saving...
+  1057→  1057→            </motion.div>
+  1058→  1058→          )}
+  1059→  1059→          {saveStatus === 'saved' && (
+  1060→  1060→            <motion.div
+  1061→  1061→              initial={{ opacity: 0, scale: 0.8 }}
+  1062→  1062→              animate={{ opacity: 1, scale: 1 }}
+  1063→  1063→              className="flex items-center gap-1 text-xs text-emerald-600"
+  1064→  1064→            >
+  1065→  1065→              <Check className="h-3 w-3" /> Saved
+  1066→  1066→            </motion.div>
+  1067→  1067→          )}
+  1068→  1068→          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowAiSummary(!showAiSummary)}>
+  1069→  1069→            <Sparkles className="h-3.5 w-3.5" /> AI Summarize
+  1070→  1070→          </Button>
+  1071→  1071→          <Button size="sm" variant="outline" className="gap-1.5" onClick={handleExportNotes}>
+  1072→  1072→            <Copy className="h-3.5 w-3.5" /> Export
+  1073→  1073→          </Button>
+  1074→  1074→        </div>
+  1075→  1075→      </div>
+  1076→  1076→
+  1077→  1077→      {/* AI Summary */}
+  1078→  1078→      <AnimatePresence>
+  1079→  1079→        {showAiSummary && (
+  1080→  1080→          <motion.div
+  1081→  1081→            initial={{ height: 0, opacity: 0 }}
+  1082→  1082→            animate={{ height: 'auto', opacity: 1 }}
+  1083→  1083→            exit={{ height: 0, opacity: 0 }}
+  1084→  1084→            transition={{ duration: 0.3 }}
+  1085→  1085→            className="overflow-hidden"
+  1086→  1086→          >
+  1087→  1087→            <Card className={cn('border-violet-200 dark:border-violet-800/40', glassCard)}>
+  1088→  1088→              <CardContent className="p-4">
+  1089→  1089→                <div className="flex items-center gap-2 mb-2">
+  1090→  1090→                  <Sparkles className="h-4 w-4 text-violet-600" />
+  1091→  1091→                  <span className="text-sm font-semibold text-foreground">AI Summary of Your Notes</span>
+  1092→  1092→                </div>
+  1093→  1093→                <div className="text-sm text-muted-foreground leading-relaxed space-y-2">
+  1094→  1094→                  <p><strong>Key Topics Covered:</strong> React 19 features (use hook, Server Components), Server/Client component boundaries, TypeScript generic patterns, and Server Actions error handling.</p>
+  1095→  1095→                  <p><strong>Areas to Review:</strong> Streaming with Suspense boundaries and partial hydration concepts need more attention based on your question notes.</p>
+  1096→  1096→                  <p><strong>Progress Insight:</strong> You have a good mix of study guides and code snippets. Consider adding more code practice exercises for TypeScript patterns.</p>
+  1097→  1097→                </div>
+  1098→  1098→              </CardContent>
+  1099→  1099→            </Card>
+  1100→  1100→          </motion.div>
+  1101→  1101→        )}
+  1102→  1102→      </AnimatePresence>
+  1103→  1103→
+  1104→  1104→      {/* Search and Filters */}
+  1105→  1105→      <div className="flex flex-col sm:flex-row gap-3">
+  1106→  1106→        <div className="relative flex-1">
+  1107→  1107→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1108→  1108→          <Input
+  1109→  1109→            placeholder="Search notes..."
+  1110→  1110→            value={searchQuery}
+  1111→  1111→            onChange={(e) => setSearchQuery(e.target.value)}
+  1112→  1112→            className="pl-9 h-9"
+  1113→  1113→          />
+  1114→  1114→        </div>
+  1115→  1115→        <div className="flex gap-1.5 overflow-x-auto">
+  1116→  1116→          <Button
+  1117→  1117→            size="sm"
+  1118→  1118→            variant={selectedCategory === 'all' ? 'default' : 'outline'}
+  1119→  1119→            className="text-xs h-9 shrink-0"
+  1120→  1120→            onClick={() => setSelectedCategory('all')}
+  1121→  1121→          >
+  1122→  1122→            All
+  1123→  1123→          </Button>
+  1124→  1124→          {Object.entries(noteCategoryConfig).map(([key, config]) => (
+  1125→  1125→            <Button
+  1126→  1126→              key={key}
+  1127→  1127→              size="sm"
+  1128→  1128→              variant={selectedCategory === key ? 'default' : 'outline'}
+  1129→  1129→              className="text-xs h-9 gap-1 shrink-0"
+  1130→  1130→              onClick={() => setSelectedCategory(key as Note['category'])}
+  1131→  1131→            >
+  1132→  1132→              {config.icon} {config.label}
+  1133→  1133→            </Button>
+  1134→  1134→          ))}
+  1135→  1135→        </div>
+  1136→  1136→      </div>
+  1137→  1137→
+  1138→  1138→      <div className="flex flex-col lg:flex-row gap-4">
+  1139→  1139→        {/* Sidebar - Lesson Navigation */}
+  1140→  1140→        <div className="lg:w-56 shrink-0">
+  1141→  1141→          <Card className={glassCard}>
+  1142→  1142→            <CardContent className="p-3">
+  1143→  1143→              <h4 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Lessons</h4>
+  1144→  1144→              <div className="space-y-1">
+  1145→  1145→                <button
+  1146→  1146→                  className={cn(
+  1147→  1147→                    'w-full text-left p-2 rounded-lg text-xs transition-colors',
+  1148→  1148→                    selectedLesson === 'all' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/50 text-muted-foreground'
+  1149→  1149→                  )}
+  1150→  1150→                  onClick={() => setSelectedLesson('all')}
+  1151→  1151→                >
+  1152→  1152→                  All Notes ({notes.length})
+  1153→  1153→                </button>
+  1154→  1154→                {lessonsWithNotes.map((lessonId) => {
+  1155→  1155→                  const lessonNotes = notes.filter(n => n.lessonId === lessonId);
+  1156→  1156→                  const lessonTitle = lessonNotes[0]?.lessonTitle || lessonId;
+  1157→  1157→                  return (
+  1158→  1158→                    <button
+  1159→  1159→                      key={lessonId}
+  1160→  1160→                      className={cn(
+  1161→  1161→                        'w-full text-left p-2 rounded-lg text-xs transition-colors',
+  1162→  1162→                        selectedLesson === lessonId ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/50 text-muted-foreground'
+  1163→  1163→                      )}
+  1164→  1164→                      onClick={() => setSelectedLesson(lessonId)}
+  1165→  1165→                    >
+  1166→  1166→                      <span className="line-clamp-1">{lessonTitle}</span>
+  1167→  1167→                      <span className="text-[10px] text-muted-foreground">{lessonNotes.length} notes</span>
+  1168→  1168→                    </button>
+  1169→  1169→                  );
+  1170→  1170→                })}
+  1171→  1171→              </div>
+  1172→  1172→            </CardContent>
+  1173→  1173→          </Card>
+  1174→  1174→        </div>
+  1175→  1175→
+  1176→  1176→        {/* Notes Content */}
+  1177→  1177→        <div className="flex-1 space-y-3">
+  1178→  1178→          {/* New Note Input */}
+  1179→  1179→          <Card className={cn('border-dashed', glassCard)}>
+  1180→  1180→            <CardContent className="p-4 space-y-3">
+  1181→  1181→              <div className="flex items-center gap-2">
+  1182→  1182→                <Edit3 className="h-4 w-4 text-muted-foreground" />
+  1183→  1183→                <span className="text-sm font-medium text-foreground">Add a Note</span>
+  1184→  1184→              </div>
+  1185→  1185→              <Textarea
+  1186→  1186→                placeholder="Write your note here... Supports **bold**, *italic*, and `code`"
+  1187→  1187→                value={newNoteContent}
+  1188→  1188→                onChange={(e) => setNewNoteContent(e.target.value)}
+  1189→  1189→                rows={3}
+  1190→  1190→                className="resize-none"
+  1191→  1191→              />
+  1192→  1192→              <div className="flex items-center justify-between">
+  1193→  1193→                <div className="flex gap-1.5">
+  1194→  1194→                  {Object.entries(noteCategoryConfig).map(([key, config]) => (
+  1195→  1195→                    <Button
+  1196→  1196→                      key={key}
+  1197→  1197→                      size="sm"
+  1198→  1198→                      variant={newNoteCategory === key ? 'default' : 'outline'}
+  1199→  1199→                      className="text-[10px] h-6 gap-1 px-2"
+  1200→  1200→                      onClick={() => setNewNoteCategory(key as Note['category'])}
+  1201→  1201→                    >
+  1202→  1202→                      {config.icon} {config.label}
+  1203→  1203→                    </Button>
+  1204→  1204→                  ))}
+  1205→  1205→                </div>
+  1206→  1206→                <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" onClick={() => { setNewNoteContent(''); handleSaveNote(); }}>
+  1207→  1207→                  <Bookmark className="h-3 w-3" /> Save Note
+  1208→  1208→                </Button>
+  1209→  1209→              </div>
+  1210→  1210→            </CardContent>
+  1211→  1211→          </Card>
+  1212→  1212→
+  1213→  1213→          {/* Notes List */}
+  1214→  1214→          <AnimatePresence mode="popLayout">
+  1215→  1215→            {filteredNotes.map((note) => (
+  1216→  1216→              <motion.div
+  1217→  1217→                key={note.id}
+  1218→  1218→                layout
+  1219→  1219→                initial={{ opacity: 0, y: 10 }}
+  1220→  1220→                animate={{ opacity: 1, y: 0 }}
+  1221→  1221→                exit={{ opacity: 0, y: -10 }}
+  1222→  1222→              >
+  1223→  1223→                <Card className={cn(glassCard, 'hover:shadow-md transition-all duration-200')}>
+  1224→  1224→                  <CardContent className="p-4">
+  1225→  1225→                    <div className="flex items-start justify-between mb-2">
+  1226→  1226→                      <div className="flex items-center gap-2 flex-wrap">
+  1227→  1227→                        <Badge className={cn('text-[10px] gap-0.5', noteCategoryConfig[note.category].color)}>
+  1228→  1228→                          {noteCategoryConfig[note.category].icon} {noteCategoryConfig[note.category].label}
+  1229→  1229→                        </Badge>
+  1230→  1230→                        <span className="text-xs text-muted-foreground">{note.lessonTitle}</span>
+  1231→  1231→                        {note.timestamp !== undefined && (
+  1232→  1232→                          <button
+  1233→  1233→                            className="flex items-center gap-1 text-[10px] text-violet-600 hover:text-violet-700 dark:text-violet-400 transition-colors"
+  1234→  1234→                            onClick={() => onJumpToTimestamp?.(note.timestamp!)}
+  1235→  1235→                          >
+  1236→  1236→                            <Clock className="h-2.5 w-2.5" /> {formatDuration(note.timestamp * 60)}
+  1237→  1237→                          </button>
+  1238→  1238→                        )}
+  1239→  1239→                      </div>
+  1240→  1240→                      <div className="flex items-center gap-1">
+  1241→  1241→                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingNote(note.id); setEditContent(note.content); }}>
+  1242→  1242→                          <Edit3 className="h-3 w-3" />
+  1243→  1243→                        </Button>
+  1244→  1244→                      </div>
+  1245→  1245→                    </div>
+  1246→  1246→                    {editingNote === note.id ? (
+  1247→  1247→                      <div className="space-y-2">
+  1248→  1248→                        <Textarea
+  1249→  1249→                          value={editContent}
+  1250→  1250→                          onChange={(e) => setEditContent(e.target.value)}
+  1251→  1251→                          rows={4}
+  1252→  1252→                          className="resize-none text-sm"
+  1253→  1253→                        />
+  1254→  1254→                        <div className="flex gap-2 justify-end">
+  1255→  1255→                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingNote(null)}>
+  1256→  1256→                            <X className="h-3 w-3" /> Cancel
+  1257→  1257→                          </Button>
+  1258→  1258→                          <Button size="sm" className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => { setEditingNote(null); handleSaveNote(); }}>
+  1259→  1259→                            <Check className="h-3 w-3" /> Save
+  1260→  1260→                          </Button>
+  1261→  1261→                        </div>
+  1262→  1262→                      </div>
+  1263→  1263→                    ) : (
+  1264→  1264→                      <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+  1265→  1265→                        {note.content}
+  1266→  1266→                      </div>
+  1267→  1267→                    )}
+  1268→  1268→                    <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+  1269→  1269→                      <span>Created {new Date(note.createdAt).toLocaleDateString()}</span>
+  1270→  1270→                      <span>·</span>
+  1271→  1271→                      <span>Updated {new Date(note.updatedAt).toLocaleDateString()}</span>
+  1272→  1272→                    </div>
+  1273→  1273→                  </CardContent>
+  1274→  1274→                </Card>
+  1275→  1275→              </motion.div>
+  1276→  1276→            ))}
+  1277→  1277→          </AnimatePresence>
+  1278→  1278→
+  1279→  1279→          {filteredNotes.length === 0 && (
+  1280→  1280→            <div className="text-center py-8">
+  1281→  1281→              <Notebook className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+  1282→  1282→              <p className="text-sm text-muted-foreground">No notes found. Start taking notes!</p>
+  1283→  1283→            </div>
+  1284→  1284→          )}
+  1285→  1285→        </div>
+  1286→  1286→      </div>
+  1287→  1287→    </div>
+  1288→  1288→  );
+  1289→  1289→}
+  1290→  1290→
+  1291→  1291→// ─── Progress Timeline Tab ─────────────────────────────────
+  1292→  1292→function ProgressTab({ events, enrollmentProgress }: { events: TimelineEvent[]; enrollmentProgress: number }) {
+  1293→  1293→  const [streak] = useState(7);
+  1294→  1294→  const [totalTime] = useState(134); // minutes
+  1295→  1295→  const [learningPace] = useState<'ahead' | 'on_track' | 'behind'>('on_track');
+  1296→  1296→
+  1297→  1297→  const paceConfig = {
+  1298→  1298→    ahead: { label: 'Ahead of Schedule', color: 'text-emerald-600 dark:text-emerald-400', icon: <TrendingUp className="h-4 w-4" />, bg: 'bg-emerald-50 dark:bg-emerald-900/10' },
+  1299→  1299→    on_track: { label: 'On Track', color: 'text-amber-600 dark:text-amber-400', icon: <Minus className="h-4 w-4" />, bg: 'bg-amber-50 dark:bg-amber-900/10' },
+  1300→  1300→    behind: { label: 'Behind Schedule', color: 'text-red-600 dark:text-red-400', icon: <TrendingDown className="h-4 w-4" />, bg: 'bg-red-50 dark:bg-red-900/10' },
+  1301→  1301→  };
+  1302→  1302→
+  1303→  1303→  const pace = paceConfig[learningPace];
+  1304→  1304→
+  1305→  1305→  // Calculate estimated completion date
+  1306→  1306→  const estimatedDate = new Date();
+  1307→  1307→  estimatedDate.setDate(estimatedDate.getDate() + Math.ceil((100 - enrollmentProgress) / 5));
+  1308→  1308→
+  1309→  1309→  const maxHours = Math.max(...weeklyActivity.map(d => d.hours));
+  1310→  1310→
+  1311→  1311→  return (
+  1312→  1312→    <div className="space-y-6">
+  1313→  1313→      {/* Stats Cards */}
+  1314→  1314→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+  1315→  1315→        <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
+  1316→  1316→          <Card className={cn(glassCard)}>
+  1317→  1317→            <CardContent className="p-4 text-center">
+  1318→  1318→              <div className="flex items-center justify-center gap-1.5 mb-1">
+  1319→  1319→                <Flame className="h-5 w-5 text-orange-500" />
+  1320→  1320→                <span className="text-2xl font-bold text-foreground">{streak}</span>
+  1321→  1321→              </div>
+  1322→  1322→              <p className="text-xs text-muted-foreground">Day Streak</p>
+  1323→  1323→            </CardContent>
+  1324→  1324→          </Card>
+  1325→  1325→        </motion.div>
+  1326→  1326→
+  1327→  1327→        <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
+  1328→  1328→          <Card className={cn(glassCard)}>
+  1329→  1329→            <CardContent className="p-4 text-center">
+  1330→  1330→              <div className="flex items-center justify-center gap-1.5 mb-1">
+  1331→  1331→                <Timer className="h-5 w-5 text-violet-500" />
+  1332→  1332→                <span className="text-2xl font-bold text-foreground">{Math.floor(totalTime / 60)}h {totalTime % 60}m</span>
+  1333→  1333→              </div>
+  1334→  1334→              <p className="text-xs text-muted-foreground">Time Invested</p>
+  1335→  1335→            </CardContent>
+  1336→  1336→          </Card>
+  1337→  1337→        </motion.div>
+  1338→  1338→
+  1339→  1339→        <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
+  1340→  1340→          <Card className={cn(glassCard)}>
+  1341→  1341→            <CardContent className="p-4 text-center">
+  1342→  1342→              <div className={cn('flex items-center justify-center gap-1.5 mb-1', pace.color)}>
+  1343→  1343→                {pace.icon}
+  1344→  1344→                <span className="text-sm font-bold">{pace.label}</span>
+  1345→  1345→              </div>
+  1346→  1346→              <p className="text-xs text-muted-foreground">Learning Pace</p>
+  1347→  1347→            </CardContent>
+  1348→  1348→          </Card>
+  1349→  1349→        </motion.div>
+  1350→  1350→
+  1351→  1351→        <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
+  1352→  1352→          <Card className={cn(glassCard)}>
+  1353→  1353→            <CardContent className="p-4 text-center">
+  1354→  1354→              <div className="flex items-center justify-center gap-1.5 mb-1">
+  1355→  1355→                <Calendar className="h-5 w-5 text-emerald-500" />
+  1356→  1356→                <span className="text-sm font-bold text-foreground">{estimatedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+  1357→  1357→              </div>
+  1358→  1358→              <p className="text-xs text-muted-foreground">Est. Completion</p>
+  1359→  1359→            </CardContent>
+  1360→  1360→          </Card>
+  1361→  1361→        </motion.div>
+  1362→  1362→      </div>
+  1363→  1363→
+  1364→  1364→      {/* Weekly Activity Chart */}
+  1365→  1365→      <Card className={cn(glassCard)}>
+  1366→  1366→        <CardHeader className="pb-3">
+  1367→  1367→          <CardTitle className="text-sm flex items-center gap-2">
+  1368→  1368→            <Activity className="h-4 w-4 text-violet-600" />
+  1369→  1369→            Weekly Activity
+  1370→  1370→          </CardTitle>
+  1371→  1371→        </CardHeader>
+  1372→  1372→        <CardContent>
+  1373→  1373→          <div className="flex items-end gap-2 h-32">
+  1374→  1374→            {weeklyActivity.map((day) => (
+  1375→  1375→              <div key={day.day} className="flex-1 flex flex-col items-center gap-1">
+  1376→  1376→                <span className="text-[10px] text-muted-foreground">{day.hours}h</span>
+  1377→  1377→                <div className="w-full bg-muted rounded-t-sm overflow-hidden" style={{ height: '80px' }}>
+  1378→  1378→                  <motion.div
+  1379→  1379→                    className={cn(
+  1380→  1380→                      'w-full rounded-t-sm bg-gradient-to-t',
+  1381→  1381→                      day.hours > 1.5 ? 'from-emerald-500 to-emerald-400' : day.hours > 0 ? 'from-amber-500 to-amber-400' : 'from-slate-300 to-slate-200 dark:from-slate-600 dark:to-slate-500'
+  1382→  1382→                    )}
+  1383→  1383→                    initial={{ height: 0 }}
+  1384→  1384→                    animate={{ height: `${maxHours > 0 ? (day.hours / maxHours) * 100 : 0}%` }}
+  1385→  1385→                    transition={{ duration: 0.5, ease: 'easeOut' }}
+  1386→  1386→                    style={{ marginTop: 'auto' }}
+  1387→  1387→                  />
+  1388→  1388→                </div>
+  1389→  1389→                <span className="text-[10px] text-muted-foreground font-medium">{day.day}</span>
+  1390→  1390→              </div>
+  1391→  1391→            ))}
+  1392→  1392→          </div>
+  1393→  1393→        </CardContent>
+  1394→  1394→      </Card>
+  1395→  1395→
+  1396→  1396→      {/* Learning Timeline */}
+  1397→  1397→      <Card className={cn(glassCard)}>
+  1398→  1398→        <CardHeader className="pb-3">
+  1399→  1399→          <CardTitle className="text-sm flex items-center gap-2">
+  1400→  1400→            <Clock className="h-4 w-4 text-emerald-600" />
+  1401→  1401→            Learning Timeline
+  1402→  1402→          </CardTitle>
+  1403→  1403→        </CardHeader>
+  1404→  1404→        <CardContent>
+  1405→  1405→          <div className="relative">
+  1406→  1406→            {/* Timeline line */}
+  1407→  1407→            <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gradient-to-b from-emerald-500 via-amber-500 to-slate-300 dark:to-slate-600" />
+  1408→  1408→
+  1409→  1409→            <div className="space-y-4">
+  1410→  1410→              {events.map((event, index) => (
+  1411→  1411→                <motion.div
+  1412→  1412→                  key={event.id}
+  1413→  1413→                  initial={{ opacity: 0, x: -20 }}
+  1414→  1414→                  animate={{ opacity: 1, x: 0 }}
+  1415→  1415→                  transition={{ delay: index * 0.1 }}
+  1416→  1416→                  className="relative pl-10"
+  1417→  1417→                >
+  1418→  1418→                  {/* Timeline node */}
+  1419→  1419→                  <div className={cn(
+  1420→  1420→                    'absolute left-2.5 top-1 w-3 h-3 rounded-full border-2',
+  1421→  1421→                    event.type === 'completed' ? 'bg-emerald-500 border-emerald-300' :
+  1422→  1422→                    event.type === 'quiz' ? 'bg-violet-500 border-violet-300' :
+  1423→  1423→                    'bg-amber-500 border-amber-300'
+  1424→  1424→                  )} />
+  1425→  1425→
+  1426→  1426→                  <div className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+  1427→  1427→                    <div className="flex items-center gap-2 mb-1">
+  1428→  1428→                      <Badge className={cn(
+  1429→  1429→                        'text-[9px]',
+  1430→  1430→                        event.type === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+  1431→  1431→                        event.type === 'quiz' ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' :
+  1432→  1432→                        'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+  1433→  1433→                      )}>
+  1434→  1434→                        {event.type === 'completed' ? '✓ Completed' : event.type === 'quiz' ? '📝 Quiz' : '▶ Started'}
+  1435→  1435→                      </Badge>
+  1436→  1436→                      <span className="text-[10px] text-muted-foreground">{event.date}</span>
+  1437→  1437→                    </div>
+  1438→  1438→                    <p className="text-sm font-medium text-foreground">{event.lessonTitle}</p>
+  1439→  1439→                    <p className="text-xs text-muted-foreground">{event.moduleName}</p>
+  1440→  1440→                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+  1441→  1441→                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {event.timeSpent} min</span>
+  1442→  1442→                      {event.quizScore !== undefined && (
+  1443→  1443→                        <span className="flex items-center gap-1">
+  1444→  1444→                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> {event.quizScore}% score
+  1445→  1445→                        </span>
+  1446→  1446→                      )}
+  1447→  1447→                    </div>
+  1448→  1448→                  </div>
+  1449→  1449→                </motion.div>
+  1450→  1450→              ))}
+  1451→  1451→            </div>
+  1452→  1452→          </div>
+  1453→  1453→        </CardContent>
+  1454→  1454→      </Card>
+  1455→  1455→
+  1456→  1456→      {/* Milestones */}
+  1457→  1457→      <Card className={cn(glassCard)}>
+  1458→  1458→        <CardHeader className="pb-3">
+  1459→  1459→          <CardTitle className="text-sm flex items-center gap-2">
+  1460→  1460→            <Trophy className="h-4 w-4 text-amber-600" />
+  1461→  1461→            Milestones
+  1462→  1462→          </CardTitle>
+  1463→  1463→        </CardHeader>
+  1464→  1464→        <CardContent>
+  1465→  1465→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1466→  1466→            {milestones.map((milestone) => (
+  1467→  1467→              <motion.div
+  1468→  1468→                key={milestone.id}
+  1469→  1469→                whileHover={{ scale: 1.02 }}
+  1470→  1470→                className={cn(
+  1471→  1471→                  'flex items-center gap-3 p-3 rounded-lg border transition-colors',
+  1472→  1472→                  milestone.achieved
+  1473→  1473→                    ? 'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800/30'
+  1474→  1474→                    : 'bg-muted/20 border-border/50'
+  1475→  1475→                )}
+  1476→  1476→              >
+  1477→  1477→                <span className="text-2xl">{milestone.icon}</span>
+  1478→  1478→                <div className="flex-1">
+  1479→  1479→                  <p className={cn('text-sm font-medium', milestone.achieved ? 'text-foreground' : 'text-muted-foreground')}>
+  1480→  1480→                    {milestone.title}
+  1481→  1481→                  </p>
+  1482→  1482→                  <p className="text-xs text-muted-foreground">{milestone.description}</p>
+  1483→  1483→                  {milestone.achieved && milestone.date && (
+  1484→  1484→                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">Achieved {milestone.date}</p>
+  1485→  1485→                  )}
+  1486→  1486→                </div>
+  1487→  1487→                {milestone.achieved ? (
+  1488→  1488→                  <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+  1489→  1489→                ) : (
+  1490→  1490→                  <Circle className="h-5 w-5 text-muted-foreground/30 shrink-0" />
+  1491→  1491→                )}
+  1492→  1492→              </motion.div>
+  1493→  1493→            ))}
+  1494→  1494→          </div>
+  1495→  1495→        </CardContent>
+  1496→  1496→      </Card>
+  1497→  1497→    </div>
+  1498→  1498→  );
+  1499→  1499→}
+  1500→  1500→
+  1501→  1501→// ─── Main Component ────────────────────────────────────────
+  1502→  1502→export function LearnerCourse() {
+  1503→  1503→  const { currentUser } = useAppStore();
+  1504→  1504→  const course = demoCourses[0]; // React & Next.js Masterclass
+  1505→  1505→  const enrollment = demoEnrollments[0]; // Active enrollment for this course
+  1506→  1506→  const modules = course.modules || [];
+  1507→  1507→  const [activeTab, setActiveTab] = useState('overview');
+  1508→  1508→  const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
+  1509→  1509→  const [activeLessonModuleName, setActiveLessonModuleName] = useState('');
+  1510→  1510→  const [lessonProgressState, setLessonProgressState] = useState(lessonProgressMap);
+  1511→  1511→  const curriculumRef = useRef<HTMLDivElement>(null);
+  1512→  1512→
+  1513→  1513→  // Calculate total lessons and completed
+  1514→  1514→  const allLessons = modules.flatMap(m => m.lessons || []);
+  1515→  1515→  const completedCount = allLessons.filter(l => lessonProgressState[l.id] === 'completed').length;
+  1516→  1516→  const totalLessons = allLessons.length;
+  1517→  1517→
+  1518→  1518→  // Handle clicking a lesson
+  1519→  1519→  const handleLessonClick = (lesson: Lesson) => {
+  1520→  1520→    setActiveLesson(lesson);
+  1521→  1521→    const parentModule = modules.find(m => m.lessons?.some(l => l.id === lesson.id));
+  1522→  1522→    setActiveLessonModuleName(parentModule?.title || '');
+  1523→  1523→  };
+  1524→  1524→
+  1525→  1525→  // Handle marking a lesson as complete
+  1526→  1526→  const handleMarkComplete = (lessonId: string) => {
+  1527→  1527→    setLessonProgressState(prev => ({ ...prev, [lessonId]: 'completed' }));
+  1528→  1528→  };
+  1529→  1529→
+  1530→  1530→  // Get next lessons for the sidebar
+  1531→  1531→  const getNextLessons = (): { id: string; title: string; moduleName: string; duration: number; contentType: Lesson['contentType'] }[] => {
+  1532→  1532→    if (!activeLesson) return [];
+  1533→  1533→    const currentIdx = allLessons.findIndex(l => l.id === activeLesson.id);
+  1534→  1534→    const next: { id: string; title: string; moduleName: string; duration: number; contentType: Lesson['contentType'] }[] = [];
+  1535→  1535→    for (let i = currentIdx + 1; i < Math.min(currentIdx + 4, allLessons.length); i++) {
+  1536→  1536→      const l = allLessons[i];
+  1537→  1537→      const mod = modules.find(m => m.lessons?.some(ml => ml.id === l.id));
+  1538→  1538→      next.push({ id: l.id, title: l.title, moduleName: mod?.title || '', duration: l.videoDuration || 0, contentType: l.contentType });
+  1539→  1539→    }
+  1540→  1540→    return next;
+  1541→  1541→  };
+  1542→  1542→
+  1543→  1543→  // If a lesson is active, show the enhanced Video Player
+  1544→  1544→  if (activeLesson) {
+  1545→  1545→    return (
+  1546→  1546→      <div className="p-4 md:p-6">
+  1547→  1547→        <VideoPlayer
+  1548→  1548→          title={activeLesson.title}
+  1549→  1549→          lesson={activeLesson}
+  1550→  1550→          moduleName={activeLessonModuleName}
+  1551→  1551→          nextLessons={getNextLessons()}
+  1552→  1552→          onMarkComplete={handleMarkComplete}
+  1553→  1553→          onNextLesson={(lessonId) => {
+  1554→  1554→            const found = allLessons.find(l => l.id === lessonId);
+  1555→  1555→            if (found) handleLessonClick(found);
+  1556→  1556→          }}
+  1557→  1557→          onBack={() => setActiveLesson(null)}
+  1558→  1558→          isCompleted={lessonProgressState[activeLesson.id] === 'completed'}
+  1559→  1559→          initialPosition={resumePositions[activeLesson.id] || 0}
+  1560→  1560→          chapters={demoChapters}
+  1561→  1561→          onProgress={(progress, currentTime) => {
+  1562→  1562→            resumePositions[activeLesson.id] = currentTime;
+  1563→  1563→          }}
+  1564→  1564→        />
+  1565→  1565→      </div>
+  1566→  1566→    );
+  1567→  1567→  }
+  1568→  1568→
+  1569→  1569→  return (
+  1570→  1570→    <motion.div
+  1571→  1571→      className="p-4 md:p-6 space-y-6"
+  1572→  1572→      variants={containerVariants}
+  1573→  1573→      initial="hidden"
+  1574→  1574→      animate="visible"
+  1575→  1575→    >
+  1576→  1576→      {/* ─── Course Header ────────────────────────────────── */}
+  1577→  1577→      <motion.div variants={itemVariants}>
+  1578→  1578→        <Card className="overflow-hidden">
+  1579→  1579→          {/* Gradient Banner */}
+  1580→  1580→          <div className={cn(
+  1581→  1581→            'h-32 md:h-40 bg-gradient-to-r flex items-end p-6',
+  1582→  1582→            getLevelAccent(course.level)
+  1583→  1583→          )}>
+  1584→  1584→            <div className="flex-1">
+  1585→  1585→              <div className="flex items-center gap-2 mb-2">
+  1586→  1586→                <Badge className="bg-white/20 text-white border-0 backdrop-blur-sm text-xs">
+  1587→  1587→                  {course.category}
+  1588→  1588→                </Badge>
+  1589→  1589→                <Badge className="bg-white/20 text-white border-0 backdrop-blur-sm text-xs capitalize">
+  1590→  1590→                  {course.level}
+  1591→  1591→                </Badge>
+  1592→  1592→              </div>
+  1593→  1593→              <h1 className="text-2xl md:text-3xl font-bold text-white leading-tight">{course.title}</h1>
+  1594→  1594→            </div>
+  1595→  1595→          </div>
+  1596→  1596→
+  1597→  1597→          <CardContent className="p-6">
+  1598→  1598→            {/* Course Meta */}
+  1599→  1599→            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-4">
+  1600→  1600→              <div className="flex items-center gap-1.5">
+  1601→  1601→                <Avatar className="h-6 w-6">
+  1602→  1602→                  <AvatarFallback className="text-[10px] bg-slate-200 dark:bg-slate-700">SM</AvatarFallback>
+  1603→  1603→                </Avatar>
+  1604→  1604→                <span>Sarah Mitchell</span>
+  1605→  1605→              </div>
+  1606→  1606→              <div className="flex items-center gap-1">
+  1607→  1607→                <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+  1608→  1608→                <span className="font-medium text-foreground">{course.avgRating}</span>
+  1609→  1609→                <span>({course.totalRatings} ratings)</span>
+  1610→  1610→              </div>
+  1611→  1611→              <div className="flex items-center gap-1">
+  1612→  1612→                <Users className="h-4 w-4" />
+  1613→  1613→                <span>{course.enrollmentCount.toLocaleString()} enrolled</span>
+  1614→  1614→              </div>
+  1615→  1615→              {course.durationHours && (
+  1616→  1616→                <div className="flex items-center gap-1">
+  1617→  1617→                  <Clock className="h-4 w-4" />
+  1618→  1618→                  <span>{course.durationHours} hours</span>
+  1619→  1619→                </div>
+  1620→  1620→              )}
+  1621→  1621→            </div>
+  1622→  1622→
+  1623→  1623→            {/* Description */}
+  1624→  1624→            <p className="text-muted-foreground text-sm mb-5 max-w-3xl">{course.description}</p>
+  1625→  1625→
+  1626→  1626→            {/* Progress */}
+  1627→  1627→            <div className="space-y-2 mb-4">
+  1628→  1628→              <div className="flex items-center justify-between text-sm">
+  1629→  1629→                <span className="font-medium text-foreground">Your Progress</span>
+  1630→  1630→                <span className="font-semibold text-emerald-600">{enrollment.progress}%</span>
+  1631→  1631→              </div>
+  1632→  1632→              <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+  1633→  1633→                <motion.div
+  1634→  1634→                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400"
+  1635→  1635→                  initial={{ width: 0 }}
+  1636→  1636→                  animate={{ width: `${enrollment.progress}%` }}
+  1637→  1637→                  transition={{ duration: 1, ease: 'easeOut' }}
+  1638→  1638→                />
+  1639→  1639→              </div>
+  1640→  1640→              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+  1641→  1641→                <span>{completedCount} of {totalLessons} lessons completed</span>
+  1642→  1642→                {enrollment.lastAccessedAt && (
+  1643→  1643→                  <span>Last accessed {new Date(enrollment.lastAccessedAt).toLocaleDateString()}</span>
+  1644→  1644→                )}
+  1645→  1645→              </div>
+  1646→  1646→            </div>
+  1647→  1647→
+  1648→  1648→            {/* Action Buttons */}
+  1649→  1649→            <div className="flex items-center gap-3">
+  1650→  1650→              <Button className="gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20 text-white">
+  1651→  1651→                <Play className="h-4 w-4" />
+  1652→  1652→                Continue Learning
+  1653→  1653→              </Button>
+  1654→  1654→              <Button variant="outline" className="gap-2">
+  1655→  1655→                <Award className="h-4 w-4" />
+  1656→  1656→                View Certificate
+  1657→  1657→              </Button>
+  1658→  1658→            </div>
+  1659→  1659→          </CardContent>
+  1660→  1660→        </Card>
+  1661→  1661→      </motion.div>
+  1662→  1662→
+  1663→  1663→      {/* ─── Course Content Tabs ──────────────────────────── */}
+  1664→  1664→      <motion.div variants={itemVariants}>
+  1665→  1665→        <Tabs value={activeTab} onValueChange={setActiveTab}>
+  1666→  1666→          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
+  1667→  1667→            <TabsTrigger value="overview" className="gap-1.5 shrink-0">
+  1668→  1668→              <BookOpen className="h-4 w-4" />
+  1669→  1669→              Overview
+  1670→  1670→            </TabsTrigger>
+  1671→  1671→            <TabsTrigger value="curriculum" className="gap-1.5 shrink-0">
+  1672→  1672→              <BookOpen className="h-4 w-4" />
+  1673→  1673→              Curriculum
+  1674→  1674→            </TabsTrigger>
+  1675→  1675→            <TabsTrigger value="discussion" className="gap-1.5 shrink-0">
+  1676→  1676→              <MessageSquare className="h-4 w-4" />
+  1677→  1677→              Discussion
+  1678→  1678→              {discussionQuestions.filter(q => !q.isAnswered).length > 0 && (
+  1679→  1679→                <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[9px] px-1 py-0 ml-1">
+  1680→  1680→                  {discussionQuestions.filter(q => !q.isAnswered).length}
+  1681→  1681→                </Badge>
+  1682→  1682→              )}
+  1683→  1683→            </TabsTrigger>
+  1684→  1684→            <TabsTrigger value="notes" className="gap-1.5 shrink-0">
+  1685→  1685→              <StickyNote className="h-4 w-4" />
+  1686→  1686→              Notes
+  1687→  1687→            </TabsTrigger>
+  1688→  1688→            <TabsTrigger value="progress" className="gap-1.5 shrink-0">
+  1689→  1689→              <BarChart3 className="h-4 w-4" />
+  1690→  1690→              Progress
+  1691→  1691→            </TabsTrigger>
+  1692→  1692→            <TabsTrigger value="resources" className="gap-1.5 shrink-0">
+  1693→  1693→              <Download className="h-4 w-4" />
+  1694→  1694→              Resources
+  1695→  1695→            </TabsTrigger>
+  1696→  1696→            <TabsTrigger value="reviews" className="gap-1.5 shrink-0">
+  1697→  1697→              <Star className="h-4 w-4" />
+  1698→  1698→              Reviews
+  1699→  1699→            </TabsTrigger>
+  1700→  1700→          </TabsList>
+  1701→  1701→
+  1702→  1702→          {/* ─── Tab: Overview ────────────────────────────── */}
+  1703→  1703→          <TabsContent value="overview" className="mt-6">
+  1704→  1704→            <AnimatePresence mode="wait">
+  1705→  1705→              <motion.div
+  1706→  1706→                key="overview"
+  1707→  1707→                variants={tabContentVariants}
+  1708→  1708→                initial="hidden"
+  1709→  1709→                animate="visible"
+  1710→  1710→                exit="exit"
+  1711→  1711→                className="space-y-6"
+  1712→  1712→              >
+  1713→  1713→                {/* What You'll Learn */}
+  1714→  1714→                <Card className={cn(glassCard)}>
+  1715→  1715→                  <CardHeader className="pb-3">
+  1716→  1716→                    <CardTitle className="text-sm flex items-center gap-2">
+  1717→  1717→                      <Target className="h-4 w-4 text-emerald-600" />
+  1718→  1718→                      What You&apos;ll Learn
+  1719→  1719→                    </CardTitle>
+  1720→  1720→                  </CardHeader>
+  1721→  1721→                  <CardContent>
+  1722→  1722→                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+  1723→  1723→                      {whatYouLearn.map((item) => (
+  1724→  1724→                        <motion.div
+  1725→  1725→                          key={item.id}
+  1726→  1726→                          initial={{ opacity: 0, x: -10 }}
+  1727→  1727→                          animate={{ opacity: 1, x: 0 }}
+  1728→  1728→                          className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/30 transition-colors"
+  1729→  1729→                        >
+  1730→  1730→                          {item.completed ? (
+  1731→  1731→                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+  1732→  1732→                          ) : (
+  1733→  1733→                            <Circle className="h-4 w-4 text-muted-foreground/40 shrink-0 mt-0.5" />
+  1734→  1734→                          )}
+  1735→  1735→                          <span className={cn('text-sm', item.completed ? 'text-muted-foreground line-through' : 'text-foreground')}>
+  1736→  1736→                            {item.text}
+  1737→  1737→                          </span>
+  1738→  1738→                        </motion.div>
+  1739→  1739→                      ))}
+  1740→  1740→                    </div>
+  1741→  1741→                  </CardContent>
+  1742→  1742→                </Card>
+  1743→  1743→
+  1744→  1744→                {/* Difficulty Meter + Prerequisites row */}
+  1745→  1745→                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  1746→  1746→                  <Card className={cn(glassCard)}>
+  1747→  1747→                    <CardHeader className="pb-3">
+  1748→  1748→                      <CardTitle className="text-sm flex items-center gap-2">
+  1749→  1749→                        <Zap className="h-4 w-4 text-orange-600" />
+  1750→  1750→                        Course Difficulty
+  1751→  1751→                      </CardTitle>
+  1752→  1752→                    </CardHeader>
+  1753→  1753→                    <CardContent>
+  1754→  1754→                      <DifficultyMeter level={course.level} />
+  1755→  1755→                      <div className="mt-4 space-y-2">
+  1756→  1756→                        <p className="text-xs font-medium text-muted-foreground">Prerequisites</p>
+  1757→  1757→                        {prerequisites.map((prereq, i) => (
+  1758→  1758→                          <div key={i} className="flex items-start gap-2">
+  1759→  1759→                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
+  1760→  1760→                            <span className="text-xs text-muted-foreground">{prereq}</span>
+  1761→  1761→                          </div>
+  1762→  1762→                        ))}
+  1763→  1763→                      </div>
+  1764→  1764→                    </CardContent>
+  1765→  1765→                  </Card>
+  1766→  1766→
+  1767→  1767→                  {/* Instructor Profile Card */}
+  1768→  1768→                  <Card className={cn(glassCard)}>
+  1769→  1769→                    <CardHeader className="pb-3">
+  1770→  1770→                      <CardTitle className="text-sm flex items-center gap-2">
+  1771→  1771→                        <GraduationCap className="h-4 w-4 text-amber-600" />
+  1772→  1772→                        Your Instructor
+  1773→  1773→                      </CardTitle>
+  1774→  1774→                    </CardHeader>
+  1775→  1775→                    <CardContent>
+  1776→  1776→                      <div className="flex items-start gap-3">
+  1777→  1777→                        <Avatar className="h-14 w-14 shrink-0">
+  1778→  1778→                          <AvatarFallback className="text-base bg-gradient-to-br from-amber-400 to-orange-500 text-white font-bold">
+  1779→  1779→                            {instructorProfile.avatar}
+  1780→  1780→                          </AvatarFallback>
+  1781→  1781→                        </Avatar>
+  1782→  1782→                        <div className="flex-1 min-w-0">
+  1783→  1783→                          <h4 className="font-semibold text-foreground text-sm">{instructorProfile.name}</h4>
+  1784→  1784→                          <p className="text-xs text-muted-foreground">{instructorProfile.title}</p>
+  1785→  1785→                          <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+  1786→  1786→                            <span className="flex items-center gap-1"><Star className="h-3 w-3 fill-amber-400 text-amber-400" /> {instructorProfile.rating}</span>
+  1787→  1787→                            <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {instructorProfile.students.toLocaleString()}</span>
+  1788→  1788→                            <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {instructorProfile.courses} courses</span>
+  1789→  1789→                          </div>
+  1790→  1790→                        </div>
+  1791→  1791→                      </div>
+  1792→  1792→                      <p className="text-xs text-muted-foreground mt-3 leading-relaxed line-clamp-3">{instructorProfile.bio}</p>
+  1793→  1793→                      {instructorProfile.otherCourses.length > 0 && (
+  1794→  1794→                        <div className="mt-3 pt-3 border-t border-border/50">
+  1795→  1795→                          <p className="text-[10px] font-medium text-muted-foreground mb-1.5">Other courses by this instructor</p>
+  1796→  1796→                          {instructorProfile.otherCourses.map((c, i) => (
+  1797→  1797→                            <div key={i} className="flex items-center gap-1 text-xs text-primary hover:underline cursor-pointer">
+  1798→  1798→                              <ArrowRight className="h-3 w-3" /> {c}
+  1799→  1799→                            </div>
+  1800→  1800→                          ))}
+  1801→  1801→                        </div>
+  1802→  1802→                      )}
+  1803→  1803→                    </CardContent>
+  1804→  1804→                  </Card>
+  1805→  1805→                </div>
+  1806→  1806→
+  1807→  1807→                {/* Students Also Taking */}
+  1808→  1808→                <Card className={cn(glassCard)}>
+  1809→  1809→                  <CardHeader className="pb-3">
+  1810→  1810→                    <CardTitle className="text-sm flex items-center gap-2">
+  1811→  1811→                      <Users className="h-4 w-4 text-violet-600" />
+  1812→  1812→                      Students Also Taking
+  1813→  1813→                    </CardTitle>
+  1814→  1814→                  </CardHeader>
+  1815→  1815→                  <CardContent>
+  1816→  1816→                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+  1817→  1817→                      {studentsAlsoTaking.map((sat) => (
+  1818→  1818→                        <motion.div
+  1819→  1819→                          key={sat.id}
+  1820→  1820→                          whileHover={{ y: -3, boxShadow: '0 8px 25px rgba(0,0,0,0.1)' }}
+  1821→  1821→                          transition={{ duration: 0.2 }}
+  1822→  1822→                          className="p-3 rounded-lg border border-border/50 hover:border-border cursor-pointer transition-colors"
+  1823→  1823→                        >
+  1824→  1824→                          <div className="flex items-center gap-2 mb-2">
+  1825→  1825→                            <Badge className={cn('text-[9px] capitalize', getLevelColor(sat.level))}>{sat.level}</Badge>
+  1826→  1826→                            <div className="flex items-center gap-0.5">
+  1827→  1827→                              <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+  1828→  1828→                              <span className="text-[10px] font-medium">{sat.rating}</span>
+  1829→  1829→                            </div>
+  1830→  1830→                          </div>
+  1831→  1831→                          <h5 className="text-xs font-semibold text-foreground line-clamp-2 mb-1">{sat.title}</h5>
+  1832→  1832→                          <div className="flex items-center justify-between">
+  1833→  1833→                            <span className="text-[10px] text-muted-foreground">{sat.students} students</span>
+  1834→  1834→                            <span className="text-xs font-bold text-foreground">${sat.price}</span>
+  1835→  1835→                          </div>
+  1836→  1836→                        </motion.div>
+  1837→  1837→                      ))}
+  1838→  1838→                    </div>
+  1839→  1839→                  </CardContent>
+  1840→  1840→                </Card>
+  1841→  1841→              </motion.div>
+  1842→  1842→            </AnimatePresence>
+  1843→  1843→          </TabsContent>
+  1844→  1844→
+  1845→  1845→          {/* ─── Tab: Curriculum ─────────────────────────── */}
+  1846→  1846→          <TabsContent value="curriculum" className="mt-6">
+  1847→  1847→            <AnimatePresence mode="wait">
+  1848→  1848→              <motion.div
+  1849→  1849→                key="curriculum"
+  1850→  1850→                variants={tabContentVariants}
+  1851→  1851→                initial="hidden"
+  1852→  1852→                animate="visible"
+  1853→  1853→                exit="exit"
+  1854→  1854→                className="space-y-3"
+  1855→  1855→                ref={curriculumRef}
+  1856→  1856→              >
+  1857→  1857→                <div className="flex items-center justify-between mb-4">
+  1858→  1858→                  <div>
+  1859→  1859→                    <h3 className="font-semibold text-foreground">Course Curriculum</h3>
+  1860→  1860→                    <p className="text-sm text-muted-foreground">
+  1861→  1861→                      {modules.length} modules · {totalLessons} lessons · {formatDuration(allLessons.reduce((s, l) => s + (l.videoDuration || 0), 0))} total
+  1862→  1862→                    </p>
+  1863→  1863→                  </div>
+  1864→  1864→                  <Button variant="outline" size="sm" className="gap-1.5">
+  1865→  1865→                    Expand All
+  1866→  1866→                  </Button>
+  1867→  1867→                </div>
+  1868→  1868→
+  1869→  1869→                {/* ─── Continue Learning / Video Player Section ──── */}
+  1870→  1870→                {(() => {
+  1871→  1871→                  const inProgressLesson = allLessons.find(l => lessonProgressState[l.id] === 'in_progress');
+  1872→  1872→                  const nextLesson = allLessons.find(l => lessonProgressState[l.id] === 'not_started');
+  1873→  1873→                  const currentLesson = inProgressLesson || nextLesson;
+  1874→  1874→                  const currentModule = currentLesson ? modules.find(m => m.lessons?.some(l => l.id === currentLesson.id)) : null;
+  1875→  1875→
+  1876→  1876→                  if (!currentLesson) return null;
+  1877→  1877→
+  1878→  1878→                  return (
+  1879→  1879→                    <Card className={cn('overflow-hidden border-emerald-200 dark:border-emerald-800/50', glassCard)}>
+  1880→  1880→                      <CardContent className="p-0">
+  1881→  1881→                        <div className="flex flex-col md:flex-row">
+  1882→  1882→                          {/* Video Player - Compact */}
+  1883→  1883→                          <div className="md:w-1/2">
+  1884→  1884→                            <VideoPlayer
+  1885→  1885→                              title={currentLesson.title}
+  1886→  1886→                              lesson={currentLesson}
+  1887→  1887→                              moduleName={currentModule?.title || ''}
+  1888→  1888→                              onMarkComplete={handleMarkComplete}
+  1889→  1889→                              isCompleted={lessonProgressState[currentLesson.id] === 'completed'}
+  1890→  1890→                              initialPosition={resumePositions[currentLesson.id] || 0}
+  1891→  1891→                              chapters={demoChapters}
+  1892→  1892→                              compact
+  1893→  1893→                              totalDuration={currentLesson.videoDuration || 300}
+  1894→  1894→                              onProgress={(progress, currentTime) => {
+  1895→  1895→                                resumePositions[currentLesson.id] = currentTime;
+  1896→  1896→                              }}
+  1897→  1897→                            />
+  1898→  1898→                          </div>
+  1899→  1899→                          {/* Lesson Info Sidebar */}
+  1900→  1900→                          <div className="md:w-1/2 p-4 md:p-6 flex flex-col justify-center">
+  1901→  1901→                            <div className="flex items-center gap-2 mb-2">
+  1902→  1902→                              {inProgressLesson ? (
+  1903→  1903→                                <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px]">
+  1904→  1904→                                  <Play className="h-3 w-3 mr-1" /> In Progress
+  1905→  1905→                                </Badge>
+  1906→  1906→                              ) : (
+  1907→  1907→                                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
+  1908→  1908→                                  Up Next
+  1909→  1909→                                </Badge>
+  1910→  1910→                              )}
+  1911→  1911→                              <Badge variant="secondary" className="text-[10px]">
+  1912→  1912→                                {currentModule?.title}
+  1913→  1913→                              </Badge>
+  1914→  1914→                            </div>
+  1915→  1915→                            <h3 className="font-semibold text-foreground text-lg mb-2">{currentLesson.title}</h3>
+  1916→  1916→                            {currentLesson.description && (
+  1917→  1917→                              <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{currentLesson.description}</p>
+  1918→  1918→                            )}
+  1919→  1919→                            <div className="flex items-center gap-3 text-xs text-muted-foreground mb-4">
+  1920→  1920→                              <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatDuration(currentLesson.videoDuration)}</span>
+  1921→  1921→                              <span className="flex items-center gap-1">
+  1922→  1922→                                <ContentTypeIcon type={currentLesson.contentType} className="h-3 w-3" />
+  1923→  1923→                                {currentLesson.contentType.charAt(0).toUpperCase() + currentLesson.contentType.slice(1).replace('_', ' ')}
+  1924→  1924→                              </span>
+  1925→  1925→                            </div>
+  1926→  1926→                            <Button
+  1927→  1927→                              onClick={() => handleLessonClick(currentLesson)}
+  1928→  1928→                              className="w-full gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20 text-white"
+  1929→  1929→                            >
+  1930→  1930→                              <Play className="h-4 w-4" fill="currentColor" />
+  1931→  1931→                              {inProgressLesson ? 'Continue Lesson' : 'Start Lesson'}
+  1932→  1932→                            </Button>
+  1933→  1933→                          </div>
+  1934→  1934→                        </div>
+  1935→  1935→                      </CardContent>
+  1936→  1936→                    </Card>
+  1937→  1937→                  );
+  1938→  1938→                })()}
+  1939→  1939→
+  1940→  1940→                {modules.length > 0 ? (
+  1941→  1941→                  modules.map((mod, idx) => (
+  1942→  1942→                    <ModuleSection key={mod.id} module={mod} moduleIndex={idx} onLessonClick={handleLessonClick} progressMap={lessonProgressState} />
+  1943→  1943→                  ))
+  1944→  1944→                ) : (
+  1945→  1945→                  <Card>
+  1946→  1946→                    <CardContent className="p-8 text-center">
+  1947→  1947→                      <BookOpen className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+  1948→  1948→                      <p className="text-muted-foreground">No curriculum content available yet.</p>
+  1949→  1949→                    </CardContent>
+  1950→  1950→                  </Card>
+  1951→  1951→                )}
+  1952→  1952→              </motion.div>
+  1953→  1953→            </AnimatePresence>
+  1954→  1954→          </TabsContent>
+  1955→  1955→
+  1956→  1956→          {/* ─── Tab: Discussion Q&A ─────────────────────── */}
+  1957→  1957→          <TabsContent value="discussion" className="mt-6">
+  1958→  1958→            <AnimatePresence mode="wait">
+  1959→  1959→              <motion.div
+  1960→  1960→                key="discussion"
+  1961→  1961→                variants={tabContentVariants}
+  1962→  1962→                initial="hidden"
+  1963→  1963→                animate="visible"
+  1964→  1964→                exit="exit"
+  1965→  1965→              >
+  1966→  1966→                <DiscussionTab questions={discussionQuestions} />
+  1967→  1967→              </motion.div>
+  1968→  1968→            </AnimatePresence>
+  1969→  1969→          </TabsContent>
+  1970→  1970→
+  1971→  1971→          {/* ─── Tab: Notes ──────────────────────────────── */}
+  1972→  1972→          <TabsContent value="notes" className="mt-6">
+  1973→  1973→            <AnimatePresence mode="wait">
+  1974→  1974→              <motion.div
+  1975→  1975→                key="notes"
+  1976→  1976→                variants={tabContentVariants}
+  1977→  1977→                initial="hidden"
+  1978→  1978→                animate="visible"
+  1979→  1979→                exit="exit"
+  1980→  1980→              >
+  1981→  1981→                <NotesTab notes={mockNotes} />
+  1982→  1982→              </motion.div>
+  1983→  1983→            </AnimatePresence>
+  1984→  1984→          </TabsContent>
+  1985→  1985→
+  1986→  1986→          {/* ─── Tab: Progress ───────────────────────────── */}
+  1987→  1987→          <TabsContent value="progress" className="mt-6">
+  1988→  1988→            <AnimatePresence mode="wait">
+  1989→  1989→              <motion.div
+  1990→  1990→                key="progress"
+  1991→  1991→                variants={tabContentVariants}
+  1992→  1992→                initial="hidden"
+  1993→  1993→                animate="visible"
+  1994→  1994→                exit="exit"
+  1995→  1995→              >
+  1996→  1996→                <ProgressTab events={timelineEvents} enrollmentProgress={enrollment.progress} />
+  1997→  1997→              </motion.div>
+  1998→  1998→            </AnimatePresence>
+  1999→  1999→          </TabsContent>
+  2000→  2000→
+
+[showing lines 1-2000 of 2002; use offset=2001 with limit to continue reading]
