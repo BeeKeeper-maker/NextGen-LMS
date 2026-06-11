@@ -68,7 +68,7 @@ function getTypeEmoji(type: CommunityPost['type']) {
 
 function getTypeColor(type: CommunityPost['type']) {
   switch (type) {
-    case 'discussion': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    case 'discussion': return 'bg-emerald-100 text-emerald-700 border-emerald-500/30';
     case 'question': return 'bg-violet-100 text-violet-700 border-violet-200';
     case 'announcement': return 'bg-amber-100 text-amber-700 border-amber-200';
     case 'resource': return 'bg-pink-100 text-pink-700 border-pink-200';
@@ -188,7 +188,7 @@ export function AdminCommunity() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Community Management</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-50">Community Management</h1>
           <p className="text-slate-500 mt-1">Moderate posts, manage categories, and track engagement</p>
         </div>
         <Button onClick={() => setShowCreateDialog(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shrink-0">
@@ -198,24 +198,24 @@ export function AdminCommunity() {
       </div>
 
       {/* Top Bar: Search, Filters, View Toggle */}
-      <Card className="border-slate-200">
+      <Card className="border-border">
         <CardContent className="p-4">
           <div className="flex flex-col lg:flex-row gap-3">
             {/* Search */}
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
               <Input
                 placeholder="Search posts..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 border-slate-200 focus:border-emerald-400"
+                className="pl-9 border-border focus:border-emerald-400"
               />
             </div>
             {/* Filters */}
             <div className="flex flex-wrap gap-2">
               <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-[150px] border-slate-200">
-                  <Filter className="h-3.5 w-3.5 mr-1 text-slate-400" />
+                <SelectTrigger className="w-[150px] border-border">
+                  <Filter className="h-3.5 w-3.5 mr-1 text-slate-400 dark:text-slate-500" />
                   <SelectValue placeholder="Type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -227,7 +227,7 @@ export function AdminCommunity() {
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[140px] border-slate-200">
+                <SelectTrigger className="w-[140px] border-border">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -238,7 +238,7 @@ export function AdminCommunity() {
                 </SelectContent>
               </Select>
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-[170px] border-slate-200">
+                <SelectTrigger className="w-[170px] border-border">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -249,7 +249,7 @@ export function AdminCommunity() {
                 </SelectContent>
               </Select>
               {/* View Toggle */}
-              <div className="flex border border-slate-200 rounded-md overflow-hidden">
+              <div className="flex border border-border rounded-md overflow-hidden">
                 <Button
                   variant={viewMode === 'grid' ? 'default' : 'ghost'}
                   size="sm"
@@ -285,7 +285,7 @@ export function AdminCommunity() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
           >
-            <Card className="border-slate-200 hover:shadow-md transition-shadow">
+            <Card className="border-border hover:shadow-md transition-shadow">
               <CardContent className="p-4 flex items-center gap-4">
                 <div className={`p-3 rounded-xl ${
                   stat.color === 'emerald' ? 'bg-emerald-100 text-emerald-600' :
@@ -295,8 +295,8 @@ export function AdminCommunity() {
                   <stat.icon className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">{stat.label}</p>
-                  <p className="text-2xl font-bold text-slate-900">{stat.value}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">{stat.label}</p>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-slate-50">{stat.value}</p>
                 </div>
               </CardContent>
             </Card>
@@ -307,7 +307,7 @@ export function AdminCommunity() {
       {/* Posts Grid/List */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-900">Posts ({filteredPosts.length})</h2>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Posts ({filteredPosts.length})</h2>
         </div>
         <AnimatePresence mode="popLayout">
           {viewMode === 'grid' ? (
@@ -348,10 +348,13 @@ export function AdminCommunity() {
       </div>
 
       {/* Category Management */}
-      <Card className="border-slate-200">
+      <Card className="border-border shadow-sm hover:shadow-md transition-shadow">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg font-semibold text-slate-900">Category Management</CardTitle>
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <Tag className="h-4 w-4 text-emerald-500" />
+              Category Management
+            </CardTitle>
             <Button
               variant="outline"
               size="sm"
@@ -360,7 +363,7 @@ export function AdminCommunity() {
                 setNewCategory({ name: '', icon: '💬', color: '#10B981' });
                 setShowCategoryDialog(true);
               }}
-              className="gap-1.5 border-slate-200 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200"
+              className="gap-1.5 border-border text-slate-700 dark:text-slate-300 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-500/30"
             >
               <Plus className="h-3.5 w-3.5" />
               Add Category
@@ -376,7 +379,7 @@ export function AdminCommunity() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: i * 0.05 }}
               >
-                <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all group">
+                <div className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-border hover:shadow-sm transition-all group">
                   <div
                     className="w-10 h-10 rounded-lg flex items-center justify-center text-lg shrink-0"
                     style={{ backgroundColor: cat.color + '20', color: cat.color }}
@@ -384,8 +387,8 @@ export function AdminCommunity() {
                     {cat.icon}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-slate-900 text-sm truncate">{cat.name}</p>
-                    <p className="text-xs text-slate-400">{categoryPostCounts[cat.id] || 0} posts</p>
+                    <p className="font-medium text-slate-900 dark:text-slate-50 text-sm truncate">{cat.name}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">{categoryPostCounts[cat.id] || 0} posts</p>
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button
@@ -419,33 +422,33 @@ export function AdminCommunity() {
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-slate-900">Create New Post</DialogTitle>
+            <DialogTitle className="text-slate-900 dark:text-slate-50">Create New Post</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <Label className="text-slate-700 mb-1.5">Title</Label>
+              <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Title</Label>
               <Input
                 placeholder="Enter post title..."
                 value={newPost.title}
                 onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
-                className="border-slate-200 focus:border-emerald-400"
+                className="border-border focus:border-emerald-400"
               />
             </div>
             <div>
-              <Label className="text-slate-700 mb-1.5">Content</Label>
+              <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Content</Label>
               <Textarea
                 placeholder="Write your post content..."
                 value={newPost.content}
                 onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
                 rows={4}
-                className="border-slate-200 focus:border-emerald-400 resize-none"
+                className="border-border focus:border-emerald-400 resize-none"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-slate-700 mb-1.5">Type</Label>
+                <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Type</Label>
                 <Select value={newPost.type} onValueChange={(v) => setNewPost({ ...newPost, type: v as CommunityPost['type'] })}>
-                  <SelectTrigger className="border-slate-200">
+                  <SelectTrigger className="border-border">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -457,9 +460,9 @@ export function AdminCommunity() {
                 </Select>
               </div>
               <div>
-                <Label className="text-slate-700 mb-1.5">Category</Label>
+                <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Category</Label>
                 <Select value={newPost.categoryId} onValueChange={(v) => setNewPost({ ...newPost, categoryId: v })}>
-                  <SelectTrigger className="border-slate-200">
+                  <SelectTrigger className="border-border">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -471,17 +474,17 @@ export function AdminCommunity() {
               </div>
             </div>
             <div>
-              <Label className="text-slate-700 mb-1.5">Tags (comma separated)</Label>
+              <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Tags (comma separated)</Label>
               <Input
                 placeholder="e.g., nextjs, react, tips"
                 value={newPost.tags}
                 onChange={(e) => setNewPost({ ...newPost, tags: e.target.value })}
-                className="border-slate-200 focus:border-emerald-400"
+                className="border-border focus:border-emerald-400"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)} className="border-slate-200">
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)} className="border-border">
               Cancel
             </Button>
             <Button
@@ -499,50 +502,50 @@ export function AdminCommunity() {
       <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-slate-900">
+            <DialogTitle className="text-slate-900 dark:text-slate-50">
               {editingCategory ? 'Edit Category' : 'Add New Category'}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <Label className="text-slate-700 mb-1.5">Name</Label>
+              <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Name</Label>
               <Input
                 placeholder="Category name..."
                 value={newCategory.name}
                 onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
-                className="border-slate-200 focus:border-emerald-400"
+                className="border-border focus:border-emerald-400"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-slate-700 mb-1.5">Icon (emoji)</Label>
+                <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Icon (emoji)</Label>
                 <Input
                   placeholder="💬"
                   value={newCategory.icon}
                   onChange={(e) => setNewCategory({ ...newCategory, icon: e.target.value })}
-                  className="border-slate-200 focus:border-emerald-400"
+                  className="border-border focus:border-emerald-400"
                 />
               </div>
               <div>
-                <Label className="text-slate-700 mb-1.5">Color</Label>
+                <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Color</Label>
                 <div className="flex gap-2 items-center">
                   <input
                     type="color"
                     value={newCategory.color}
                     onChange={(e) => setNewCategory({ ...newCategory, color: e.target.value })}
-                    className="h-9 w-9 rounded border border-slate-200 cursor-pointer"
+                    className="h-9 w-9 rounded border border-border cursor-pointer"
                   />
                   <Input
                     value={newCategory.color}
                     onChange={(e) => setNewCategory({ ...newCategory, color: e.target.value })}
-                    className="border-slate-200 flex-1"
+                    className="border-border flex-1"
                   />
                 </div>
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCategoryDialog(false)} className="border-slate-200">
+            <Button variant="outline" onClick={() => setShowCategoryDialog(false)} className="border-border">
               Cancel
             </Button>
             <Button
@@ -584,12 +587,12 @@ function PostCard({
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ delay: index * 0.05 }}
     >
-      <Card className={`border-slate-200 hover:shadow-lg transition-all h-full flex flex-col ${post.isPinned ? 'ring-2 ring-emerald-200 border-emerald-200' : ''}`}>
+      <Card className={`border-border hover:shadow-lg transition-all h-full flex flex-col ${post.isPinned ? 'ring-2 ring-emerald-500/30 border-emerald-500/30' : ''}`}>
         <CardContent className="p-4 flex-1 flex flex-col">
           {/* Top: Badges */}
           <div className="flex items-center gap-2 flex-wrap mb-2">
             {post.isPinned && (
-              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs gap-1">
+              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-500/30 text-xs gap-1">
                 <Pin className="h-3 w-3" /> Pinned
               </Badge>
             )}
@@ -604,12 +607,12 @@ function PostCard({
           </div>
 
           {/* Title */}
-          <h3 className="font-bold text-slate-900 text-base leading-snug mb-1.5 line-clamp-2">
+          <h3 className="font-bold text-slate-900 dark:text-slate-50 text-base leading-snug mb-1.5 line-clamp-2">
             {post.title}
           </h3>
 
           {/* Content preview */}
-          <p className="text-slate-500 text-sm leading-relaxed mb-3 line-clamp-2 flex-1">
+          <p className="text-slate-500 text-sm leading-relaxed mb-3 line-clamp-2 flex-1" title={post.content}>
             {post.content}
           </p>
 
@@ -638,7 +641,7 @@ function PostCard({
           )}
 
           {/* Author & Stats */}
-          <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
+          <div className="flex items-center justify-between mt-auto pt-3 border-t border-border/50">
             <div className="flex items-center gap-2">
               <Avatar className="h-6 w-6">
                 <AvatarFallback className="bg-violet-100 text-violet-700 text-xs font-medium">
@@ -650,7 +653,7 @@ function PostCard({
                 <Clock className="h-3 w-3" /> {timeAgo(post.createdAt)}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
               <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{post.viewCount}</span>
               <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{post.likeCount}</span>
               <span className="flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{post.commentCount}</span>
@@ -658,7 +661,7 @@ function PostCard({
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-1 mt-3 pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-1 mt-3 pt-2 border-t border-border/50">
             <Button
               variant="ghost"
               size="sm"
@@ -680,7 +683,7 @@ function PostCard({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 text-xs gap-1 text-slate-500 hover:text-slate-700"
+              className="h-8 text-xs gap-1 text-slate-500 hover:text-slate-700 dark:text-slate-300"
             >
               <Eye className="h-3 w-3" />
               View
@@ -726,7 +729,7 @@ function PostListItem({
       exit={{ opacity: 0, x: 20 }}
       transition={{ delay: index * 0.05 }}
     >
-      <Card className={`border-slate-200 hover:shadow-md transition-all ${post.isPinned ? 'ring-2 ring-emerald-200 border-emerald-200' : ''}`}>
+      <Card className={`border-border hover:shadow-md transition-all ${post.isPinned ? 'ring-2 ring-emerald-500/30 border-emerald-500/30' : ''}`}>
         <CardContent className="p-4">
           <div className="flex gap-4">
             {/* Left: Type icon */}
@@ -743,7 +746,7 @@ function PostListItem({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">
                 {post.isPinned && (
-                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs gap-1">
+                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-500/30 text-xs gap-1">
                     <Pin className="h-3 w-3" /> Pinned
                   </Badge>
                 )}
@@ -764,15 +767,15 @@ function PostListItem({
                   </span>
                 )}
               </div>
-              <h3 className="font-bold text-slate-900 text-sm mb-1">{post.title}</h3>
+              <h3 className="font-bold text-slate-900 dark:text-slate-50 text-sm mb-1">{post.title}</h3>
               <p className="text-slate-500 text-sm line-clamp-1 mb-2">{post.content}</p>
               <div className="flex items-center gap-3 flex-wrap">
                 {post.tags && post.tags.slice(0, 3).map(tag => (
-                  <Badge key={tag} variant="secondary" className="text-xs bg-slate-100 text-slate-500">
+                  <Badge key={tag} variant="secondary" className="text-xs bg-slate-100 text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     {tag}
                   </Badge>
                 ))}
-                <span className="text-xs text-slate-400">by {post.author?.name}</span>
+                <span className="text-xs text-slate-400 dark:text-slate-500">by {post.author?.name}</span>
                 <span className="text-xs text-slate-400 flex items-center gap-0.5">
                   <Clock className="h-3 w-3" /> {timeAgo(post.createdAt)}
                 </span>
@@ -781,7 +784,7 @@ function PostListItem({
 
             {/* Right: Stats + Actions */}
             <div className="shrink-0 flex flex-col items-end justify-between">
-              <div className="flex items-center gap-3 text-xs text-slate-400">
+              <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500">
                 <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{post.viewCount}</span>
                 <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{post.likeCount}</span>
                 <span className="flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{post.commentCount}</span>
@@ -803,7 +806,7 @@ function PostListItem({
                 >
                   {post.isLocked ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
                 </Button>
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600">
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:text-slate-500">
                   <Eye className="h-3.5 w-3.5" />
                 </Button>
                 <Button

@@ -80,7 +80,7 @@ const categoryBadgeColors: Record<string, string> = {
   'AI & ML': 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
   'Data Science': 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
   Design: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300',
-  Business: 'bg-slate-100 text-slate-700 dark:bg-slate-950 dark:text-slate-300',
+  Business: 'bg-slate-100 text-slate-700 dark:text-slate-300 dark:bg-slate-950 dark:text-slate-300',
   Marketing: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-300',
 };
 
@@ -213,8 +213,8 @@ function CourseCatalogTab() {
 
 function CourseCard({ course }: { course: Course }) {
   const gradient = categoryGradients[course.category || ''] || 'from-slate-500 to-slate-600';
-  const catBadge = categoryBadgeColors[course.category || ''] || 'bg-slate-100 text-slate-700 dark:bg-slate-950 dark:text-slate-300';
-  const lvlBadge = levelBadgeColors[course.level] || 'bg-slate-100 text-slate-700 dark:bg-slate-950 dark:text-slate-300';
+  const catBadge = categoryBadgeColors[course.category || ''] || 'bg-slate-100 text-slate-700 dark:text-slate-300 dark:bg-slate-950 dark:text-slate-300';
+  const lvlBadge = levelBadgeColors[course.level] || 'bg-slate-100 text-slate-700 dark:text-slate-300 dark:bg-slate-950 dark:text-slate-300';
 
   return (
     <motion.div
@@ -224,7 +224,7 @@ function CourseCard({ course }: { course: Course }) {
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.2 }}
     >
-      <Card className="overflow-hidden hover:shadow-lg transition-shadow group">
+      <Card className="overflow-hidden hover:shadow-lg transition-shadow group h-full shadow-sm flex flex-col">
         {/* Colored header band */}
         <div className={`h-24 bg-gradient-to-r ${gradient} relative`}>
           <div className="absolute inset-0 bg-black/10" />
@@ -243,7 +243,7 @@ function CourseCard({ course }: { course: Course }) {
           )}
         </div>
 
-        <CardContent className="p-6 space-y-4">
+        <CardContent className="p-6 space-y-4 flex-1 flex flex-col">
           {/* Title & Description */}
           <div>
             <h3 className="font-semibold text-foreground line-clamp-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
@@ -328,22 +328,23 @@ function NewCourseDialog() {
           New Course
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent className="sm:max-w-[580px]">
         <DialogHeader>
           <DialogTitle>Create New Course</DialogTitle>
           <DialogDescription>
             Add a new course to your learning platform. You can configure details and curriculum after creation.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
+        <div className="grid gap-5 py-4">
           <div className="grid gap-2">
             <Label htmlFor="course-title">Course Title</Label>
             <Input id="course-title" placeholder="e.g. Advanced TypeScript Patterns" />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="course-desc">Description</Label>
-            <Textarea id="course-desc" placeholder="Brief description of the course..." rows={3} />
+            <Textarea id="course-desc" placeholder="Brief description of the course..." rows={3} className="resize-none" />
           </div>
+          <Separator />
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label>Category</Label>
@@ -383,9 +384,10 @@ function NewCourseDialog() {
             </div>
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setOpen(false)}>
+          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={() => setOpen(false)}>
+            <BookOpen className="h-4 w-4" />
             Create Course
           </Button>
         </DialogFooter>
@@ -934,7 +936,7 @@ function CurriculumOverviewTab() {
           </div>
           <div className="flex items-center gap-2 text-sm">
             <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-              <CheckCircle2 className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+              <CheckCircle2 className="h-4 w-4 text-slate-600 dark:text-slate-400 dark:text-slate-500" />
             </div>
             <div>
               <p className="font-semibold text-foreground">{publishedLessons}/{totalLessons}</p>

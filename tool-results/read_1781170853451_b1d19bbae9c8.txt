@@ -1,0 +1,1163 @@
+     1→'use client';
+     2→
+     3→import { useState, useCallback, useEffect, useRef } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Search, Filter, Plus, Edit3, Trash2, Eye, GripVertical,
+     7→  ChevronRight, ChevronLeft, Clock, Target, Shuffle,
+     8→  CheckCircle2, XCircle, HelpCircle, Code, FileText,
+     9→  ArrowUpDown, Play, Save, Send, RotateCcw, X,
+    10→  AlertCircle, MoreHorizontal, Copy, Settings2,
+    11→  ListChecks, Timer, Award, BookOpen, Type, Hash,
+    12→} from 'lucide-react';
+    13→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+    14→import { Button } from '@/components/ui/button';
+    15→import { Input } from '@/components/ui/input';
+    16→import { Textarea } from '@/components/ui/textarea';
+    17→import { Badge } from '@/components/ui/badge';
+    18→import { Switch } from '@/components/ui/switch';
+    19→import { Label } from '@/components/ui/label';
+    20→import { Separator } from '@/components/ui/separator';
+    21→import {
+    22→  Dialog,
+    23→  DialogContent,
+    24→  DialogDescription,
+    25→  DialogHeader,
+    26→  DialogTitle,
+    27→  DialogFooter,
+    28→} from '@/components/ui/dialog';
+    29→import {
+    30→  Select,
+    31→  SelectContent,
+    32→  SelectItem,
+    33→  SelectTrigger,
+    34→  SelectValue,
+    35→} from '@/components/ui/select';
+    36→import {
+    37→  Table,
+    38→  TableBody,
+    39→  TableCell,
+    40→  TableHead,
+    41→  TableHeader,
+    42→  TableRow,
+    43→} from '@/components/ui/table';
+    44→import {
+    45→  Tooltip,
+    46→  TooltipContent,
+    47→  TooltipProvider,
+    48→  TooltipTrigger,
+    49→} from '@/components/ui/tooltip';
+    50→import { Progress } from '@/components/ui/progress';
+    51→import { demoAssessments, demoCourses } from '@/lib/mock-data';
+    52→import type { Assessment, Question } from '@/types';
+    53→
+    54→// ---- Helper types ----
+    55→type ViewMode = 'list' | 'builder' | 'preview';
+    56→
+    57→interface QuestionFormData {
+    58→  type: Question['type'];
+    59→  question: string;
+    60→  options: string[];
+    61→  correctAnswer: string;
+    62→  explanation: string;
+    63→  points: number;
+    64→  difficulty: Question['difficulty'];
+    65→  poolGroup: string;
+    66→}
+    67→
+    68→const emptyQuestionForm: QuestionFormData = {
+    69→  type: 'multiple_choice',
+    70→  question: '',
+    71→  options: ['', '', '', ''],
+    72→  correctAnswer: '',
+    73→  explanation: '',
+    74→  points: 1,
+    75→  difficulty: 'medium',
+    76→  poolGroup: '',
+    77→};
+    78→
+    79→// ---- Icon helpers ----
+    80→function TypeIcon({ type, className = 'h-4 w-4' }: { type: string; className?: string }) {
+    81→  switch (type) {
+    82→    case 'quiz': return <ListChecks className={className} />;
+    83→    case 'assignment': return <FileText className={className} />;
+    84→    case 'peer_review': return <HelpCircle className={className} />;
+    85→    case 'coding': return <Code className={className} />;
+    86→    case 'file_upload': return <BookOpen className={className} />;
+    87→    case 'multiple_choice': return <ListChecks className={className} />;
+    88→    case 'true_false': return <CheckCircle2 className={className} />;
+    89→    case 'short_answer': return <Type className={className} />;
+    90→    case 'long_answer': return <FileText className={className} />;
+    91→    case 'coding': return <Code className={className} />;
+    92→    default: return <HelpCircle className={className} />;
+    93→  }
+    94→}
+    95→
+    96→function DifficultyBadge({ difficulty }: { difficulty: string }) {
+    97→  const styles: Record<string, string> = {
+    98→    easy: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    99→    medium: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+   100→    hard: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+   101→  };
+   102→  return <Badge variant="outline" className={`${styles[difficulty] ?? ''} text-xs font-medium`}>{difficulty}</Badge>;
+   103→}
+   104→
+   105→function AssessmentTypeBadge({ type }: { type: string }) {
+   106→  const styles: Record<string, string> = {
+   107→    quiz: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
+   108→    assignment: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+   109→    peer_review: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+   110→    coding: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+   111→    file_upload: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+   112→  };
+   113→  return (
+   114→    <Badge variant="outline" className={`${styles[type] ?? ''} text-xs gap-1`}>
+   115→      <TypeIcon type={type} className="h-3 w-3" />
+   116→      {type.replace('_', ' ')}
+   117→    </Badge>
+   118→  );
+   119→}
+   120→
+   121→function StatusBadge({ isPublished }: { isPublished: boolean }) {
+   122→  return isPublished
+   123→    ? <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs">Published</Badge>
+   124→    : <Badge variant="outline" className="text-xs text-muted-foreground">Draft</Badge>;
+   125→}
+   126→
+   127→function getCourseTitle(courseId: string) {
+   128→  return demoCourses.find(c => c.id === courseId)?.title ?? 'Unknown Course';
+   129→}
+   130→
+   131→// ==========================
+   132→// ASSESSMENT LIST VIEW
+   133→// ==========================
+   134→function AssessmentList({
+   135→  assessments,
+   136→  onEdit,
+   137→  onPreview,
+   138→  onCreateNew,
+   139→}: {
+   140→  assessments: Assessment[];
+   141→  onEdit: (a: Assessment) => void;
+   142→  onPreview: (a: Assessment) => void;
+   143→  onCreateNew: () => void;
+   144→}) {
+   145→  const [search, setSearch] = useState('');
+   146→  const [typeFilter, setTypeFilter] = useState<string>('all');
+   147→  const [statusFilter, setStatusFilter] = useState<string>('all');
+   148→
+   149→  const filtered = assessments.filter(a => {
+   150→    const matchesSearch = a.title.toLowerCase().includes(search.toLowerCase()) ||
+   151→      a.description?.toLowerCase().includes(search.toLowerCase());
+   152→    const matchesType = typeFilter === 'all' || a.type === typeFilter;
+   153→    const matchesStatus = statusFilter === 'all' ||
+   154→      (statusFilter === 'published' && a.isPublished) ||
+   155→      (statusFilter === 'draft' && !a.isPublished);
+   156→    return matchesSearch && matchesType && matchesStatus;
+   157→  });
+   158→
+   159→  return (
+   160→    <div className="space-y-6">
+   161→      {/* Header */}
+   162→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+   163→        <div>
+   164→          <h2 className="text-2xl font-bold text-foreground">Assessments</h2>
+   165→          <p className="text-muted-foreground text-sm mt-1">Create and manage quizzes, assignments, and coding challenges</p>
+   166→        </div>
+   167→        <Button onClick={onCreateNew} className="bg-violet-600 hover:bg-violet-700 text-white gap-2">
+   168→          <Plus className="h-4 w-4" /> Create Assessment
+   169→        </Button>
+   170→      </div>
+   171→
+   172→      {/* Filters */}
+   173→      <Card>
+   174→        <CardContent className="p-4">
+   175→          <div className="flex flex-col sm:flex-row gap-3">
+   176→            <div className="relative flex-1">
+   177→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   178→              <Input
+   179→                placeholder="Search assessments..."
+   180→                value={search}
+   181→                onChange={e => setSearch(e.target.value)}
+   182→                className="pl-9"
+   183→              />
+   184→            </div>
+   185→            <Select value={typeFilter} onValueChange={setTypeFilter}>
+   186→              <SelectTrigger className="w-[160px]">
+   187→                <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
+   188→                <SelectValue placeholder="Type" />
+   189→              </SelectTrigger>
+   190→              <SelectContent>
+   191→                <SelectItem value="all">All Types</SelectItem>
+   192→                <SelectItem value="quiz">Quiz</SelectItem>
+   193→                <SelectItem value="assignment">Assignment</SelectItem>
+   194→                <SelectItem value="peer_review">Peer Review</SelectItem>
+   195→                <SelectItem value="coding">Coding</SelectItem>
+   196→                <SelectItem value="file_upload">File Upload</SelectItem>
+   197→              </SelectContent>
+   198→            </Select>
+   199→            <Select value={statusFilter} onValueChange={setStatusFilter}>
+   200→              <SelectTrigger className="w-[150px]">
+   201→                <SelectValue placeholder="Status" />
+   202→              </SelectTrigger>
+   203→              <SelectContent>
+   204→                <SelectItem value="all">All Status</SelectItem>
+   205→                <SelectItem value="published">Published</SelectItem>
+   206→                <SelectItem value="draft">Draft</SelectItem>
+   207→              </SelectContent>
+   208→            </Select>
+   209→          </div>
+   210→        </CardContent>
+   211→      </Card>
+   212→
+   213→      {/* Table */}
+   214→      <Card>
+   215→        <CardContent className="p-0">
+   216→          <div className="overflow-x-auto">
+   217→            <Table>
+   218→              <TableHeader>
+   219→                <TableRow>
+   220→                  <TableHead className="w-[280px]">Title</TableHead>
+   221→                  <TableHead>Course</TableHead>
+   222→                  <TableHead>Type</TableHead>
+   223→                  <TableHead className="text-center">Passing</TableHead>
+   224→                  <TableHead className="text-center">Attempts</TableHead>
+   225→                  <TableHead className="text-center">Time</TableHead>
+   226→                  <TableHead>Status</TableHead>
+   227→                  <TableHead className="text-right">Actions</TableHead>
+   228→                </TableRow>
+   229→              </TableHeader>
+   230→              <TableBody>
+   231→                {filtered.length === 0 ? (
+   232→                  <TableRow>
+   233→                    <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
+   234→                      <div className="flex flex-col items-center gap-2">
+   235→                        <Search className="h-8 w-8 text-muted-foreground/50" />
+   236→                        <span>No assessments found</span>
+   237→                      </div>
+   238→                    </TableCell>
+   239→                  </TableRow>
+   240→                ) : (
+   241→                  filtered.map((assessment, idx) => (
+   242→                    <motion.tr
+   243→                      key={assessment.id}
+   244→                      initial={{ opacity: 0, y: 8 }}
+   245→                      animate={{ opacity: 1, y: 0 }}
+   246→                      transition={{ delay: idx * 0.05 }}
+   247→                      className="border-b transition-colors hover:bg-muted/50"
+   248→                    >
+   249→                      <TableCell className="font-medium">
+   250→                        <div>
+   251→                          <div className="font-semibold text-foreground">{assessment.title}</div>
+   252→                          {assessment.description && (
+   253→                            <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{assessment.description}</div>
+   254→                          )}
+   255→                          <div className="text-xs text-muted-foreground mt-1">
+   256→                            {assessment.questions?.length ?? 0} question{(assessment.questions?.length ?? 0) !== 1 ? 's' : ''}
+   257→                          </div>
+   258→                        </div>
+   259→                      </TableCell>
+   260→                      <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
+   261→                        {getCourseTitle(assessment.courseId)}
+   262→                      </TableCell>
+   263→                      <TableCell><AssessmentTypeBadge type={assessment.type} /></TableCell>
+   264→                      <TableCell className="text-center text-sm">{assessment.passingScore}%</TableCell>
+   265→                      <TableCell className="text-center text-sm">{assessment.maxAttempts}</TableCell>
+   266→                      <TableCell className="text-center text-sm">
+   267→                        {assessment.timeLimit ? `${assessment.timeLimit}m` : '—'}
+   268→                      </TableCell>
+   269→                      <TableCell><StatusBadge isPublished={assessment.isPublished} /></TableCell>
+   270→                      <TableCell className="text-right">
+   271→                        <div className="flex items-center justify-end gap-1">
+   272→                          <TooltipProvider>
+   273→                            <Tooltip>
+   274→                              <TooltipTrigger asChild>
+   275→                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onPreview(assessment)}>
+   276→                                  <Play className="h-4 w-4" />
+   277→                                </Button>
+   278→                              </TooltipTrigger>
+   279→                              <TooltipContent>Preview Quiz</TooltipContent>
+   280→                            </Tooltip>
+   281→                          </TooltipProvider>
+   282→                          <TooltipProvider>
+   283→                            <Tooltip>
+   284→                              <TooltipTrigger asChild>
+   285→                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(assessment)}>
+   286→                                  <Edit3 className="h-4 w-4" />
+   287→                                </Button>
+   288→                              </TooltipTrigger>
+   289→                              <TooltipContent>Edit</TooltipContent>
+   290→                            </Tooltip>
+   291→                          </TooltipProvider>
+   292→                          <TooltipProvider>
+   293→                            <Tooltip>
+   294→                              <TooltipTrigger asChild>
+   295→                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600">
+   296→                                  <Trash2 className="h-4 w-4" />
+   297→                                </Button>
+   298→                              </TooltipTrigger>
+   299→                              <TooltipContent>Delete</TooltipContent>
+   300→                            </Tooltip>
+   301→                          </TooltipProvider>
+   302→                        </div>
+   303→                      </TableCell>
+   304→                    </motion.tr>
+   305→                  ))
+   306→                )}
+   307→              </TableBody>
+   308→            </Table>
+   309→          </div>
+   310→        </CardContent>
+   311→      </Card>
+   312→
+   313→      {/* Stats row */}
+   314→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+   315→        {[
+   316→          { label: 'Total Assessments', value: assessments.length, icon: ListChecks, color: 'text-violet-600' },
+   317→          { label: 'Published', value: assessments.filter(a => a.isPublished).length, icon: CheckCircle2, color: 'text-emerald-600' },
+   318→          { label: 'Total Questions', value: assessments.reduce((sum, a) => sum + (a.questions?.length ?? 0), 0), icon: HelpCircle, color: 'text-amber-600' },
+   319→          { label: 'Avg. Passing Score', value: `${Math.round(assessments.reduce((sum, a) => sum + a.passingScore, 0) / assessments.length)}%`, icon: Target, color: 'text-rose-600' },
+   320→        ].map((stat, i) => (
+   321→          <motion.div
+   322→            key={stat.label}
+   323→            initial={{ opacity: 0, y: 12 }}
+   324→            animate={{ opacity: 1, y: 0 }}
+   325→            transition={{ delay: 0.3 + i * 0.1 }}
+   326→          >
+   327→            <Card>
+   328→              <CardContent className="p-4 flex items-center gap-3">
+   329→                <div className={`p-2 rounded-lg bg-muted ${stat.color}`}>
+   330→                  <stat.icon className="h-5 w-5" />
+   331→                </div>
+   332→                <div>
+   333→                  <div className="text-2xl font-bold">{stat.value}</div>
+   334→                  <div className="text-xs text-muted-foreground">{stat.label}</div>
+   335→                </div>
+   336→              </CardContent>
+   337→            </Card>
+   338→          </motion.div>
+   339→        ))}
+   340→      </div>
+   341→    </div>
+   342→  );
+   343→}
+   344→
+   345→// ==========================
+   346→// ASSESSMENT BUILDER VIEW
+   347→// ==========================
+   348→function AssessmentBuilder({
+   349→  assessment,
+   350→  onBack,
+   351→  onSave,
+   352→}: {
+   353→  assessment: Assessment;
+   354→  onBack: () => void;
+   355→  onSave: (a: Assessment) => void;
+   356→}) {
+   357→  const [form, setForm] = useState<Assessment>({ ...assessment });
+   358→  const [showQuestionForm, setShowQuestionForm] = useState(false);
+   359→  const [editingQuestionIdx, setEditingQuestionIdx] = useState<number | null>(null);
+   360→  const [questionForm, setQuestionForm] = useState<QuestionFormData>(emptyQuestionForm);
+   361→  const [dragIdx, setDragIdx] = useState<number | null>(null);
+   362→
+   363→  const updateField = useCallback(<K extends keyof Assessment>(key: K, value: Assessment[K]) => {
+   364→    setForm(prev => ({ ...prev, [key]: value }));
+   365→  }, []);
+   366→
+   367→  const openAddQuestion = () => {
+   368→    setEditingQuestionIdx(null);
+   369→    setQuestionForm(emptyQuestionForm);
+   370→    setShowQuestionForm(true);
+   371→  };
+   372→
+   373→  const openEditQuestion = (idx: number) => {
+   374→    const q = form.questions?.[idx];
+   375→    if (!q) return;
+   376→    setEditingQuestionIdx(idx);
+   377→    setQuestionForm({
+   378→      type: q.type,
+   379→      question: q.question,
+   380→      options: q.options ?? (q.type === 'multiple_choice' ? ['', '', '', ''] : []),
+   381→      correctAnswer: q.correctAnswer ?? '',
+   382→      explanation: q.explanation ?? '',
+   383→      points: q.points,
+   384→      difficulty: q.difficulty,
+   385→      poolGroup: q.poolGroup ?? '',
+   386→    });
+   387→    setShowQuestionForm(true);
+   388→  };
+   389→
+   390→  const saveQuestion = () => {
+   391→    if (!questionForm.question.trim()) return;
+   392→    const newQ: Question = {
+   393→      id: editingQuestionIdx !== null ? (form.questions?.[editingQuestionIdx]?.id ?? `q-${Date.now()}`) : `q-${Date.now()}`,
+   394→      assessmentId: form.id,
+   395→      type: questionForm.type,
+   396→      question: questionForm.question,
+   397→      options: ['multiple_choice', 'true_false'].includes(questionForm.type) ? questionForm.options.filter(o => o.trim()) : undefined,
+   398→      correctAnswer: questionForm.correctAnswer,
+   399→      explanation: questionForm.explanation || undefined,
+   400→      points: questionForm.points,
+   401→      orderIndex: editingQuestionIdx !== null ? (form.questions?.[editingQuestionIdx]?.orderIndex ?? 0) : (form.questions?.length ?? 0),
+   402→      difficulty: questionForm.difficulty,
+   403→      poolGroup: questionForm.poolGroup || undefined,
+   404→    };
+   405→
+   406→    const updatedQuestions = [...(form.questions ?? [])];
+   407→    if (editingQuestionIdx !== null) {
+   408→      updatedQuestions[editingQuestionIdx] = newQ;
+   409→    } else {
+   410→      updatedQuestions.push(newQ);
+   411→    }
+   412→    updateField('questions', updatedQuestions);
+   413→    setShowQuestionForm(false);
+   414→  };
+   415→
+   416→  const deleteQuestion = (idx: number) => {
+   417→    const updated = [...(form.questions ?? [])];
+   418→    updated.splice(idx, 1);
+   419→    updated.forEach((q, i) => { q.orderIndex = i; });
+   420→    updateField('questions', updated);
+   421→  };
+   422→
+   423→  const moveQuestion = (from: number, to: number) => {
+   424→    if (to < 0 || to >= (form.questions?.length ?? 0)) return;
+   425→    const updated = [...(form.questions ?? [])];
+   426→    const [moved] = updated.splice(from, 1);
+   427→    updated.splice(to, 0, moved);
+   428→    updated.forEach((q, i) => { q.orderIndex = i; });
+   429→    updateField('questions', updated);
+   430→  };
+   431→
+   432→  const totalPoints = (form.questions ?? []).reduce((sum, q) => sum + q.points, 0);
+   433→
+   434→  return (
+   435→    <div className="space-y-6">
+   436→      {/* Header */}
+   437→      <div className="flex items-center justify-between">
+   438→        <div className="flex items-center gap-3">
+   439→          <Button variant="ghost" size="icon" onClick={onBack}>
+   440→            <ChevronLeft className="h-5 w-5" />
+   441→          </Button>
+   442→          <div>
+   443→            <h2 className="text-2xl font-bold text-foreground">Assessment Builder</h2>
+   444→            <p className="text-sm text-muted-foreground">{form.title || 'New Assessment'}</p>
+   445→          </div>
+   446→        </div>
+   447→        <div className="flex items-center gap-2">
+   448→          <Button variant="outline" onClick={onBack} className="gap-2">
+   449→            <RotateCcw className="h-4 w-4" /> Cancel
+   450→          </Button>
+   451→          <Button variant="outline" className="gap-2" onClick={() => onSave({ ...form, isPublished: false })}>
+   452→            <Save className="h-4 w-4" /> Save Draft
+   453→          </Button>
+   454→          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={() => onSave({ ...form, isPublished: true })}>
+   455→            <Send className="h-4 w-4" /> Publish
+   456→          </Button>
+   457→        </div>
+   458→      </div>
+   459→
+   460→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   461→        {/* Left column: Settings */}
+   462→        <div className="lg:col-span-1 space-y-4">
+   463→          <Card>
+   464→            <CardHeader className="pb-3">
+   465→              <CardTitle className="text-base flex items-center gap-2">
+   466→                <Settings2 className="h-4 w-4 text-violet-600" /> Assessment Settings
+   467→              </CardTitle>
+   468→            </CardHeader>
+   469→            <CardContent className="space-y-4">
+   470→              <div className="space-y-2">
+   471→                <Label htmlFor="title">Title</Label>
+   472→                <Input id="title" value={form.title} onChange={e => updateField('title', e.target.value)} placeholder="Assessment title" />
+   473→              </div>
+   474→              <div className="space-y-2">
+   475→                <Label htmlFor="description">Description</Label>
+   476→                <Textarea id="description" value={form.description ?? ''} onChange={e => updateField('description', e.target.value)} placeholder="Describe this assessment" rows={3} />
+   477→              </div>
+   478→              <div className="space-y-2">
+   479→                <Label>Course</Label>
+   480→                <Select value={form.courseId} onValueChange={v => updateField('courseId', v)}>
+   481→                  <SelectTrigger><SelectValue /></SelectTrigger>
+   482→                  <SelectContent>
+   483→                    {demoCourses.map(c => (
+   484→                      <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
+   485→                    ))}
+   486→                  </SelectContent>
+   487→                </Select>
+   488→              </div>
+   489→              <div className="space-y-2">
+   490→                <Label>Type</Label>
+   491→                <Select value={form.type} onValueChange={v => updateField('type', v as Assessment['type'])}>
+   492→                  <SelectTrigger><SelectValue /></SelectTrigger>
+   493→                  <SelectContent>
+   494→                    <SelectItem value="quiz">Quiz</SelectItem>
+   495→                    <SelectItem value="assignment">Assignment</SelectItem>
+   496→                    <SelectItem value="peer_review">Peer Review</SelectItem>
+   497→                    <SelectItem value="coding">Coding</SelectItem>
+   498→                    <SelectItem value="file_upload">File Upload</SelectItem>
+   499→                  </SelectContent>
+   500→                </Select>
+   501→              </div>
+   502→
+   503→              <Separator />
+   504→
+   505→              <div className="grid grid-cols-2 gap-3">
+   506→                <div className="space-y-2">
+   507→                  <Label htmlFor="passingScore" className="flex items-center gap-1">
+   508→                    <Target className="h-3 w-3" /> Passing Score
+   509→                  </Label>
+   510→                  <div className="flex items-center gap-1">
+   511→                    <Input id="passingScore" type="number" min={0} max={100} value={form.passingScore} onChange={e => updateField('passingScore', Number(e.target.value))} />
+   512→                    <span className="text-sm text-muted-foreground">%</span>
+   513→                  </div>
+   514→                </div>
+   515→                <div className="space-y-2">
+   516→                  <Label htmlFor="maxAttempts" className="flex items-center gap-1">
+   517→                    <RotateCcw className="h-3 w-3" /> Max Attempts
+   518→                  </Label>
+   519→                  <Input id="maxAttempts" type="number" min={1} max={10} value={form.maxAttempts} onChange={e => updateField('maxAttempts', Number(e.target.value))} />
+   520→                </div>
+   521→              </div>
+   522→
+   523→              <div className="space-y-2">
+   524→                <Label htmlFor="timeLimit" className="flex items-center gap-1">
+   525→                  <Timer className="h-3 w-3" /> Time Limit (minutes)
+   526→                </Label>
+   527→                <Input id="timeLimit" type="number" min={0} placeholder="0 = no limit" value={form.timeLimit ?? ''} onChange={e => updateField('timeLimit', e.target.value ? Number(e.target.value) : undefined)} />
+   528→              </div>
+   529→
+   530→              <div className="flex items-center justify-between">
+   531→                <Label htmlFor="shuffle" className="flex items-center gap-1">
+   532→                  <Shuffle className="h-3 w-3" /> Shuffle Questions
+   533→                </Label>
+   534→                <Switch id="shuffle" checked={form.shuffleQuestions} onCheckedChange={v => updateField('shuffleQuestions', v)} />
+   535→              </div>
+   536→            </CardContent>
+   537→          </Card>
+   538→
+   539→          {/* Summary card */}
+   540→          <Card>
+   541→            <CardHeader className="pb-3">
+   542→              <CardTitle className="text-base">Summary</CardTitle>
+   543→            </CardHeader>
+   544→            <CardContent className="space-y-3">
+   545→              <div className="flex justify-between text-sm">
+   546→                <span className="text-muted-foreground">Questions</span>
+   547→                <span className="font-medium">{form.questions?.length ?? 0}</span>
+   548→              </div>
+   549→              <div className="flex justify-between text-sm">
+   550→                <span className="text-muted-foreground">Total Points</span>
+   551→                <span className="font-medium">{totalPoints}</span>
+   552→              </div>
+   553→              <div className="flex justify-between text-sm">
+   554→                <span className="text-muted-foreground">Passing Score</span>
+   555→                <span className="font-medium">{form.passingScore}%</span>
+   556→              </div>
+   557→              <div className="flex justify-between text-sm">
+   558→                <span className="text-muted-foreground">Status</span>
+   559→                <StatusBadge isPublished={form.isPublished} />
+   560→              </div>
+   561→            </CardContent>
+   562→          </Card>
+   563→        </div>
+   564→
+   565→        {/* Right column: Questions */}
+   566→        <div className="lg:col-span-2 space-y-4">
+   567→          <Card>
+   568→            <CardHeader className="pb-3">
+   569→              <div className="flex items-center justify-between">
+   570→                <CardTitle className="text-base flex items-center gap-2">
+   571→                  <HelpCircle className="h-4 w-4 text-violet-600" /> Questions ({form.questions?.length ?? 0})
+   572→                </CardTitle>
+   573→                <Button size="sm" onClick={openAddQuestion} className="bg-violet-600 hover:bg-violet-700 text-white gap-1">
+   574→                  <Plus className="h-4 w-4" /> Add Question
+   575→                </Button>
+   576→              </div>
+   577→            </CardHeader>
+   578→            <CardContent>
+   579→              {(form.questions ?? []).length === 0 ? (
+   580→                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+   581→                  <HelpCircle className="h-12 w-12 mb-3 opacity-30" />
+   582→                  <p className="text-sm">No questions yet</p>
+   583→                  <p className="text-xs mt-1">Click &quot;Add Question&quot; to start building your assessment</p>
+   584→                </div>
+   585→              ) : (
+   586→                <div className="space-y-2">
+   587→                  {(form.questions ?? []).map((q, idx) => (
+   588→                    <motion.div
+   589→                      key={q.id}
+   590→                      layout
+   591→                      initial={{ opacity: 0, x: -10 }}
+   592→                      animate={{ opacity: 1, x: 0 }}
+   593→                      transition={{ delay: idx * 0.03 }}
+   594→                      className={`flex items-start gap-2 p-3 rounded-lg border transition-colors hover:bg-muted/50 ${dragIdx === idx ? 'border-violet-400 bg-violet-50 dark:bg-violet-950/20' : 'border-border'}`}
+   595→                      draggable
+   596→                      onDragStart={() => setDragIdx(idx)}
+   597→                      onDragOver={e => e.preventDefault()}
+   598→                      onDrop={() => {
+   599→                        if (dragIdx !== null && dragIdx !== idx) moveQuestion(dragIdx, idx);
+   600→                        setDragIdx(null);
+   601→                      }}
+   602→                      onDragEnd={() => setDragIdx(null)}
+   603→                    >
+   604→                      <div className="flex items-center gap-2 pt-0.5">
+   605→                        <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+   606→                        <span className="text-xs font-mono text-muted-foreground w-5">{idx + 1}.</span>
+   607→                      </div>
+   608→                      <div className="flex-1 min-w-0">
+   609→                        <div className="flex items-center gap-2 mb-1">
+   610→                          <TypeIcon type={q.type} className="h-3.5 w-3.5 text-muted-foreground" />
+   611→                          <span className="text-sm font-medium truncate">{q.question}</span>
+   612→                        </div>
+   613→                        <div className="flex items-center gap-2 flex-wrap">
+   614→                          <DifficultyBadge difficulty={q.difficulty} />
+   615→                          <Badge variant="outline" className="text-xs">{q.points} pt{q.points !== 1 ? 's' : ''}</Badge>
+   616→                          {q.poolGroup && <Badge variant="outline" className="text-xs text-violet-600">Pool: {q.poolGroup}</Badge>}
+   617→                        </div>
+   618→                      </div>
+   619→                      <div className="flex items-center gap-1 shrink-0">
+   620→                        <TooltipProvider>
+   621→                          <Tooltip>
+   622→                            <TooltipTrigger asChild>
+   623→                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditQuestion(idx)}>
+   624→                                <Edit3 className="h-3.5 w-3.5" />
+   625→                              </Button>
+   626→                            </TooltipTrigger>
+   627→                            <TooltipContent>Edit</TooltipContent>
+   628→                          </Tooltip>
+   629→                        </TooltipProvider>
+   630→                        <TooltipProvider>
+   631→                          <Tooltip>
+   632→                            <TooltipTrigger asChild>
+   633→                              <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" onClick={() => deleteQuestion(idx)}>
+   634→                                <Trash2 className="h-3.5 w-3.5" />
+   635→                              </Button>
+   636→                            </TooltipTrigger>
+   637→                            <TooltipContent>Delete</TooltipContent>
+   638→                          </Tooltip>
+   639→                        </TooltipProvider>
+   640→                      </div>
+   641→                    </motion.div>
+   642→                  ))}
+   643→                </div>
+   644→              )}
+   645→            </CardContent>
+   646→          </Card>
+   647→        </div>
+   648→      </div>
+   649→
+   650→      {/* Question Form Dialog */}
+   651→      <Dialog open={showQuestionForm} onOpenChange={setShowQuestionForm}>
+   652→        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+   653→          <DialogHeader>
+   654→            <DialogTitle>{editingQuestionIdx !== null ? 'Edit Question' : 'Add Question'}</DialogTitle>
+   655→            <DialogDescription>
+   656→              {editingQuestionIdx !== null ? 'Modify the question details below.' : 'Fill in the question details below.'}
+   657→            </DialogDescription>
+   658→          </DialogHeader>
+   659→
+   660→          <div className="space-y-4 py-2">
+   661→            <div className="grid grid-cols-2 gap-3">
+   662→              <div className="space-y-2">
+   663→                <Label>Question Type</Label>
+   664→                <Select value={questionForm.type} onValueChange={v => {
+   665→                  const t = v as Question['type'];
+   666→                  setQuestionForm(prev => ({
+   667→                    ...prev,
+   668→                    type: t,
+   669→                    options: t === 'multiple_choice' ? (prev.options.length > 0 ? prev.options : ['', '', '', '']) :
+   670→                             t === 'true_false' ? ['True', 'False'] : [],
+   671→                    correctAnswer: t === 'true_false' ? '' : prev.correctAnswer,
+   672→                  }));
+   673→                }}>
+   674→                  <SelectTrigger><SelectValue /></SelectTrigger>
+   675→                  <SelectContent>
+   676→                    <SelectItem value="multiple_choice">Multiple Choice</SelectItem>
+   677→                    <SelectItem value="true_false">True / False</SelectItem>
+   678→                    <SelectItem value="short_answer">Short Answer</SelectItem>
+   679→                    <SelectItem value="long_answer">Long Answer</SelectItem>
+   680→                    <SelectItem value="coding">Coding</SelectItem>
+   681→                  </SelectContent>
+   682→                </Select>
+   683→              </div>
+   684→              <div className="space-y-2">
+   685→                <Label>Difficulty</Label>
+   686→                <Select value={questionForm.difficulty} onValueChange={v => setQuestionForm(prev => ({ ...prev, difficulty: v as Question['difficulty'] }))}>
+   687→                  <SelectTrigger><SelectValue /></SelectTrigger>
+   688→                  <SelectContent>
+   689→                    <SelectItem value="easy">Easy</SelectItem>
+   690→                    <SelectItem value="medium">Medium</SelectItem>
+   691→                    <SelectItem value="hard">Hard</SelectItem>
+   692→                  </SelectContent>
+   693→                </Select>
+   694→              </div>
+   695→            </div>
+   696→
+   697→            <div className="space-y-2">
+   698→              <Label>Question Text</Label>
+   699→              <Textarea
+   700→                value={questionForm.question}
+   701→                onChange={e => setQuestionForm(prev => ({ ...prev, question: e.target.value }))}
+   702→                placeholder="Enter your question..."
+   703→                rows={3}
+   704→              />
+   705→            </div>
+   706→
+   707→            {/* Options for multiple choice */}
+   708→            {questionForm.type === 'multiple_choice' && (
+   709→              <div className="space-y-3">
+   710→                <Label>Answer Options</Label>
+   711→                {questionForm.options.map((opt, i) => (
+   712→                  <div key={i} className="flex items-center gap-2">
+   713→                    <div
+   714→                      className={`h-5 w-5 rounded-full border-2 flex items-center justify-center cursor-pointer transition-colors ${questionForm.correctAnswer === String(i) ? 'border-emerald-500 bg-emerald-500' : 'border-muted-foreground/30'}`}
+   715→                      onClick={() => setQuestionForm(prev => ({ ...prev, correctAnswer: String(i) }))}
+   716→                    >
+   717→                      {questionForm.correctAnswer === String(i) && <div className="h-2 w-2 rounded-full bg-white" />}
+   718→                    </div>
+   719→                    <Input
+   720→                      value={opt}
+   721→                      onChange={e => {
+   722→                        const updated = [...questionForm.options];
+   723→                        updated[i] = e.target.value;
+   724→                        setQuestionForm(prev => ({ ...prev, options: updated }));
+   725→                      }}
+   726→                      placeholder={`Option ${i + 1}`}
+   727→                      className="flex-1"
+   728→                    />
+   729→                    {questionForm.options.length > 2 && (
+   730→                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => {
+   731→                        const updated = questionForm.options.filter((_, idx) => idx !== i);
+   732→                        setQuestionForm(prev => ({ ...prev, options: updated, correctAnswer: prev.correctAnswer === String(i) ? '' : prev.correctAnswer }));
+   733→                      }}>
+   734→                        <X className="h-4 w-4" />
+   735→                      </Button>
+   736→                    )}
+   737→                  </div>
+   738→                ))}
+   739→                <Button variant="outline" size="sm" onClick={() => setQuestionForm(prev => ({ ...prev, options: [...prev.options, ''] }))} className="gap-1">
+   740→                  <Plus className="h-3 w-3" /> Add Option
+   741→                </Button>
+   742→              </div>
+   743→            )}
+   744→
+   745→            {/* True/False selector */}
+   746→            {questionForm.type === 'true_false' && (
+   747→              <div className="space-y-2">
+   748→                <Label>Correct Answer</Label>
+   749→                <div className="flex gap-3">
+   750→                  {['True', 'False'].map(ans => (
+   751→                    <Button
+   752→                      key={ans}
+   753→                      variant={questionForm.correctAnswer === ans ? 'default' : 'outline'}
+   754→                      className={questionForm.correctAnswer === ans ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+   755→                      onClick={() => setQuestionForm(prev => ({ ...prev, correctAnswer: ans }))}
+   756→                    >
+   757→                      {ans === 'True' ? <CheckCircle2 className="h-4 w-4 mr-1" /> : <XCircle className="h-4 w-4 mr-1" />}
+   758→                      {ans}
+   759→                    </Button>
+   760→                  ))}
+   761→                </div>
+   762→              </div>
+   763→            )}
+   764→
+   765→            {/* Short answer / coding correct answer */}
+   766→            {(questionForm.type === 'short_answer' || questionForm.type === 'coding') && (
+   767→              <div className="space-y-2">
+   768→                <Label>Correct Answer</Label>
+   769→                <Input
+   770→                  value={questionForm.correctAnswer}
+   771→                  onChange={e => setQuestionForm(prev => ({ ...prev, correctAnswer: e.target.value }))}
+   772→                  placeholder="Expected answer"
+   773→                />
+   774→              </div>
+   775→            )}
+   776→
+   777→            <div className="space-y-2">
+   778→              <Label>Explanation (optional)</Label>
+   779→              <Textarea
+   780→                value={questionForm.explanation}
+   781→                onChange={e => setQuestionForm(prev => ({ ...prev, explanation: e.target.value }))}
+   782→                placeholder="Explain why this is the correct answer..."
+   783→                rows={2}
+   784→              />
+   785→            </div>
+   786→
+   787→            <div className="grid grid-cols-2 gap-3">
+   788→              <div className="space-y-2">
+   789→                <Label>Points</Label>
+   790→                <Input type="number" min={1} max={100} value={questionForm.points} onChange={e => setQuestionForm(prev => ({ ...prev, points: Number(e.target.value) || 1 }))} />
+   791→              </div>
+   792→              <div className="space-y-2">
+   793→                <Label>Pool Group (optional)</Label>
+   794→                <Input
+   795→                  value={questionForm.poolGroup}
+   796→                  onChange={e => setQuestionForm(prev => ({ ...prev, poolGroup: e.target.value }))}
+   797→                  placeholder="e.g. Module 1"
+   798→                />
+   799→              </div>
+   800→            </div>
+   801→          </div>
+   802→
+   803→          <DialogFooter>
+   804→            <Button variant="outline" onClick={() => setShowQuestionForm(false)}>Cancel</Button>
+   805→            <Button onClick={saveQuestion} className="bg-violet-600 hover:bg-violet-700 text-white" disabled={!questionForm.question.trim()}>
+   806→              {editingQuestionIdx !== null ? 'Save Changes' : 'Add Question'}
+   807→            </Button>
+   808→          </DialogFooter>
+   809→        </DialogContent>
+   810→      </Dialog>
+   811→    </div>
+   812→  );
+   813→}
+   814→
+   815→// ==========================
+   816→// QUIZ TAKING PREVIEW
+   817→// ==========================
+   818→function QuizPreview({
+   819→  assessment,
+   820→  onClose,
+   821→}: {
+   822→  assessment: Assessment;
+   823→  onClose: () => void;
+   824→}) {
+   825→  const questions = assessment.questions ?? [];
+   826→  const [currentIdx, setCurrentIdx] = useState(0);
+   827→  const [answers, setAnswers] = useState<Record<string, string>>({});
+   828→  const [submitted, setSubmitted] = useState(false);
+   829→  const [timeLeft, setTimeLeft] = useState(assessment.timeLimit ? assessment.timeLimit * 60 : null);
+   830→  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+   831→
+   832→  useEffect(() => {
+   833→    if (timeLeft !== null && timeLeft > 0 && !submitted) {
+   834→      timerRef.current = setInterval(() => {
+   835→        setTimeLeft(prev => {
+   836→          if (prev === null || prev <= 1) {
+   837→            if (timerRef.current) clearInterval(timerRef.current);
+   838→            setSubmitted(true);
+   839→            return 0;
+   840→          }
+   841→          return prev - 1;
+   842→        });
+   843→      }, 1000);
+   844→    }
+   845→    return () => {
+   846→      if (timerRef.current) clearInterval(timerRef.current);
+   847→    };
+   848→  }, [timeLeft, submitted]);
+   849→
+   850→  const formatTime = (s: number) => {
+   851→    const m = Math.floor(s / 60);
+   852→    const sec = s % 60;
+   853→    return `${m}:${sec.toString().padStart(2, '0')}`;
+   854→  };
+   855→
+   856→  const currentQ = questions[currentIdx];
+   857→  if (!currentQ) {
+   858→    return (
+   859→      <Dialog open={true} onOpenChange={onClose}>
+   860→        <DialogContent className="max-w-lg">
+   861→          <DialogHeader>
+   862→            <DialogTitle>No Questions</DialogTitle>
+   863→            <DialogDescription>This assessment has no questions to preview.</DialogDescription>
+   864→          </DialogHeader>
+   865→          <DialogFooter>
+   866→            <Button onClick={onClose}>Close</Button>
+   867→          </DialogFooter>
+   868→        </DialogContent>
+   869→      </Dialog>
+   870→    );
+   871→  }
+   872→
+   873→  const handleSubmit = () => {
+   874→    if (timerRef.current) clearInterval(timerRef.current);
+   875→    setSubmitted(true);
+   876→  };
+   877→
+   878→  let score = 0;
+   879→  let maxScore = 0;
+   880→  if (submitted) {
+   881→    questions.forEach(q => {
+   882→      maxScore += q.points;
+   883→      if (answers[q.id] === q.correctAnswer) score += q.points;
+   884→    });
+   885→  }
+   886→
+   887→  return (
+   888→    <Dialog open={true} onOpenChange={onClose}>
+   889→      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+   890→        <DialogHeader>
+   891→          <div className="flex items-center justify-between">
+   892→            <div>
+   893→              <DialogTitle className="text-lg">{assessment.title}</DialogTitle>
+   894→              <DialogDescription>{assessment.description}</DialogDescription>
+   895→            </div>
+   896→            {timeLeft !== null && (
+   897→              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono font-bold ${timeLeft < 60 ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+   898→                <Clock className="h-4 w-4" /> {formatTime(timeLeft)}
+   899→              </div>
+   900→            )}
+   901→          </div>
+   902→        </DialogHeader>
+   903→
+   904→        {/* Progress bar */}
+   905→        <div className="space-y-1">
+   906→          <div className="flex items-center justify-between text-xs text-muted-foreground">
+   907→            <span>Question {currentIdx + 1} of {questions.length}</span>
+   908→            <span>{Math.round(((currentIdx + 1) / questions.length) * 100)}% complete</span>
+   909→          </div>
+   910→          <Progress value={((currentIdx + 1) / questions.length) * 100} className="h-2" />
+   911→        </div>
+   912→
+   913→        {/* Question navigation dots */}
+   914→        <div className="flex flex-wrap gap-1.5">
+   915→          {questions.map((q, i) => (
+   916→            <button
+   917→              key={q.id}
+   918→              onClick={() => setCurrentIdx(i)}
+   919→              className={`h-7 w-7 rounded-full text-xs font-medium flex items-center justify-center transition-colors ${
+   920→                i === currentIdx
+   921→                  ? 'bg-violet-600 text-white'
+   922→                  : answers[q.id]
+   923→                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+   924→                    : 'bg-muted text-muted-foreground'
+   925→              }`}
+   926→            >
+   927→              {i + 1}
+   928→            </button>
+   929→          ))}
+   930→        </div>
+   931→
+   932→        <Separator />
+   933→
+   934→        {/* Question content */}
+   935→        {!submitted ? (
+   936→          <div className="space-y-4">
+   937→            <div className="flex items-center gap-2">
+   938→              <TypeIcon type={currentQ.type} className="h-4 w-4 text-violet-600" />
+   939→              <DifficultyBadge difficulty={currentQ.difficulty} />
+   940→              <Badge variant="outline" className="text-xs">{currentQ.points} pt{currentQ.points !== 1 ? 's' : ''}</Badge>
+   941→            </div>
+   942→            <h3 className="text-base font-semibold">{currentQ.question}</h3>
+   943→
+   944→            {/* Multiple choice */}
+   945→            {currentQ.type === 'multiple_choice' && currentQ.options && (
+   946→              <div className="space-y-2">
+   947→                {currentQ.options.map((opt, i) => (
+   948→                  <button
+   949→                    key={i}
+   950→                    onClick={() => setAnswers(prev => ({ ...prev, [currentQ.id]: String(i) }))}
+   951→                    className={`w-full text-left p-3 rounded-lg border transition-colors flex items-center gap-3 ${
+   952→                      answers[currentQ.id] === String(i)
+   953→                        ? 'border-violet-400 bg-violet-50 dark:bg-violet-950/20'
+   954→                        : 'border-border hover:bg-muted/50'
+   955→                    }`}
+   956→                  >
+   957→                    <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+   958→                      answers[currentQ.id] === String(i) ? 'border-violet-500' : 'border-muted-foreground/30'
+   959→                    }`}>
+   960→                      {answers[currentQ.id] === String(i) && <div className="h-2 w-2 rounded-full bg-violet-500" />}
+   961→                    </div>
+   962→                    <span className="text-sm">{opt}</span>
+   963→                  </button>
+   964→                ))}
+   965→              </div>
+   966→            )}
+   967→
+   968→            {/* True/False */}
+   969→            {currentQ.type === 'true_false' && (
+   970→              <div className="flex gap-3">
+   971→                {['True', 'False'].map(ans => (
+   972→                  <button
+   973→                    key={ans}
+   974→                    onClick={() => setAnswers(prev => ({ ...prev, [currentQ.id]: ans }))}
+   975→                    className={`flex-1 p-4 rounded-lg border transition-colors flex items-center justify-center gap-2 font-medium ${
+   976→                      answers[currentQ.id] === ans
+   977→                        ? ans === 'True'
+   978→                          ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400'
+   979→                          : 'border-red-400 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400'
+   980→                        : 'border-border hover:bg-muted/50'
+   981→                    }`}
+   982→                  >
+   983→                    {ans === 'True' ? <CheckCircle2 className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
+   984→                    {ans}
+   985→                  </button>
+   986→                ))}
+   987→              </div>
+   988→            )}
+   989→
+   990→            {/* Short answer / coding */}
+   991→            {(currentQ.type === 'short_answer' || currentQ.type === 'coding') && (
+   992→              <div className="space-y-2">
+   993→                <Input
+   994→                  value={answers[currentQ.id] ?? ''}
+   995→                  onChange={e => setAnswers(prev => ({ ...prev, [currentQ.id]: e.target.value }))}
+   996→                  placeholder={currentQ.type === 'coding' ? 'Enter your code...' : 'Type your answer...'}
+   997→                />
+   998→              </div>
+   999→            )}
+  1000→
+  1001→            {/* Long answer */}
+  1002→            {currentQ.type === 'long_answer' && (
+  1003→              <Textarea
+  1004→                value={answers[currentQ.id] ?? ''}
+  1005→                onChange={e => setAnswers(prev => ({ ...prev, [currentQ.id]: e.target.value }))}
+  1006→                placeholder="Write your detailed answer..."
+  1007→                rows={5}
+  1008→              />
+  1009→            )}
+  1010→          </div>
+  1011→        ) : (
+  1012→          /* Submitted results */
+  1013→          <div className="space-y-4">
+  1014→            <div className={`p-6 rounded-xl text-center ${score / maxScore * 100 >= assessment.passingScore ? 'bg-emerald-50 dark:bg-emerald-950/20' : 'bg-red-50 dark:bg-red-950/20'}`}>
+  1015→              <div className="text-4xl font-bold mb-1">
+  1016→                {score}/{maxScore}
+  1017→              </div>
+  1018→              <div className="text-sm text-muted-foreground mb-2">
+  1019→                {Math.round(score / maxScore * 100)}% — {score / maxScore * 100 >= assessment.passingScore ? 'Passed! 🎉' : 'Not Passed'}
+  1020→              </div>
+  1021→              <div className="text-xs text-muted-foreground">Passing score: {assessment.passingScore}%</div>
+  1022→            </div>
+  1023→
+  1024→            {questions.map((q, i) => {
+  1025→              const isCorrect = answers[q.id] === q.correctAnswer;
+  1026→              return (
+  1027→                <div key={q.id} className={`p-3 rounded-lg border ${isCorrect ? 'border-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/10' : 'border-red-300 bg-red-50/50 dark:bg-red-950/10'}`}>
+  1028→                  <div className="flex items-start gap-2">
+  1029→                    {isCorrect ? <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" /> : <XCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />}
+  1030→                    <div className="flex-1">
+  1031→                      <p className="text-sm font-medium">{q.question}</p>
+  1032→                      <p className="text-xs text-muted-foreground mt-1">
+  1033→                        Your answer: {q.type === 'multiple_choice' ? (q.options?.[Number(answers[q.id])] ?? answers[q.id]) : answers[q.id] || 'No answer'}
+  1034→                      </p>
+  1035→                      {!isCorrect && q.correctAnswer && (
+  1036→                        <p className="text-xs text-emerald-600 mt-0.5">
+  1037→                          Correct: {q.type === 'multiple_choice' ? (q.options?.[Number(q.correctAnswer)] ?? q.correctAnswer) : q.correctAnswer}
+  1038→                        </p>
+  1039→                      )}
+  1040→                      {q.explanation && <p className="text-xs text-muted-foreground mt-1 italic">💡 {q.explanation}</p>}
+  1041→                    </div>
+  1042→                  </div>
+  1043→                </div>
+  1044→              );
+  1045→            })}
+  1046→          </div>
+  1047→        )}
+  1048→
+  1049→        <DialogFooter className="flex items-center justify-between">
+  1050→          {!submitted ? (
+  1051→            <>
+  1052→              <Button
+  1053→                variant="outline"
+  1054→                onClick={() => setCurrentIdx(Math.max(0, currentIdx - 1))}
+  1055→                disabled={currentIdx === 0}
+  1056→                className="gap-1"
+  1057→              >
+  1058→                <ChevronLeft className="h-4 w-4" /> Previous
+  1059→              </Button>
+  1060→              {currentIdx < questions.length - 1 ? (
+  1061→                <Button onClick={() => setCurrentIdx(currentIdx + 1)} className="gap-1 bg-violet-600 hover:bg-violet-700 text-white">
+  1062→                  Next <ChevronRight className="h-4 w-4" />
+  1063→                </Button>
+  1064→              ) : (
+  1065→                <Button onClick={handleSubmit} className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white">
+  1066→                  Submit Quiz
+  1067→                </Button>
+  1068→              )}
+  1069→            </>
+  1070→          ) : (
+  1071→            <Button onClick={onClose}>Close Preview</Button>
+  1072→          )}
+  1073→        </DialogFooter>
+  1074→      </DialogContent>
+  1075→    </Dialog>
+  1076→  );
+  1077→}
+  1078→
+  1079→// ==========================
+  1080→// MAIN COMPONENT
+  1081→// ==========================
+  1082→export function AdminAssessments() {
+  1083→  const [assessments, setAssessments] = useState<Assessment[]>(demoAssessments);
+  1084→  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  1085→  const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
+  1086→  const [previewAssessment, setPreviewAssessment] = useState<Assessment | null>(null);
+  1087→
+  1088→  const handleEdit = (a: Assessment) => {
+  1089→    setSelectedAssessment({ ...a, questions: a.questions?.map(q => ({ ...q })) });
+  1090→    setViewMode('builder');
+  1091→  };
+  1092→
+  1093→  const handleCreateNew = () => {
+  1094→    const newAssessment: Assessment = {
+  1095→      id: `assess-${Date.now()}`,
+  1096→      courseId: demoCourses[0].id,
+  1097→      tenantId: 'demo-tenant-1',
+  1098→      title: '',
+  1099→      description: '',
+  1100→      type: 'quiz',
+  1101→      passingScore: 70,
+  1102→      maxAttempts: 3,
+  1103→      timeLimit: 30,
+  1104→      isPublished: false,
+  1105→      shuffleQuestions: false,
+  1106→      questions: [],
+  1107→    };
+  1108→    setSelectedAssessment(newAssessment);
+  1109→    setViewMode('builder');
+  1110→  };
+  1111→
+  1112→  const handleSave = (a: Assessment) => {
+  1113→    const idx = assessments.findIndex(x => x.id === a.id);
+  1114→    if (idx >= 0) {
+  1115→      const updated = [...assessments];
+  1116→      updated[idx] = a;
+  1117→      setAssessments(updated);
+  1118→    } else {
+  1119→      setAssessments(prev => [...prev, a]);
+  1120→    }
+  1121→    setViewMode('list');
+  1122→    setSelectedAssessment(null);
+  1123→  };
+  1124→
+  1125→  const handleBack = () => {
+  1126→    setViewMode('list');
+  1127→    setSelectedAssessment(null);
+  1128→  };
+  1129→
+  1130→  return (
+  1131→    <div className="p-6">
+  1132→      <AnimatePresence mode="wait">
+  1133→        {viewMode === 'list' && (
+  1134→          <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+  1135→            <AssessmentList
+  1136→              assessments={assessments}
+  1137→              onEdit={handleEdit}
+  1138→              onPreview={a => setPreviewAssessment(a)}
+  1139→              onCreateNew={handleCreateNew}
+  1140→            />
+  1141→          </motion.div>
+  1142→        )}
+  1143→        {viewMode === 'builder' && selectedAssessment && (
+  1144→          <motion.div key="builder" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+  1145→            <AssessmentBuilder
+  1146→              assessment={selectedAssessment}
+  1147→              onBack={handleBack}
+  1148→              onSave={handleSave}
+  1149→            />
+  1150→          </motion.div>
+  1151→        )}
+  1152→      </AnimatePresence>
+  1153→
+  1154→      {previewAssessment && (
+  1155→        <QuizPreview
+  1156→          assessment={previewAssessment}
+  1157→          onClose={() => setPreviewAssessment(null)}
+  1158→        />
+  1159→      )}
+  1160→    </div>
+  1161→  );
+  1162→}
+  1163→

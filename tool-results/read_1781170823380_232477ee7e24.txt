@@ -1,0 +1,694 @@
+     1→'use client';
+     2→
+     3→import { useState } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { useAppStore } from '@/store/app-store';
+     6→import { demoCourses, demoEnrollments } from '@/lib/mock-data';
+     7→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+     8→import { Button } from '@/components/ui/button';
+     9→import { Badge } from '@/components/ui/badge';
+    10→import { Progress } from '@/components/ui/progress';
+    11→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    12→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    13→import { Separator } from '@/components/ui/separator';
+    14→import {
+    15→  Play,
+    16→  FileText,
+    17→  Headphones,
+    18→  Video,
+    19→  Monitor,
+    20→  Clock,
+    21→  Star,
+    22→  Users,
+    23→  ChevronDown,
+    24→  ChevronRight,
+    25→  CheckCircle2,
+    26→  Circle,
+    27→  Eye,
+    28→  MessageSquare,
+    29→  Download,
+    30→  ExternalLink,
+    31→  GitBranch,
+    32→  ThumbsUp,
+    33→  Send,
+    34→  BookOpen,
+    35→  Award,
+    36→} from 'lucide-react';
+    37→import { cn } from '@/lib/utils';
+    38→import type { Lesson, Module } from '@/types';
+    39→
+    40→// ─── Content type icon mapping ─────────────────────────────
+    41→function ContentTypeIcon({ type, className }: { type: Lesson['contentType']; className?: string }) {
+    42→  switch (type) {
+    43→    case 'video':
+    44→      return <Video className={className} />;
+    45→    case 'text':
+    46→      return <FileText className={className} />;
+    47→    case 'audio':
+    48→      return <Headphones className={className} />;
+    49→    case 'document':
+    50→      return <FileText className={className} />;
+    51→    case 'live_session':
+    52→      return <Monitor className={className} />;
+    53→    default:
+    54→      return <FileText className={className} />;
+    55→  }
+    56→}
+    57→
+    58→// ─── Format duration ───────────────────────────────────────
+    59→function formatDuration(seconds?: number): string {
+    60→  if (!seconds) return '';
+    61→  const mins = Math.floor(seconds / 60);
+    62→  if (mins < 60) return `${mins} min`;
+    63→  const hours = Math.floor(mins / 60);
+    64→  const remainMins = mins % 60;
+    65→  return `${hours}h ${remainMins}m`;
+    66→}
+    67→
+    68→// ─── Level color mapping ───────────────────────────────────
+    69→function getLevelColor(level: string) {
+    70→  const colors: Record<string, string> = {
+    71→    beginner: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    72→    intermediate: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    73→    advanced: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+    74→    expert: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    75→  };
+    76→  return colors[level] || 'bg-slate-100 text-slate-700';
+    77→}
+    78→
+    79→function getLevelAccent(level: string) {
+    80→  const accents: Record<string, string> = {
+    81→    beginner: 'from-emerald-600 to-emerald-800',
+    82→    intermediate: 'from-amber-600 to-amber-800',
+    83→    advanced: 'from-orange-600 to-orange-800',
+    84→    expert: 'from-red-600 to-red-800',
+    85→  };
+    86→  return accents[level] || 'from-slate-600 to-slate-800';
+    87→}
+    88→
+    89→// ─── Mock lesson progress ──────────────────────────────────
+    90→const lessonProgressMap: Record<string, 'completed' | 'in_progress' | 'not_started'> = {
+    91→  'les-1-1-1': 'completed',
+    92→  'les-1-1-2': 'completed',
+    93→  'les-1-1-3': 'in_progress',
+    94→  'les-1-2-1': 'not_started',
+    95→  'les-1-2-2': 'not_started',
+    96→};
+    97→
+    98→// ─── Mock discussion threads ───────────────────────────────
+    99→const discussionThreads = [
+   100→  {
+   101→    id: 'thread-1',
+   102→    author: 'Mike Chen',
+   103→    avatar: 'MC',
+   104→    title: 'How do Server Components interact with client state?',
+   105→    content: 'I\'m confused about how Server Components can trigger client-side state updates. Can someone explain the data flow?',
+   106→    likes: 12,
+   107→    replies: 5,
+   108→    time: '2 hours ago',
+   109→  },
+   110→  {
+   111→    id: 'thread-2',
+   112→    author: 'Emma Rodriguez',
+   113→    avatar: 'ER',
+   114→    title: 'Best pattern for loading states in App Router?',
+   115→    content: 'What\'s the recommended way to handle loading.tsx vs Suspense boundaries for complex pages?',
+   116→    likes: 8,
+   117→    replies: 3,
+   118→    time: '5 hours ago',
+   119→  },
+   120→  {
+   121→    id: 'thread-3',
+   122→    author: 'David Park',
+   123→    avatar: 'DP',
+   124→    title: 'TypeScript generic patterns for API routes',
+   125→    content: 'I\'ve been experimenting with typed API routes. Here\'s my approach to type-safe server actions...',
+   126→    likes: 15,
+   127→    replies: 7,
+   128→    time: '1 day ago',
+   129→  },
+   130→];
+   131→
+   132→// ─── Mock resources ────────────────────────────────────────
+   133→const courseResources = [
+   134→  { id: 'res-1', title: 'React 19 Cheat Sheet', type: 'pdf', size: '2.4 MB' },
+   135→  { id: 'res-2', title: 'Next.js App Router Diagram', type: 'pdf', size: '1.1 MB' },
+   136→  { id: 'res-3', title: 'Course Code Repository', type: 'repo', url: 'github.com/nextgen-lms/react-masterclass' },
+   137→  { id: 'res-4', title: 'TypeScript Best Practices Guide', type: 'pdf', size: '3.8 MB' },
+   138→  { id: 'res-5', title: 'Official React Documentation', type: 'link', url: 'react.dev' },
+   139→  { id: 'res-6', title: 'Next.js Documentation', type: 'link', url: 'nextjs.org/docs' },
+   140→];
+   141→
+   142→// ─── Mock reviews ──────────────────────────────────────────
+   143→const courseReviews = [
+   144→  { id: 'rev-1', author: 'Sarah K.', avatar: 'SK', rating: 5, date: '2 weeks ago', content: 'Absolutely incredible course! The section on Server Components completely changed how I think about React architecture. Highly recommended for anyone serious about modern web development.' },
+   145→  { id: 'rev-2', author: 'James L.', avatar: 'JL', rating: 5, date: '1 month ago', content: 'Best React course I\'ve ever taken. The instructor explains complex concepts in a way that\'s easy to follow. The hands-on projects really solidify the learning.' },
+   146→  { id: 'rev-3', author: 'Priya S.', avatar: 'PS', rating: 4, date: '1 month ago', content: 'Great content overall. The TypeScript patterns section was excellent. Would have liked more content on testing patterns, but still very much worth the investment.' },
+   147→  { id: 'rev-4', author: 'Alex M.', avatar: 'AM', rating: 5, date: '2 months ago', content: 'This course is a game-changer. I went from struggling with React concepts to building production apps confidently. The community support is amazing too.' },
+   148→  { id: 'rev-5', author: 'Tom W.', avatar: 'TW', rating: 4, date: '3 months ago', content: 'Very comprehensive course. The App Router deep-dive was particularly helpful. Some sections could be a bit more beginner-friendly, but the depth is appreciated.' },
+   149→];
+   150→
+   151→// ─── Rating distribution ───────────────────────────────────
+   152→const ratingDistribution = [
+   153→  { stars: 5, count: 186 },
+   154→  { stars: 4, count: 89 },
+   155→  { stars: 3, count: 24 },
+   156→  { stars: 2, count: 9 },
+   157→  { stars: 1, count: 4 },
+   158→];
+   159→const totalReviews = ratingDistribution.reduce((s, r) => s + r.count, 0);
+   160→
+   161→// ─── Animation variants ────────────────────────────────────
+   162→const containerVariants = {
+   163→  hidden: { opacity: 0 },
+   164→  visible: { opacity: 1, transition: { staggerChildren: 0.05 } },
+   165→};
+   166→
+   167→const itemVariants = {
+   168→  hidden: { opacity: 0, y: 12 },
+   169→  visible: { opacity: 1, y: 0, transition: { duration: 0.35 } },
+   170→};
+   171→
+   172→// ─── Module Section Component ──────────────────────────────
+   173→function ModuleSection({ module: mod, moduleIndex }: { module: Module; moduleIndex: number }) {
+   174→  const [isOpen, setIsOpen] = useState(moduleIndex === 0);
+   175→  const lessons = mod.lessons || [];
+   176→  const completedLessons = lessons.filter(
+   177→    (l) => lessonProgressMap[l.id] === 'completed'
+   178→  ).length;
+   179→  const totalDuration = lessons.reduce((sum, l) => sum + (l.videoDuration || 0), 0);
+   180→
+   181→  return (
+   182→    <div className="border rounded-lg overflow-hidden">
+   183→      {/* Module Header */}
+   184→      <button
+   185→        onClick={() => setIsOpen(!isOpen)}
+   186→        className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors text-left"
+   187→      >
+   188→        <div className="flex items-center gap-3">
+   189→          <div className="text-muted-foreground">
+   190→            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+   191→          </div>
+   192→          <div>
+   193→            <div className="flex items-center gap-2">
+   194→              <span className="text-xs font-medium text-muted-foreground">Module {moduleIndex + 1}</span>
+   195→              {mod.isPublished ? (
+   196→                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Published</Badge>
+   197→              ) : (
+   198→                <Badge variant="outline" className="text-[10px] px-1.5 py-0">Draft</Badge>
+   199→              )}
+   200→            </div>
+   201→            <h4 className="font-semibold text-foreground text-sm mt-0.5">{mod.title}</h4>
+   202→          </div>
+   203→        </div>
+   204→        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+   205→          <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {lessons.length} lessons</span>
+   206→          {totalDuration > 0 && <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatDuration(totalDuration)}</span>}
+   207→          {completedLessons > 0 && (
+   208→            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
+   209→              {completedLessons}/{lessons.length} done
+   210→            </Badge>
+   211→          )}
+   212→        </div>
+   213→      </button>
+   214→
+   215→      {/* Module Lessons */}
+   216→      <AnimatePresence>
+   217→        {isOpen && (
+   218→          <motion.div
+   219→            initial={{ height: 0, opacity: 0 }}
+   220→            animate={{ height: 'auto', opacity: 1 }}
+   221→            exit={{ height: 0, opacity: 0 }}
+   222→            transition={{ duration: 0.2 }}
+   223→            className="overflow-hidden"
+   224→          >
+   225→            <div className="border-t bg-muted/20">
+   226→              {lessons.map((lesson, lessonIdx) => {
+   227→                const status = lessonProgressMap[lesson.id] || 'not_started';
+   228→                return (
+   229→                  <div
+   230→                    key={lesson.id}
+   231→                    className={cn(
+   232→                      'flex items-center justify-between p-3 pl-12 hover:bg-muted/40 transition-colors',
+   233→                      lessonIdx < lessons.length - 1 && 'border-b border-border/50'
+   234→                    )}
+   235→                  >
+   236→                    <div className="flex items-center gap-3">
+   237→                      {/* Status Icon */}
+   238→                      {status === 'completed' ? (
+   239→                        <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+   240→                      ) : status === 'in_progress' ? (
+   241→                        <div className="h-5 w-5 rounded-full border-2 border-amber-500 border-t-transparent animate-spin shrink-0" />
+   242→                      ) : (
+   243→                        <Circle className="h-5 w-5 text-muted-foreground/40 shrink-0" />
+   244→                      )}
+   245→
+   246→                      {/* Content Type Icon */}
+   247→                      <ContentTypeIcon type={lesson.contentType} className="h-4 w-4 text-muted-foreground shrink-0" />
+   248→
+   249→                      {/* Lesson Info */}
+   250→                      <div>
+   251→                        <p className={cn(
+   252→                          'text-sm font-medium',
+   253→                          status === 'completed' ? 'text-muted-foreground line-through' : 'text-foreground'
+   254→                        )}>
+   255→                          {lesson.title}
+   256→                        </p>
+   257→                        <div className="flex items-center gap-2 mt-0.5">
+   258→                          {lesson.videoDuration && (
+   259→                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+   260→                              <Clock className="h-3 w-3" /> {formatDuration(lesson.videoDuration)}
+   261→                            </span>
+   262→                          )}
+   263→                          {lesson.isPreview && (
+   264→                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-0.5">
+   265→                              <Eye className="h-2.5 w-2.5" /> Preview
+   266→                            </Badge>
+   267→                          )}
+   268→                        </div>
+   269→                      </div>
+   270→                    </div>
+   271→
+   272→                    {/* Action Button */}
+   273→                    <div>
+   274→                      {status === 'completed' ? (
+   275→                        <Badge variant="outline" className="text-emerald-600 border-emerald-200 dark:border-emerald-800 text-xs">
+   276→                          Completed
+   277→                        </Badge>
+   278→                      ) : status === 'in_progress' ? (
+   279→                        <Button size="sm" className="h-7 text-xs gap-1 bg-amber-600 hover:bg-amber-700">
+   280→                          <Play className="h-3 w-3" /> Continue
+   281→                        </Button>
+   282→                      ) : lesson.isPreview ? (
+   283→                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+   284→                          <Play className="h-3 w-3" /> Preview
+   285→                        </Button>
+   286→                      ) : (
+   287→                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+   288→                          <Play className="h-3 w-3" /> Start
+   289→                        </Button>
+   290→                      )}
+   291→                    </div>
+   292→                  </div>
+   293→                );
+   294→              })}
+   295→            </div>
+   296→          </motion.div>
+   297→        )}
+   298→      </AnimatePresence>
+   299→    </div>
+   300→  );
+   301→}
+   302→
+   303→// ─── Main Component ────────────────────────────────────────
+   304→export function LearnerCourse() {
+   305→  const { currentUser } = useAppStore();
+   306→  const course = demoCourses[0]; // React & Next.js Masterclass
+   307→  const enrollment = demoEnrollments[0]; // Active enrollment for this course
+   308→  const modules = course.modules || [];
+   309→  const [activeTab, setActiveTab] = useState('curriculum');
+   310→
+   311→  // Calculate total lessons and completed
+   312→  const allLessons = modules.flatMap(m => m.lessons || []);
+   313→  const completedCount = allLessons.filter(l => lessonProgressMap[l.id] === 'completed').length;
+   314→  const totalLessons = allLessons.length;
+   315→
+   316→  return (
+   317→    <motion.div
+   318→      className="p-4 md:p-6 space-y-6"
+   319→      variants={containerVariants}
+   320→      initial="hidden"
+   321→      animate="visible"
+   322→    >
+   323→      {/* ─── Course Header ────────────────────────────────── */}
+   324→      <motion.div variants={itemVariants}>
+   325→        <Card className="overflow-hidden">
+   326→          {/* Gradient Banner */}
+   327→          <div className={cn(
+   328→            'h-32 md:h-40 bg-gradient-to-r flex items-end p-6',
+   329→            getLevelAccent(course.level)
+   330→          )}>
+   331→            <div className="flex-1">
+   332→              <div className="flex items-center gap-2 mb-2">
+   333→                <Badge className="bg-white/20 text-white border-0 backdrop-blur-sm text-xs">
+   334→                  {course.category}
+   335→                </Badge>
+   336→                <Badge className="bg-white/20 text-white border-0 backdrop-blur-sm text-xs capitalize">
+   337→                  {course.level}
+   338→                </Badge>
+   339→              </div>
+   340→              <h1 className="text-2xl md:text-3xl font-bold text-white leading-tight">{course.title}</h1>
+   341→            </div>
+   342→          </div>
+   343→
+   344→          <CardContent className="p-6">
+   345→            {/* Course Meta */}
+   346→            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-4">
+   347→              <div className="flex items-center gap-1.5">
+   348→                <Avatar className="h-6 w-6">
+   349→                  <AvatarFallback className="text-[10px] bg-slate-200 dark:bg-slate-700">SM</AvatarFallback>
+   350→                </Avatar>
+   351→                <span>Sarah Mitchell</span>
+   352→              </div>
+   353→              <div className="flex items-center gap-1">
+   354→                <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+   355→                <span className="font-medium text-foreground">{course.avgRating}</span>
+   356→                <span>({course.totalRatings} ratings)</span>
+   357→              </div>
+   358→              <div className="flex items-center gap-1">
+   359→                <Users className="h-4 w-4" />
+   360→                <span>{course.enrollmentCount.toLocaleString()} enrolled</span>
+   361→              </div>
+   362→              {course.durationHours && (
+   363→                <div className="flex items-center gap-1">
+   364→                  <Clock className="h-4 w-4" />
+   365→                  <span>{course.durationHours} hours</span>
+   366→                </div>
+   367→              )}
+   368→            </div>
+   369→
+   370→            {/* Description */}
+   371→            <p className="text-muted-foreground text-sm mb-5 max-w-3xl">{course.description}</p>
+   372→
+   373→            {/* Progress */}
+   374→            <div className="space-y-2 mb-4">
+   375→              <div className="flex items-center justify-between text-sm">
+   376→                <span className="font-medium text-foreground">Your Progress</span>
+   377→                <span className="font-semibold text-emerald-600">{enrollment.progress}%</span>
+   378→              </div>
+   379→              <Progress value={enrollment.progress} className="h-2.5" />
+   380→              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+   381→                <span>{completedCount} of {totalLessons} lessons completed</span>
+   382→                {enrollment.lastAccessedAt && (
+   383→                  <span>Last accessed {new Date(enrollment.lastAccessedAt).toLocaleDateString()}</span>
+   384→                )}
+   385→              </div>
+   386→            </div>
+   387→
+   388→            {/* Action Buttons */}
+   389→            <div className="flex items-center gap-3">
+   390→              <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white">
+   391→                <Play className="h-4 w-4" />
+   392→                Continue Learning
+   393→              </Button>
+   394→              <Button variant="outline" className="gap-2">
+   395→                <Award className="h-4 w-4" />
+   396→                View Certificate
+   397→              </Button>
+   398→            </div>
+   399→          </CardContent>
+   400→        </Card>
+   401→      </motion.div>
+   402→
+   403→      {/* ─── Course Content Tabs ──────────────────────────── */}
+   404→      <motion.div variants={itemVariants}>
+   405→        <Tabs value={activeTab} onValueChange={setActiveTab}>
+   406→          <TabsList className="w-full justify-start overflow-x-auto">
+   407→            <TabsTrigger value="curriculum" className="gap-1.5">
+   408→              <BookOpen className="h-4 w-4" />
+   409→              Curriculum
+   410→            </TabsTrigger>
+   411→            <TabsTrigger value="community" className="gap-1.5">
+   412→              <MessageSquare className="h-4 w-4" />
+   413→              Community
+   414→            </TabsTrigger>
+   415→            <TabsTrigger value="resources" className="gap-1.5">
+   416→              <Download className="h-4 w-4" />
+   417→              Resources
+   418→            </TabsTrigger>
+   419→            <TabsTrigger value="reviews" className="gap-1.5">
+   420→              <Star className="h-4 w-4" />
+   421→              Reviews
+   422→            </TabsTrigger>
+   423→          </TabsList>
+   424→
+   425→          {/* ─── Tab 1: Curriculum ─────────────────────────── */}
+   426→          <TabsContent value="curriculum" className="mt-6">
+   427→            <div className="space-y-3">
+   428→              <div className="flex items-center justify-between mb-4">
+   429→                <div>
+   430→                  <h3 className="font-semibold text-foreground">Course Curriculum</h3>
+   431→                  <p className="text-sm text-muted-foreground">
+   432→                    {modules.length} modules · {totalLessons} lessons · {formatDuration(allLessons.reduce((s, l) => s + (l.videoDuration || 0), 0))} total
+   433→                  </p>
+   434→                </div>
+   435→                <Button variant="outline" size="sm" className="gap-1.5">
+   436→                  Expand All
+   437→                </Button>
+   438→              </div>
+   439→
+   440→              {modules.length > 0 ? (
+   441→                modules.map((mod, idx) => (
+   442→                  <ModuleSection key={mod.id} module={mod} moduleIndex={idx} />
+   443→                ))
+   444→              ) : (
+   445→                <Card>
+   446→                  <CardContent className="p-8 text-center">
+   447→                    <BookOpen className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+   448→                    <p className="text-muted-foreground">No curriculum content available yet.</p>
+   449→                  </CardContent>
+   450→                </Card>
+   451→              )}
+   452→            </div>
+   453→          </TabsContent>
+   454→
+   455→          {/* ─── Tab 2: Community ──────────────────────────── */}
+   456→          <TabsContent value="community" className="mt-6">
+   457→            <div className="space-y-4">
+   458→              <div className="flex items-center justify-between">
+   459→                <div>
+   460→                  <h3 className="font-semibold text-foreground">Course Discussions</h3>
+   461→                  <p className="text-sm text-muted-foreground">Ask questions and share insights with fellow learners</p>
+   462→                </div>
+   463→                <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+   464→                  <Send className="h-3.5 w-3.5" />
+   465→                  Ask a Question
+   466→                </Button>
+   467→              </div>
+   468→
+   469→              <div className="space-y-3">
+   470→                {discussionThreads.map((thread) => (
+   471→                  <Card key={thread.id} className="hover:shadow-sm transition-shadow cursor-pointer">
+   472→                    <CardContent className="p-4">
+   473→                      <div className="flex items-start gap-3">
+   474→                        <Avatar className="h-9 w-9 shrink-0">
+   475→                          <AvatarFallback className="text-xs bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
+   476→                            {thread.avatar}
+   477→                          </AvatarFallback>
+   478→                        </Avatar>
+   479→                        <div className="flex-1 min-w-0">
+   480→                          <div className="flex items-center gap-2 mb-1">
+   481→                            <span className="text-sm font-medium text-foreground">{thread.author}</span>
+   482→                            <span className="text-xs text-muted-foreground">· {thread.time}</span>
+   483→                          </div>
+   484→                          <h4 className="text-sm font-semibold text-foreground mb-1">{thread.title}</h4>
+   485→                          <p className="text-xs text-muted-foreground line-clamp-2">{thread.content}</p>
+   486→                          <div className="flex items-center gap-4 mt-2">
+   487→                            <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+   488→                              <ThumbsUp className="h-3 w-3" /> {thread.likes}
+   489→                            </button>
+   490→                            <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+   491→                              <MessageSquare className="h-3 w-3" /> {thread.replies} replies
+   492→                            </button>
+   493→                          </div>
+   494→                        </div>
+   495→                      </div>
+   496→                    </CardContent>
+   497→                  </Card>
+   498→                ))}
+   499→              </div>
+   500→
+   501→              <Button variant="outline" className="w-full">View All Discussions</Button>
+   502→            </div>
+   503→          </TabsContent>
+   504→
+   505→          {/* ─── Tab 3: Resources ─────────────────────────── */}
+   506→          <TabsContent value="resources" className="mt-6">
+   507→            <div className="space-y-4">
+   508→              <div>
+   509→                <h3 className="font-semibold text-foreground">Course Resources</h3>
+   510→                <p className="text-sm text-muted-foreground">Downloadable files, links, and code repositories</p>
+   511→              </div>
+   512→
+   513→              {/* Downloads */}
+   514→              <Card>
+   515→                <CardHeader className="pb-3">
+   516→                  <CardTitle className="text-sm flex items-center gap-2">
+   517→                    <Download className="h-4 w-4 text-emerald-600" />
+   518→                    Downloadable Files
+   519→                  </CardTitle>
+   520→                </CardHeader>
+   521→                <CardContent className="space-y-2">
+   522→                  {courseResources.filter(r => r.type === 'pdf').map((res) => (
+   523→                    <div key={res.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+   524→                      <div className="flex items-center gap-3">
+   525→                        <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/20">
+   526→                          <FileText className="h-4 w-4 text-red-600" />
+   527→                        </div>
+   528→                        <div>
+   529→                          <p className="text-sm font-medium text-foreground">{res.title}</p>
+   530→                          <p className="text-xs text-muted-foreground">PDF · {res.size}</p>
+   531→                        </div>
+   532→                      </div>
+   533→                      <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs">
+   534→                        <Download className="h-3 w-3" /> Download
+   535→                      </Button>
+   536→                    </div>
+   537→                  ))}
+   538→                </CardContent>
+   539→              </Card>
+   540→
+   541→              {/* External Links */}
+   542→              <Card>
+   543→                <CardHeader className="pb-3">
+   544→                  <CardTitle className="text-sm flex items-center gap-2">
+   545→                    <ExternalLink className="h-4 w-4 text-violet-600" />
+   546→                    External Links
+   547→                  </CardTitle>
+   548→                </CardHeader>
+   549→                <CardContent className="space-y-2">
+   550→                  {courseResources.filter(r => r.type === 'link').map((res) => (
+   551→                    <div key={res.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+   552→                      <div className="flex items-center gap-3">
+   553→                        <div className="p-2 rounded-lg bg-violet-100 dark:bg-violet-900/20">
+   554→                          <ExternalLink className="h-4 w-4 text-violet-600" />
+   555→                        </div>
+   556→                        <div>
+   557→                          <p className="text-sm font-medium text-foreground">{res.title}</p>
+   558→                          <p className="text-xs text-muted-foreground">{res.url}</p>
+   559→                        </div>
+   560→                      </div>
+   561→                      <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs">
+   562→                        Visit <ExternalLink className="h-3 w-3" />
+   563→                      </Button>
+   564→                    </div>
+   565→                  ))}
+   566→                </CardContent>
+   567→              </Card>
+   568→
+   569→              {/* Code Repos */}
+   570→              <Card>
+   571→                <CardHeader className="pb-3">
+   572→                  <CardTitle className="text-sm flex items-center gap-2">
+   573→                    <GitBranch className="h-4 w-4 text-amber-600" />
+   574→                    Code Repositories
+   575→                  </CardTitle>
+   576→                </CardHeader>
+   577→                <CardContent className="space-y-2">
+   578→                  {courseResources.filter(r => r.type === 'repo').map((res) => (
+   579→                    <div key={res.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+   580→                      <div className="flex items-center gap-3">
+   581→                        <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/20">
+   582→                          <GitBranch className="h-4 w-4 text-amber-600" />
+   583→                        </div>
+   584→                        <div>
+   585→                          <p className="text-sm font-medium text-foreground">{res.title}</p>
+   586→                          <p className="text-xs text-muted-foreground">{res.url}</p>
+   587→                        </div>
+   588→                      </div>
+   589→                      <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs">
+   590→                        <GitBranch className="h-3 w-3" /> Clone
+   591→                      </Button>
+   592→                    </div>
+   593→                  ))}
+   594→                </CardContent>
+   595→              </Card>
+   596→            </div>
+   597→          </TabsContent>
+   598→
+   599→          {/* ─── Tab 4: Reviews ───────────────────────────── */}
+   600→          <TabsContent value="reviews" className="mt-6">
+   601→            <div className="space-y-6">
+   602→              {/* Overall Rating */}
+   603→              <Card>
+   604→                <CardContent className="p-6">
+   605→                  <div className="flex flex-col md:flex-row items-center gap-6">
+   606→                    <div className="text-center">
+   607→                      <p className="text-5xl font-bold text-foreground">{course.avgRating}</p>
+   608→                      <div className="flex items-center gap-0.5 mt-1">
+   609→                        {[1, 2, 3, 4, 5].map((star) => (
+   610→                          <Star
+   611→                            key={star}
+   612→                            className={cn(
+   613→                              'h-5 w-5',
+   614→                              star <= Math.round(course.avgRating)
+   615→                                ? 'fill-amber-400 text-amber-400'
+   616→                                : 'text-muted-foreground/30'
+   617→                            )}
+   618→                          />
+   619→                        ))}
+   620→                      </div>
+   621→                      <p className="text-sm text-muted-foreground mt-1">{course.totalRatings} ratings</p>
+   622→                    </div>
+   623→
+   624→                    {/* Rating Distribution */}
+   625→                    <div className="flex-1 w-full space-y-1.5">
+   626→                      {ratingDistribution.map((dist) => (
+   627→                        <div key={dist.stars} className="flex items-center gap-2">
+   628→                          <span className="text-xs text-muted-foreground w-8 text-right">{dist.stars}★</span>
+   629→                          <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden">
+   630→                            <div
+   631→                              className="h-full bg-amber-400 rounded-full"
+   632→                              style={{ width: `${(dist.count / totalReviews) * 100}%` }}
+   633→                            />
+   634→                          </div>
+   635→                          <span className="text-xs text-muted-foreground w-8">{dist.count}</span>
+   636→                        </div>
+   637→                      ))}
+   638→                    </div>
+   639→                  </div>
+   640→                </CardContent>
+   641→              </Card>
+   642→
+   643→              {/* Individual Reviews */}
+   644→              <div className="space-y-3">
+   645→                <h3 className="font-semibold text-foreground">Recent Reviews</h3>
+   646→                {courseReviews.map((review) => (
+   647→                  <Card key={review.id}>
+   648→                    <CardContent className="p-4">
+   649→                      <div className="flex items-start gap-3">
+   650→                        <Avatar className="h-9 w-9 shrink-0">
+   651→                          <AvatarFallback className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+   652→                            {review.avatar}
+   653→                          </AvatarFallback>
+   654→                        </Avatar>
+   655→                        <div className="flex-1 min-w-0">
+   656→                          <div className="flex items-center gap-2 mb-1">
+   657→                            <span className="text-sm font-medium text-foreground">{review.author}</span>
+   658→                            <span className="text-xs text-muted-foreground">· {review.date}</span>
+   659→                          </div>
+   660→                          <div className="flex items-center gap-0.5 mb-2">
+   661→                            {[1, 2, 3, 4, 5].map((star) => (
+   662→                              <Star
+   663→                                key={star}
+   664→                                className={cn(
+   665→                                  'h-3.5 w-3.5',
+   666→                                  star <= review.rating
+   667→                                    ? 'fill-amber-400 text-amber-400'
+   668→                                    : 'text-muted-foreground/30'
+   669→                                )}
+   670→                              />
+   671→                            ))}
+   672→                          </div>
+   673→                          <p className="text-sm text-muted-foreground leading-relaxed">{review.content}</p>
+   674→                          <div className="flex items-center gap-3 mt-3">
+   675→                            <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+   676→                              <ThumbsUp className="h-3 w-3" /> Helpful
+   677→                            </button>
+   678→                          </div>
+   679→                        </div>
+   680→                      </div>
+   681→                    </CardContent>
+   682→                  </Card>
+   683→                ))}
+   684→              </div>
+   685→
+   686→              <Button variant="outline" className="w-full">Load More Reviews</Button>
+   687→            </div>
+   688→          </TabsContent>
+   689→        </Tabs>
+   690→      </motion.div>
+   691→    </motion.div>
+   692→  );
+   693→}
+   694→

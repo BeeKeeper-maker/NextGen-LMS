@@ -174,7 +174,7 @@ function getHeatmapColor(value: number, metric: string): string {
     if (value >= 300) return 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400';
     return 'bg-red-500/20 text-red-700 dark:text-red-400';
   }
-  return 'bg-slate-500/20 text-slate-700 dark:text-slate-400';
+  return 'bg-slate-500/20 text-slate-700 dark:text-slate-300';
 }
 
 // ─── Compute revenue KPIs ──────────────────────────────────
@@ -255,8 +255,8 @@ export function AdminAnalytics() {
 
       {/* ─── Revenue Deep Dive ─────────────────────────────── */}
       <motion.div variants={itemVariants}>
-        <Card>
-          <CardHeader>
+        <Card className="shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <div className="p-2 rounded-lg bg-emerald-500/10">
                 <DollarSign className="h-5 w-5 text-emerald-600" />
@@ -337,8 +337,8 @@ export function AdminAnalytics() {
 
       {/* ─── Learner Engagement Analytics ──────────────────── */}
       <motion.div variants={itemVariants}>
-        <Card>
-          <CardHeader>
+        <Card className="shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <div className="p-2 rounded-lg bg-violet-500/10">
                 <Users className="h-5 w-5 text-violet-600" />
@@ -438,8 +438,8 @@ export function AdminAnalytics() {
 
       {/* ─── Course Performance Matrix ─────────────────────── */}
       <motion.div variants={itemVariants}>
-        <Card>
-          <CardHeader>
+        <Card className="shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <div className="p-2 rounded-lg bg-amber-500/10">
                 <Target className="h-5 w-5 text-amber-600" />
@@ -509,8 +509,8 @@ export function AdminAnalytics() {
 
       {/* ─── Geographic Distribution ───────────────────────── */}
       <motion.div variants={itemVariants}>
-        <Card>
-          <CardHeader>
+        <Card className="shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <div className="p-2 rounded-lg bg-sky-500/10">
                 <Globe className="h-5 w-5 text-sky-600" />
@@ -569,8 +569,8 @@ export function AdminAnalytics() {
 
       {/* ─── Learning Outcomes Report ──────────────────────── */}
       <motion.div variants={itemVariants}>
-        <Card>
-          <CardHeader>
+        <Card className="shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <div className="p-2 rounded-lg bg-rose-500/10">
                 <GraduationCap className="h-5 w-5 text-rose-600" />

@@ -24,6 +24,7 @@ import {
   X,
   Menu,
   ChevronRight,
+  ChevronLeft,
   Star,
   ArrowRight,
   Twitter,
@@ -35,6 +36,14 @@ import {
   Play,
   Mail,
   MessageCircle,
+  Heart,
+  Pin,
+  Eye,
+  Clock,
+  MessageSquare,
+  TrendingUp,
+  UserPlus,
+  Trophy,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -89,6 +98,52 @@ const testimonials = [
     role: 'Director, Online University',
     quote: 'We migrated 200+ courses to NextGen LMS. The multi-currency checkout and certificate automation made scaling globally effortless. The support team is phenomenal.',
     avatar: 'ET',
+  },
+];
+
+// ============================================================
+// Community Preview Posts
+// ============================================================
+const communityPreviewPosts = [
+  {
+    name: 'Jamie Rodriguez',
+    initials: 'JR',
+    color: 'bg-emerald-500',
+    timestamp: '2 hours ago',
+    content: 'Just completed the React Masterclass! The new hooks module is incredible. Anyone else working through the final project?',
+    likes: 24,
+    comments: 8,
+    pinned: true,
+  },
+  {
+    name: 'Aisha Patel',
+    initials: 'AP',
+    color: 'bg-violet-500',
+    timestamp: '5 hours ago',
+    content: 'Can someone explain the difference between server components and client components in Next.js? The docs are a bit confusing on this...',
+    likes: 12,
+    comments: 15,
+    pinned: false,
+  },
+  {
+    name: 'David Kim',
+    initials: 'DK',
+    color: 'bg-amber-500',
+    timestamp: '8 hours ago',
+    content: 'Pro tip: Use the AI tutor to generate practice quizzes before exams. It creates questions based on your weak areas. Game changer!',
+    likes: 47,
+    comments: 21,
+    pinned: false,
+  },
+  {
+    name: 'Sarah Mitchell',
+    initials: 'SM',
+    color: 'bg-sky-500',
+    timestamp: '1 day ago',
+    content: 'My cohort starts the live session tomorrow on Advanced TypeScript patterns. So excited! Who else is joining?',
+    likes: 18,
+    comments: 6,
+    pinned: false,
   },
 ];
 
@@ -202,7 +257,7 @@ function FloatingParticles() {
 }
 
 // ============================================================
-// Floating Dashboard Mockup
+// Floating Dashboard Mockup (Hero)
 // ============================================================
 function DashboardMockup() {
   return (
@@ -458,6 +513,529 @@ function GlowBorderCard({ children, highlighted }: { children: React.ReactNode; 
 }
 
 // ============================================================
+// "As Seen In" Media Logos Marquee
+// ============================================================
+function MediaLogosMarquee() {
+  const logos = ['TechCrunch', 'Forbes', 'Wired', 'EdTech', 'The Verge', 'VentureBeat'];
+
+  return (
+    <section className="py-10 border-y border-border/40 bg-muted/20 overflow-hidden">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <p className="text-center text-xs text-muted-foreground uppercase tracking-wider font-medium mb-6">As Seen In</p>
+      </div>
+      <div className="relative">
+        {/* Fade edges */}
+        <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-muted/20 to-transparent z-10 pointer-events-none" />
+        <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-muted/20 to-transparent z-10 pointer-events-none" />
+
+        <div className="flex animate-marquee">
+          {[...logos, ...logos, ...logos, ...logos].map((logo, i) => (
+            <div
+              key={`${logo}-${i}`}
+              className="flex items-center justify-center mx-8 sm:mx-12 shrink-0"
+            >
+              <span className="text-xl sm:text-2xl font-bold text-muted-foreground/40 whitespace-nowrap tracking-tight select-none">
+                {logo}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <style jsx>{`
+        @keyframes marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-25%); }
+        }
+        .animate-marquee {
+          animation: marquee 30s linear infinite;
+        }
+      `}</style>
+    </section>
+  );
+}
+
+// ============================================================
+// Live Dashboard Preview Section
+// ============================================================
+function LiveDashboardPreview() {
+  const [inView, setInView] = useState(false);
+  const sectionRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true);
+        }
+      },
+      { threshold: 0.3 }
+    );
+    if (sectionRef.current) observer.observe(sectionRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  const kpiData = [
+    { label: 'Total Revenue', value: 47800, prefix: '$', suffix: '', format: true, color: 'from-emerald-500 to-emerald-600' },
+    { label: 'Active Learners', value: 3847, prefix: '', suffix: '', format: true, color: 'from-violet-500 to-violet-600' },
+    { label: 'Completion Rate', value: 72.4, prefix: '', suffix: '%', format: false, color: 'from-amber-500 to-amber-600' },
+    { label: 'Engagement', value: 89.3, prefix: '', suffix: '%', format: false, color: 'from-sky-500 to-sky-600' },
+  ];
+
+  const chartBars = [40, 65, 45, 80, 55, 90, 70, 85, 60, 95, 75, 88];
+
+  const tableData = [
+    { course: 'React Masterclass', learners: 847, revenue: '$12,450', status: 'Active' },
+    { course: 'AI & ML Fundamentals', learners: 623, revenue: '$9,870', status: 'Active' },
+    { course: 'Data Science Pro', learners: 534, revenue: '$8,120', status: 'Draft' },
+  ];
+
+  function formatNumber(n: number, shouldFormat: boolean): string {
+    if (shouldFormat) return n.toLocaleString('en-US');
+    return n.toFixed(1);
+  }
+
+  return (
+    <section ref={sectionRef} className="py-20 sm:py-28">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: '-100px' }}
+          variants={staggerContainer}
+          className="text-center mb-16"
+        >
+          <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+            See Your{' '}
+            <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Dashboard</span> in Action
+          </motion.h2>
+          <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+            Real-time insights, beautiful charts, and actionable data — all at your fingertips.
+          </motion.p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.8 }}
+          className="relative max-w-5xl mx-auto"
+        >
+          {/* Glow effect */}
+          <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/10 via-violet-500/10 to-emerald-500/10 rounded-3xl blur-2xl" />
+
+          {/* Floating animation wrapper */}
+          <motion.div
+            animate={{ y: [0, -6, 0] }}
+            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <div className="relative rounded-2xl border border-border/60 bg-card shadow-2xl overflow-hidden">
+              {/* Browser chrome */}
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border/40 bg-muted/30">
+                <div className="flex gap-1.5">
+                  <div className="h-3 w-3 rounded-full bg-red-400" />
+                  <div className="h-3 w-3 rounded-full bg-yellow-400" />
+                  <div className="h-3 w-3 rounded-full bg-green-400" />
+                </div>
+                <div className="flex-1 flex justify-center">
+                  <div className="h-7 w-72 rounded-md bg-muted/60 flex items-center justify-center px-3">
+                    <span className="text-[11px] text-muted-foreground">academy.nextgen-lms.com/admin/dashboard</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dashboard mockup content */}
+              <div className="p-5 sm:p-6 space-y-5">
+                {/* KPI Cards Row */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {kpiData.map((kpi) => (
+                    <div key={kpi.label} className="rounded-xl border border-border/40 bg-gradient-to-br from-muted/30 to-muted/10 p-4 hover:shadow-md transition-shadow">
+                      <p className="text-xs text-muted-foreground mb-1">{kpi.label}</p>
+                      <p className="text-xl sm:text-2xl font-bold text-foreground">
+                        {kpi.prefix}
+                        {inView ? formatNumber(kpi.value, kpi.format) : '0'}
+                        {kpi.suffix}
+                      </p>
+                      <div className="flex items-center gap-1 mt-1">
+                        <TrendingUp className="h-3 w-3 text-emerald-500" />
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">+12.5%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Chart + Table row */}
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+                  {/* Bar chart */}
+                  <div className="sm:col-span-3 rounded-xl border border-border/40 bg-muted/10 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-semibold text-foreground">Revenue Overview</span>
+                      <span className="text-[10px] text-muted-foreground">Last 12 months</span>
+                    </div>
+                    <div className="h-28 flex items-end gap-1">
+                      {chartBars.map((h, i) => (
+                        <motion.div
+                          key={i}
+                          className="flex-1 rounded-t bg-gradient-to-t from-emerald-600 to-emerald-400 min-w-0"
+                          initial={{ height: 0 }}
+                          animate={inView ? { height: `${h}%` } : { height: 0 }}
+                          transition={{ duration: 0.5, delay: 0.3 + i * 0.04, ease: 'easeOut' }}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex justify-between mt-2">
+                      {['Jan', 'Mar', 'Jun', 'Sep', 'Dec'].map((m) => (
+                        <span key={m} className="text-[9px] text-muted-foreground">{m}</span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Mini table */}
+                  <div className="sm:col-span-2 rounded-xl border border-border/40 bg-muted/10 p-4">
+                    <span className="text-sm font-semibold text-foreground mb-3 block">Top Courses</span>
+                    <div className="space-y-2">
+                      {tableData.map((row) => (
+                        <div key={row.course} className="flex items-center justify-between py-1.5 border-b border-border/20 last:border-0">
+                          <div>
+                            <p className="text-xs font-medium text-foreground truncate max-w-[120px]">{row.course}</p>
+                            <p className="text-[10px] text-muted-foreground">{row.learners} learners</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-semibold text-foreground">{row.revenue}</p>
+                            <Badge variant="secondary" className={`text-[9px] px-1.5 py-0 ${row.status === 'Active' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
+                              {row.status}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Try it yourself button */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.8 }}
+            className="text-center mt-8"
+          >
+            <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={() => useAppStore.getState().enterAdminMode()}>
+              Try it yourself
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </motion.div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// ============================================================
+// Community Preview Section
+// ============================================================
+function CommunityPreview() {
+  return (
+    <section className="py-20 sm:py-28 bg-muted/30">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: '-100px' }}
+          variants={staggerContainer}
+          className="text-center mb-16"
+        >
+          <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+            A Thriving{' '}
+            <span className="bg-gradient-to-r from-violet-600 to-violet-400 bg-clip-text text-transparent">Learning Community</span>
+          </motion.h2>
+          <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+            Built-in discussions, peer support, and knowledge sharing — no need for Slack or Discord.
+          </motion.p>
+        </motion.div>
+
+        <div className="max-w-2xl mx-auto space-y-4">
+          {communityPreviewPosts.map((post, i) => (
+            <motion.div
+              key={post.name}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: i * 0.15 }}
+            >
+              <Card className="hover:shadow-lg transition-all duration-300 border-border/60 group">
+                <CardContent className="p-5">
+                  <div className="flex items-start gap-3">
+                    <div className={`h-10 w-10 rounded-full ${post.color} flex items-center justify-center text-white text-sm font-bold shrink-0`}>
+                      {post.initials}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-foreground">{post.name}</span>
+                        {post.pinned && (
+                          <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 text-[10px] px-1.5 py-0 gap-1">
+                            <Pin className="h-2.5 w-2.5" /> Pinned
+                          </Badge>
+                        )}
+                        <span className="text-xs text-muted-foreground">{post.timestamp}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">{post.content}</p>
+                      <div className="flex items-center gap-4 mt-3">
+                        <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-rose-500 transition-colors group/btn">
+                          <Heart className="h-3.5 w-3.5 group-hover/btn:scale-110 transition-transform" />
+                          {post.likes}
+                        </button>
+                        <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-emerald-500 transition-colors">
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          {post.comments}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+
+          {/* CTA */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.8 }}
+            className="text-center pt-4"
+          >
+            <Button size="lg" className="bg-violet-600 hover:bg-violet-700 text-white gap-2" onClick={() => useAppStore.getState().enterLearnerMode()}>
+              Join the Community
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ============================================================
+// Enhanced Testimonials Carousel
+// ============================================================
+function TestimonialCarousel() {
+  const [current, setCurrent] = useState(0);
+  const [direction, setDirection] = useState(0);
+
+  // Auto-rotate every 5 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDirection(1);
+      setCurrent((prev) => (prev + 1) % testimonials.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const goTo = (index: number) => {
+    setDirection(index > current ? 1 : -1);
+    setCurrent(index);
+  };
+
+  const next = () => {
+    setDirection(1);
+    setCurrent((prev) => (prev + 1) % testimonials.length);
+  };
+
+  const prev = () => {
+    setDirection(-1);
+    setCurrent((prev) => (prev - 1 + testimonials.length) % testimonials.length);
+  };
+
+  const slideVariants = {
+    enter: (d: number) => ({
+      x: d > 0 ? 100 : -100,
+      opacity: 0,
+    }),
+    center: {
+      x: 0,
+      opacity: 1,
+    },
+    exit: (d: number) => ({
+      x: d > 0 ? -100 : 100,
+      opacity: 0,
+    }),
+  };
+
+  return (
+    <div className="relative">
+      {/* Desktop: show 3 at a time, mobile: 1 */}
+      <div className="hidden lg:grid lg:grid-cols-3 gap-6">
+        {testimonials.map((testimonial, i) => {
+          const isActive = i >= current && i < current + 3;
+          const adjustedIndex = ((i - current + testimonials.length) % testimonials.length);
+          return (
+            <motion.div
+              key={testimonial.name}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+            >
+              <Card className="h-full border-border/60 hover:shadow-lg transition-shadow">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 text-sm font-bold">
+                      {testimonial.avatar}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{testimonial.name}</p>
+                      <p className="text-xs text-muted-foreground">{testimonial.role}</p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-0.5 mb-3">
+                    {[...Array(5)].map((_, j) => (
+                      <Star key={j} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                    ))}
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed">&ldquo;{testimonial.quote}&rdquo;</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Mobile: carousel with single testimonial */}
+      <div className="lg:hidden">
+        <div className="relative overflow-hidden min-h-[260px]">
+          <AnimatePresence initial={false} custom={direction} mode="wait">
+            <motion.div
+              key={current}
+              custom={direction}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.35, ease: 'easeInOut' }}
+            >
+              <Card className="border-border/60">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 text-sm font-bold">
+                      {testimonials[current].avatar}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{testimonials[current].name}</p>
+                      <p className="text-xs text-muted-foreground">{testimonials[current].role}</p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-0.5 mb-3">
+                    {[...Array(5)].map((_, j) => (
+                      <Star key={j} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                    ))}
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed">&ldquo;{testimonials[current].quote}&rdquo;</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* Navigation */}
+        <div className="flex items-center justify-center gap-4 mt-6">
+          <button
+            onClick={prev}
+            className="h-8 w-8 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
+            aria-label="Previous testimonial"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div className="flex gap-2">
+            {testimonials.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => goTo(i)}
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  i === current ? 'w-6 bg-emerald-500' : 'w-2 bg-muted-foreground/30'
+                }`}
+                aria-label={`Go to testimonial ${i + 1}`}
+              />
+            ))}
+          </div>
+          <button
+            onClick={next}
+            className="h-8 w-8 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
+            aria-label="Next testimonial"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Floating Stats Counter
+// ============================================================
+function FloatingStatsCounter() {
+  const [visible, setVisible] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [onlineCount, setOnlineCount] = useState(2847);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const heroSection = document.getElementById('hero-section');
+      if (heroSection) {
+        const heroBottom = heroSection.getBoundingClientRect().bottom;
+        setVisible(heroBottom < 0);
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Randomly tick online count
+  useEffect(() => {
+    if (!visible || dismissed) return;
+    const timer = setInterval(() => {
+      setOnlineCount((prev) => {
+        const change = Math.floor(Math.random() * 5) - 2; // -2 to +2
+        return Math.max(2800, Math.min(2900, prev + change));
+      });
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [visible, dismissed]);
+
+  if (dismissed || !visible) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20, scale: 0.9 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 20, scale: 0.9 }}
+      className="fixed bottom-4 left-4 z-50"
+    >
+      <div className="rounded-xl border border-border/40 bg-background/80 backdrop-blur-xl shadow-xl px-4 py-3 flex items-center gap-3">
+        <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+        <div>
+          <p className="text-sm font-semibold text-foreground">{onlineCount.toLocaleString()} learners online</p>
+          <p className="text-[10px] text-muted-foreground">across 50+ countries</p>
+        </div>
+        <button
+          onClick={() => setDismissed(true)}
+          className="ml-2 h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Dismiss"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
+// ============================================================
 // Landing Page Component
 // ============================================================
 export function LandingPage() {
@@ -556,7 +1134,7 @@ export function LandingPage() {
 
       <main className="flex-1">
         {/* ============ HERO SECTION ============ */}
-        <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
+        <section id="hero-section" className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
           {/* Background Gradient Orbs */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl" />
@@ -661,6 +1239,9 @@ export function LandingPage() {
           </div>
         </section>
 
+        {/* ============ AS SEEN IN MEDIA LOGOS ============ */}
+        <MediaLogosMarquee />
+
         {/* ============ FEATURES SECTION ============ */}
         <section id="features" className="py-20 sm:py-28 bg-muted/30">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -742,6 +1323,9 @@ export function LandingPage() {
             </div>
           </div>
         </section>
+
+        {/* ============ LIVE DASHBOARD PREVIEW ============ */}
+        <LiveDashboardPreview />
 
         {/* ============ PRICING SECTION ============ */}
         <section id="pricing" className="py-20 sm:py-28">
@@ -850,8 +1434,11 @@ export function LandingPage() {
           </div>
         </section>
 
+        {/* ============ COMMUNITY PREVIEW ============ */}
+        <CommunityPreview />
+
         {/* ============ COMPETITOR COMPARISON ============ */}
-        <section id="comparison" className="py-20 sm:py-28 bg-muted/30">
+        <section id="comparison" className="py-20 sm:py-28">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <motion.div
               initial="hidden"
@@ -909,7 +1496,7 @@ export function LandingPage() {
         </section>
 
         {/* ============ TESTIMONIALS SECTION ============ */}
-        <section id="testimonials" className="py-20 sm:py-28">
+        <section id="testimonials" className="py-20 sm:py-28 bg-muted/30">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <motion.div
               initial="hidden"
@@ -927,44 +1514,12 @@ export function LandingPage() {
               </motion.p>
             </motion.div>
 
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: '-100px' }}
-              variants={staggerContainer}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-            >
-              {testimonials.map((testimonial) => (
-                <motion.div key={testimonial.name} variants={fadeInUp}>
-                  <Card className="h-full border-border/60 hover:shadow-lg transition-shadow">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 text-sm font-bold">
-                          {testimonial.avatar}
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">{testimonial.name}</p>
-                          <p className="text-xs text-muted-foreground">{testimonial.role}</p>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex gap-0.5 mb-3">
-                        {[...Array(5)].map((_, i) => (
-                          <Star key={i} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                        ))}
-                      </div>
-                      <p className="text-sm text-muted-foreground leading-relaxed">&ldquo;{testimonial.quote}&rdquo;</p>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </motion.div>
+            <TestimonialCarousel />
           </div>
         </section>
 
         {/* ============ INTEGRATIONS SECTION ============ */}
-        <section className="py-20 sm:py-28 bg-muted/30">
+        <section className="py-20 sm:py-28">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <motion.div
               initial="hidden"
@@ -1165,6 +1720,9 @@ export function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* ============ FLOATING STATS COUNTER ============ */}
+      <FloatingStatsCounter />
     </div>
   );
 }

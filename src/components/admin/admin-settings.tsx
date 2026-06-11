@@ -81,7 +81,7 @@ function GeneralSettings() {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="shadow-sm hover:shadow-md transition-shadow">
         <CardHeader>
           <CardTitle className="text-lg">Platform Information</CardTitle>
           <CardDescription>Basic information about your learning platform</CardDescription>
@@ -184,7 +184,7 @@ function BrandingTheming() {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="shadow-sm hover:shadow-md transition-shadow">
         <CardHeader>
           <CardTitle className="text-lg">Colors & Typography</CardTitle>
           <CardDescription>Customize your platform&apos;s visual identity</CardDescription>
@@ -273,7 +273,7 @@ function BrandingTheming() {
       </Card>
 
       {/* Live Preview */}
-      <Card>
+      <Card className="shadow-sm hover:shadow-md transition-shadow">
         <CardHeader>
           <CardTitle className="text-lg">Live Preview</CardTitle>
           <CardDescription>See how your branding looks on a sample card</CardDescription>
@@ -348,7 +348,7 @@ function DomainSSL() {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="shadow-sm hover:shadow-md transition-shadow">
         <CardHeader>
           <CardTitle className="text-lg">Custom Domain</CardTitle>
           <CardDescription>Configure your custom domain for the learning platform</CardDescription>
@@ -406,7 +406,7 @@ function DomainSSL() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="shadow-sm hover:shadow-md transition-shadow">
         <CardHeader>
           <CardTitle className="text-lg">DNS Configuration</CardTitle>
           <CardDescription>
@@ -504,7 +504,7 @@ function Integrations() {
   return (
     <div className="space-y-6">
       {/* Payment Gateways */}
-      <Card>
+      <Card className="shadow-sm hover:shadow-md transition-shadow">
         <CardHeader>
           <CardTitle className="text-lg">Payment Gateways</CardTitle>
           <CardDescription>Connect payment providers to accept course payments</CardDescription>
@@ -564,7 +564,7 @@ function Integrations() {
       </Card>
 
       {/* Marketing */}
-      <Card>
+      <Card className="shadow-sm hover:shadow-md transition-shadow">
         <CardHeader>
           <CardTitle className="text-lg">Marketing & Analytics</CardTitle>
           <CardDescription>Track and analyze your platform performance</CardDescription>
@@ -592,7 +592,7 @@ function Integrations() {
       </Card>
 
       {/* CRM */}
-      <Card>
+      <Card className="shadow-sm hover:shadow-md transition-shadow">
         <CardHeader>
           <CardTitle className="text-lg">CRM Integrations</CardTitle>
           <CardDescription>Connect your customer relationship management tools</CardDescription>
@@ -627,7 +627,7 @@ function Integrations() {
       </Card>
 
       {/* Webhooks */}
-      <Card>
+      <Card className="shadow-sm hover:shadow-md transition-shadow">
         <CardHeader>
           <CardTitle className="text-lg">Webhooks</CardTitle>
           <CardDescription>Receive real-time event notifications</CardDescription>
@@ -750,7 +750,7 @@ function TeamRoles() {
   return (
     <div className="space-y-6">
       {/* Invite Member */}
-      <Card>
+      <Card className="shadow-sm hover:shadow-md transition-shadow">
         <CardHeader>
           <CardTitle className="text-lg">Invite Team Member</CardTitle>
           <CardDescription>Send an invitation to join your platform team</CardDescription>
@@ -783,7 +783,7 @@ function TeamRoles() {
       </Card>
 
       {/* Team Members Table */}
-      <Card>
+      <Card className="shadow-sm hover:shadow-md transition-shadow">
         <CardHeader>
           <CardTitle className="text-lg">Team Members</CardTitle>
           <CardDescription>Manage your team and their roles</CardDescription>
@@ -810,12 +810,14 @@ function TeamRoles() {
                         variant="secondary"
                         className={
                           member.role === 'Super Admin'
-                            ? 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300'
+                            ? 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300 gap-1'
                             : member.role === 'Admin'
-                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                            : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 gap-1'
+                            : 'bg-slate-100 text-slate-700 dark:text-slate-300 dark:bg-slate-800 dark:text-slate-300 gap-1'
                         }
                       >
+                        {member.role === 'Super Admin' && <Crown className="h-3 w-3" />}
+                        {member.role === 'Admin' && <Shield className="h-3 w-3" />}
                         {member.role}
                       </Badge>
                     </TableCell>
@@ -850,7 +852,7 @@ function TeamRoles() {
       </Card>
 
       {/* RBAC Matrix */}
-      <Card>
+      <Card className="shadow-sm hover:shadow-md transition-shadow">
         <CardHeader>
           <CardTitle className="text-lg">Role Permissions Matrix</CardTitle>
           <CardDescription>Overview of permissions for each role</CardDescription>
@@ -933,7 +935,7 @@ function Billing() {
   return (
     <div className="space-y-6">
       {/* Current Plan */}
-      <Card className="border-emerald-200 dark:border-emerald-800">
+      <Card className="border-emerald-500/30 dark:border-emerald-800">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -1021,7 +1023,7 @@ function Billing() {
       </div>
 
       {/* Payment Method */}
-      <Card>
+      <Card className="shadow-sm hover:shadow-md transition-shadow">
         <CardHeader>
           <CardTitle className="text-lg">Payment Method</CardTitle>
           <CardDescription>Your payment method on file</CardDescription>
@@ -1045,7 +1047,7 @@ function Billing() {
       </Card>
 
       {/* Invoice History */}
-      <Card>
+      <Card className="shadow-sm hover:shadow-md transition-shadow">
         <CardHeader>
           <CardTitle className="text-lg">Invoice History</CardTitle>
           <CardDescription>Download past invoices</CardDescription>

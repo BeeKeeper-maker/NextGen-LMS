@@ -11,6 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
+import { VideoPlayer } from '@/components/shared/video-player';
 import {
   Play,
   FileText,
@@ -170,11 +171,11 @@ const itemVariants = {
 };
 
 // ─── Module Section Component ──────────────────────────────
-function ModuleSection({ module: mod, moduleIndex }: { module: Module; moduleIndex: number }) {
+function ModuleSection({ module: mod, moduleIndex, onLessonClick, progressMap }: { module: Module; moduleIndex: number; onLessonClick: (lesson: Lesson) => void; progressMap: Record<string, 'completed' | 'in_progress' | 'not_started'> }) {
   const [isOpen, setIsOpen] = useState(moduleIndex === 0);
   const lessons = mod.lessons || [];
   const completedLessons = lessons.filter(
-    (l) => lessonProgressMap[l.id] === 'completed'
+    (l) => progressMap[l.id] === 'completed'
   ).length;
   const totalDuration = lessons.reduce((sum, l) => sum + (l.videoDuration || 0), 0);
 
@@ -224,7 +225,7 @@ function ModuleSection({ module: mod, moduleIndex }: { module: Module; moduleInd
           >
             <div className="border-t bg-muted/20">
               {lessons.map((lesson, lessonIdx) => {
-                const status = lessonProgressMap[lesson.id] || 'not_started';
+                const status = progressMap[lesson.id] || 'not_started';
                 return (
                   <div
                     key={lesson.id}
@@ -272,19 +273,24 @@ function ModuleSection({ module: mod, moduleIndex }: { module: Module; moduleInd
                     {/* Action Button */}
                     <div>
                       {status === 'completed' ? (
-                        <Badge variant="outline" className="text-emerald-600 border-emerald-200 dark:border-emerald-800 text-xs">
-                          Completed
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-emerald-600 border-emerald-500/30 dark:border-emerald-800 text-xs">
+                            Completed
+                          </Badge>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-emerald-600 hover:text-emerald-700" onClick={() => onLessonClick(lesson)}>
+                            <Play className="h-3 w-3" /> Rewatch
+                          </Button>
+                        </div>
                       ) : status === 'in_progress' ? (
-                        <Button size="sm" className="h-7 text-xs gap-1 bg-amber-600 hover:bg-amber-700">
+                        <Button size="sm" className="h-7 text-xs gap-1 bg-amber-600 hover:bg-amber-700" onClick={() => onLessonClick(lesson)}>
                           <Play className="h-3 w-3" /> Continue
                         </Button>
                       ) : lesson.isPreview ? (
-                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onLessonClick(lesson)}>
                           <Play className="h-3 w-3" /> Preview
                         </Button>
                       ) : (
-                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onLessonClick(lesson)}>
                           <Play className="h-3 w-3" /> Start
                         </Button>
                       )}
@@ -307,11 +313,60 @@ export function LearnerCourse() {
   const enrollment = demoEnrollments[0]; // Active enrollment for this course
   const modules = course.modules || [];
   const [activeTab, setActiveTab] = useState('curriculum');
+  const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
+  const [activeLessonModuleName, setActiveLessonModuleName] = useState('');
+  const [lessonProgressState, setLessonProgressState] = useState(lessonProgressMap);
 
   // Calculate total lessons and completed
   const allLessons = modules.flatMap(m => m.lessons || []);
-  const completedCount = allLessons.filter(l => lessonProgressMap[l.id] === 'completed').length;
+  const completedCount = allLessons.filter(l => lessonProgressState[l.id] === 'completed').length;
   const totalLessons = allLessons.length;
+
+  // Handle clicking a lesson
+  const handleLessonClick = (lesson: Lesson) => {
+    setActiveLesson(lesson);
+    // Find the module name for this lesson
+    const parentModule = modules.find(m => m.lessons?.some(l => l.id === lesson.id));
+    setActiveLessonModuleName(parentModule?.title || '');
+  };
+
+  // Handle marking a lesson as complete
+  const handleMarkComplete = (lessonId: string) => {
+    setLessonProgressState(prev => ({ ...prev, [lessonId]: 'completed' }));
+  };
+
+  // Get next lessons for the sidebar
+  const getNextLessons = (): { id: string; title: string; moduleName: string; duration: number; contentType: Lesson['contentType'] }[] => {
+    if (!activeLesson) return [];
+    const currentIdx = allLessons.findIndex(l => l.id === activeLesson.id);
+    const next: { id: string; title: string; moduleName: string; duration: number; contentType: Lesson['contentType'] }[] = [];
+    for (let i = currentIdx + 1; i < Math.min(currentIdx + 4, allLessons.length); i++) {
+      const l = allLessons[i];
+      const mod = modules.find(m => m.lessons?.some(ml => ml.id === l.id));
+      next.push({ id: l.id, title: l.title, moduleName: mod?.title || '', duration: l.videoDuration || 0, contentType: l.contentType });
+    }
+    return next;
+  };
+
+  // If a lesson is active, show the Video Player
+  if (activeLesson) {
+    return (
+      <div className="p-4 md:p-6">
+        <VideoPlayer
+          lesson={activeLesson}
+          moduleName={activeLessonModuleName}
+          nextLessons={getNextLessons()}
+          onMarkComplete={handleMarkComplete}
+          onNextLesson={(lessonId) => {
+            const found = allLessons.find(l => l.id === lessonId);
+            if (found) handleLessonClick(found);
+          }}
+          onBack={() => setActiveLesson(null)}
+          isCompleted={lessonProgressState[activeLesson.id] === 'completed'}
+        />
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -439,7 +494,7 @@ export function LearnerCourse() {
 
               {modules.length > 0 ? (
                 modules.map((mod, idx) => (
-                  <ModuleSection key={mod.id} module={mod} moduleIndex={idx} />
+                  <ModuleSection key={mod.id} module={mod} moduleIndex={idx} onLessonClick={handleLessonClick} progressMap={lessonProgressState} />
                 ))
               ) : (
                 <Card>

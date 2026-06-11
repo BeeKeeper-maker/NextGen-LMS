@@ -158,7 +158,7 @@ function DailyGoalRing({ percentage, minutes, goal }: { percentage: number; minu
   const strokeDashoffset = circumference - (animatedPercent / 100) * circumference;
 
   return (
-    <Card className="border-slate-200 dark:border-slate-800">
+    <Card className="border-border dark:border-slate-800">
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-semibold flex items-center gap-2">
           <Target className="h-4 w-4 text-emerald-500" />
@@ -176,7 +176,7 @@ function DailyGoalRing({ percentage, minutes, goal }: { percentage: number; minu
               fill="none"
               stroke="currentColor"
               strokeWidth="6"
-              className="text-slate-200 dark:text-slate-700"
+              className="text-slate-200 dark:text-slate-700 dark:text-slate-300"
             />
             {/* Progress circle */}
             <motion.circle
@@ -448,7 +448,7 @@ export function LearnerDashboard() {
                   className="min-w-[280px] sm:min-w-[320px]"
                 >
                   <TiltCard>
-                    <Card className="overflow-hidden border-slate-200 dark:border-slate-800 hover:shadow-lg transition-shadow group">
+                    <Card className="overflow-hidden border-border dark:border-slate-800 hover:shadow-lg transition-shadow group">
                       {/* Course colored header */}
                       <div className={cn(
                         'bg-gradient-to-r p-4 h-20 flex items-end',
@@ -513,7 +513,7 @@ export function LearnerDashboard() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.1 * i }}
                 >
-                  <Card className="overflow-hidden border-slate-200 dark:border-slate-800 hover:shadow-lg transition-shadow group relative">
+                  <Card className="overflow-hidden border-border dark:border-slate-800 hover:shadow-lg transition-shadow group relative">
                     {/* Completion badge */}
                     <div className="absolute top-3 right-3 z-10">
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30">
@@ -562,7 +562,7 @@ export function LearnerDashboard() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Activity Feed */}
           <Section delay={0.2}>
-            <Card className="border-slate-200 dark:border-slate-800 h-full">
+            <Card className="border-border dark:border-slate-800 h-full">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
                   <Zap className="h-4 w-4 text-yellow-500" />
@@ -612,7 +612,7 @@ export function LearnerDashboard() {
 
           {/* Leaderboard Preview */}
           <Section delay={0.25}>
-            <Card className="border-slate-200 dark:border-slate-800 h-full">
+            <Card className="border-border dark:border-slate-800 h-full">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -635,7 +635,7 @@ export function LearnerDashboard() {
                         className={cn(
                           'flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors',
                           isCurrentUser
-                            ? 'bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/30 dark:border-emerald-800'
                             : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
                         )}
                       >
@@ -643,7 +643,7 @@ export function LearnerDashboard() {
                         <div className={cn(
                           'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
                           entry.rank === 1 && 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
-                          entry.rank === 2 && 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+                          entry.rank === 2 && 'bg-slate-200 text-slate-700 dark:text-slate-300 dark:bg-slate-700 dark:text-slate-300',
                           entry.rank === 3 && 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
                           entry.rank > 3 && 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
                         )}>
@@ -692,7 +692,7 @@ export function LearnerDashboard() {
               <DailyGoalRing percentage={dailyPercent} minutes={dailyMinutes} goal={dailyGoal} />
 
               {/* Streak Card */}
-              <Card className="border-slate-200 dark:border-slate-800 overflow-hidden">
+              <Card className="border-border dark:border-slate-800 overflow-hidden">
                 <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 p-4 text-white">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
@@ -757,7 +757,7 @@ export function LearnerDashboard() {
                   transition={{ duration: 0.4, delay: 0.1 * i }}
                 >
                   <TiltCard>
-                    <Card className="overflow-hidden border-slate-200 dark:border-slate-800 hover:shadow-lg transition-shadow group cursor-pointer">
+                    <Card className="overflow-hidden border-border dark:border-slate-800 hover:shadow-lg transition-shadow group cursor-pointer">
                       {/* Course colored header */}
                       <div className={cn(
                         'bg-gradient-to-r p-4 h-20 flex items-end relative',

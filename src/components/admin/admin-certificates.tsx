@@ -228,7 +228,7 @@ function TemplatesList({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.08 }}
           >
-            <Card className="overflow-hidden group hover:shadow-lg transition-shadow">
+            <Card className="overflow-hidden group hover:shadow-lg transition-shadow h-full flex flex-col shadow-sm">
               {/* Certificate preview thumbnail */}
               <div
                 className="h-48 relative overflow-hidden"
@@ -275,17 +275,27 @@ function TemplatesList({
                 </div>
               </div>
 
-              <CardContent className="p-4">
+              <CardContent className="p-4 flex-1 flex flex-col">
                 <h3 className="font-semibold text-foreground mb-1">{template.name}</h3>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
                   <Badge variant="outline" className="text-[10px]">{template.template}</Badge>
                   <span>{template.width}×{template.height}</span>
                   <span>{template.elements.length} elements</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 mt-auto">
                   <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => onEdit(template)}>
                     <Edit3 className="h-3.5 w-3.5" /> Edit
                   </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => { /* sample download */ }}>
+                          <Download className="h-3.5 w-3.5" /> Sample
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Download Sample</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -294,16 +304,6 @@ function TemplatesList({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>Preview</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button size="sm" variant="outline" className="h-8 w-8 p-0">
-                          <Download className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Download</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 </div>
@@ -403,7 +403,7 @@ function CertificateBuilder({
         {/* Left panel: Element palette + element list */}
         <div className="lg:col-span-3 space-y-4">
           {/* Settings */}
-          <Card>
+          <Card className="shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Settings2 className="h-4 w-4 text-violet-600" /> Template Settings

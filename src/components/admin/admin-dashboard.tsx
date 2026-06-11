@@ -217,7 +217,7 @@ function KPICard({ kpi, index }: { kpi: DashboardKPI; index: number }) {
 
   return (
     <motion.div variants={itemVariants} custom={index}>
-      <Card className={`border-l-4 ${accentBorder} h-full`}>
+      <Card className={`border-l-4 ${accentBorder} h-full shadow-sm hover:shadow-md transition-shadow duration-200`}>
         <CardContent className="p-6">
           <div className="flex items-start justify-between">
             <div className="space-y-1">
@@ -260,14 +260,14 @@ function KPICard({ kpi, index }: { kpi: DashboardKPI; index: number }) {
 function RevenueChart() {
   return (
     <motion.div variants={itemVariants}>
-      <Card>
-        <CardHeader>
+      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+        <CardHeader className="pb-2">
           <CardTitle>Revenue Analytics</CardTitle>
           <CardDescription>
             Monthly revenue, enrollments & completions trend
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0 pb-4 px-6">
           <ChartContainer config={revenueChartConfig} className="h-[320px] w-full">
             <ComposedChart data={revenueData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
               <defs>
@@ -328,8 +328,8 @@ function RevenueChart() {
 function EngagementChart() {
   return (
     <motion.div variants={itemVariants}>
-      <Card className="h-full">
-        <CardHeader>
+      <Card className="h-full shadow-sm hover:shadow-md transition-shadow duration-200">
+        <CardHeader className="pb-2">
           <CardTitle>Weekly Engagement</CardTitle>
           <CardDescription>
             Active users, posts & quizzes by day
@@ -358,8 +358,8 @@ function EngagementChart() {
 function CategoryChart() {
   return (
     <motion.div variants={itemVariants}>
-      <Card className="h-full">
-        <CardHeader>
+      <Card className="h-full shadow-sm hover:shadow-md transition-shadow duration-200">
+        <CardHeader className="pb-2">
           <CardTitle>Category Distribution</CardTitle>
           <CardDescription>
             Enrollment by course category
@@ -407,8 +407,8 @@ function CompletionFunnel() {
 
   return (
     <motion.div variants={itemVariants}>
-      <Card>
-        <CardHeader>
+      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+        <CardHeader className="pb-2">
           <CardTitle>Completion Funnel</CardTitle>
           <CardDescription>
             Enrollment-to-certification journey
@@ -451,8 +451,8 @@ function CompletionFunnel() {
 function RecentCoursesTable() {
   return (
     <motion.div variants={itemVariants}>
-      <Card>
-        <CardHeader>
+      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+        <CardHeader className="pb-2">
           <CardTitle>Recent Courses</CardTitle>
           <CardDescription>
             Overview of all published courses
@@ -532,8 +532,8 @@ function VideoDropoffChart() {
 
   return (
     <motion.div variants={itemVariants}>
-      <Card>
-        <CardHeader>
+      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+        <CardHeader className="pb-2">
           <CardTitle>Video Engagement Drop-off</CardTitle>
           <CardDescription>
             Viewer drop-off rate by video segment
@@ -598,8 +598,8 @@ const quickActions = [
 function QuickActionsPanel() {
   return (
     <motion.div variants={itemVariants}>
-      <Card>
-        <CardHeader>
+      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+        <CardHeader className="pb-2">
           <CardTitle>Quick Actions</CardTitle>
           <CardDescription>
             Common tasks and shortcuts
@@ -613,7 +613,7 @@ function QuickActionsPanel() {
                 <button
                   key={action.title}
                   type="button"
-                  className="group flex flex-col items-start gap-3 rounded-lg border p-4 text-left transition-all hover:border-slate-300 hover:shadow-md dark:hover:border-slate-600"
+                  className="group flex flex-col items-start gap-3 rounded-lg border p-4 text-left transition-all hover:border-border hover:shadow-md dark:hover:border-slate-600"
                 >
                   <div className={`rounded-lg p-2.5 ${action.accent} relative`}>
                     <IconComp className="h-5 w-5" />
@@ -770,6 +770,8 @@ export function AdminDashboard() {
         <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1 sm:mt-0">
           <Clock className="h-3.5 w-3.5" />
           {currentDateTime}
+          <span className="text-muted-foreground/60">·</span>
+          <span className="text-muted-foreground/80">Last updated: just now</span>
         </div>
       </motion.div>
 

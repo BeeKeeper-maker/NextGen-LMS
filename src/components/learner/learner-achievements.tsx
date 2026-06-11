@@ -178,7 +178,7 @@ export function LearnerAchievements() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3, delay: 0.15 }}
             >
-              <Card className="border-emerald-200 dark:border-emerald-800/40 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/20 overflow-hidden relative">
+              <Card className="border-emerald-500/30 dark:border-emerald-800/40 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/20 overflow-hidden relative">
                 <div className="absolute top-0 right-0 h-20 w-20 -translate-y-6 translate-x-6 rounded-full bg-emerald-200/30 dark:bg-emerald-800/20 blur-xl" />
                 <CardContent className="p-5 relative">
                   <div className="flex items-center gap-3">
@@ -224,7 +224,7 @@ export function LearnerAchievements() {
 
         {/* Level Progress Bar */}
         <Section delay={0.1}>
-          <Card className="border-slate-200 dark:border-slate-800">
+          <Card className="border-border dark:border-slate-800">
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -265,7 +265,7 @@ export function LearnerAchievements() {
                 {earnedCount} Earned
               </Badge>
               <Badge variant="secondary" className="text-xs gap-1">
-                <Lock className="h-3 w-3 text-slate-400" />
+                <Lock className="h-3 w-3 text-slate-400 dark:text-slate-500" />
                 {totalAchievements - earnedCount} Locked
               </Badge>
             </div>
@@ -286,8 +286,8 @@ export function LearnerAchievements() {
                     className={cn(
                       'relative overflow-hidden transition-all duration-300 group',
                       isEarned
-                        ? 'border-emerald-200 dark:border-emerald-800/60 hover:shadow-lg hover:shadow-emerald-500/10'
-                        : 'border-slate-200 dark:border-slate-800 opacity-70 hover:opacity-90'
+                        ? 'border-emerald-500/30 dark:border-emerald-800/60 hover:shadow-lg hover:shadow-emerald-500/10'
+                        : 'border-border dark:border-slate-800 opacity-70 hover:opacity-90'
                     )}
                   >
                     {/* Glow effect for earned achievements */}
@@ -339,7 +339,7 @@ export function LearnerAchievements() {
                           <span>Earned {formatDate(earnedStatus.earnedAt)}</span>
                         </div>
                       ) : (
-                        <div className="mt-3 flex items-center justify-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+                        <div className="mt-3 flex items-center justify-center gap-1 text-xs text-slate-400 dark:text-slate-500 dark:text-slate-400 dark:text-slate-500">
                           <Lock className="h-3 w-3" />
                           <span>Locked</span>
                         </div>
@@ -361,10 +361,10 @@ export function LearnerAchievements() {
             </h2>
             <Badge variant="secondary" className="text-xs">This Week</Badge>
           </div>
-          <Card className="border-slate-200 dark:border-slate-800 overflow-hidden">
+          <Card className="border-border dark:border-slate-800 overflow-hidden">
             <CardContent className="p-0">
               {/* Header row */}
-              <div className="flex items-center gap-4 px-5 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 text-xs font-medium text-muted-foreground">
+              <div className="flex items-center gap-4 px-5 py-3 border-b border-border dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 text-xs font-medium text-muted-foreground">
                 <div className="w-10 text-center">Rank</div>
                 <div className="flex-1">Name</div>
                 <div className="w-20 text-right hidden sm:block">Points</div>
@@ -411,7 +411,7 @@ export function LearnerAchievements() {
                       <div className={cn(
                         'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
                         entry.rank === 1 && 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
-                        entry.rank === 2 && 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+                        entry.rank === 2 && 'bg-slate-200 text-slate-700 dark:text-slate-300 dark:bg-slate-700 dark:text-slate-300',
                         entry.rank === 3 && 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
                         entry.rank > 3 && isCurrentUser && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
                         entry.rank > 3 && !isCurrentUser && 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',

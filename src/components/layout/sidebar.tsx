@@ -24,6 +24,7 @@ import {
   LogOut,
   Calendar,
   FileText,
+  Sun,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -48,6 +49,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ThemeToggle } from '@/components/shared/theme-toggle';
 
 interface NavItem {
   label: string;
@@ -74,6 +76,7 @@ const learnerNavItems: NavItem[] = [
   { label: 'Community', view: 'learner-community', icon: MessageCircle },
   { label: 'Live Cohorts', view: 'learner-live-cohorts', icon: Calendar },
   { label: 'Achievements', view: 'learner-achievements', icon: Trophy },
+  { label: 'Profile', view: 'learner-profile', icon: User },
   { label: 'AI Tutor', view: 'ai-assistant', icon: Sparkles },
 ];
 
@@ -337,6 +340,16 @@ export function Sidebar() {
                   <DropdownMenuItem onClick={() => setView('admin-settings')}>
                     <Settings className="mr-2 h-4 w-4" />
                     Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="cursor-default">
+                    <div className="flex items-center justify-between w-full">
+                      <span className="flex items-center">
+                        <Sun className="mr-2 h-4 w-4" />
+                        Theme
+                      </span>
+                      <ThemeToggle />
+                    </div>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={goToLanding}>

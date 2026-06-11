@@ -72,7 +72,7 @@ function getTypeEmoji(type: CommunityPost['type']) {
 
 function getTypeBadgeStyle(type: CommunityPost['type']) {
   switch (type) {
-    case 'discussion': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    case 'discussion': return 'bg-emerald-100 text-emerald-700 border-emerald-500/30';
     case 'question': return 'bg-violet-100 text-violet-700 border-violet-200';
     case 'announcement': return 'bg-amber-100 text-amber-700 border-amber-200';
     case 'resource': return 'bg-pink-100 text-pink-700 border-pink-200';
@@ -194,7 +194,7 @@ export function LearnerCommunity() {
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Community</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-50">Community</h1>
           <p className="text-slate-500 mt-0.5">Connect, share, and learn together</p>
         </div>
         <Button
@@ -258,9 +258,9 @@ export function LearnerCommunity() {
         {/* Trending Sidebar - Hidden on mobile */}
         <div className="hidden lg:block w-80 shrink-0 space-y-4">
           {/* Trending Topics */}
-          <Card className="border-slate-200 overflow-hidden">
+          <Card className="border-border overflow-hidden">
             <CardHeader className="pb-3 bg-gradient-to-r from-emerald-50 to-violet-50">
-              <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+              <CardTitle className="text-sm font-semibold text-slate-900 dark:text-slate-50 flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-emerald-600" />
                 Trending Topics
               </CardTitle>
@@ -274,9 +274,9 @@ export function LearnerCommunity() {
                   >
                     <div className="flex items-center gap-2.5">
                       <span className="text-xs font-bold text-slate-400 w-5">{idx + 1}</span>
-                      <span className="text-sm font-medium text-slate-700">#{topic.tag}</span>
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">#{topic.tag}</span>
                     </div>
-                    <span className="text-xs text-slate-400">{topic.count} posts</span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500">{topic.count} posts</span>
                   </div>
                 ))}
               </div>
@@ -284,9 +284,9 @@ export function LearnerCommunity() {
           </Card>
 
           {/* Top Contributors */}
-          <Card className="border-slate-200 overflow-hidden">
+          <Card className="border-border overflow-hidden">
             <CardHeader className="pb-3 bg-gradient-to-r from-violet-50 to-pink-50">
-              <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+              <CardTitle className="text-sm font-semibold text-slate-900 dark:text-slate-50 flex items-center gap-2">
                 <Trophy className="h-4 w-4 text-violet-600" />
                 Top Contributors
               </CardTitle>
@@ -312,13 +312,13 @@ export function LearnerCommunity() {
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900 truncate">{user.name}</p>
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-50 truncate">{user.name}</p>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-slate-400 flex items-center gap-0.5">
                           <Flame className="h-3 w-3 text-orange-400" />
                           {user.streak}
                         </span>
-                        <span className="text-xs text-slate-400">{user.points.toLocaleString()} pts</span>
+                        <span className="text-xs text-slate-400 dark:text-slate-500">{user.points.toLocaleString()} pts</span>
                       </div>
                     </div>
                   </div>
@@ -328,7 +328,7 @@ export function LearnerCommunity() {
           </Card>
 
           {/* Quick Stats */}
-          <Card className="border-slate-200">
+          <Card className="border-border">
             <CardContent className="p-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="text-center p-3 rounded-lg bg-emerald-50">
@@ -357,36 +357,36 @@ export function LearnerCommunity() {
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-slate-900 flex items-center gap-2">
+            <DialogTitle className="text-slate-900 dark:text-slate-50 flex items-center gap-2">
               <MessageCircle className="h-5 w-5 text-emerald-600" />
               Create a Post
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <Label className="text-slate-700 mb-1.5">Title</Label>
+              <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Title</Label>
               <Input
                 placeholder="What's on your mind?"
                 value={newPost.title}
                 onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
-                className="border-slate-200 focus:border-emerald-400"
+                className="border-border focus:border-emerald-400"
               />
             </div>
             <div>
-              <Label className="text-slate-700 mb-1.5">Content</Label>
+              <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Content</Label>
               <Textarea
                 placeholder="Share your thoughts, questions, or resources..."
                 value={newPost.content}
                 onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
                 rows={5}
-                className="border-slate-200 focus:border-emerald-400 resize-none"
+                className="border-border focus:border-emerald-400 resize-none"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-slate-700 mb-1.5">Type</Label>
+                <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Type</Label>
                 <Select value={newPost.type} onValueChange={(v) => setNewPost({ ...newPost, type: v as CommunityPost['type'] })}>
-                  <SelectTrigger className="border-slate-200">
+                  <SelectTrigger className="border-border">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -398,9 +398,9 @@ export function LearnerCommunity() {
                 </Select>
               </div>
               <div>
-                <Label className="text-slate-700 mb-1.5">Category</Label>
+                <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Category</Label>
                 <Select value={newPost.categoryId} onValueChange={(v) => setNewPost({ ...newPost, categoryId: v })}>
-                  <SelectTrigger className="border-slate-200">
+                  <SelectTrigger className="border-border">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -412,17 +412,17 @@ export function LearnerCommunity() {
               </div>
             </div>
             <div>
-              <Label className="text-slate-700 mb-1.5">Tags (comma separated)</Label>
+              <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Tags (comma separated)</Label>
               <Input
                 placeholder="e.g., nextjs, react, tips"
                 value={newPost.tags}
                 onChange={(e) => setNewPost({ ...newPost, tags: e.target.value })}
-                className="border-slate-200 focus:border-emerald-400"
+                className="border-border focus:border-emerald-400"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)} className="border-slate-200">
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)} className="border-border">
               Cancel
             </Button>
             <Button
@@ -471,7 +471,7 @@ function PostFeedCard({
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ delay: index * 0.05 }}
     >
-      <Card className={`border-slate-200 hover:shadow-md transition-all overflow-hidden ${post.isPinned ? 'ring-2 ring-emerald-200 border-emerald-200' : ''}`}>
+      <Card className={`border-border hover:shadow-md transition-all overflow-hidden ${post.isPinned ? 'ring-2 ring-emerald-500/30 border-emerald-500/30' : ''}`}>
         <CardContent className="p-0">
           {/* Author Header */}
           <div className="p-4 pb-0">
@@ -484,12 +484,12 @@ function PostFeedCard({
                 </Avatar>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-900 text-sm">{post.author?.name || 'Unknown'}</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-50 text-sm">{post.author?.name || 'Unknown'}</span>
                     <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${roleBadge.class} border-0`}>
                       {roleBadge.label}
                     </Badge>
                     {post.isPinned && (
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200">
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-500/30">
                         📌 Pinned
                       </Badge>
                     )}
@@ -508,7 +508,7 @@ function PostFeedCard({
 
           {/* Content */}
           <div className="px-4 pt-3 pb-2">
-            <h3 className="font-bold text-slate-900 text-base leading-snug mb-1.5">{post.title}</h3>
+            <h3 className="font-bold text-slate-900 dark:text-slate-50 text-base leading-snug mb-1.5">{post.title}</h3>
             <p className="text-slate-600 text-sm leading-relaxed">{post.content}</p>
           </div>
 
@@ -588,7 +588,7 @@ function PostFeedCard({
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="border-t border-slate-200 bg-slate-50/50">
+                <div className="border-t border-border bg-slate-50/50 dark:bg-slate-900/50">
                   <div className="p-4 space-y-3">
                     {sampleComments.map((comment) => (
                       <div key={comment.id} className="flex gap-3">
@@ -599,8 +599,8 @@ function PostFeedCard({
                         </Avatar>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-xs font-semibold text-slate-900">{comment.author}</span>
-                            <span className="text-[10px] text-slate-400">{comment.timeAgo}</span>
+                            <span className="text-xs font-semibold text-slate-900 dark:text-slate-50">{comment.author}</span>
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500">{comment.timeAgo}</span>
                           </div>
                           <p className="text-sm text-slate-600 leading-relaxed">{comment.content}</p>
                           <button className="text-xs text-slate-400 hover:text-red-500 mt-1 flex items-center gap-1">
@@ -620,7 +620,7 @@ function PostFeedCard({
                       <div className="flex-1 flex gap-2">
                         <Input
                           placeholder="Write a comment..."
-                          className="text-sm border-slate-200 focus:border-emerald-400 h-8"
+                          className="text-sm border-border focus:border-emerald-400 h-8"
                         />
                         <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 px-3 shrink-0">
                           <Send className="h-3 w-3" />

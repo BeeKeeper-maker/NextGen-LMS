@@ -14,6 +14,7 @@ import { LearnerDashboard } from '@/components/learner/learner-dashboard';
 import { LearnerCourse } from '@/components/learner/learner-course';
 import { LearnerCommunity } from '@/components/learner/learner-community';
 import { LearnerAchievements } from '@/components/learner/learner-achievements';
+import { LearnerProfile } from '@/components/learner/learner-profile';
 import { AdminLiveCohorts } from '@/components/admin/admin-live-cohorts';
 import { LearnerLiveCohorts } from '@/components/learner/learner-live-cohorts';
 import { CheckoutPage } from '@/components/checkout/checkout-page';
@@ -44,6 +45,7 @@ import {
   ChevronRight,
   CheckCheck,
 } from 'lucide-react';
+import { ThemeToggle } from '@/components/shared/theme-toggle';
 
 // View name map for breadcrumbs
 const viewLabels: Record<string, string> = {
@@ -60,6 +62,7 @@ const viewLabels: Record<string, string> = {
   'learner-community': 'Community',
   'learner-achievements': 'Achievements',
   'learner-live-cohorts': 'Live Cohorts',
+  'learner-profile': 'Profile',
   'ai-assistant': 'AI Tutor',
   'ai-content-gen': 'AI Content Generation',
 };
@@ -81,6 +84,7 @@ function MainContent() {
     'learner-community': <LearnerCommunity />,
     'learner-achievements': <LearnerAchievements />,
     'learner-live-cohorts': <LearnerLiveCohorts />,
+    'learner-profile': <LearnerProfile />,
     'checkout': <CheckoutPage />,
     'ai-assistant': <AITutorFullPage />,
     'ai-content-gen': <AIContentGeneration />,
@@ -131,6 +135,9 @@ function TopBar() {
             className="h-8 w-48 lg:w-64 pl-8 text-sm bg-muted/50 border-0 focus-visible:ring-1"
           />
         </div>
+
+        {/* Theme Toggle */}
+        <ThemeToggle />
 
         {/* Notifications */}
         <Popover>

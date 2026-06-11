@@ -322,7 +322,7 @@ export function AdminLiveCohorts() {
 
       {/* Calendar View */}
       {viewMode === 'calendar' && (
-        <Card>
+        <Card className="shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-4 md:p-6">
             {/* Month Navigation */}
             <div className="flex items-center justify-between mb-6">
@@ -335,6 +335,16 @@ export function AdminLiveCohorts() {
               <Button variant="ghost" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
                 <ChevronRight className="h-5 w-5" />
               </Button>
+            </div>
+
+            {/* Color Legend */}
+            <div className="flex flex-wrap gap-3 mb-4">
+              {Object.entries(eventTypeLabels).map(([type, label]) => (
+                <div key={type} className="flex items-center gap-1.5">
+                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: eventTypeColors[type] }} />
+                  <span className="text-[10px] text-muted-foreground">{label}</span>
+                </div>
+              ))}
             </div>
 
             {/* Day-of-week headers */}

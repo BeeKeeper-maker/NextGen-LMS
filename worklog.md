@@ -445,13 +445,275 @@ Stage Summary:
 1. **Fast Refresh runtime warnings** in dev.log when landing-page.tsx changes — likely due to useEffect patterns in typing animations; not a production issue
 2. **No real authentication flow** — Currently using demo user data
 3. **No database seeding in production** — All data is from mock data
-4. **No dark mode implementation** — All views use light theme only
+4. ~~**No dark mode implementation**~~ — **RESOLVED**: Dark mode now fully implemented with next-themes (Task S1)
 5. **Settings sidebar click** — Previously reported as flaky in automated testing; may need manual verification
 
 ### Priority Recommendations for Next Phase:
-1. **Implement Dark Mode** — Add theme toggle with next-themes and ensure all components respect dark variants
+1. ~~**Implement Dark Mode**~~ — ✅ COMPLETED (Task S1)
 2. **Database Seeding Script** — Create a comprehensive seed script that populates the database for a real demo
 3. **Video Player Component** — Build a mock video player for course lesson pages
 4. **Real-time Notifications** — Use WebSocket/SSE for live notification delivery
 5. **RBAC Permission Enforcement** — Connect role-based permissions to actual UI restrictions
 6. **Mobile App Shell** — Add PWA manifest and service worker for mobile app-like experience
+
+---
+
+## Task ID: S2-S3
+Agent: full-stack-developer
+Task: Build Video Player Component and Student Profile & Settings Page
+
+Work Log:
+- Created Video Player Component (`src/components/shared/video-player.tsx`):
+  - 16:9 aspect ratio container with dark gradient background
+  - Simulated video content with animated gradient that shifts during playback
+  - Large centered Play/Pause button overlay with blur effect
+  - Bottom control bar: Play/Pause toggle, Skip Forward (+10s), Volume (mute/unmute), Time display (m:ss / h:mm:ss), Mark as Complete button, Playback Speed selector (0.5x-2x dropdown), Fullscreen button
+  - Seekable progress bar with hover-to-expand effect and drag indicator
+  - Buffered progress indicator (mock)
+  - Auto-hide controls after 3s during playback; show on mouse move
+  - Title overlay with module name and lesson title, auto-hides after 3s during playback
+  - Completed state indicator (green checkmark overlay)
+  - Sidebar/Next Up panel (right on desktop, below on mobile): current lesson info, Up Next list with next 3 lessons, Lesson Notes, "Ask AI Tutor" gradient button, Download Resources section
+  - Netflix-inspired dark theme with slate/emerald/violet color scheme
+  - Back to Course button
+
+- Updated Learner Course Detail (`src/components/learner/learner-course.tsx`):
+  - Added `activeLesson` state to track which lesson is being viewed
+  - Added `lessonProgressState` to track completion across curriculum and video player
+  - When a lesson button is clicked (Start, Continue, Preview, Rewatch), the VideoPlayer replaces the curriculum view
+  - "Back to Course" button returns to the curriculum view
+  - ModuleSection now accepts `progressMap` and `onLessonClick` props for proper state management
+  - Completed lessons show a "Rewatch" button
+  - All lesson buttons navigate to the Video Player
+  - Progress updates in the video player are reflected in the curriculum when returning
+
+- Created Student Profile Page (`src/components/learner/learner-profile.tsx`):
+  - Profile Header: Large avatar with upload hover overlay, name, email, role badge, member since date, streak/points info, Edit Profile button with gradient background
+  - Tab 1 - Personal Info: First/Last name inputs, Email (read-only with Change link), Bio textarea with character count, Timezone selector (12 options), Language selector (8 options), Save/Cancel buttons
+  - Tab 2 - Learning Preferences: Daily learning goal slider (10-120 min), Learning pace selector (Slow/Moderate/Fast with emoji cards), Email notification toggles (5 options: course updates, community mentions, live reminders, achievements, weekly report), Auto-play toggle, Video quality selector (Auto/720p/1080p), Closed captions toggle
+  - Tab 3 - Security: Change password form (current, new, confirm with validation hints), Two-factor authentication toggle with success message, Active sessions list (3 sessions with device, location, last active), Sign out all devices button
+  - Tab 4 - Connected Accounts: Google (connected), GitHub (connected), LinkedIn (not connected), Slack (not connected) - each with connect/disconnect toggle
+  - Tab 5 - Learning History: Summary cards (5 courses completed, 119h total, 88% avg quiz, 4 certificates), Course completion table with date, time spent, quiz score badge, certificate status, Export CSV button
+
+- Updated Types (`src/types/index.ts`):
+  - Added 'learner-profile' to AppView type union
+
+- Updated Sidebar (`src/components/layout/sidebar.tsx`):
+  - Added "Profile" nav item with User icon to learner navigation, placed after Achievements
+
+- Updated App Layout (`src/components/layout/app-layout.tsx`):
+  - Added LearnerProfile import and view mapping for 'learner-profile'
+  - Added 'learner-profile' to breadcrumb labels
+
+Stage Summary:
+- Professional Netflix-inspired video player with full playback controls
+- Lesson view integration with curriculum → video player → back navigation
+- Comprehensive student profile with 5 tabs covering all settings
+- All components use slate/emerald/violet color scheme
+- Clean lint with zero errors
+- Dev server compiles and serves successfully
+
+---
+
+## Task ID: S1
+Agent: full-stack-developer
+Task: Implement Dark Mode with next-themes across the entire application
+
+Work Log:
+- Created ThemeProvider component (`src/components/shared/theme-provider.tsx`) wrapping next-themes with `attribute="class"`, `defaultTheme="light"`, `enableSystem`, and `disableTransitionOnChange`
+- Updated root layout (`src/app/layout.tsx`) to wrap children with ThemeProvider and confirmed `suppressHydrationWarning` on html tag
+- Created ThemeToggle component (`src/components/shared/theme-toggle.tsx`) with:
+  - Animated Sun/Moon icon transition using CSS rotate and scale transforms
+  - Dropdown with 3 options: Light, Dark, System (with checkmark on active)
+  - Hydration-safe using `useMounted` hook with `useSyncExternalStore`
+  - Monitor icon shown when system theme is active
+- Created `useMounted` hook (`src/hooks/use-mounted.ts`) using `useSyncExternalStore` to avoid `set-state-in-effect` lint errors
+- Added ThemeToggle to 3 locations:
+  - TopBar in app-layout.tsx (between search and notification bell)
+  - Sidebar user profile dropdown menu (as "Theme" row with toggle button)
+  - Landing page navbar (both desktop CTAs and mobile menu)
+- Updated all custom components with dark mode classes across 20+ files:
+  - **Landing Page**: Logo gradient text (`dark:from-slate-100 dark:via-slate-300 dark:to-emerald-400`), already had dark variants for feature cards, pricing, comparison, testimonials, integrations, CTA, and footer
+  - **App Layout**: TopBar already uses `bg-background/95` and `border-border` which work in both modes
+  - **Sidebar**: Already had `dark:bg-emerald-950 dark:text-emerald-300` for active nav, `dark:bg-emerald-900` for avatar
+  - **Admin Dashboard**: Already had `dark:bg-emerald-950/40` and `dark:bg-violet-950/40` for KPI cards and activity items
+  - **Admin Community**: Replaced `border-slate-200` → `border-border`, `text-slate-900` → `text-slate-900 dark:text-slate-50`, `text-slate-700` → `text-slate-700 dark:text-slate-300`, `bg-slate-100` → `bg-slate-100 dark:bg-slate-800`
+  - **Admin Courses**: Same border and text color dark variants
+  - **Admin Assessments**: Same border and text color dark variants
+  - **Admin Certificates**: Same border and text color dark variants
+  - **Admin Analytics**: Fixed duplicate `dark:text-slate-400` to `dark:text-slate-300`
+  - **Admin Settings**: Same border and text color dark variants
+  - **Admin Live Cohorts**: Same border and text color dark variants
+  - **Learner Dashboard**: Already had many dark variants; added remaining `dark:text-slate-50`, `dark:border-border` etc.
+  - **Learner Course**: Same border and text color dark variants
+  - **Learner Community**: Added `dark:bg-slate-900/50` for comment sections
+  - **Learner Achievements**: Already had comprehensive dark variants
+  - **Learner Live Cohorts**: Already had `dark:bg-emerald-950/30` for schedule cells, `dark:bg-violet-950` for recording icons
+  - **Checkout Page**: Added `dark:from-slate-950 dark:to-emerald-950/20` for success state background, `dark:bg-emerald-900` for success checkmark, `dark:bg-emerald-950/30` for order details, `dark:from-violet-950 dark:to-emerald-950` for product card image, `dark:bg-violet-900 dark:text-violet-300` for type badge, `dark:border-emerald-700 dark:text-emerald-300` for courses badge, `dark:bg-emerald-900 dark:text-emerald-300` for savings badge, `dark:bg-muted` for payment method logos, `dark:bg-muted/50` for included courses section, `dark:from-slate-950 dark:to-violet-950/10` for main background
+  - **AI Tutor Chat**: Already had dark variants for code blocks and chat bubbles
+  - **AI Content Generation**: Already had dark variants
+  - **Notification Center**: Already had dark variants for unread indicators and icon backgrounds
+- Fixed pre-existing lint errors in video-player.tsx (set-state-in-effect pattern)
+- Batch replacements performed via sed across all component directories:
+  - `text-slate-900"` → `text-slate-900 dark:text-slate-50"`
+  - `text-slate-900 ` → `text-slate-900 dark:text-slate-50 ` (for non-quote-ending cases)
+  - `border-slate-200` → `border-border` (using CSS variable)
+  - `text-slate-700"` → `text-slate-700 dark:text-slate-300"`
+  - `text-slate-700 ` → `text-slate-700 dark:text-slate-300 `
+  - `bg-slate-100"` → `bg-slate-100 dark:bg-slate-800"`
+  - `text-slate-600"` → `text-slate-600 dark:text-slate-400"`
+  - `text-slate-500"` → `text-slate-500 dark:text-slate-400"`
+  - `hover:bg-slate-50"` → `hover:bg-muted/50"`
+  - `hover:bg-slate-100"` → `hover:bg-muted"`
+  - `hover:border-slate-300` → `hover:border-border`
+  - `bg-white"` → `bg-card"` (where appropriate)
+- All ESLint checks pass with zero errors
+- Dev server returns 200 for all routes
+- Dark mode uses existing `.dark` CSS variables in globals.css (oklch color system)
+
+Stage Summary:
+- Full dark mode implementation using next-themes with class-based switching
+- ThemeToggle available in TopBar, Sidebar dropdown, and Landing navbar
+- 3 theme options: Light, Dark, System (follows OS preference)
+- All 20+ custom components updated with dark: variants
+- Consistent use of CSS variables (bg-card, text-foreground, border-border) that work in both modes
+- Custom colored elements (emerald badges, violet accents) have proper dark mode contrast
+- Color scheme preserved (slate/emerald/violet) in both light and dark modes
+- Clean lint with zero errors
+
+---
+
+## Task ID: S5-S6
+Agent: full-stack-developer
+Task: Enhanced Landing Page Interactive Demos and Admin Page Styling Consistency
+
+Work Log:
+
+### Landing Page Interactive Enhancements (`src/components/landing/landing-page.tsx`)
+
+1. **"As Seen In" Media Logos Marquee** (between Hero and Features)
+   - Horizontal infinite scroll marquee with text-based logos: TechCrunch, Forbes, Wired, EdTech, The Verge, VentureBeat
+   - Smooth CSS animation (30s infinite linear) with fade gradient edges
+   - Muted text styling for premium feel
+
+2. **Live Dashboard Preview Section** (between Features and Pricing)
+   - Interactive HTML/CSS dashboard mockup with browser chrome (URL bar, traffic lights)
+   - 4 KPI cards with animated counter numbers (count up when scrolled into view using IntersectionObserver)
+   - Mini bar chart with 12 animated bars (revenue data)
+   - Mini table showing top 3 courses with status badges
+   - Floating animation wrapper (6s cycle) and glowing effect behind the card
+   - "Try it yourself →" CTA button linking to admin mode
+
+3. **Community Preview Section** (between Pricing and Comparison)
+   - 4 mock discussion post cards with colored avatar initials, names, timestamps
+   - Like/comment counts with interactive hover effects
+   - Pinned badge on first post
+   - Staggered animation on scroll (0.15s delay per card)
+   - "Join the Community" CTA button linking to learner mode
+
+4. **Enhanced Testimonials Section** (carousel)
+   - Desktop: shows all 5 testimonials in a 3-column grid
+   - Mobile: carousel with auto-rotate every 5 seconds
+   - Left/right arrow navigation buttons
+   - Navigation dots at bottom (animated active state: emerald pill)
+   - Fade/slide transition between testimonials on mobile using AnimatePresence
+
+5. **Floating Stats Counter** (fixed position, bottom-left)
+   - Shows "2,847 learners online now" with "across 50+ countries" subtitle
+   - Green pulsing dot indicator
+   - Number randomly ticks ±2 every 3 seconds (clamped 2800-2900)
+   - Glass-morphism effect (backdrop-blur-xl, bg-background/80)
+   - Dismiss with X button
+   - Only appears after scrolling past the hero section
+
+### Admin Pages Styling Consistency
+
+1. **Admin Dashboard** (`admin-dashboard.tsx`):
+   - Added `shadow-sm hover:shadow-md transition-shadow` to all 8 card types
+   - Added `pb-2` to CardHeaders for consistent padding
+   - Added "Last updated: just now" timestamp next to date/time display
+
+2. **Admin Courses** (`admin-courses.tsx`):
+   - Added `h-full shadow-sm flex flex-col` to course cards for consistent heights
+   - Added `flex-1 flex flex-col` to CardContent for proper stretching
+   - Improved New Course Dialog: wider max-width (580px), added Separator, resize-none textarea, BookOpen icon on Create button
+
+3. **Admin Community** (`admin-community.tsx`):
+   - Added `shadow-sm hover:shadow-md transition-shadow` to Category Management card
+   - Added Tag icon next to "Category Management" title
+   - Added `title={post.content}` attribute for hover preview on truncated post content
+
+4. **Admin Assessments** (`admin-assessments.tsx`):
+   - Added `shadow-sm hover:shadow-md transition-shadow` to filter card
+   - Already had difficulty color coding and consistent question styling
+
+5. **Admin Certificates** (`admin-certificates.tsx`):
+   - Added `h-full flex flex-col shadow-sm` to certificate preview cards
+   - Added "Download Sample" button with Download icon on each template
+   - Added `shadow-sm` to certificate builder settings card
+
+6. **Admin Analytics** (`admin-analytics.tsx`):
+   - Added `shadow-sm hover:shadow-md transition-shadow` to all chart cards
+   - Added `pb-2` to CardHeaders for consistent padding
+
+7. **Admin Live Cohorts** (`admin-live-cohorts.tsx`):
+   - Added `shadow-sm hover:shadow-md transition-shadow` to calendar card
+   - Added color legend for 7 event types (colored dots with labels)
+
+8. **Admin Settings** (`admin-settings.tsx`):
+   - Added `shadow-sm hover:shadow-md transition-shadow` to all 13 cards across all tabs
+   - Added Crown icon to Super Admin role badges, Shield icon to Admin role badges
+
+Stage Summary:
+- All 5 landing page interactive enhancements implemented
+- All 8 admin components polished with consistent styling
+- ESLint passes with zero errors
+- Dev server returns HTTP 200, all pages compile successfully
+
+---
+
+## Round 3 Summary — QA, Dark Mode, Video Player, Profile & Landing Polish
+
+### Current Project Status Assessment
+- **Previous Rounds**: Built 27+ features across 2 rounds including landing page, admin dashboards, learner views, checkout, notifications, live cohorts
+- **QA Result**: All pages return HTTP 200, zero console errors, dark mode verified working, video player functional
+- **Key Finding**: Checkout page works correctly when clicked via sidebar (agent-browser `find text` had false positive matching)
+
+### Current Goals / Completed Modifications / Verification Results
+
+#### New Features Built:
+1. ✅ **Dark Mode System** — ThemeProvider with next-themes, ThemeToggle dropdown (Light/Dark/System), placed in TopBar, sidebar profile dropdown, and landing navbar. All 20+ components updated with dark: variants.
+2. ✅ **Video Player Component** — Netflix-style 16:9 player with play/pause, seek bar, volume, speed control, fullscreen, auto-hide controls, progress tracking, sidebar with Up Next/Notes/Resources/AI Tutor
+3. ✅ **Lesson View Integration** — Clicking lessons in curriculum opens VideoPlayer, Back to Course button, progress syncs between views
+4. ✅ **Student Profile Page** — 5 tabs (Personal Info, Learning Preferences, Security, Connected Accounts, Learning History) with avatar, preferences, 2FA, sessions, export CSV
+5. ✅ **Landing: Live Dashboard Preview** — Interactive HTML/CSS mockup with animated KPI counters, mini bar chart, mini table, glow effect
+6. ✅ **Landing: Community Preview** — 4 mock discussion posts with staggered animations, Join CTA
+7. ✅ **Landing: "As Seen In" Marquee** — TechCrunch, Forbes, Wired, EdTech, The Verge, VentureBeat infinite scroll
+8. ✅ **Landing: Enhanced Testimonials** — Desktop 3-column grid, mobile auto-rotating carousel with dots and arrows
+9. ✅ **Landing: Floating Stats Counter** — Glass-morphism card with live "2,847 learners online" count, dismissible
+10. ✅ **Admin Pages Polish** — Consistent card shadows, timestamps, color legends, download buttons, empty states across all 8 admin views
+
+#### Verification:
+- ✅ ESLint passes with zero errors
+- ✅ Dev server returns HTTP 200 for all routes
+- ✅ Dark mode toggle works (verified: html class="dark" applied)
+- ✅ Video player renders when lesson is clicked
+- ✅ Profile page loads with all 5 tabs
+- ✅ Landing page shows new sections (marquee, dashboard preview, community preview)
+- ✅ No console errors across all tested views
+
+### Total Platform Features: **37+**
+
+### Unresolved Issues or Risks:
+1. **Agent-browser text matching** — `find text "Checkout"` matches landing page CTA instead of sidebar button; use `snapshot -i` + ref-based clicking instead
+2. **No real video playback** — Video player simulates playback with a timer, no actual video streaming
+3. **No database-backed data** — All views use mock data from `/src/lib/mock-data.ts`
+4. **No authentication** — Using demo user data in Zustand store
+
+### Priority Recommendations for Next Phase:
+1. **Real Authentication Flow** — Implement NextAuth.js with proper session management
+2. **Database-Backed Operations** — Connect CRUD operations to Prisma for courses, posts, assessments
+3. **HLS Video Streaming** — Integrate adaptive bitrate streaming for real video content
+4. **Real-time Notifications** — WebSocket-based notification delivery
+5. **PWA Support** — Service worker, manifest, offline support
+6. **i18n Integration** — Multi-language support using next-intl

@@ -1,0 +1,881 @@
+     1→'use client';
+     2→
+     3→import { useState, useRef, useEffect, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { Button } from '@/components/ui/button';
+     6→import { Input } from '@/components/ui/input';
+     7→import { ScrollArea } from '@/components/ui/scroll-area';
+     8→import { Card } from '@/components/ui/card';
+     9→import { Badge } from '@/components/ui/badge';
+    10→import { Separator } from '@/components/ui/separator';
+    11→import {
+    12→  Bot,
+    13→  Send,
+    14→  X,
+    15→  Minus,
+    16→  Maximize2,
+    17→  Sparkles,
+    18→  User,
+    19→  Loader2,
+    20→  BookOpen,
+    21→  HelpCircle,
+    22→  Code,
+    23→  GraduationCap,
+    24→  MessageSquare,
+    25→  ChevronLeft,
+    26→  Plus,
+    27→  Trash2,
+    28→} from 'lucide-react';
+    29→import { toast } from 'sonner';
+    30→import type { ChatMessage } from '@/types';
+    31→import { useAppStore } from '@/store/app-store';
+    32→import { demoCourses } from '@/lib/mock-data';
+    33→
+    34→// ============================================================
+    35→// Markdown Renderer (simplified - handles code, bold, lists)
+    36→// ============================================================
+    37→function MarkdownRenderer({ content }: { content: string }) {
+    38→  const lines = content.split('\n');
+    39→  const elements: React.ReactNode[] = [];
+    40→  let inCodeBlock = false;
+    41→  let codeContent = '';
+    42→  let codeLang = '';
+    43→  let inList = false;
+    44→
+    45→  for (let i = 0; i < lines.length; i++) {
+    46→    const line = lines[i];
+    47→
+    48→    if (line.startsWith('```')) {
+    49→      if (inCodeBlock) {
+    50→        elements.push(
+    51→          <pre
+    52→            key={`code-${i}`}
+    53→            className="my-2 rounded-lg bg-slate-900 p-3 text-sm text-emerald-300 overflow-x-auto font-mono"
+    54→          >
+    55→            {codeLang && (
+    56→              <div className="text-xs text-slate-500 mb-1">{codeLang}</div>
+    57→            )}
+    58→            <code>{codeContent.trim()}</code>
+    59→          </pre>
+    60→        );
+    61→        codeContent = '';
+    62→        codeLang = '';
+    63→        inCodeBlock = false;
+    64→      } else {
+    65→        inCodeBlock = true;
+    66→        codeLang = line.slice(3).trim();
+    67→      }
+    68→      continue;
+    69→    }
+    70→
+    71→    if (inCodeBlock) {
+    72→      codeContent += line + '\n';
+    73→      continue;
+    74→    }
+    75→
+    76→    // Inline formatting
+    77→    const formatInline = (text: string): React.ReactNode => {
+    78→      // Bold
+    79→      const parts = text.split(/(\*\*[^*]+\*\*)/g);
+    80→      return parts.map((part, idx) => {
+    81→        if (part.startsWith('**') && part.endsWith('**')) {
+    82→          return (
+    83→            <strong key={idx} className="font-semibold text-foreground">
+    84→              {part.slice(2, -2)}
+    85→            </strong>
+    86→          );
+    87→        }
+    88→        // Inline code
+    89→        const codeParts = part.split(/(`[^`]+`)/g);
+    90→        return codeParts.map((cp, cidx) => {
+    91→          if (cp.startsWith('`') && cp.endsWith('`')) {
+    92→            return (
+    93→              <code
+    94→                key={`${idx}-${cidx}`}
+    95→                className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-mono text-violet-700 dark:bg-slate-800 dark:text-violet-300"
+    96→              >
+    97→                {cp.slice(1, -1)}
+    98→              </code>
+    99→            );
+   100→          }
+   101→          return cp;
+   102→        });
+   103→      });
+   104→    };
+   105→
+   106→    // Headers
+   107→    if (line.startsWith('### ')) {
+   108→      if (inList) { inList = false; }
+   109→      elements.push(
+   110→        <h4 key={`h3-${i}`} className="font-semibold text-foreground mt-3 mb-1">
+   111→          {formatInline(line.slice(4))}
+   112→        </h4>
+   113→      );
+   114→      continue;
+   115→    }
+   116→    if (line.startsWith('## ')) {
+   117→      if (inList) { inList = false; }
+   118→      elements.push(
+   119→        <h3 key={`h2-${i}`} className="text-base font-semibold text-foreground mt-3 mb-1">
+   120→          {formatInline(line.slice(3))}
+   121→        </h3>
+   122→      );
+   123→      continue;
+   124→    }
+   125→    if (line.startsWith('# ')) {
+   126→      if (inList) { inList = false; }
+   127→      elements.push(
+   128→        <h2 key={`h1-${i}`} className="text-lg font-bold text-foreground mt-3 mb-1">
+   129→          {formatInline(line.slice(2))}
+   130→        </h2>
+   131→      );
+   132→      continue;
+   133→    }
+   134→
+   135→    // Unordered list
+   136→    if (line.match(/^[-*]\s/)) {
+   137→      inList = true;
+   138→      elements.push(
+   139→        <li key={`li-${i}`} className="ml-4 list-disc text-sm text-muted-foreground">
+   140→          {formatInline(line.replace(/^[-*]\s/, ''))}
+   141→        </li>
+   142→      );
+   143→      continue;
+   144→    }
+   145→
+   146→    // Ordered list
+   147→    if (line.match(/^\d+\.\s/)) {
+   148→      inList = true;
+   149→      elements.push(
+   150→        <li key={`oli-${i}`} className="ml-4 list-decimal text-sm text-muted-foreground">
+   151→          {formatInline(line.replace(/^\d+\.\s/, ''))}
+   152→        </li>
+   153→      );
+   154→      continue;
+   155→    }
+   156→
+   157→    if (inList) { inList = false; }
+   158→
+   159→    // Empty line
+   160→    if (line.trim() === '') {
+   161→      elements.push(<div key={`br-${i}`} className="h-2" />);
+   162→      continue;
+   163→    }
+   164→
+   165→    // Paragraph
+   166→    elements.push(
+   167→      <p key={`p-${i}`} className="text-sm text-muted-foreground leading-relaxed">
+   168→        {formatInline(line)}
+   169→      </p>
+   170→    );
+   171→  }
+   172→
+   173→  return <div className="space-y-0.5">{elements}</div>;
+   174→}
+   175→
+   176→// ============================================================
+   177→// Floating Chat Widget
+   178→// ============================================================
+   179→interface Conversation {
+   180→  id: string;
+   181→  title: string;
+   182→  messages: ChatMessage[];
+   183→  createdAt: string;
+   184→  courseContext?: string;
+   185→}
+   186→
+   187→export function AITutorFloatingWidget() {
+   188→  const [isOpen, setIsOpen] = useState(false);
+   189→  const [messages, setMessages] = useState<ChatMessage[]>([
+   190→    {
+   191→      id: 'welcome',
+   192→      role: 'assistant',
+   193→      content:
+   194→        "Hi! I'm your AI Learning Assistant. I can help you understand concepts, debug code, create study plans, and more. What would you like to learn today?",
+   195→      timestamp: new Date().toISOString(),
+   196→    },
+   197→  ]);
+   198→  const [input, setInput] = useState('');
+   199→  const [isLoading, setIsLoading] = useState(false);
+   200→  const scrollRef = useRef<HTMLDivElement>(null);
+   201→  const inputRef = useRef<HTMLInputElement>(null);
+   202→
+   203→  const scrollToBottom = useCallback(() => {
+   204→    if (scrollRef.current) {
+   205→      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+   206→    }
+   207→  }, []);
+   208→
+   209→  useEffect(() => {
+   210→    scrollToBottom();
+   211→  }, [messages, scrollToBottom]);
+   212→
+   213→  useEffect(() => {
+   214→    if (isOpen && inputRef.current) {
+   215→      inputRef.current.focus();
+   216→    }
+   217→  }, [isOpen]);
+   218→
+   219→  const sendMessage = useCallback(
+   220→    async (messageText?: string) => {
+   221→      const text = messageText || input.trim();
+   222→      if (!text || isLoading) return;
+   223→
+   224→      const userMsg: ChatMessage = {
+   225→        id: `user-${Date.now()}`,
+   226→        role: 'user',
+   227→        content: text,
+   228→        timestamp: new Date().toISOString(),
+   229→      };
+   230→
+   231→      setMessages((prev) => [...prev, userMsg]);
+   232→      setInput('');
+   233→      setIsLoading(true);
+   234→
+   235→      try {
+   236→        const res = await fetch('/api/ai', {
+   237→          method: 'POST',
+   238→          headers: { 'Content-Type': 'application/json' },
+   239→          body: JSON.stringify({
+   240→            message: text,
+   241→            sessionId: 'floating-chat',
+   242→          }),
+   243→        });
+   244→
+   245→        if (!res.ok) throw new Error('Failed to get response');
+   246→
+   247→        const data = await res.json();
+   248→
+   249→        const aiMsg: ChatMessage = {
+   250→          id: `ai-${Date.now()}`,
+   251→          role: 'assistant',
+   252→          content: data.response || 'I apologize, but I could not generate a response. Please try again.',
+   253→          timestamp: new Date().toISOString(),
+   254→        };
+   255→
+   256→        setMessages((prev) => [...prev, aiMsg]);
+   257→      } catch {
+   258→        toast.error('Failed to get AI response. Please try again.');
+   259→        setMessages((prev) => [
+   260→          ...prev,
+   261→          {
+   262→            id: `error-${Date.now()}`,
+   263→            role: 'assistant',
+   264→            content: 'Sorry, I encountered an error. Please try again in a moment.',
+   265→            timestamp: new Date().toISOString(),
+   266→          },
+   267→        ]);
+   268→      } finally {
+   269→        setIsLoading(false);
+   270→      }
+   271→    },
+   272→    [input, isLoading]
+   273→  );
+   274→
+   275→  return (
+   276→    <>
+   277→      {/* Floating Button */}
+   278→      <AnimatePresence>
+   279→        {!isOpen && (
+   280→          <motion.button
+   281→            initial={{ scale: 0, opacity: 0 }}
+   282→            animate={{ scale: 1, opacity: 1 }}
+   283→            exit={{ scale: 0, opacity: 0 }}
+   284→            whileHover={{ scale: 1.1 }}
+   285→            whileTap={{ scale: 0.9 }}
+   286→            onClick={() => setIsOpen(true)}
+   287→            className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-violet-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-shadow"
+   288→            aria-label="Open AI Learning Assistant"
+   289→          >
+   290→            <Bot className="h-6 w-6" />
+   291→          </motion.button>
+   292→        )}
+   293→      </AnimatePresence>
+   294→
+   295→      {/* Chat Panel */}
+   296→      <AnimatePresence>
+   297→        {isOpen && (
+   298→          <motion.div
+   299→            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+   300→            animate={{ opacity: 1, y: 0, scale: 1 }}
+   301→            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+   302→            transition={{ duration: 0.2 }}
+   303→            className="fixed bottom-6 right-6 z-50 flex h-[520px] w-[380px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+   304→          >
+   305→            {/* Header */}
+   306→            <div className="flex items-center justify-between bg-gradient-to-r from-emerald-600 to-violet-600 px-4 py-3 text-white">
+   307→              <div className="flex items-center gap-2">
+   308→                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
+   309→                  <Bot className="h-4 w-4" />
+   310→                </div>
+   311→                <div>
+   312→                  <p className="text-sm font-semibold">AI Learning Assistant</p>
+   313→                  <p className="text-[10px] text-white/70">Always here to help</p>
+   314→                </div>
+   315→              </div>
+   316→              <div className="flex items-center gap-1">
+   317→                <Button
+   318→                  variant="ghost"
+   319→                  size="icon"
+   320→                  className="h-7 w-7 text-white/80 hover:text-white hover:bg-white/10"
+   321→                  onClick={() => {
+   322→                    const store = useAppStore.getState();
+   323→                    store.setView('ai-assistant');
+   324→                    setIsOpen(false);
+   325→                  }}
+   326→                >
+   327→                  <Maximize2 className="h-3.5 w-3.5" />
+   328→                </Button>
+   329→                <Button
+   330→                  variant="ghost"
+   331→                  size="icon"
+   332→                  className="h-7 w-7 text-white/80 hover:text-white hover:bg-white/10"
+   333→                  onClick={() => setIsOpen(false)}
+   334→                >
+   335→                  <X className="h-3.5 w-3.5" />
+   336→                </Button>
+   337→              </div>
+   338→            </div>
+   339→
+   340→            {/* Messages */}
+   341→            <div
+   342→              ref={scrollRef}
+   343→              className="flex-1 overflow-y-auto p-4 space-y-4"
+   344→            >
+   345→              {messages.map((msg) => (
+   346→                <div
+   347→                  key={msg.id}
+   348→                  className={`flex gap-2 ${
+   349→                    msg.role === 'user' ? 'justify-end' : 'justify-start'
+   350→                  }`}
+   351→                >
+   352→                  {msg.role === 'assistant' && (
+   353→                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-100 to-violet-100 dark:from-emerald-900 dark:to-violet-900">
+   354→                      <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+   355→                    </div>
+   356→                  )}
+   357→                  <div
+   358→                    className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm ${
+   359→                      msg.role === 'user'
+   360→                        ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
+   361→                        : 'bg-muted text-muted-foreground'
+   362→                    }`}
+   363→                  >
+   364→                    {msg.role === 'assistant' ? (
+   365→                      <MarkdownRenderer content={msg.content} />
+   366→                    ) : (
+   367→                      msg.content
+   368→                    )}
+   369→                  </div>
+   370→                  {msg.role === 'user' && (
+   371→                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+   372→                      <User className="h-3.5 w-3.5" />
+   373→                    </div>
+   374→                  )}
+   375→                </div>
+   376→              ))}
+   377→
+   378→              {/* Typing Indicator */}
+   379→              {isLoading && (
+   380→                <div className="flex gap-2 justify-start">
+   381→                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-100 to-violet-100 dark:from-emerald-900 dark:to-violet-900">
+   382→                    <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+   383→                  </div>
+   384→                  <div className="rounded-2xl bg-muted px-4 py-3">
+   385→                    <div className="flex gap-1.5">
+   386→                      <motion.span
+   387→                        animate={{ opacity: [0.3, 1, 0.3] }}
+   388→                        transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+   389→                        className="h-2 w-2 rounded-full bg-emerald-500"
+   390→                      />
+   391→                      <motion.span
+   392→                        animate={{ opacity: [0.3, 1, 0.3] }}
+   393→                        transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
+   394→                        className="h-2 w-2 rounded-full bg-violet-500"
+   395→                      />
+   396→                      <motion.span
+   397→                        animate={{ opacity: [0.3, 1, 0.3] }}
+   398→                        transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
+   399→                        className="h-2 w-2 rounded-full bg-emerald-500"
+   400→                      />
+   401→                    </div>
+   402→                  </div>
+   403→                </div>
+   404→              )}
+   405→            </div>
+   406→
+   407→            {/* Input */}
+   408→            <div className="border-t border-border p-3">
+   409→              <form
+   410→                onSubmit={(e) => {
+   411→                  e.preventDefault();
+   412→                  sendMessage();
+   413→                }}
+   414→                className="flex gap-2"
+   415→              >
+   416→                <Input
+   417→                  ref={inputRef}
+   418→                  value={input}
+   419→                  onChange={(e) => setInput(e.target.value)}
+   420→                  placeholder="Ask me anything..."
+   421→                  className="flex-1 rounded-xl text-sm"
+   422→                  disabled={isLoading}
+   423→                />
+   424→                <Button
+   425→                  type="submit"
+   426→                  size="icon"
+   427→                  disabled={!input.trim() || isLoading}
+   428→                  className="h-9 w-9 rounded-xl bg-gradient-to-br from-emerald-500 to-violet-600 hover:from-emerald-600 hover:to-violet-700"
+   429→                >
+   430→                  <Send className="h-4 w-4" />
+   431→                </Button>
+   432→              </form>
+   433→            </div>
+   434→          </motion.div>
+   435→        )}
+   436→      </AnimatePresence>
+   437→    </>
+   438→  );
+   439→}
+   440→
+   441→// ============================================================
+   442→// Full-Page AI Tutor
+   443→// ============================================================
+   444→export function AITutorFullPage() {
+   445→  const [conversations, setConversations] = useState<Conversation[]>([
+   446→    {
+   447→      id: 'conv-1',
+   448→      title: 'Getting Started',
+   449→      messages: [
+   450→        {
+   451→          id: 'welcome-full',
+   452→          role: 'assistant',
+   453→          content:
+   454→            "Welcome to your AI Learning Assistant! I can help you with:\n\n- **Understanding concepts** — Ask me to explain any topic\n- **Code help** — Debug issues or learn new patterns\n- **Study plans** — Create personalized learning paths\n- **Quiz prep** — Review and practice for assessments\n\nWhat would you like to explore today?",
+   455→          timestamp: new Date().toISOString(),
+   456→        },
+   457→      ],
+   458→      createdAt: new Date().toISOString(),
+   459→    },
+   460→  ]);
+   461→  const [activeConvId, setActiveConvId] = useState('conv-1');
+   462→  const [input, setInput] = useState('');
+   463→  const [isLoading, setIsLoading] = useState(false);
+   464→  const [sidebarOpen, setSidebarOpen] = useState(true);
+   465→  const [selectedCourse, setSelectedCourse] = useState<string>('all');
+   466→  const scrollRef = useRef<HTMLDivElement>(null);
+   467→  const inputRef = useRef<HTMLTextAreaElement>(null);
+   468→
+   469→  const activeConv = conversations.find((c) => c.id === activeConvId);
+   470→
+   471→  const scrollToBottom = useCallback(() => {
+   472→    if (scrollRef.current) {
+   473→      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+   474→    }
+   475→  }, []);
+   476→
+   477→  useEffect(() => {
+   478→    scrollToBottom();
+   479→  }, [activeConv?.messages, scrollToBottom]);
+   480→
+   481→  const suggestedPrompts = [
+   482→    { icon: Code, label: 'Explain Server Components', prompt: 'Explain how React Server Components work in Next.js, with practical examples and when to use them vs client components.' },
+   483→    { icon: HelpCircle, label: 'Help me with this quiz', prompt: 'I need help preparing for a quiz. Can you give me some practice questions on web development fundamentals and explain the answers?' },
+   484→    { icon: GraduationCap, label: 'Create a study plan', prompt: 'Create a 4-week study plan for learning full-stack web development, starting from the basics and progressing to advanced topics.' },
+   485→    { icon: MessageSquare, label: 'Review my code', prompt: 'I want to learn best practices for code review. Can you explain common patterns and anti-patterns in React/Next.js code?' },
+   486→  ];
+   487→
+   488→  const sendMessage = useCallback(
+   489→    async (messageText?: string) => {
+   490→      const text = messageText || input.trim();
+   491→      if (!text || isLoading) return;
+   492→
+   493→      const userMsg: ChatMessage = {
+   494→        id: `user-${Date.now()}`,
+   495→        role: 'user',
+   496→        content: text,
+   497→        timestamp: new Date().toISOString(),
+   498→      };
+   499→
+   500→      setConversations((prev) =>
+   501→        prev.map((conv) =>
+   502→          conv.id === activeConvId
+   503→            ? { ...conv, messages: [...conv.messages, userMsg], title: conv.messages.length <= 1 ? text.slice(0, 40) + (text.length > 40 ? '...' : '') : conv.title }
+   504→            : conv
+   505→        )
+   506→      );
+   507→      setInput('');
+   508→      setIsLoading(true);
+   509→
+   510→      const courseContext =
+   511→        selectedCourse !== 'all'
+   512→          ? demoCourses.find((c) => c.id === selectedCourse)?.title
+   513→          : undefined;
+   514→
+   515→      try {
+   516→        const res = await fetch('/api/ai', {
+   517→          method: 'POST',
+   518→          headers: { 'Content-Type': 'application/json' },
+   519→          body: JSON.stringify({
+   520→            message: text,
+   521→            context: courseContext,
+   522→            sessionId: activeConvId,
+   523→          }),
+   524→        });
+   525→
+   526→        if (!res.ok) throw new Error('Failed to get response');
+   527→
+   528→        const data = await res.json();
+   529→
+   530→        const aiMsg: ChatMessage = {
+   531→          id: `ai-${Date.now()}`,
+   532→          role: 'assistant',
+   533→          content: data.response || 'I apologize, but I could not generate a response. Please try again.',
+   534→          timestamp: new Date().toISOString(),
+   535→        };
+   536→
+   537→        setConversations((prev) =>
+   538→          prev.map((conv) =>
+   539→            conv.id === activeConvId
+   540→              ? { ...conv, messages: [...conv.messages, aiMsg] }
+   541→              : conv
+   542→          )
+   543→        );
+   544→      } catch {
+   545→        toast.error('Failed to get AI response. Please try again.');
+   546→        setConversations((prev) =>
+   547→          prev.map((conv) =>
+   548→            conv.id === activeConvId
+   549→              ? {
+   550→                  ...conv,
+   551→                  messages: [
+   552→                    ...conv.messages,
+   553→                    {
+   554→                      id: `error-${Date.now()}`,
+   555→                      role: 'assistant',
+   556→                      content: 'Sorry, I encountered an error. Please try again in a moment.',
+   557→                      timestamp: new Date().toISOString(),
+   558→                    },
+   559→                  ],
+   560→                }
+   561→              : conv
+   562→          )
+   563→        );
+   564→      } finally {
+   565→        setIsLoading(false);
+   566→      }
+   567→    },
+   568→    [input, isLoading, activeConvId, selectedCourse]
+   569→  );
+   570→
+   571→  const createNewConversation = () => {
+   572→    const newConv: Conversation = {
+   573→      id: `conv-${Date.now()}`,
+   574→      title: 'New Chat',
+   575→      messages: [
+   576→        {
+   577→          id: `welcome-${Date.now()}`,
+   578→          role: 'assistant',
+   579→          content: "Hello! I'm your AI Learning Assistant. How can I help you today?",
+   580→          timestamp: new Date().toISOString(),
+   581→        },
+   582→      ],
+   583→      createdAt: new Date().toISOString(),
+   584→    };
+   585→    setConversations((prev) => [newConv, ...prev]);
+   586→    setActiveConvId(newConv.id);
+   587→  };
+   588→
+   589→  const deleteConversation = (convId: string) => {
+   590→    if (conversations.length <= 1) {
+   591→      toast.error("Can't delete the last conversation");
+   592→      return;
+   593→    }
+   594→    setConversations((prev) => prev.filter((c) => c.id !== convId));
+   595→    if (activeConvId === convId) {
+   596→      setActiveConvId(conversations.find((c) => c.id !== convId)?.id || '');
+   597→    }
+   598→  };
+   599→
+   600→  return (
+   601→    <div className="flex h-full">
+   602→      {/* Left Sidebar - Conversation History */}
+   603→      <AnimatePresence mode="wait">
+   604→        {sidebarOpen && (
+   605→          <motion.div
+   606→            initial={{ width: 0, opacity: 0 }}
+   607→            animate={{ width: 280, opacity: 1 }}
+   608→            exit={{ width: 0, opacity: 0 }}
+   609→            transition={{ duration: 0.2 }}
+   610→            className="border-r border-border bg-card/50 flex flex-col shrink-0 overflow-hidden"
+   611→          >
+   612→            {/* Sidebar Header */}
+   613→            <div className="p-4 border-b border-border">
+   614→              <div className="flex items-center justify-between mb-3">
+   615→                <div className="flex items-center gap-2">
+   616→                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-violet-600">
+   617→                    <Sparkles className="h-3.5 w-3.5 text-white" />
+   618→                  </div>
+   619→                  <span className="font-semibold text-sm text-foreground">AI Tutor</span>
+   620→                </div>
+   621→                <Button
+   622→                  variant="ghost"
+   623→                  size="icon"
+   624→                  className="h-7 w-7"
+   625→                  onClick={() => setSidebarOpen(false)}
+   626→                >
+   627→                  <Minus className="h-3.5 w-3.5" />
+   628→                </Button>
+   629→              </div>
+   630→              <Button
+   631→                onClick={createNewConversation}
+   632→                className="w-full justify-start gap-2 text-sm"
+   633→                variant="outline"
+   634→                size="sm"
+   635→              >
+   636→                <Plus className="h-3.5 w-3.5" />
+   637→                New Chat
+   638→              </Button>
+   639→            </div>
+   640→
+   641→            {/* Course Context Selector */}
+   642→            <div className="px-4 py-3 border-b border-border">
+   643→              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-2">
+   644→                Course Focus
+   645→              </p>
+   646→              <select
+   647→                value={selectedCourse}
+   648→                onChange={(e) => setSelectedCourse(e.target.value)}
+   649→                className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500"
+   650→              >
+   651→                <option value="all">All Courses</option>
+   652→                {demoCourses.map((course) => (
+   653→                  <option key={course.id} value={course.id}>
+   654→                    {course.title}
+   655→                  </option>
+   656→                ))}
+   657→              </select>
+   658→            </div>
+   659→
+   660→            {/* Conversation List */}
+   661→            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+   662→              {conversations.map((conv) => (
+   663→                <div
+   664→                  key={conv.id}
+   665→                  className={`group flex items-center gap-2 rounded-lg px-3 py-2 text-sm cursor-pointer transition-colors ${
+   666→                    conv.id === activeConvId
+   667→                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+   668→                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+   669→                  }`}
+   670→                  onClick={() => setActiveConvId(conv.id)}
+   671→                >
+   672→                  <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+   673→                  <span className="truncate flex-1 text-xs">{conv.title}</span>
+   674→                  <button
+   675→                    onClick={(e) => {
+   676→                      e.stopPropagation();
+   677→                      deleteConversation(conv.id);
+   678→                    }}
+   679→                    className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+   680→                  >
+   681→                    <Trash2 className="h-3 w-3 text-red-400 hover:text-red-600" />
+   682→                  </button>
+   683→                </div>
+   684→              ))}
+   685→            </div>
+   686→          </motion.div>
+   687→        )}
+   688→      </AnimatePresence>
+   689→
+   690→      {/* Main Chat Area */}
+   691→      <div className="flex-1 flex flex-col min-w-0">
+   692→        {/* Chat Header */}
+   693→        <div className="flex items-center justify-between border-b border-border px-6 py-3 bg-card/50">
+   694→          <div className="flex items-center gap-3">
+   695→            {!sidebarOpen && (
+   696→              <Button
+   697→                variant="ghost"
+   698→                size="icon"
+   699→                className="h-8 w-8"
+   700→                onClick={() => setSidebarOpen(true)}
+   701→              >
+   702→                <ChevronLeft className="h-4 w-4" />
+   703→              </Button>
+   704→            )}
+   705→            <div>
+   706→              <h2 className="text-sm font-semibold text-foreground">AI Learning Assistant</h2>
+   707→              <p className="text-xs text-muted-foreground">
+   708→                {selectedCourse !== 'all'
+   709→                  ? `Focused on: ${demoCourses.find((c) => c.id === selectedCourse)?.title}`
+   710→                  : 'General learning mode'}
+   711→              </p>
+   712→            </div>
+   713→          </div>
+   714→          <Badge variant="secondary" className="text-xs gap-1">
+   715→            <Sparkles className="h-3 w-3" />
+   716→            Powered by AI
+   717→          </Badge>
+   718→        </div>
+   719→
+   720→        {/* Messages */}
+   721→        <div
+   722→          ref={scrollRef}
+   723→          className="flex-1 overflow-y-auto px-6 py-4"
+   724→        >
+   725→          {activeConv && activeConv.messages.length <= 1 && (
+   726→            /* Suggested Prompts */
+   727→            <div className="mb-8">
+   728→              <p className="text-sm font-medium text-muted-foreground mb-4 text-center">
+   729→                Try one of these to get started
+   730→              </p>
+   731→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto">
+   732→                {suggestedPrompts.map((prompt) => (
+   733→                  <Card
+   734→                    key={prompt.label}
+   735→                    className="p-4 cursor-pointer hover:border-emerald-300 hover:shadow-md transition-all group"
+   736→                    onClick={() => sendMessage(prompt.prompt)}
+   737→                  >
+   738→                    <div className="flex items-start gap-3">
+   739→                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-400 shrink-0">
+   740→                        <prompt.icon className="h-4 w-4" />
+   741→                      </div>
+   742→                      <div>
+   743→                        <p className="text-sm font-medium text-foreground">{prompt.label}</p>
+   744→                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+   745→                          {prompt.prompt.slice(0, 80)}...
+   746→                        </p>
+   747→                      </div>
+   748→                    </div>
+   749→                  </Card>
+   750→                ))}
+   751→              </div>
+   752→            </div>
+   753→          )}
+   754→
+   755→          {/* Message List */}
+   756→          <div className="space-y-6 max-w-3xl mx-auto">
+   757→            {activeConv?.messages.map((msg) => (
+   758→              <motion.div
+   759→                key={msg.id}
+   760→                initial={{ opacity: 0, y: 10 }}
+   761→                animate={{ opacity: 1, y: 0 }}
+   762→                className={`flex gap-3 ${
+   763→                  msg.role === 'user' ? 'justify-end' : 'justify-start'
+   764→                }`}
+   765→              >
+   766→                {msg.role === 'assistant' && (
+   767→                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-100 to-violet-100 dark:from-emerald-900 dark:to-violet-900 mt-0.5">
+   768→                    <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+   769→                  </div>
+   770→                )}
+   771→                <div
+   772→                  className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+   773→                    msg.role === 'user'
+   774→                      ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
+   775→                      : 'bg-muted'
+   776→                  }`}
+   777→                >
+   778→                  {msg.role === 'assistant' ? (
+   779→                    <MarkdownRenderer content={msg.content} />
+   780→                  ) : (
+   781→                    <p className="text-sm leading-relaxed">{msg.content}</p>
+   782→                  )}
+   783→                  <p
+   784→                    className={`text-[10px] mt-1.5 ${
+   785→                      msg.role === 'user' ? 'text-white/60' : 'text-muted-foreground/60'
+   786→                    }`}
+   787→                  >
+   788→                    {new Date(msg.timestamp).toLocaleTimeString([], {
+   789→                      hour: '2-digit',
+   790→                      minute: '2-digit',
+   791→                    })}
+   792→                  </p>
+   793→                </div>
+   794→                {msg.role === 'user' && (
+   795→                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white mt-0.5">
+   796→                    <User className="h-4 w-4" />
+   797→                  </div>
+   798→                )}
+   799→              </motion.div>
+   800→            ))}
+   801→
+   802→            {/* Typing Indicator */}
+   803→            {isLoading && (
+   804→              <div className="flex gap-3 justify-start">
+   805→                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-100 to-violet-100 dark:from-emerald-900 dark:to-violet-900">
+   806→                  <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+   807→                </div>
+   808→                <div className="rounded-2xl bg-muted px-4 py-3">
+   809→                  <div className="flex gap-2">
+   810→                    <motion.span
+   811→                      animate={{ opacity: [0.3, 1, 0.3] }}
+   812→                      transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+   813→                      className="h-2.5 w-2.5 rounded-full bg-emerald-500"
+   814→                    />
+   815→                    <motion.span
+   816→                      animate={{ opacity: [0.3, 1, 0.3] }}
+   817→                      transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
+   818→                      className="h-2.5 w-2.5 rounded-full bg-violet-500"
+   819→                    />
+   820→                    <motion.span
+   821→                      animate={{ opacity: [0.3, 1, 0.3] }}
+   822→                      transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
+   823→                      className="h-2.5 w-2.5 rounded-full bg-emerald-500"
+   824→                    />
+   825→                  </div>
+   826→                </div>
+   827→              </div>
+   828→            )}
+   829→          </div>
+   830→        </div>
+   831→
+   832→        {/* Input Area */}
+   833→        <div className="border-t border-border px-6 py-4 bg-card/50">
+   834→          <div className="max-w-3xl mx-auto">
+   835→            <form
+   836→              onSubmit={(e) => {
+   837→                e.preventDefault();
+   838→                sendMessage();
+   839→              }}
+   840→              className="flex gap-3 items-end"
+   841→            >
+   842→              <div className="flex-1 relative">
+   843→                <textarea
+   844→                  ref={inputRef}
+   845→                  value={input}
+   846→                  onChange={(e) => setInput(e.target.value)}
+   847→                  onKeyDown={(e) => {
+   848→                    if (e.key === 'Enter' && !e.shiftKey) {
+   849→                      e.preventDefault();
+   850→                      sendMessage();
+   851→                    }
+   852→                  }}
+   853→                  placeholder="Ask anything about your courses..."
+   854→                  className="w-full resize-none rounded-xl border border-border bg-background px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px] max-h-[120px]"
+   855→                  rows={1}
+   856→                  disabled={isLoading}
+   857→                />
+   858→              </div>
+   859→              <Button
+   860→                type="submit"
+   861→                disabled={!input.trim() || isLoading}
+   862→                className="h-11 w-11 rounded-xl bg-gradient-to-br from-emerald-500 to-violet-600 hover:from-emerald-600 hover:to-violet-700 shrink-0"
+   863→                size="icon"
+   864→              >
+   865→                {isLoading ? (
+   866→                  <Loader2 className="h-4 w-4 animate-spin" />
+   867→                ) : (
+   868→                  <Send className="h-4 w-4" />
+   869→                )}
+   870→              </Button>
+   871→            </form>
+   872→            <p className="text-[10px] text-muted-foreground/60 mt-2 text-center">
+   873→              AI can make mistakes. Verify important information.
+   874→            </p>
+   875→          </div>
+   876→        </div>
+   877→      </div>
+   878→    </div>
+   879→  );
+   880→}
+   881→

@@ -112,7 +112,7 @@ export function CheckoutPage() {
 
   if (paymentSuccess) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-50 to-emerald-50/30">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-50 to-emerald-50/30 dark:from-slate-950 dark:to-emerald-950/20">
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -125,7 +125,7 @@ export function CheckoutPage() {
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.2, type: 'spring', stiffness: 200, damping: 15 }}
-                className="mx-auto w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center"
+                className="mx-auto w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center"
               >
                 <motion.div
                   initial={{ scale: 0 }}
@@ -150,14 +150,14 @@ export function CheckoutPage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.7 }}
-                className="bg-emerald-50 rounded-lg p-4 text-left space-y-2"
+                className="bg-emerald-50 dark:bg-emerald-950/30 rounded-lg p-4 text-left space-y-2"
               >
-                <p className="text-sm font-medium text-emerald-800">Order Details</p>
-                <p className="text-sm text-emerald-700">{product.name}</p>
-                <p className="text-lg font-bold text-emerald-900">
+                <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">Order Details</p>
+                <p className="text-sm text-emerald-700 dark:text-emerald-300">{product.name}</p>
+                <p className="text-lg font-bold text-emerald-900 dark:text-emerald-100">
                   {formatPrice(product.price, selectedCurrency)} {selectedCurrency.code}
                 </p>
-                <p className="text-xs text-emerald-600">Confirmation sent to {email || 'your email'}</p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">Confirmation sent to {email || 'your email'}</p>
               </motion.div>
 
               <motion.div
@@ -184,9 +184,9 @@ export function CheckoutPage() {
   }
 
   return (
-    <div className="bg-gradient-to-br from-slate-50 to-violet-50/20 p-6">
+    <div className="bg-gradient-to-br from-slate-50 to-violet-50/20 dark:from-slate-950 dark:to-violet-950/10 p-6">
       {/* Header */}
-      <div className="border-b bg-white/80 backdrop-blur-sm rounded-t-lg px-4 sm:px-6 py-4 flex items-center gap-4">
+      <div className="border-b bg-background/80 backdrop-blur-sm rounded-t-lg px-4 sm:px-6 py-4 flex items-center gap-4">
           <Button
             variant="ghost"
             size="sm"
@@ -215,24 +215,24 @@ export function CheckoutPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4 }}
             >
-              <Card className="overflow-hidden border-slate-200 shadow-sm">
+              <Card className="overflow-hidden border-border shadow-sm">
                 <div className="bg-gradient-to-r from-violet-600 to-emerald-600 p-1" />
                 <CardContent className="p-6">
                   <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="shrink-0 w-full sm:w-48 h-32 rounded-lg bg-gradient-to-br from-violet-100 to-emerald-100 flex items-center justify-center">
+                    <div className="shrink-0 w-full sm:w-48 h-32 rounded-lg bg-gradient-to-br from-violet-100 to-emerald-100 dark:from-violet-950 dark:to-emerald-950 flex items-center justify-center">
                       <div className="text-center">
-                        <Star className="h-8 w-8 text-violet-600 mx-auto mb-1" />
-                        <p className="text-xs font-medium text-violet-700">Best Seller</p>
+                        <Star className="h-8 w-8 text-violet-600 dark:text-violet-400 mx-auto mb-1" />
+                        <p className="text-xs font-medium text-violet-700 dark:text-violet-300">Best Seller</p>
                       </div>
                     </div>
                     <div className="flex-1 space-y-3">
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="flex items-center gap-2 mb-1">
-                            <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 text-xs">
+                            <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 dark:bg-violet-900 dark:text-violet-300 text-xs">
                               {product.type}
                             </Badge>
-                            <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700">
+                            <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300">
                               3 Courses
                             </Badge>
                           </div>
@@ -250,7 +250,7 @@ export function CheckoutPage() {
                           </span>
                         )}
                         {savings && (
-                          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-xs">
+                          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900 dark:text-emerald-300 text-xs">
                             Save {formatPrice(savings, selectedCurrency)}
                           </Badge>
                         )}
@@ -312,7 +312,7 @@ export function CheckoutPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.1 }}
             >
-              <Card className="border-slate-200 shadow-sm">
+              <Card className="border-border shadow-sm">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-base font-semibold flex items-center gap-2">
                     <CreditCard className="h-4 w-4 text-violet-600" />
@@ -412,10 +412,10 @@ export function CheckoutPage() {
                   <div className="flex items-center gap-2 pt-1">
                     <span className="text-xs text-muted-foreground">We accept:</span>
                     <div className="flex gap-1.5">
-                      <div className="px-2 py-0.5 bg-slate-100 rounded text-xs font-medium text-slate-700">VISA</div>
-                      <div className="px-2 py-0.5 bg-slate-100 rounded text-xs font-medium text-slate-700">MC</div>
-                      <div className="px-2 py-0.5 bg-slate-100 rounded text-xs font-medium text-slate-700">AMEX</div>
-                      <div className="px-2 py-0.5 bg-slate-100 rounded text-xs font-medium text-slate-700">PayPal</div>
+                      <div className="px-2 py-0.5 bg-muted rounded text-xs font-medium text-foreground">VISA</div>
+                      <div className="px-2 py-0.5 bg-muted rounded text-xs font-medium text-foreground">MC</div>
+                      <div className="px-2 py-0.5 bg-muted rounded text-xs font-medium text-foreground">AMEX</div>
+                      <div className="px-2 py-0.5 bg-muted rounded text-xs font-medium text-foreground">PayPal</div>
                     </div>
                   </div>
                 </CardContent>
@@ -431,7 +431,7 @@ export function CheckoutPage() {
               transition={{ duration: 0.4, delay: 0.2 }}
               className="lg:sticky lg:top-20"
             >
-              <Card className="border-slate-200 shadow-sm">
+              <Card className="border-border shadow-sm">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base font-semibold">Order Summary</CardTitle>
                 </CardHeader>
@@ -524,11 +524,11 @@ export function CheckoutPage() {
                   </div>
 
                   {/* Course Included Preview */}
-                  <div className="bg-slate-50 rounded-lg p-3 mt-2">
-                    <p className="text-xs font-medium text-slate-700 mb-2">Courses included in this bundle:</p>
+                  <div className="bg-muted/50 rounded-lg p-3 mt-2">
+                    <p className="text-xs font-medium text-foreground mb-2">Courses included in this bundle:</p>
                     <div className="space-y-1.5">
                       {demoCourses.slice(0, 3).map((c) => (
-                        <div key={c.id} className="flex items-center gap-2 text-xs text-slate-600">
+                        <div key={c.id} className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Check className="h-3 w-3 text-emerald-500" />
                           <span>{c.title}</span>
                         </div>

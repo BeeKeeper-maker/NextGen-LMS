@@ -18,6 +18,7 @@ export type AppView =
   | 'learner-community'
   | 'learner-achievements'
   | 'learner-live-cohorts'
+  | 'learner-profile'
   | 'course-builder'
   | 'ai-assistant'
   | 'ai-content-gen'

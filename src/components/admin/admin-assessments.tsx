@@ -105,7 +105,7 @@ function DifficultyBadge({ difficulty }: { difficulty: string }) {
 function AssessmentTypeBadge({ type }: { type: string }) {
   const styles: Record<string, string> = {
     quiz: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
-    assignment: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+    assignment: 'bg-slate-100 text-slate-700 dark:text-slate-300 dark:bg-slate-800 dark:text-slate-300',
     peer_review: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
     coding: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
     file_upload: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
@@ -170,7 +170,7 @@ function AssessmentList({
       </div>
 
       {/* Filters */}
-      <Card>
+      <Card className="shadow-sm hover:shadow-md transition-shadow">
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
@@ -460,7 +460,7 @@ function AssessmentBuilder({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column: Settings */}
         <div className="lg:col-span-1 space-y-4">
-          <Card>
+          <Card className="shadow-sm hover:shadow-md transition-shadow">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Settings2 className="h-4 w-4 text-violet-600" /> Assessment Settings
@@ -537,7 +537,7 @@ function AssessmentBuilder({
           </Card>
 
           {/* Summary card */}
-          <Card>
+          <Card className="shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Summary</CardTitle>
             </CardHeader>
@@ -564,7 +564,7 @@ function AssessmentBuilder({
 
         {/* Right column: Questions */}
         <div className="lg:col-span-2 space-y-4">
-          <Card>
+          <Card className="shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -714,7 +714,7 @@ function AssessmentBuilder({
                       className={`h-5 w-5 rounded-full border-2 flex items-center justify-center cursor-pointer transition-colors ${questionForm.correctAnswer === String(i) ? 'border-emerald-500 bg-emerald-500' : 'border-muted-foreground/30'}`}
                       onClick={() => setQuestionForm(prev => ({ ...prev, correctAnswer: String(i) }))}
                     >
-                      {questionForm.correctAnswer === String(i) && <div className="h-2 w-2 rounded-full bg-white" />}
+                      {questionForm.correctAnswer === String(i) && <div className="h-2 w-2 rounded-full bg-card" />}
                     </div>
                     <Input
                       value={opt}
@@ -894,7 +894,7 @@ function QuizPreview({
               <DialogDescription>{assessment.description}</DialogDescription>
             </div>
             {timeLeft !== null && (
-              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono font-bold ${timeLeft < 60 ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono font-bold ${timeLeft < 60 ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-slate-100 text-slate-700 dark:text-slate-300 dark:bg-slate-800 dark:text-slate-300'}`}>
                 <Clock className="h-4 w-4" /> {formatTime(timeLeft)}
               </div>
             )}
