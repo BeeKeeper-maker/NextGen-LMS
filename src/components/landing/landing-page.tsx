@@ -461,7 +461,12 @@ function GlowBorderCard({ children, highlighted }: { children: React.ReactNode; 
 // Landing Page Component
 // ============================================================
 export function LandingPage() {
-  const { enterAdminMode, enterLearnerMode } = useAppStore();
+  const { enterAdminMode, enterLearnerMode, setView, setAppMode } = useAppStore();
+
+  const goToCheckout = () => {
+    setAppMode('admin');
+    setView('checkout');
+  };
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAllFeatures, setShowAllFeatures] = useState(false);
   const [isAnnual, setIsAnnual] = useState(false);
@@ -819,7 +824,7 @@ export function LandingPage() {
                             <Button
                               className={`w-full ${plan.highlighted ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
                               variant={plan.highlighted ? 'default' : 'outline'}
-                              onClick={enterAdminMode}
+                              onClick={plan.ctaText === 'Contact Sales' ? enterAdminMode : goToCheckout}
                             >
                               {plan.ctaText}
                             </Button>

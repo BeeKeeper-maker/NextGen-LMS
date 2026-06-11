@@ -64,6 +64,7 @@ const adminNavItems: NavItem[] = [
   { label: 'Certificates', view: 'admin-certificates', icon: Award },
   { label: 'Analytics', view: 'admin-analytics', icon: BarChart3 },
   { label: 'AI Generate', view: 'ai-content-gen', icon: Sparkles },
+  { label: 'Checkout', view: 'checkout' as AppView, icon: FileText },
   { label: 'Settings', view: 'admin-settings', icon: Settings },
 ];
 

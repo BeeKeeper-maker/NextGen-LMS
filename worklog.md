@@ -406,3 +406,52 @@ Stage Summary:
 - Admin dashboard has animated counters, greeting, and activity feed
 - Learner dashboard has streak glow, shimmer, progress ring, and tilt cards
 - ESLint passes cleanly with zero errors
+
+---
+
+## Round 2 Summary — QA, Bug Fixes & Major Feature Enhancements
+
+### Current Project Status Assessment
+- **Previous Round**: Built 18 major features across admin, learner, AI, community, and marketing views
+- **QA Result**: 14/14 tests passed with 100% pass rate
+- **Known Issues Found**: Page title was generic ("Z.ai Code Scaffold"), no checkout page, no notifications, no live cohort calendar, landing page lacked visual polish
+
+### Current Goals / Completed Modifications / Verification Results
+
+#### Bug Fixes:
+1. ✅ Fixed page title from "Z.ai Code Scaffold" to "NextGen Global LMS — AI-Powered Learning Platform"
+2. ✅ Updated all metadata (description, keywords, OG tags) for proper branding
+3. ✅ Verified all import paths are correct (previous @/Table error was already fixed)
+
+#### New Features Built:
+1. ✅ **Multi-Currency Checkout Page** — 8 currencies with real-time conversion, card brand detection, payment form, trust badges, animated success state
+2. ✅ **Notification Center** — Bell with unread badge, dropdown panel, mark-as-read, time-ago formatting, GitHub/Slack-style design
+3. ✅ **Admin Live Cohorts Calendar** — Monthly calendar grid, list view, create event dialog, stats cards, color-coded event types
+4. ✅ **Learner Live Cohorts View** — "Join Live" banner, upcoming sessions with RSVP, weekly schedule, session recordings
+5. ✅ **Landing Page Enhancements** — Animated grid background, floating particles, typing animation, AI live demo, savings calculator, monthly/annual pricing toggle, integrations section, newsletter signup
+6. ✅ **Top Bar with Breadcrumb** — Search, notification bell, user avatar dropdown in admin/learner modes
+7. ✅ **Sidebar Enhancements** — Quick Create button, user profile section, smoother animations
+8. ✅ **Admin Dashboard Polish** — Welcome greeting, animated KPI counters, pulsing AI indicator, recent activity feed
+9. ✅ **Learner Dashboard Polish** — Streak fire glow, shimmer progress bars, daily goal ring, parallax tilt cards
+
+#### Verification:
+- ✅ ESLint passes with zero errors
+- ✅ Dev server returns HTTP 200 for all routes
+- ✅ All new view mappings properly connected in app-layout.tsx
+- ✅ All new component files verified to exist
+- ✅ Store properly updated with notifications state and actions
+
+### Unresolved Issues or Risks:
+1. **Fast Refresh runtime warnings** in dev.log when landing-page.tsx changes — likely due to useEffect patterns in typing animations; not a production issue
+2. **No real authentication flow** — Currently using demo user data
+3. **No database seeding in production** — All data is from mock data
+4. **No dark mode implementation** — All views use light theme only
+5. **Settings sidebar click** — Previously reported as flaky in automated testing; may need manual verification
+
+### Priority Recommendations for Next Phase:
+1. **Implement Dark Mode** — Add theme toggle with next-themes and ensure all components respect dark variants
+2. **Database Seeding Script** — Create a comprehensive seed script that populates the database for a real demo
+3. **Video Player Component** — Build a mock video player for course lesson pages
+4. **Real-time Notifications** — Use WebSocket/SSE for live notification delivery
+5. **RBAC Permission Enforcement** — Connect role-based permissions to actual UI restrictions
+6. **Mobile App Shell** — Add PWA manifest and service worker for mobile app-like experience

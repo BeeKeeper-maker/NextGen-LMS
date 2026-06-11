@@ -184,10 +184,9 @@ export function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-violet-50/20">
+    <div className="bg-gradient-to-br from-slate-50 to-violet-50/20 p-6">
       {/* Header */}
-      <div className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
+      <div className="border-b bg-white/80 backdrop-blur-sm rounded-t-lg px-4 sm:px-6 py-4 flex items-center gap-4">
           <Button
             variant="ghost"
             size="sm"
@@ -204,7 +203,6 @@ export function CheckoutPage() {
             <Lock className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">SSL Encrypted</span>
           </div>
-        </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 lg:py-8">
