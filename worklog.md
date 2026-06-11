@@ -717,3 +717,388 @@ Stage Summary:
 4. **Real-time Notifications** — WebSocket-based notification delivery
 5. **PWA Support** — Service worker, manifest, offline support
 6. **i18n Integration** — Multi-language support using next-intl
+
+---
+
+## Task ID: 5
+Agent: Dashboard Enhancement Agent
+Task: Enhance admin dashboard with better data visualization and micro-interactions
+
+Work Log:
+- Read and analyzed existing admin-dashboard.tsx (827 lines) and mock-data.ts
+- Identified all existing components: KPICard, RevenueChart, EngagementChart, CategoryChart, CompletionFunnel, RecentCoursesTable, VideoDropoffChart, QuickActionsPanel, RecentActivityFeed
+- Enhanced KPI Cards:
+  - Added sparkline mini-charts using recharts AreaChart with 7-day deterministic trend data
+  - Added subtle gradient backgrounds (different for each KPI card: emerald, violet, sky, amber, rose, teal)
+  - Animated number counting already existed (AnimatedCounter component)
+  - Added pulsing indicator dot for positive/negative trends with animate-ping
+- Enhanced Revenue Chart:
+  - Added improved gradient fill with 3-stop opacity transition
+  - Added custom RevenueCustomTooltip component with detailed breakdown (dollar formatting for revenue, number formatting for others)
+  - Added annotation markers using ReferenceLine and ReferenceDot for key events (monthly: "New Course Launch", weekly: "Campaign Peak", daily: "Mid-week Spike")
+  - Added toggle between monthly/weekly/daily views using shadcn Tabs component
+  - Added deterministic weekly and daily data arrays
+- Enhanced Completion Funnel:
+  - Improved sequential animation with custom easing curve [0.25, 0.46, 0.45, 0.94]
+  - Added PercentageCounter component with animated percentage labels
+  - Added FunnelArrow component with SVG triangle connectors between stages
+  - Changed colors to gradient from emerald to amber across funnel stages (from-emerald-500 to-emerald-400, etc.)
+  - Added subtle border colors matching each stage
+- Enhanced Quick Actions:
+  - Added hover scale effect (1.03) and y-lift (-2px) using framer-motion whileHover
+  - Added tap scale effect (0.98) using whileTap
+  - Added animated icon entrance with spring animation (staggered by index)
+  - Added gradient borders that appear on hover using gradient background layering technique
+- Enhanced Course Table:
+  - Added alternating row colors (even rows: bg-muted/30, odd rows: bg-background)
+  - Added hover highlight effect (hover:bg-muted/60)
+  - Added pulse animation for "Published" status badge with animate-ping dot
+  - Enhanced progress bar width from w-16 to w-20 for better visibility
+- Enhanced Recent Activity Feed:
+  - Added vertical timeline connecting line with gradient (emerald → violet → amber)
+  - Added colored timeline dots for each activity with ring-2 ring-background
+  - Added live pulse indicator in header
+  - Added "Live feed of platform events" description
+  - Added dotColor property to each activity item
+- Cleaned up unused imports (useCallback, AnimatePresence, ChevronDown, Zap, Award, Calendar, Eye, Bell, LineChart, Legend)
+- Verified zero lint errors on admin-dashboard.tsx
+- Confirmed dev server compiles successfully
+
+Stage Summary:
+- All 6 enhancement areas completed successfully
+- No existing functionality broken
+- Used recharts for sparklines and annotations
+- Used framer-motion for hover/tap animations and icon entrance
+- Used deterministic data (no Math.random())
+- Zero lint errors on the enhanced component
+- File grew from 827 lines to ~1100 lines
+
+---
+
+## Task ID: 6
+Agent: Learner Dashboard Enhancement Specialist
+Task: Enhance learner dashboard with richer course cards, progress visualization, and micro-interactions
+
+Work Log:
+- Analyzed existing learner dashboard (817 lines) and mock data structure
+- Reviewed types, app-store, and component dependencies
+- Implemented all 7 enhancement areas:
+
+1. **Welcome Header Enhancement**:
+   - Added time-of-day greeting (Good morning/afternoon/evening)
+   - Added motivational message based on time and streak
+   - Added mini daily goal progress ring in header
+   - Added confetti animation on streak milestones (7-day multiples)
+   - Enhanced "Resume Learning" button with hover spring animation
+
+2. **KPI Cards Enhancement**:
+   - Added circular progress indicators (KPICircularProgress component) with percentage labels
+   - Added subtle gradient backgrounds on hover
+   - Added animated counting numbers (AnimatedCounter using DOM ref + requestAnimationFrame)
+   - Added trend arrows (ArrowUpRight/ArrowDownRight) with smooth entrance animations
+   - Extended color map with gradient and ring color properties
+
+3. **Continue Learning Course Cards Enhancement**:
+   - Added course icon watermark on header gradient
+   - Added circular progress ring on card showing completion percentage
+   - Added "Last accessed" timestamp (already existed, enhanced with relative time)
+   - Added mini curriculum progress bar (completed/total lessons)
+   - Added "Resume" button with play icon hover animation (ResumeButton component)
+   - Added next lesson preview section with "Next up" label
+   - Added gradient overlay on header for depth
+
+4. **Completed Courses Section Enhancement**:
+   - Added animated celebration badge (spring entrance with rotation)
+   - Changed "Certificate" button to "View Certificate" with Award icon
+   - Added star rating display (StarRating component with filled/half/empty states)
+   - Added completion date display
+   - Added gradient overlay and course icon watermark on header
+
+5. **Activity Feed Enhancement**:
+   - Added timeline-style layout with dots and connecting lines
+   - Added colored activity type indicators (dot + uppercase label)
+   - Added relative timestamps (using ISO dates + getRelativeTime helper)
+   - Added activity detail text (e.g., "12 replies", "+25 points earned")
+   - Added subtle entrance animations for items
+
+6. **Leaderboard Enhancement**:
+   - Added gradient rank badges (gold/silver/bronze for top 3)
+   - Added avatar initials with colored gradient backgrounds
+   - Added point change indicators (+120, +85, etc.)
+   - Added position change arrows (ArrowUpRight/ArrowDownRight)
+   - Deterministic point changes based on rank
+
+7. **Recommendations Enhancement**:
+   - Added course difficulty indicators (colored dot + label)
+   - Added "Why recommended" reason tags (Lightbulb icon + tag bar)
+   - Added star ratings (StarRating component)
+   - Added enrollment count with Users icon
+   - Added completion rate with BarChart3 icon
+   - Added hover-to-reveal description (smooth height transition)
+   - Added course icon watermark on header
+
+New helper components created:
+- `AnimatedCounter` - DOM-ref based counting animation (avoids setState-in-effect lint error)
+- `MiniProgressRing` - Reusable circular progress indicator
+- `KPICircularProgress` - KPI-specific circular progress with color
+- `ResumeButton` - Play button with hover animation
+- `StarRating` - 5-star display with fill states
+- `ConfettiParticle` - Confetti animation for streak milestones
+
+New utility functions:
+- `getTimeGreeting()` - Time-of-day greeting
+- `getMotivationalMessage()` - Context-aware motivation
+- `getKPIPercentage()` - Deterministic KPI progress values
+- `getRecommendationReason()` - Course recommendation reasons
+- `getDifficultyStyle()` - Difficulty badge styles
+- `getRankBadgeStyle()` - Leaderboard rank badge styles
+- `getAvatarColor()` - Deterministic avatar gradient
+- `getInitials()` - Name to initials
+- `getPointChange()` - Deterministic leaderboard point changes
+- `getNextLesson()` - Next lesson from course modules
+- `getLessonCounts()` - Total/completed lesson counts
+- `getCourseColor()` - Category-based hex color
+
+Stage Summary:
+- All 7 enhancement areas completed successfully
+- No existing functionality broken
+- Used framer-motion for all animations
+- Avoided Math.random() - all values are deterministic
+- Fixed AnimatedCounter to use DOM ref instead of setState in effect (lint compliance)
+- Zero lint errors on the enhanced component
+- File grew from 817 lines to ~1416 lines
+
+---
+
+## Task ID: 4
+Agent: Visual Enhancement Agent
+Task: Enhance landing page with visual polish, animations, and details
+
+Work Log:
+- Added ParallaxOrbs component using framer-motion useScroll/useTransform for parallax scroll effect on hero background orbs
+- Added GrainOverlay component using SVG feTurbulence filter for subtle noise texture on hero section
+- Added ShimmerText component with CSS shimmer animation for hero tagline
+- Added glowing gradient pulse animation behind hero heading (motion.div with opacity/scale animation)
+- Added staggered avatar entrance animations in hero social proof row
+- Improved MediaLogosMarquee with smoother infinite scroll (8 copies of logos, 25s duration, -12.5% translate)
+- Created GradientBorderCard component with gradient border + glow shadow on hover for feature cards
+- Added staggerContainerSlow variant (0.15s stagger) for features section sequential entrance
+- Enhanced GlowBorderCard with pulsing opacity animation and outer glow pulse for "Most Popular" pricing card
+- Added AnimatePresence with flip animation (rotateY) for pricing toggle monthly/annual
+- Added whileHover scale + y transform on pricing cards
+- Added spring-based animation for toggle switch knob (framer-motion motion.span)
+- Created useAnimatedCounter hook with easeOutCubic for savings calculator animated counter
+- Added scale animation on savings result card when value changes
+- Created AnimatedStars component with sequential scale/rotate entrance animation per star
+- Added DotPatternBackground component (SVG dot pattern) for testimonials section
+- Enhanced testimonial carousel with hover-pause functionality (isPaused state)
+- Fixed Math.random() hydration mismatch in FloatingStatsCounter — replaced with deterministic tickValues array and tickIndex ref
+- Added spring animation for FloatingStatsCounter entrance
+- Added floating y animation on stats bar for smoother feel
+- Created BackToTopButton component with AnimatePresence, appears after 600px scroll
+- Added sectionReveal variant for scroll-triggered section animations on Features, Pricing, Comparison, Testimonials, Integrations sections
+- All animations use framer-motion exclusively
+- No Math.random() usage — all values are deterministic to avoid hydration mismatch
+
+Stage Summary:
+- All 5 enhancement areas completed successfully
+- Hero: parallax orbs, grain texture, shimmer tagline, glowing pulse heading, smoother marquee
+- Features: gradient border cards, glow shadow on hover, staggered entrance animations
+- Pricing: pulsing glow border, flip animation on toggle, scale-up hover, animated counter
+- Testimonials: animated star ratings, dot pattern background, hover-pause carousel
+- General: scroll-triggered section reveals, back-to-top button, floating bar improvements
+- Fixed Math.random() hydration mismatch
+- Component compiles successfully with no errors
+
+---
+
+## Task ID: 7
+Agent: Video Player Enhancement Specialist
+Task: Create enhanced video player component with progress tracking
+
+Work Log:
+- Completely rewrote `/home/z/my-project/src/components/shared/video-player.tsx` as a professional, feature-rich video player
+- Updated `/home/z/my-project/src/components/learner/learner-course.tsx` to integrate enhanced video player in Curriculum tab
+
+### Video Player Features Implemented:
+
+1. **Custom Video Controls**:
+   - Play/Pause button with animated icon transition (framer-motion AnimatePresence)
+   - Progress bar with buffered indicator (lighter color behind the played segment)
+   - Current time / Duration display with formatted timestamps
+   - Volume control with expandable slider on hover (Volume2/Volume1/VolumeX icons)
+   - Fullscreen toggle (Maximize/Minimize) with real fullscreen API support
+   - Playback speed selector (0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x) with dropdown menu
+   - Skip forward/backward 10s buttons (SkipForward/SkipBack icons)
+   - Picture-in-Picture toggle (simulated, with fixed positioning mode)
+   - Mark as Complete button with completion badge
+
+2. **Progress Tracking**:
+   - SegmentTracker class that tracks watched segments (not just current position)
+   - Merges nearby segments (within 5s) for accurate watched percentage
+   - Shows progress percentage badge during playback
+   - Auto-marks lessons as completed when 90%+ is watched
+   - Stores progress in component state and reports via onProgress callback
+   - Shows "Continue from where you left off" resume prompt with initialPosition support
+   - Resume prompt offers "Start Over" or "Resume" options
+
+3. **Visual Design**:
+   - Controls auto-hide after 3 seconds of inactivity, show on mouse move
+   - Smooth fade in/out for control bar (framer-motion AnimatePresence)
+   - Gradient overlay on control bar (bottom gradient for readability)
+   - Chapter markers on the progress bar (white vertical lines)
+   - Time tooltip on hover over progress bar (with chapter name)
+   - Fullscreen mode with proper layout
+   - PiP mode with fixed positioning
+
+4. **Keyboard Shortcuts**:
+   - Space/k: Play/Pause
+   - Left/Right arrows: Seek 10s
+   - Up/Down arrows: Volume +/- 10%
+   - F: Fullscreen toggle
+   - M: Mute toggle
+   - </> (comma/period): Decrease/increase playback speed
+   - Keyboard shortcuts hint displayed below player
+
+5. **Mobile Support**:
+   - Touch-friendly controls with adequate touch targets
+   - Swipe to seek (horizontal swipe detection with velocity check)
+   - Responsive layout with compact mode
+   - Volume slider expands on hover (group interaction)
+
+6. **Integration**:
+   - Accepts props: videoUrl, title, onComplete, onProgress, initialPosition, chapters, compact, lesson, moduleName, nextLessons, onMarkComplete, onNextLesson, onBack, isCompleted, totalDuration
+   - Backward-compatible with existing lesson-based usage
+   - Compact mode prop hides sidebar, back button, keyboard shortcuts, chapter list
+   - Demo mode with animated gradient background simulating video playback
+   - Chapter list with clickable items showing active/past/upcoming states
+
+### Learner Course Page Updates:
+- Added Chapter type import from video-player
+- Added demo chapters data (5 chapters with timestamps)
+- Added resume positions tracking for lessons
+- Updated full-page VideoPlayer usage with new props (title, initialPosition, chapters, onProgress)
+- Added "Continue Learning" video player section at top of Curriculum tab
+  - Shows the in-progress or next lesson in a split layout (video + lesson info)
+  - Compact mode video player on the left
+  - Lesson info sidebar on the right with status badges, description, and action button
+  - Green accent border for visual emphasis
+  - "Continue Lesson" / "Start Lesson" button that opens full video player
+
+### Lint Fixes:
+- Removed unused eslint-disable directive
+- Fixed ref access during render (progressRef.current?.offsetWidth) by storing width in state
+- Removed manual useCallback that conflicted with React Compiler memoization
+
+Stage Summary:
+- Professional video player component with all requested features
+- Segment-based progress tracking with accurate watched percentage
+- Auto-completion at 90% threshold
+- Full keyboard shortcuts with visual hints
+- Touch/swipe support for mobile
+- Compact mode for embedded usage
+- Resume prompt for returning learners
+- Chapter navigation with visual indicators
+- Integration with learner course page's Curriculum tab
+- All lint errors resolved, compiles successfully
+
+---
+
+## Task ID: 9
+Agent: Full-Stack Developer
+Task: Enhance notification center with real-time updates simulation and richer interactions
+
+Work Log:
+- Analyzed existing notification-center.tsx, Notification type, and useAppStore interface
+- Enhanced the notification center with 6 major feature improvements:
+  1. **Real-Time Updates Simulation**: Added simulated notifications every 30-60 seconds when panel is open, with slide-in animation from top, "Live" indicator with pulsing dot, and glow/highlight effect that fades after 3 seconds
+  2. **Notification Grouping**: Grouped notifications by time period ("Just now", "Today", "Yesterday", "Earlier") with section headers and count indicators per group
+  3. **Notification Filters**: Added filter tabs ("All", "Unread", "Mentions") with matching counts and smooth tab transitions
+  4. **Rich Notification Actions**: Added inline action buttons per type (enrollment→"View Student", achievement→"Share", community→"Reply", assessment→"Review") with hover effects
+  5. **Notification Sound**: Added visual sound toggle (Volume2/VolumeX icons) with bell ring animation when new notification arrives
+  6. **Empty State Enhancement**: Added animated Sparkles icon, confetti-like dots animation, and "All caught up!" celebration message with filter-aware subtitle
+- Fixed lint errors: moved CONFETTI_DOTS to module-level constant (ref-in-render), used useState(isNew) for glow initialization (no synchronous setState in effect), removed unused eslint-disable directive
+- All existing functionality preserved (mark read, mark all read, close on outside click, badge count)
+
+Stage Summary:
+- Notification center fully enhanced with real-time simulation, grouping, filtering, rich actions, sound indicator, and improved empty state
+- All 6 features implemented using framer-motion animations
+- Zero lint errors, compiles successfully
+- Uses useAppStore and Notification type from @/types as required
+
+---
+
+## Task ID: 10
+Agent: Admin Live Cohorts Enhancer
+Task: Enhance admin live cohorts page with calendar view, schedule dialog, session cards, list view, and quick stats
+
+Work Log:
+- Analyzed existing admin-live-cohorts.tsx (846 lines) - already had basic calendar, list, and dialog
+- Enhanced Calendar View: added colored dot indicators on mobile, animated session bars with framer-motion, improved selected day detail panel with status badges, countdown timers, attendee avatars, and start session buttons
+- Enhanced Schedule Session Dialog: added Duration dropdown (15m-3h) instead of separate end time field, added comprehensive form validation with animated error messages, added success confirmation animation with checkmark icon and spring animation, added DialogDescription for accessibility, added bi-weekly recurrence pattern option
+- Enhanced Session Cards: added new "Upcoming Sessions" card grid section showing top 6 upcoming sessions with entrance animations (staggered), added CountdownTimer component (updates every second, urgent pulse animation when <15 min), added AttendeeAvatars component (overlapping avatars with progress bar), added "Start Session" button for sessions within 15 minutes and "Join Live" for currently live sessions, added status indicators (upcoming/live/completed/cancelled) with color-coded badges and icons, color-coded by session type, hover lift effects with whileHover
+- Enhanced List View: converted to proper Table component with sortable columns (Title, Type, Date/Time, Attendees), clickable column headers with sort direction indicators, staggered row entrance animations, status badges in table rows, inline action buttons with Start/Copy/Edit/Cancel
+- Enhanced Quick Stats: expanded from 3 to 4 cards (Sessions This Month, Upcoming This Week, Avg Attendance Rate, Total Attendees), staggered entrance animations, hover shadow effects, new Activity icon for upcoming week stat
+
+Stage Summary:
+- All 5 enhancements implemented in single comprehensive file rewrite
+- Added CountdownTimer component with real-time updates and urgent pulse animation
+- Added AttendeeAvatars component with overlapping avatar circles and progress indicator
+- Added getSessionStatus helper for deriving session status (upcoming/live/completed/cancelled)
+- Form validation with animated error messages and success confirmation with spring animation
+- Sortable table columns with direction indicators in list view
+- Zero lint errors, compiles successfully
+- All existing functionality preserved (calendar grid, month navigation, type filter, color legend, create event, copy link, cancel event)
+
+---
+Task ID: CR3 (Cron Review Round 3)
+Agent: Principal Engineer
+Task: Assess project status, QA testing, fix bugs, improve styling, add features
+
+Work Log:
+- Read worklog.md to understand full project context (1051 lines of prior history)
+- Performed comprehensive QA testing via agent-browser across all views:
+  - Landing page: ✅ No errors
+  - Admin dashboard: ✅ No errors
+  - Admin courses, community, assessments, certificates, analytics, settings, live cohorts: ✅ No errors
+  - Learner dashboard, courses, community, achievements, profile: ✅ No errors
+  - Checkout page, AI tutor: ✅ No errors
+- Identified and fixed 2 bugs:
+  1. **enterAdminMode user switch bug**: When switching from learner→admin, the store's `enterAdminMode` action didn't update `currentUser`, so the admin dashboard still showed "Welcome back, Alex!" instead of "Welcome back, Sarah!". Fixed by adding the full admin user object to the `enterAdminMode` state update.
+  2. **Hydration mismatch from Math.random()**: The `FloatingParticles` component in the landing page used `Math.random()` for particle positions, causing server/client hydration mismatches. Fixed by replacing with deterministic seeded values using index-based calculations.
+- Enhanced 4 major components with styling improvements (delegated to parallel Task agents):
+  1. **Landing Page**: Added glowing gradient pulse behind hero heading, shimmer text effect on tagline, smoother infinite marquee for logos, parallax orb background, grain texture overlay, staggered feature card animations with gradient borders, pulsing glow on popular pricing card, flip animation for pricing toggle, animated fee calculator counter, auto-rotating testimonial carousel, scroll-triggered section reveals, back-to-top button
+  2. **Admin Dashboard**: Added sparkline mini-charts in KPI cards, gradient KPI backgrounds, pulsing trend indicators, revenue chart with gradient fill/custom tooltip/annotation markers/weekly-daily toggle, animated completion funnel with gradient colors and connecting arrows, enhanced quick actions with hover effects, alternating row colors in course table, timeline-style recent activity feed
+  3. **Learner Dashboard**: Added time-of-day greeting, streak fire pulse animation, daily goal progress ring, circular progress indicators on KPI cards, course cards with progress rings/next lesson preview/curriculum progress, celebration badges on completed courses, timeline-style activity feed, leaderboard with gold/silver/bronze badges, recommendation cards with difficulty/reason tags/ratings
+  4. **Video Player**: Complete rewrite with custom controls (play/pause, progress bar with buffering, volume, fullscreen, PiP, speed selector, skip buttons), segment-based progress tracking, auto-complete at 90%, keyboard shortcuts, mobile touch support, chapter markers, auto-hiding controls, resume prompt
+- Enhanced 2 additional components (delegated to parallel Task agents):
+  1. **Notification Center**: Added real-time notification simulation (every 30-60s), notification grouping by time period (Just now/Today/Yesterday/Earlier), filter tabs (All/Unread/Mentions), inline action buttons per notification type, visual sound indicator with bell ring animation, confetti-like empty state
+  2. **Admin Live Cohorts**: Added calendar view with colored session bars, schedule session dialog with validation and success animation, countdown timer for upcoming sessions, attendee avatars with progress, Start Session/Join Live buttons, sortable list view table, enhanced quick stats (4 cards)
+- Final QA pass: All 16+ views tested with zero errors via agent-browser
+- Lint check: ✅ Zero errors
+- Screenshots saved to /home/z/my-project/download/
+
+Stage Summary:
+- **Bugs Fixed**: 2 critical bugs (user switch on mode change, hydration mismatch)
+- **Styling Enhanced**: 4 major components (Landing, Admin Dashboard, Learner Dashboard, Video Player)
+- **Features Added**: 2 new feature enhancements (Notification Center, Admin Live Cohorts)
+- **QA Status**: All 16+ views pass with zero errors
+- **Lint Status**: Clean - zero errors
+- **Dev Server**: Running stably on port 3000
+
+Unresolved Issues / Risks:
+- Real authentication flow not implemented (still using demo users)
+- Real video hosting integration not implemented (simulated video playback)
+- Webhook management UI not yet built
+- Multi-currency checkout could be enhanced with Stripe integration
+- The Settings > Team/RBAC page could use more detailed permission management
+- Admin analytics deep-dive could include more chart types (scatter, heatmap)
+- Community reactions could support emoji picker
+- Certificate templates could support drag-and-drop layout editor
+
+Priority Recommendations for Next Phase:
+1. Add real-time collaboration features (WebSocket-based) for live cohorts
+2. Implement drag-and-drop course builder with visual module reordering
+3. Add advanced assessment analytics (question-level difficulty analysis)
+4. Build email template editor for automated communications
+5. Add API key management in Settings for integrations

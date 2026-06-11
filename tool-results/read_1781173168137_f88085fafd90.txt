@@ -1,0 +1,817 @@
+     1→'use client';
+     2→
+     3→import { useEffect, useState, useRef } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { useAppStore } from '@/store/app-store';
+     6→import { learnerKPIs, demoEnrollments, demoCourses, leaderboardData } from '@/lib/mock-data';
+     7→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+     8→import { Button } from '@/components/ui/button';
+     9→import { Badge } from '@/components/ui/badge';
+    10→import { Progress } from '@/components/ui/progress';
+    11→import {
+    12→  BookOpen,
+    13→  GraduationCap,
+    14→  Flame,
+    15→  Star,
+    16→  Award,
+    17→  MessageCircle,
+    18→  Play,
+    19→  Trophy,
+    20→  Clock,
+    21→  CheckCircle2,
+    22→  Download,
+    23→  Sparkles,
+    24→  ArrowRight,
+    25→  Zap,
+    26→  TrendingUp,
+    27→  Target,
+    28→} from 'lucide-react';
+    29→import { cn } from '@/lib/utils';
+    30→import type { DashboardKPI } from '@/types';
+    31→
+    32→// Map icon string from KPI data to lucide component
+    33→function getKPIIcon(iconName: string) {
+    34→  const iconMap: Record<string, React.ElementType> = {
+    35→    'book-open': BookOpen,
+    36→    'graduation-cap': GraduationCap,
+    37→    flame: Flame,
+    38→    star: Star,
+    39→    award: Award,
+    40→    'message-circle': MessageCircle,
+    41→  };
+    42→  return iconMap[iconName] || Star;
+    43→}
+    44→
+    45→// Color map for KPI cards
+    46→function getKPIColor(iconName: string) {
+    47→  const colorMap: Record<string, { bg: string; text: string; border: string }> = {
+    48→    'book-open': { bg: 'bg-emerald-500/10', text: 'text-emerald-500', border: 'border-emerald-500/20' },
+    49→    'graduation-cap': { bg: 'bg-violet-500/10', text: 'text-violet-500', border: 'border-violet-500/20' },
+    50→    flame: { bg: 'bg-orange-500/10', text: 'text-orange-500', border: 'border-orange-500/20' },
+    51→    star: { bg: 'bg-yellow-500/10', text: 'text-yellow-500', border: 'border-yellow-500/20' },
+    52→    award: { bg: 'bg-emerald-500/10', text: 'text-emerald-500', border: 'border-emerald-500/20' },
+    53→    'message-circle': { bg: 'bg-sky-500/10', text: 'text-sky-500', border: 'border-sky-500/20' },
+    54→  };
+    55→  return colorMap[iconName] || { bg: 'bg-slate-500/10', text: 'text-slate-500', border: 'border-slate-500/20' };
+    56→}
+    57→
+    58→// Course color accent by category
+    59→function getCourseAccent(category?: string) {
+    60→  const accents: Record<string, string> = {
+    61→    'Web Development': 'from-emerald-600 to-emerald-800',
+    62→    'AI & ML': 'from-violet-600 to-violet-800',
+    63→    'Data Science': 'from-sky-600 to-sky-800',
+    64→    Design: 'from-pink-600 to-pink-800',
+    65→    Business: 'from-amber-600 to-amber-800',
+    66→    Marketing: 'from-rose-600 to-rose-800',
+    67→  };
+    68→  return accents[category || ''] || 'from-slate-600 to-slate-800';
+    69→}
+    70→
+    71→// Relative time helper
+    72→function getRelativeTime(dateStr?: string) {
+    73→  if (!dateStr) return '';
+    74→  const now = new Date();
+    75→  const date = new Date(dateStr);
+    76→  const diffMs = now.getTime() - date.getTime();
+    77→  const diffMins = Math.floor(diffMs / 60000);
+    78→  const diffHours = Math.floor(diffMins / 60);
+    79→  const diffDays = Math.floor(diffHours / 24);
+    80→
+    81→  if (diffMins < 60) return `${diffMins}m ago`;
+    82→  if (diffHours < 24) return `${diffHours}h ago`;
+    83→  if (diffDays < 7) return `${diffDays}d ago`;
+    84→  return date.toLocaleDateString();
+    85→}
+    86→
+    87→// Animated progress bar with shimmer
+    88→function AnimatedProgress({ value, className }: { value: number; className?: string }) {
+    89→  const [animatedValue, setAnimatedValue] = useState(0);
+    90→
+    91→  useEffect(() => {
+    92→    const timer = setTimeout(() => setAnimatedValue(value), 100);
+    93→    return () => clearTimeout(timer);
+    94→  }, [value]);
+    95→
+    96→  return (
+    97→    <div className={cn('relative h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700', className)}>
+    98→      <motion.div
+    99→        className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 overflow-hidden"
+   100→        initial={{ width: 0 }}
+   101→        animate={{ width: `${animatedValue}%` }}
+   102→        transition={{ duration: 1, ease: 'easeOut', delay: 0.2 }}
+   103→      >
+   104→        {/* Shimmer effect */}
+   105→        <div className="absolute inset-0">
+   106→          <motion.div
+   107→            className="absolute inset-y-0 w-8 bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-20deg]"
+   108→            animate={{ x: ['-100%', '500%'] }}
+   109→            transition={{ duration: 2, repeat: Infinity, ease: 'linear', delay: 1.5 }}
+   110→          />
+   111→        </div>
+   112→      </motion.div>
+   113→    </div>
+   114→  );
+   115→}
+   116→
+   117→// ─── Streak Fire Effect ──────────────────────────────────────
+   118→function StreakFireBadge({ days }: { days: number }) {
+   119→  return (
+   120→    <div className="relative inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-1 dark:bg-orange-950/40">
+   121→      <motion.div
+   122→        animate={{
+   123→          scale: [1, 1.2, 1],
+   124→          filter: [
+   125→            'brightness(1) drop-shadow(0 0 0px transparent)',
+   126→            'brightness(1.3) drop-shadow(0 0 8px rgba(249, 115, 22, 0.6))',
+   127→            'brightness(1) drop-shadow(0 0 0px transparent)',
+   128→          ],
+   129→        }}
+   130→        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+   131→      >
+   132→        <Flame className="h-4 w-4 text-orange-500" />
+   133→      </motion.div>
+   134→      <span className="text-sm font-semibold text-orange-700 dark:text-orange-300">
+   135→        {days} day streak
+   136→      </span>
+   137→      {/* Glow effect behind badge */}
+   138→      <motion.div
+   139→        className="absolute inset-0 rounded-full bg-orange-400/20 blur-md -z-10"
+   140→        animate={{ opacity: [0.3, 0.7, 0.3] }}
+   141→        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+   142→      />
+   143→    </div>
+   144→  );
+   145→}
+   146→
+   147→// ─── Daily Goal Progress Ring ────────────────────────────────
+   148→function DailyGoalRing({ percentage, minutes, goal }: { percentage: number; minutes: number; goal: number }) {
+   149→  const [animatedPercent, setAnimatedPercent] = useState(0);
+   150→
+   151→  useEffect(() => {
+   152→    const timer = setTimeout(() => setAnimatedPercent(percentage), 200);
+   153→    return () => clearTimeout(timer);
+   154→  }, [percentage]);
+   155→
+   156→  const radius = 40;
+   157→  const circumference = 2 * Math.PI * radius;
+   158→  const strokeDashoffset = circumference - (animatedPercent / 100) * circumference;
+   159→
+   160→  return (
+   161→    <Card className="border-border dark:border-slate-800">
+   162→      <CardHeader className="pb-2">
+   163→        <CardTitle className="text-base font-semibold flex items-center gap-2">
+   164→          <Target className="h-4 w-4 text-emerald-500" />
+   165→          Daily Goal
+   166→        </CardTitle>
+   167→      </CardHeader>
+   168→      <CardContent className="flex flex-col items-center pb-4">
+   169→        <div className="relative">
+   170→          <svg width="100" height="100" className="-rotate-90">
+   171→            {/* Background circle */}
+   172→            <circle
+   173→              cx="50"
+   174→              cy="50"
+   175→              r={radius}
+   176→              fill="none"
+   177→              stroke="currentColor"
+   178→              strokeWidth="6"
+   179→              className="text-slate-200 dark:text-slate-700 dark:text-slate-300"
+   180→            />
+   181→            {/* Progress circle */}
+   182→            <motion.circle
+   183→              cx="50"
+   184→              cy="50"
+   185→              r={radius}
+   186→              fill="none"
+   187→              stroke="url(#goalGradient)"
+   188→              strokeWidth="6"
+   189→              strokeLinecap="round"
+   190→              strokeDasharray={circumference}
+   191→              initial={{ strokeDashoffset: circumference }}
+   192→              animate={{ strokeDashoffset }}
+   193→              transition={{ duration: 1.5, ease: 'easeOut', delay: 0.3 }}
+   194→            />
+   195→            <defs>
+   196→              <linearGradient id="goalGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+   197→                <stop offset="0%" stopColor="#10b981" />
+   198→                <stop offset="100%" stopColor="#8b5cf6" />
+   199→              </linearGradient>
+   200→            </defs>
+   201→          </svg>
+   202→          <div className="absolute inset-0 flex flex-col items-center justify-center">
+   203→            <span className="text-xl font-bold text-foreground">{percentage}%</span>
+   204→            <span className="text-[10px] text-muted-foreground">complete</span>
+   205→          </div>
+   206→        </div>
+   207→        <div className="mt-3 text-center">
+   208→          <p className="text-sm text-foreground font-medium">
+   209→            {minutes} of {goal} min
+   210→          </p>
+   211→          <p className="text-xs text-muted-foreground mt-0.5">
+   212→            {percentage >= 100 ? 'Goal reached! 🎉' : `${goal - minutes} min to go`}
+   213→          </p>
+   214→        </div>
+   215→      </CardContent>
+   216→    </Card>
+   217→  );
+   218→}
+   219→
+   220→// ─── Parallax Tilt Card ─────────────────────────────────────
+   221→function TiltCard({ children, className }: { children: React.ReactNode; className?: string }) {
+   222→  const cardRef = useRef<HTMLDivElement>(null);
+   223→  const [rotateX, setRotateX] = useState(0);
+   224→  const [rotateY, setRotateY] = useState(0);
+   225→
+   226→  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+   227→    if (!cardRef.current) return;
+   228→    const rect = cardRef.current.getBoundingClientRect();
+   229→    const x = e.clientX - rect.left;
+   230→    const y = e.clientY - rect.top;
+   231→    const centerX = rect.width / 2;
+   232→    const centerY = rect.height / 2;
+   233→    const maxTilt = 5;
+   234→    const newRotateX = ((y - centerY) / centerY) * -maxTilt;
+   235→    const newRotateY = ((x - centerX) / centerX) * maxTilt;
+   236→    setRotateX(newRotateX);
+   237→    setRotateY(newRotateY);
+   238→  };
+   239→
+   240→  const handleMouseLeave = () => {
+   241→    setRotateX(0);
+   242→    setRotateY(0);
+   243→  };
+   244→
+   245→  return (
+   246→    <div
+   247→      ref={cardRef}
+   248→      onMouseMove={handleMouseMove}
+   249→      onMouseLeave={handleMouseLeave}
+   250→      className={className}
+   251→      style={{
+   252→        transform: `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`,
+   253→        transition: 'transform 0.15s ease-out',
+   254→      }}
+   255→    >
+   256→      {children}
+   257→    </div>
+   258→  );
+   259→}
+   260→
+   261→// Activity feed items
+   262→const activityItems = [
+   263→  {
+   264→    id: 'act-1',
+   265→    type: 'lesson' as const,
+   266→    icon: CheckCircle2,
+   267→    color: 'text-emerald-500',
+   268→    title: 'Completed Lesson: Server Components Architecture',
+   269→    time: '2 hours ago',
+   270→  },
+   271→  {
+   272→    id: 'act-2',
+   273→    type: 'achievement' as const,
+   274→    icon: Trophy,
+   275→    color: 'text-yellow-500',
+   276→    title: 'Earned Achievement: Streak Starter 🔥',
+   277→    time: '5 hours ago',
+   278→  },
+   279→  {
+   280→    id: 'act-3',
+   281→    type: 'community' as const,
+   282→    icon: MessageCircle,
+   283→    color: 'text-sky-500',
+   284→    title: 'Posted in Community: How do you handle state management in large Next.js apps?',
+   285→    time: '1 day ago',
+   286→  },
+   287→  {
+   288→    id: 'act-4',
+   289→    type: 'quiz' as const,
+   290→    icon: Zap,
+   291→    color: 'text-violet-500',
+   292→    title: 'Quiz Score: 92% on React Fundamentals',
+   293→    time: '1 day ago',
+   294→  },
+   295→  {
+   296→    id: 'act-5',
+   297→    type: 'lesson' as const,
+   298→    icon: Play,
+   299→    color: 'text-emerald-500',
+   300→    title: 'Started Lesson: Prompt Engineering Mastery',
+   301→    time: '2 days ago',
+   302→  },
+   303→  {
+   304→    id: 'act-6',
+   305→    type: 'achievement' as const,
+   306→    icon: Sparkles,
+   307→    color: 'text-orange-500',
+   308→    title: 'Reached 1,000 points milestone!',
+   309→    time: '3 days ago',
+   310→  },
+   311→];
+   312→
+   313→// Section animation wrapper
+   314→function Section({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+   315→  return (
+   316→    <motion.div
+   317→      initial={{ opacity: 0, y: 20 }}
+   318→      animate={{ opacity: 1, y: 0 }}
+   319→      transition={{ duration: 0.5, delay }}
+   320→    >
+   321→      {children}
+   322→    </motion.div>
+   323→  );
+   324→}
+   325→
+   326→export function LearnerDashboard() {
+   327→  const { currentUser } = useAppStore();
+   328→  const [showAllActivities, setShowAllActivities] = useState(false);
+   329→
+   330→  const firstName = currentUser?.name?.split(' ')[0] || 'Learner';
+   331→  const streakDays = currentUser?.streakDays || 7;
+   332→
+   333→  // Filter enrollments
+   334→  const activeEnrollments = demoEnrollments.filter((e) => e.status === 'active');
+   335→  const completedEnrollments = demoEnrollments.filter((e) => e.status === 'completed');
+   336→
+   337→  // Most recently accessed course
+   338→  const mostRecentEnrollment = [...activeEnrollments].sort((a, b) => {
+   339→    const aTime = a.lastAccessedAt ? new Date(a.lastAccessedAt).getTime() : 0;
+   340→    const bTime = b.lastAccessedAt ? new Date(b.lastAccessedAt).getTime() : 0;
+   341→    return bTime - aTime;
+   342→  })[0];
+   343→
+   344→  // Courses not enrolled in
+   345→  const enrolledCourseIds = new Set(demoEnrollments.map((e) => e.courseId));
+   346→  const recommendedCourses = demoCourses.filter((c) => !enrolledCourseIds.has(c.id));
+   347→
+   348→  // Leaderboard top 5
+   349→  const topFive = leaderboardData.slice(0, 5);
+   350→
+   351→  // Daily goal data
+   352→  const dailyMinutes = 22;
+   353→  const dailyGoal = 30;
+   354→  const dailyPercent = Math.round((dailyMinutes / dailyGoal) * 100);
+   355→
+   356→  return (
+   357→    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+   358→      <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:p-8">
+   359→        {/* ============ WELCOME HEADER ============ */}
+   360→        <Section delay={0}>
+   361→          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   362→            <div>
+   363→              <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-50 sm:text-3xl">
+   364→                Welcome back, {firstName}! 👋
+   365→              </h1>
+   366→              <div className="mt-2 flex items-center gap-3">
+   367→                <StreakFireBadge days={streakDays} />
+   368→                <div className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 dark:bg-emerald-950/40">
+   369→                  <TrendingUp className="h-4 w-4 text-emerald-500" />
+   370→                  <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+   371→                    340 pts this week
+   372→                  </span>
+   373→                </div>
+   374→              </div>
+   375→            </div>
+   376→            {mostRecentEnrollment && (
+   377→              <Button
+   378→                size="lg"
+   379→                className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20"
+   380→                onClick={() => {}}
+   381→              >
+   382→                <Play className="h-4 w-4" />
+   383→                Resume Learning
+   384→              </Button>
+   385→            )}
+   386→          </div>
+   387→        </Section>
+   388→
+   389→        {/* ============ KPI STATS ROW ============ */}
+   390→        <Section delay={0.05}>
+   391→          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+   392→            {learnerKPIs.map((kpi: DashboardKPI, i: number) => {
+   393→              const Icon = getKPIIcon(kpi.icon);
+   394→              const colors = getKPIColor(kpi.icon);
+   395→              return (
+   396→                <motion.div
+   397→                  key={kpi.label}
+   398→                  initial={{ opacity: 0, scale: 0.9 }}
+   399→                  animate={{ opacity: 1, scale: 1 }}
+   400→                  transition={{ duration: 0.3, delay: 0.05 * i }}
+   401→                >
+   402→                  <Card className={cn(
+   403→                    'relative overflow-hidden border transition-shadow hover:shadow-md',
+   404→                    colors.border
+   405→                  )}>
+   406→                    <CardContent className="p-4">
+   407→                      <div className={cn('mb-3 flex h-9 w-9 items-center justify-center rounded-lg', colors.bg)}>
+   408→                        <Icon className={cn('h-4 w-4', colors.text)} />
+   409→                      </div>
+   410→                      <p className="text-2xl font-bold text-slate-900 dark:text-slate-50">{kpi.value}</p>
+   411→                      <p className="mt-0.5 text-xs text-muted-foreground">{kpi.label}</p>
+   412→                      <div className="mt-2 flex items-center gap-1">
+   413→                        <span className={cn(
+   414→                          'text-xs font-medium',
+   415→                          kpi.change >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'
+   416→                        )}>
+   417→                          {kpi.change >= 0 ? '+' : ''}{kpi.change}
+   418→                        </span>
+   419→                        <span className="text-xs text-muted-foreground">{kpi.changeLabel}</span>
+   420→                      </div>
+   421→                    </CardContent>
+   422→                  </Card>
+   423→                </motion.div>
+   424→              );
+   425→            })}
+   426→          </div>
+   427→        </Section>
+   428→
+   429→        {/* ============ CONTINUE LEARNING SECTION ============ */}
+   430→        {activeEnrollments.length > 0 && (
+   431→          <Section delay={0.1}>
+   432→            <div className="flex items-center justify-between mb-4">
+   433→              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50 flex items-center gap-2">
+   434→                <Play className="h-5 w-5 text-emerald-500" />
+   435→                Continue Learning
+   436→              </h2>
+   437→              <Badge variant="secondary" className="text-xs">
+   438→                {activeEnrollments.length} active
+   439→              </Badge>
+   440→            </div>
+   441→            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin">
+   442→              {activeEnrollments.map((enrollment, i) => (
+   443→                <motion.div
+   444→                  key={enrollment.id}
+   445→                  initial={{ opacity: 0, x: 30 }}
+   446→                  animate={{ opacity: 1, x: 0 }}
+   447→                  transition={{ duration: 0.4, delay: 0.1 * i }}
+   448→                  className="min-w-[280px] sm:min-w-[320px]"
+   449→                >
+   450→                  <TiltCard>
+   451→                    <Card className="overflow-hidden border-border dark:border-slate-800 hover:shadow-lg transition-shadow group">
+   452→                      {/* Course colored header */}
+   453→                      <div className={cn(
+   454→                        'bg-gradient-to-r p-4 h-20 flex items-end',
+   455→                        getCourseAccent(enrollment.course?.category)
+   456→                      )}>
+   457→                        <div className="flex w-full items-center justify-between">
+   458→                          <Badge className="bg-white/20 text-white border-0 text-xs backdrop-blur-sm">
+   459→                            {enrollment.course?.level}
+   460→                          </Badge>
+   461→                          <span className="text-xs text-white/70">
+   462→                            {enrollment.course?.durationHours}h
+   463→                          </span>
+   464→                        </div>
+   465→                      </div>
+   466→                      <CardContent className="p-4 space-y-3">
+   467→                        <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-50 line-clamp-2 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+   468→                          {enrollment.course?.title}
+   469→                        </h3>
+   470→                        <div className="space-y-1.5">
+   471→                          <div className="flex items-center justify-between text-xs">
+   472→                            <span className="text-muted-foreground">Progress</span>
+   473→                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">{enrollment.progress}%</span>
+   474→                          </div>
+   475→                          <AnimatedProgress value={enrollment.progress} />
+   476→                        </div>
+   477→                        <div className="flex items-center justify-between">
+   478→                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+   479→                            <Clock className="h-3 w-3" />
+   480→                            {getRelativeTime(enrollment.lastAccessedAt)}
+   481→                          </span>
+   482→                          <Button size="sm" className="h-7 gap-1 bg-emerald-600 text-white hover:bg-emerald-700 text-xs px-3">
+   483→                            <Play className="h-3 w-3" />
+   484→                            Continue
+   485→                          </Button>
+   486→                        </div>
+   487→                      </CardContent>
+   488→                    </Card>
+   489→                  </TiltCard>
+   490→                </motion.div>
+   491→              ))}
+   492→            </div>
+   493→          </Section>
+   494→        )}
+   495→
+   496→        {/* ============ COMPLETED COURSES ============ */}
+   497→        {completedEnrollments.length > 0 && (
+   498→          <Section delay={0.15}>
+   499→            <div className="flex items-center justify-between mb-4">
+   500→              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50 flex items-center gap-2">
+   501→                <GraduationCap className="h-5 w-5 text-violet-500" />
+   502→                Completed Courses
+   503→              </h2>
+   504→              <Badge variant="secondary" className="text-xs">
+   505→                {completedEnrollments.length} completed
+   506→              </Badge>
+   507→            </div>
+   508→            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   509→              {completedEnrollments.map((enrollment, i) => (
+   510→                <motion.div
+   511→                  key={enrollment.id}
+   512→                  initial={{ opacity: 0, y: 20 }}
+   513→                  animate={{ opacity: 1, y: 0 }}
+   514→                  transition={{ duration: 0.4, delay: 0.1 * i }}
+   515→                >
+   516→                  <Card className="overflow-hidden border-border dark:border-slate-800 hover:shadow-lg transition-shadow group relative">
+   517→                    {/* Completion badge */}
+   518→                    <div className="absolute top-3 right-3 z-10">
+   519→                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30">
+   520→                        <CheckCircle2 className="h-5 w-5" />
+   521→                      </div>
+   522→                    </div>
+   523→                    {/* Course colored header */}
+   524→                    <div className={cn(
+   525→                      'bg-gradient-to-r p-4 h-20 flex items-end',
+   526→                      getCourseAccent(enrollment.course?.category)
+   527→                    )}>
+   528→                      <Badge className="bg-white/20 text-white border-0 text-xs backdrop-blur-sm">
+   529→                        {enrollment.course?.category}
+   530→                      </Badge>
+   531→                    </div>
+   532→                    <CardContent className="p-4 space-y-3">
+   533→                      <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-50 pr-8 line-clamp-2">
+   534→                        {enrollment.course?.title}
+   535→                      </h3>
+   536→                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   537→                        <span className="flex items-center gap-1">
+   538→                          <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
+   539→                          {enrollment.course?.avgRating}
+   540→                        </span>
+   541→                        <span>·</span>
+   542→                        <span>100% complete</span>
+   543→                      </div>
+   544→                      <div className="flex items-center gap-2">
+   545→                        <Button size="sm" variant="outline" className="h-7 gap-1 text-xs px-3 border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40">
+   546→                          <Download className="h-3 w-3" />
+   547→                          Certificate
+   548→                        </Button>
+   549→                        <Button size="sm" variant="ghost" className="h-7 text-xs px-3 text-muted-foreground">
+   550→                          Review Course
+   551→                        </Button>
+   552→                      </div>
+   553→                    </CardContent>
+   554→                  </Card>
+   555→                </motion.div>
+   556→              ))}
+   557→            </div>
+   558→          </Section>
+   559→        )}
+   560→
+   561→        {/* ============ MIDDLE ROW: ACTIVITY FEED + LEADERBOARD + DAILY GOAL ============ */}
+   562→        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+   563→          {/* Activity Feed */}
+   564→          <Section delay={0.2}>
+   565→            <Card className="border-border dark:border-slate-800 h-full">
+   566→              <CardHeader className="pb-2">
+   567→                <CardTitle className="text-base font-semibold flex items-center gap-2">
+   568→                  <Zap className="h-4 w-4 text-yellow-500" />
+   569→                  Recent Activity
+   570→                </CardTitle>
+   571→              </CardHeader>
+   572→              <CardContent className="space-y-0">
+   573→                <div className="max-h-96 overflow-y-auto scrollbar-thin">
+   574→                  <AnimatePresence>
+   575→                    {(showAllActivities ? activityItems : activityItems.slice(0, 4)).map((activity, i) => {
+   576→                      const ActivityIcon = activity.icon;
+   577→                      return (
+   578→                        <motion.div
+   579→                          key={activity.id}
+   580→                          initial={{ opacity: 0, x: -10 }}
+   581→                          animate={{ opacity: 1, x: 0 }}
+   582→                          transition={{ duration: 0.3, delay: 0.05 * i }}
+   583→                          className="flex items-start gap-3 py-3 border-b border-slate-100 dark:border-slate-800 last:border-0"
+   584→                        >
+   585→                          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+   586→                            <ActivityIcon className={cn('h-4 w-4', activity.color)} />
+   587→                          </div>
+   588→                          <div className="min-w-0 flex-1">
+   589→                            <p className="text-sm text-slate-900 dark:text-slate-100 line-clamp-2">
+   590→                              {activity.title}
+   591→                            </p>
+   592→                            <p className="mt-0.5 text-xs text-muted-foreground">{activity.time}</p>
+   593→                          </div>
+   594→                        </motion.div>
+   595→                      );
+   596→                    })}
+   597→                  </AnimatePresence>
+   598→                </div>
+   599→                {activityItems.length > 4 && (
+   600→                  <Button
+   601→                    variant="ghost"
+   602→                    size="sm"
+   603→                    className="mt-2 w-full text-xs text-muted-foreground"
+   604→                    onClick={() => setShowAllActivities(!showAllActivities)}
+   605→                  >
+   606→                    {showAllActivities ? 'Show less' : 'View all activity'}
+   607→                  </Button>
+   608→                )}
+   609→              </CardContent>
+   610→            </Card>
+   611→          </Section>
+   612→
+   613→          {/* Leaderboard Preview */}
+   614→          <Section delay={0.25}>
+   615→            <Card className="border-border dark:border-slate-800 h-full">
+   616→              <CardHeader className="pb-2">
+   617→                <div className="flex items-center justify-between">
+   618→                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+   619→                    <Trophy className="h-4 w-4 text-yellow-500" />
+   620→                    Leaderboard
+   621→                  </CardTitle>
+   622→                  <Badge variant="secondary" className="text-xs">This Week</Badge>
+   623→                </div>
+   624→              </CardHeader>
+   625→              <CardContent className="space-y-0">
+   626→                <div className="space-y-1">
+   627→                  {topFive.map((entry, i) => {
+   628→                    const isCurrentUser = entry.name === 'Alex Johnson';
+   629→                    return (
+   630→                      <motion.div
+   631→                        key={entry.rank}
+   632→                        initial={{ opacity: 0, x: 20 }}
+   633→                        animate={{ opacity: 1, x: 0 }}
+   634→                        transition={{ duration: 0.3, delay: 0.08 * i }}
+   635→                        className={cn(
+   636→                          'flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors',
+   637→                          isCurrentUser
+   638→                            ? 'bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/30 dark:border-emerald-800'
+   639→                            : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+   640→                        )}
+   641→                      >
+   642→                        {/* Rank */}
+   643→                        <div className={cn(
+   644→                          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+   645→                          entry.rank === 1 && 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+   646→                          entry.rank === 2 && 'bg-slate-200 text-slate-700 dark:text-slate-300 dark:bg-slate-700 dark:text-slate-300',
+   647→                          entry.rank === 3 && 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+   648→                          entry.rank > 3 && 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
+   649→                        )}>
+   650→                          {entry.rank <= 3 ? ['🥇', '🥈', '🥉'][entry.rank - 1] : entry.rank}
+   651→                        </div>
+   652→                        {/* Name & details */}
+   653→                        <div className="min-w-0 flex-1">
+   654→                          <p className={cn(
+   655→                            'text-sm font-medium truncate',
+   656→                            isCurrentUser ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-900 dark:text-slate-100'
+   657→                          )}>
+   658→                            {entry.name}
+   659→                            {isCurrentUser && (
+   660→                              <span className="ml-1.5 text-xs font-normal text-emerald-500">(You)</span>
+   661→                            )}
+   662→                          </p>
+   663→                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   664→                            <span>{entry.points.toLocaleString()} pts</span>
+   665→                            <span>·</span>
+   666→                            <span className="flex items-center gap-0.5">
+   667→                              <Flame className="h-3 w-3 text-orange-400" />
+   668→                              {entry.streak}
+   669→                            </span>
+   670→                          </div>
+   671→                        </div>
+   672→                      </motion.div>
+   673→                    );
+   674→                  })}
+   675→                </div>
+   676→                <Button
+   677→                  variant="outline"
+   678→                  size="sm"
+   679→                  className="mt-3 w-full text-xs gap-1"
+   680→                  onClick={() => useAppStore.getState().setView('learner-achievements')}
+   681→                >
+   682→                  View Full Leaderboard
+   683→                  <ArrowRight className="h-3 w-3" />
+   684→                </Button>
+   685→              </CardContent>
+   686→            </Card>
+   687→          </Section>
+   688→
+   689→          {/* Daily Goal Ring + Quick Stats */}
+   690→          <Section delay={0.3}>
+   691→            <div className="space-y-4">
+   692→              <DailyGoalRing percentage={dailyPercent} minutes={dailyMinutes} goal={dailyGoal} />
+   693→
+   694→              {/* Streak Card */}
+   695→              <Card className="border-border dark:border-slate-800 overflow-hidden">
+   696→                <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 p-4 text-white">
+   697→                  <div className="flex items-center gap-3 mb-3">
+   698→                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
+   699→                      <Flame className="h-5 w-5" />
+   700→                    </div>
+   701→                    <div>
+   702→                      <p className="text-xs text-emerald-100">Learning Streak</p>
+   703→                      <p className="text-2xl font-bold">{streakDays} Days</p>
+   704→                    </div>
+   705→                  </div>
+   706→                  {/* Streak visual - last 7 days */}
+   707→                  <div className="flex items-end gap-1.5 mt-2">
+   708→                    {Array.from({ length: 7 }, (_, idx) => {
+   709→                      const isActive = idx < streakDays % 7 || (streakDays >= 7 && true);
+   710→                      return (
+   711→                        <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+   712→                          <div className={cn(
+   713→                            'w-full rounded-sm transition-all',
+   714→                            isActive
+   715→                              ? 'bg-white/80 h-6'
+   716→                              : 'bg-white/20 h-2'
+   717→                          )} />
+   718→                          <span className="text-[9px] text-emerald-200">
+   719→                            {['M', 'T', 'W', 'T', 'F', 'S', 'S'][idx]}
+   720→                          </span>
+   721→                        </div>
+   722→                      );
+   723→                    })}
+   724→                  </div>
+   725→                </div>
+   726→                <CardContent className="p-3">
+   727→                  <div className="flex items-center gap-2 rounded-lg bg-violet-50 dark:bg-violet-950/30 p-2.5">
+   728→                    <Sparkles className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+   729→                    <p className="text-[11px] text-violet-700 dark:text-violet-300">
+   730→                      <strong>Streak Master</strong> unlocked! +100 pts
+   731→                    </p>
+   732→                  </div>
+   733→                </CardContent>
+   734→              </Card>
+   735→            </div>
+   736→          </Section>
+   737→        </div>
+   738→
+   739→        {/* ============ RECOMMENDED COURSES ============ */}
+   740→        {recommendedCourses.length > 0 && (
+   741→          <Section delay={0.35}>
+   742→            <div className="flex items-center justify-between mb-4">
+   743→              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50 flex items-center gap-2">
+   744→                <Sparkles className="h-5 w-5 text-violet-500" />
+   745→                Recommended For You
+   746→              </h2>
+   747→              <Button variant="ghost" size="sm" className="text-xs gap-1 text-muted-foreground">
+   748→                Browse All <ArrowRight className="h-3 w-3" />
+   749→              </Button>
+   750→            </div>
+   751→            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   752→              {recommendedCourses.map((course, i) => (
+   753→                <motion.div
+   754→                  key={course.id}
+   755→                  initial={{ opacity: 0, y: 20 }}
+   756→                  animate={{ opacity: 1, y: 0 }}
+   757→                  transition={{ duration: 0.4, delay: 0.1 * i }}
+   758→                >
+   759→                  <TiltCard>
+   760→                    <Card className="overflow-hidden border-border dark:border-slate-800 hover:shadow-lg transition-shadow group cursor-pointer">
+   761→                      {/* Course colored header */}
+   762→                      <div className={cn(
+   763→                        'bg-gradient-to-r p-4 h-20 flex items-end relative',
+   764→                        getCourseAccent(course.category)
+   765→                      )}>
+   766→                        {course.isFeatured && (
+   767→                          <Badge className="absolute top-3 right-3 bg-white/20 text-white border-0 text-xs backdrop-blur-sm gap-1">
+   768→                            <Star className="h-3 w-3 fill-white" />
+   769→                            Featured
+   770→                          </Badge>
+   771→                        )}
+   772→                        <Badge className="bg-white/20 text-white border-0 text-xs backdrop-blur-sm">
+   773→                          {course.level}
+   774→                        </Badge>
+   775→                      </div>
+   776→                      <CardContent className="p-4 space-y-3">
+   777→                        <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-50 line-clamp-2 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+   778→                          {course.title}
+   779→                        </h3>
+   780→                        <p className="text-xs text-muted-foreground line-clamp-2">
+   781→                          {course.description}
+   782→                        </p>
+   783→                        <div className="flex items-center justify-between">
+   784→                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   785→                            <span className="flex items-center gap-1">
+   786→                              <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
+   787→                              {course.avgRating}
+   788→                            </span>
+   789→                            <span>({course.totalRatings})</span>
+   790→                            <span>·</span>
+   791→                            <span>{course.enrollmentCount} students</span>
+   792→                          </div>
+   793→                        </div>
+   794→                        <div className="flex items-center justify-between pt-1">
+   795→                          <div className="flex items-baseline gap-1.5">
+   796→                            <span className="text-sm font-bold text-slate-900 dark:text-slate-50">${course.price}</span>
+   797→                            {course.compareAtPrice && (
+   798→                              <span className="text-xs text-muted-foreground line-through">${course.compareAtPrice}</span>
+   799→                            )}
+   800→                          </div>
+   801→                          <Button size="sm" className="h-7 gap-1 bg-emerald-600 text-white hover:bg-emerald-700 text-xs px-3">
+   802→                            Enroll Now
+   803→                          </Button>
+   804→                        </div>
+   805→                      </CardContent>
+   806→                    </Card>
+   807→                  </TiltCard>
+   808→                </motion.div>
+   809→              ))}
+   810→            </div>
+   811→          </Section>
+   812→        )}
+   813→      </div>
+   814→    </div>
+   815→  );
+   816→}
+   817→

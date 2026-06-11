@@ -27,6 +27,7 @@ import {
   ChevronLeft,
   Star,
   ArrowRight,
+  ArrowUp,
   Twitter,
   Linkedin,
   Github,
@@ -45,7 +46,7 @@ import {
   UserPlus,
   Trophy,
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useInView, useScroll, useTransform } from 'framer-motion';
 
 // ============================================================
 // Feature Definitions
@@ -174,6 +175,41 @@ const staggerContainer = {
   visible: { transition: { staggerChildren: 0.1 } },
 };
 
+const staggerContainerSlow = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.15 } },
+};
+
+// Section reveal variant — each section fades + slides in
+const sectionReveal = {
+  hidden: { opacity: 0, y: 40 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: 'easeOut' } },
+};
+
+// ============================================================
+// Shimmer Text Component (for hero tagline)
+// ============================================================
+function ShimmerText({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span className={`relative inline-block ${className}`}>
+      <span className="relative z-10">{children}</span>
+      <span
+        className="absolute inset-0 z-0 bg-gradient-to-r from-transparent via-white/30 to-transparent dark:via-white/10 animate-shimmer bg-[length:200%_100%]"
+        aria-hidden="true"
+      />
+      <style jsx>{`
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        .animate-shimmer {
+          animation: shimmer 3s ease-in-out infinite;
+        }
+      `}</style>
+    </span>
+  );
+}
+
 // ============================================================
 // Typing Animation Component
 // ============================================================
@@ -225,33 +261,86 @@ function GridBackground() {
 }
 
 // ============================================================
-// Floating Particles
+// Noise / Grain Texture Overlay
 // ============================================================
+function GrainOverlay() {
+  return (
+    <div className="absolute inset-0 pointer-events-none z-10 opacity-[0.035]">
+      <svg width="100%" height="100%">
+        <filter id="grain">
+          <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
+        </filter>
+        <rect width="100%" height="100%" filter="url(#grain)" />
+      </svg>
+    </div>
+  );
+}
+
+// ============================================================
+// Floating Particles — deterministic seeded positions to avoid hydration mismatch
+// ============================================================
+const particleData = Array.from({ length: 20 }, (_, i) => ({
+  width: ((i * 7 + 3) % 5) + 2,
+  height: ((i * 5 + 2) % 5) + 2,
+  left: `${((i * 13 + 7) % 100)}%`,
+  top: `${((i * 17 + 11) % 100)}%`,
+  duration: 4 + ((i * 3 + 1) % 5),
+  delay: ((i * 2 + 3) % 4),
+}));
+
 function FloatingParticles() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {Array.from({ length: 20 }).map((_, i) => (
+      {particleData.map((p, i) => (
         <motion.div
           key={i}
           className="absolute rounded-full bg-emerald-500/20"
           style={{
-            width: Math.random() * 4 + 2,
-            height: Math.random() * 4 + 2,
-            left: `${Math.random() * 100}%`,
-            top: `${Math.random() * 100}%`,
+            width: p.width,
+            height: p.height,
+            left: p.left,
+            top: p.top,
           }}
           animate={{
             y: [0, -30, 0],
             opacity: [0.2, 0.6, 0.2],
           }}
           transition={{
-            duration: 4 + Math.random() * 4,
+            duration: p.duration,
             repeat: Infinity,
-            delay: Math.random() * 3,
+            delay: p.delay,
             ease: 'easeInOut',
           }}
         />
       ))}
+    </div>
+  );
+}
+
+// ============================================================
+// Parallax Orbs (Hero background orbs with parallax scroll)
+// ============================================================
+function ParallaxOrbs() {
+  const ref = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
+  const y1 = useTransform(scrollYProgress, [0, 1], [0, 150]);
+  const y2 = useTransform(scrollYProgress, [0, 1], [0, -100]);
+  const y3 = useTransform(scrollYProgress, [0, 1], [0, 80]);
+
+  return (
+    <div ref={ref} className="absolute inset-0 overflow-hidden pointer-events-none">
+      <motion.div
+        className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl"
+        style={{ y: y1 }}
+      />
+      <motion.div
+        className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-violet-500/10 blur-3xl"
+        style={{ y: y2 }}
+      />
+      <motion.div
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[600px] w-[600px] rounded-full bg-slate-500/5 blur-3xl"
+        style={{ y: y3 }}
+      />
     </div>
   );
 }
@@ -431,13 +520,46 @@ function AILiveDemo() {
 }
 
 // ============================================================
-// Savings Calculator
+// Animated Counter Hook
+// ============================================================
+function useAnimatedCounter(target: number, duration: number = 800) {
+  const [count, setCount] = useState(0);
+  const prevTarget = useRef(0);
+
+  useEffect(() => {
+    if (target === prevTarget.current) return;
+    prevTarget.current = target;
+
+    const start = count;
+    const diff = target - start;
+    const startTime = performance.now();
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      // easeOutCubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.round(start + diff * eased));
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }, [target, duration]);
+
+  return count;
+}
+
+// ============================================================
+// Savings Calculator (with animated counter)
 // ============================================================
 function SavingsCalculator() {
   const [revenue, setRevenue] = useState(5000);
   const teachableFee = revenue * 0.05 + 59;
   const nextgenFee = 0;
-  const savings = teachableFee - nextgenFee;
+  const savings = Math.round(teachableFee - nextgenFee);
+  const animatedSavings = useAnimatedCounter(savings, 600);
 
   return (
     <Card className="border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50/50 to-slate-50/50 dark:from-emerald-950/30 dark:to-slate-950/30">
@@ -469,43 +591,61 @@ function SavingsCalculator() {
         </div>
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200/50 dark:border-red-800/50">
+          <motion.div
+            className="flex items-center justify-between p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200/50 dark:border-red-800/50"
+            whileHover={{ scale: 1.02 }}
+            transition={{ duration: 0.15 }}
+          >
             <span className="text-sm text-red-700 dark:text-red-400">With Teachable</span>
             <span className="font-bold text-red-600 dark:text-red-400">${Math.round(teachableFee).toLocaleString()}/mo in fees</span>
-          </div>
-          <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/50">
+          </motion.div>
+          <motion.div
+            className="flex items-center justify-between p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/50"
+            whileHover={{ scale: 1.02 }}
+            transition={{ duration: 0.15 }}
+          >
             <span className="text-sm text-emerald-700 dark:text-emerald-400">With NextGen</span>
             <span className="font-bold text-emerald-600 dark:text-emerald-400">$0/mo in fees</span>
-          </div>
+          </motion.div>
         </div>
 
-        <div className="text-center p-3 rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 text-white">
+        <motion.div
+          className="text-center p-3 rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 text-white"
+          key={animatedSavings}
+          animate={{ scale: [1, 1.03, 1] }}
+          transition={{ duration: 0.3 }}
+        >
           <p className="text-xs text-emerald-100">You save</p>
-          <p className="text-2xl font-bold">${Math.round(savings).toLocaleString()}/month</p>
-        </div>
+          <p className="text-2xl font-bold">${animatedSavings.toLocaleString()}/month</p>
+        </motion.div>
       </CardContent>
     </Card>
   );
 }
 
 // ============================================================
-// Animated Border Glow Card
+// Animated Border Glow Card (Pulsing for "Most Popular")
 // ============================================================
 function GlowBorderCard({ children, highlighted }: { children: React.ReactNode; highlighted: boolean }) {
-  const cardRef = useRef<HTMLDivElement>(null);
-
   if (!highlighted) return <>{children}</>;
 
   return (
-    <div ref={cardRef} className="relative group">
-      {/* Animated glow border */}
+    <div className="relative group">
+      {/* Pulsing glow border */}
       <motion.div
         className="absolute -inset-[2px] rounded-xl bg-gradient-to-r from-emerald-500 via-violet-500 to-emerald-500 opacity-75 blur-[1px]"
         animate={{
           backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
+          opacity: [0.5, 0.85, 0.5],
         }}
-        transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
         style={{ backgroundSize: '200% 200%' }}
+      />
+      {/* Outer glow pulse */}
+      <motion.div
+        className="absolute -inset-3 rounded-2xl bg-emerald-500/10"
+        animate={{ opacity: [0.2, 0.5, 0.2], scale: [1, 1.02, 1] }}
+        transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
       />
       <div className="relative rounded-xl">{children}</div>
     </div>
@@ -513,7 +653,24 @@ function GlowBorderCard({ children, highlighted }: { children: React.ReactNode; 
 }
 
 // ============================================================
-// "As Seen In" Media Logos Marquee
+// Gradient Border Feature Card
+// ============================================================
+function GradientBorderCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`relative group ${className}`}>
+      {/* Gradient border — appears on hover */}
+      <div className="absolute -inset-[1px] rounded-xl bg-gradient-to-r from-emerald-500/0 via-violet-500/0 to-emerald-500/0 group-hover:from-emerald-500/60 group-hover:via-violet-500/60 group-hover:to-emerald-500/60 transition-all duration-500 opacity-0 group-hover:opacity-100" />
+      {/* Glow shadow on hover */}
+      <div className="absolute -inset-2 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-r from-emerald-500/5 via-violet-500/5 to-emerald-500/5 blur-lg" />
+      <div className="relative">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// "As Seen In" Media Logos Marquee (smooth infinite scroll)
 // ============================================================
 function MediaLogosMarquee() {
   const logos = ['TechCrunch', 'Forbes', 'Wired', 'EdTech', 'The Verge', 'VentureBeat'];
@@ -528,8 +685,8 @@ function MediaLogosMarquee() {
         <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-muted/20 to-transparent z-10 pointer-events-none" />
         <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-muted/20 to-transparent z-10 pointer-events-none" />
 
-        <div className="flex animate-marquee">
-          {[...logos, ...logos, ...logos, ...logos].map((logo, i) => (
+        <div className="flex animate-marquee-smooth">
+          {[...logos, ...logos, ...logos, ...logos, ...logos, ...logos, ...logos, ...logos].map((logo, i) => (
             <div
               key={`${logo}-${i}`}
               className="flex items-center justify-center mx-8 sm:mx-12 shrink-0"
@@ -542,12 +699,12 @@ function MediaLogosMarquee() {
         </div>
       </div>
       <style jsx>{`
-        @keyframes marquee {
+        @keyframes marquee-smooth {
           0% { transform: translateX(0); }
-          100% { transform: translateX(-25%); }
+          100% { transform: translateX(-12.5%); }
         }
-        .animate-marquee {
-          animation: marquee 30s linear infinite;
+        .animate-marquee-smooth {
+          animation: marquee-smooth 25s linear infinite;
         }
       `}</style>
     </section>
@@ -819,20 +976,63 @@ function CommunityPreview() {
 }
 
 // ============================================================
+// Animated Star Rating
+// ============================================================
+function AnimatedStars({ delay = 0 }: { delay?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const isInView = useInView(ref, { once: true });
+
+  return (
+    <div ref={ref} className="flex gap-0.5 mb-3">
+      {[0, 1, 2, 3, 4].map((j) => (
+        <motion.div
+          key={j}
+          initial={{ opacity: 0, scale: 0, rotate: -30 }}
+          animate={isInView ? { opacity: 1, scale: 1, rotate: 0 } : {}}
+          transition={{ duration: 0.3, delay: delay + j * 0.08, ease: 'backOut' }}
+        >
+          <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+// ============================================================
+// Dot Pattern Background
+// ============================================================
+function DotPatternBackground() {
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.04]">
+      <svg width="100%" height="100%">
+        <defs>
+          <pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse">
+            <circle cx="10" cy="10" r="1.5" fill="currentColor" />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#dots)" className="text-foreground" />
+      </svg>
+    </div>
+  );
+}
+
+// ============================================================
 // Enhanced Testimonials Carousel
 // ============================================================
 function TestimonialCarousel() {
   const [current, setCurrent] = useState(0);
   const [direction, setDirection] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
 
-  // Auto-rotate every 5 seconds
+  // Auto-rotate every 5 seconds (pause on hover)
   useEffect(() => {
+    if (isPaused) return;
     const timer = setInterval(() => {
       setDirection(1);
       setCurrent((prev) => (prev + 1) % testimonials.length);
     }, 5000);
     return () => clearInterval(timer);
-  }, []);
+  }, [isPaused]);
 
   const goTo = (index: number) => {
     setDirection(index > current ? 1 : -1);
@@ -851,7 +1051,7 @@ function TestimonialCarousel() {
 
   const slideVariants = {
     enter: (d: number) => ({
-      x: d > 0 ? 100 : -100,
+      x: d > 0 ? 80 : -80,
       opacity: 0,
     }),
     center: {
@@ -859,49 +1059,46 @@ function TestimonialCarousel() {
       opacity: 1,
     },
     exit: (d: number) => ({
-      x: d > 0 ? -100 : 100,
+      x: d > 0 ? -80 : 80,
       opacity: 0,
     }),
   };
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+    >
       {/* Desktop: show 3 at a time, mobile: 1 */}
       <div className="hidden lg:grid lg:grid-cols-3 gap-6">
-        {testimonials.map((testimonial, i) => {
-          const isActive = i >= current && i < current + 3;
-          const adjustedIndex = ((i - current + testimonials.length) % testimonials.length);
-          return (
-            <motion.div
-              key={testimonial.name}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-            >
-              <Card className="h-full border-border/60 hover:shadow-lg transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 text-sm font-bold">
-                      {testimonial.avatar}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{testimonial.name}</p>
-                      <p className="text-xs text-muted-foreground">{testimonial.role}</p>
-                    </div>
+        {testimonials.map((testimonial, i) => (
+          <motion.div
+            key={testimonial.name}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }}
+            whileHover={{ y: -4, transition: { duration: 0.2 } }}
+          >
+            <Card className="h-full border-border/60 hover:shadow-lg transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 text-sm font-bold">
+                    {testimonial.avatar}
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex gap-0.5 mb-3">
-                    {[...Array(5)].map((_, j) => (
-                      <Star key={j} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                    ))}
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{testimonial.name}</p>
+                    <p className="text-xs text-muted-foreground">{testimonial.role}</p>
                   </div>
-                  <p className="text-sm text-muted-foreground leading-relaxed">&ldquo;{testimonial.quote}&rdquo;</p>
-                </CardContent>
-              </Card>
-            </motion.div>
-          );
-        })}
+                </div>
+              </CardHeader>
+              <CardContent>
+                <AnimatedStars delay={i * 0.15} />
+                <p className="text-sm text-muted-foreground leading-relaxed">&ldquo;{testimonial.quote}&rdquo;</p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
       </div>
 
       {/* Mobile: carousel with single testimonial */}
@@ -915,7 +1112,7 @@ function TestimonialCarousel() {
               initial="enter"
               animate="center"
               exit="exit"
-              transition={{ duration: 0.35, ease: 'easeInOut' }}
+              transition={{ duration: 0.4, ease: 'easeInOut' }}
             >
               <Card className="border-border/60">
                 <CardHeader className="pb-3">
@@ -930,11 +1127,7 @@ function TestimonialCarousel() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex gap-0.5 mb-3">
-                    {[...Array(5)].map((_, j) => (
-                      <Star key={j} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                    ))}
-                  </div>
+                  <AnimatedStars delay={0.1} />
                   <p className="text-sm text-muted-foreground leading-relaxed">&ldquo;{testimonials[current].quote}&rdquo;</p>
                 </CardContent>
               </Card>
@@ -977,12 +1170,16 @@ function TestimonialCarousel() {
 }
 
 // ============================================================
-// Floating Stats Counter
+// Floating Stats Counter (fixed Math.random hydration issue)
 // ============================================================
 function FloatingStatsCounter() {
   const [visible, setVisible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [onlineCount, setOnlineCount] = useState(2847);
+  const tickIndex = useRef(0);
+
+  // Deterministic tick values to avoid hydration mismatch
+  const tickValues = [1, -1, 2, 0, 1, -2, 1, 0, 2, -1, 0, 1, -1, 2, 1, 0, -1, 1, 0, 2];
 
   useEffect(() => {
     const handleScroll = () => {
@@ -996,14 +1193,13 @@ function FloatingStatsCounter() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Randomly tick online count
+  // Deterministically tick online count
   useEffect(() => {
     if (!visible || dismissed) return;
     const timer = setInterval(() => {
-      setOnlineCount((prev) => {
-        const change = Math.floor(Math.random() * 5) - 2; // -2 to +2
-        return Math.max(2800, Math.min(2900, prev + change));
-      });
+      const change = tickValues[tickIndex.current % tickValues.length];
+      tickIndex.current++;
+      setOnlineCount((prev) => Math.max(2800, Math.min(2900, prev + change)));
     }, 3000);
     return () => clearInterval(timer);
   }, [visible, dismissed]);
@@ -1015,9 +1211,14 @@ function FloatingStatsCounter() {
       initial={{ opacity: 0, y: 20, scale: 0.9 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 20, scale: 0.9 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
       className="fixed bottom-4 left-4 z-50"
     >
-      <div className="rounded-xl border border-border/40 bg-background/80 backdrop-blur-xl shadow-xl px-4 py-3 flex items-center gap-3">
+      <motion.div
+        animate={{ y: [0, -3, 0] }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+        className="rounded-xl border border-border/40 bg-background/80 backdrop-blur-xl shadow-xl px-4 py-3 flex items-center gap-3"
+      >
         <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
         <div>
           <p className="text-sm font-semibold text-foreground">{onlineCount.toLocaleString()} learners online</p>
@@ -1030,8 +1231,45 @@ function FloatingStatsCounter() {
         >
           <X className="h-3 w-3" />
         </button>
-      </div>
+      </motion.div>
     </motion.div>
+  );
+}
+
+// ============================================================
+// Back To Top Button
+// ============================================================
+function BackToTopButton() {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShow(window.scrollY > 600);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.button
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.8 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+          onClick={scrollToTop}
+          className="fixed bottom-4 right-4 z-50 h-10 w-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg flex items-center justify-center transition-colors"
+          aria-label="Back to top"
+        >
+          <ArrowUp className="h-4 w-4" />
+        </motion.button>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -1135,12 +1373,8 @@ export function LandingPage() {
       <main className="flex-1">
         {/* ============ HERO SECTION ============ */}
         <section id="hero-section" className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
-          {/* Background Gradient Orbs */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl" />
-            <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-violet-500/10 blur-3xl" />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[600px] w-[600px] rounded-full bg-slate-500/5 blur-3xl" />
-          </div>
+          {/* Parallax Orbs */}
+          <ParallaxOrbs />
 
           {/* Grid background */}
           <GridBackground />
@@ -1148,7 +1382,10 @@ export function LandingPage() {
           {/* Floating particles */}
           <FloatingParticles />
 
-          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-20 text-center">
+          {/* Grain texture overlay */}
+          <GrainOverlay />
+
+          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-20 text-center z-20">
             <motion.div
               initial="hidden"
               animate="visible"
@@ -1161,24 +1398,39 @@ export function LandingPage() {
                 </Badge>
               </motion.div>
 
-              <motion.h1
-                variants={fadeInUp}
-                className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-foreground max-w-5xl mx-auto leading-[1.1]"
-              >
-                AI-Powered Architecture.{' '}
-                <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Integrated Communities.</span>{' '}
-                Zero Transaction Taxation.
-              </motion.h1>
+              {/* Hero heading with glowing gradient pulse behind it */}
+              <div className="relative inline-block">
+                {/* Glowing pulse behind heading */}
+                <motion.div
+                  className="absolute inset-0 -m-8 rounded-3xl bg-gradient-to-r from-emerald-500/15 via-violet-500/15 to-emerald-500/15 blur-2xl"
+                  animate={{
+                    opacity: [0.3, 0.6, 0.3],
+                    scale: [1, 1.05, 1],
+                  }}
+                  transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                />
+
+                <motion.h1
+                  variants={fadeInUp}
+                  className="relative text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-foreground max-w-5xl mx-auto leading-[1.1]"
+                >
+                  AI-Powered Architecture.{' '}
+                  <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Integrated Communities.</span>{' '}
+                  Zero Transaction Taxation.
+                </motion.h1>
+              </div>
 
               <motion.div
                 variants={fadeInUp}
                 className="mt-6 text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed"
               >
-                <TypingText
-                  text="The next-generation learning platform that combines AI content creation, built-in community, and zero-fee commerce — so you can focus on teaching, not platform limitations."
-                  speed={25}
-                  delay={800}
-                />
+                <ShimmerText>
+                  <TypingText
+                    text="The next-generation learning platform that combines AI content creation, built-in community, and zero-fee commerce — so you can focus on teaching, not platform limitations."
+                    speed={25}
+                    delay={800}
+                  />
+                </ShimmerText>
               </motion.div>
 
               <motion.div
@@ -1202,12 +1454,15 @@ export function LandingPage() {
               >
                 <div className="flex -space-x-2">
                   {avatarColors.map((color, i) => (
-                    <div
+                    <motion.div
                       key={i}
                       className={`h-8 w-8 rounded-full ${color} border-2 border-background flex items-center justify-center text-white text-[10px] font-bold`}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 1 + i * 0.05 }}
                     >
                       {['SC', 'MJ', 'PS', 'AR', 'ET', 'DW', 'KL', 'RH'][i]}
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
                 <p className="text-sm text-muted-foreground">
@@ -1244,84 +1499,93 @@ export function LandingPage() {
 
         {/* ============ FEATURES SECTION ============ */}
         <section id="features" className="py-20 sm:py-28 bg-muted/30">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: '-100px' }}
-              variants={staggerContainer}
-              className="text-center mb-16"
-            >
-              <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
-                Everything You Need to{' '}
-                <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Teach & Scale</span>
-              </motion.h2>
-              <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-                A complete ecosystem of tools designed for modern educators and creators.
-              </motion.p>
-            </motion.div>
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: '-100px' }}
+            variants={sectionReveal}
+          >
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <motion.div
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, margin: '-100px' }}
+                variants={staggerContainer}
+                className="text-center mb-16"
+              >
+                <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+                  Everything You Need to{' '}
+                  <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Teach & Scale</span>
+                </motion.h2>
+                <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+                  A complete ecosystem of tools designed for modern educators and creators.
+                </motion.p>
+              </motion.div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Feature Cards */}
-              <div className="lg:col-span-2">
-                <motion.div
-                  initial="hidden"
-                  whileInView="visible"
-                  viewport={{ once: true, margin: '-100px' }}
-                  variants={staggerContainer}
-                  className="grid grid-cols-1 sm:grid-cols-2 gap-6"
-                >
-                  {visibleFeatures.map((feature) => {
-                    const Icon = feature.icon;
-                    return (
-                      <motion.div key={feature.title} variants={fadeInUp}>
-                        <Card className="h-full hover:shadow-lg transition-all duration-300 border-border/60 group relative overflow-hidden">
-                          {/* Gradient border on hover */}
-                          <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-r from-emerald-500/10 via-transparent to-violet-500/10 pointer-events-none" />
-                          <CardHeader className="pb-3 relative">
-                            <div className="h-10 w-10 rounded-lg bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center mb-2 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900 transition-colors">
-                              <Icon className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                            </div>
-                            <CardTitle className="text-base font-semibold">{feature.title}</CardTitle>
-                          </CardHeader>
-                          <CardContent className="relative">
-                            <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    );
-                  })}
-                </motion.div>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Feature Cards */}
+                <div className="lg:col-span-2">
+                  <motion.div
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true, margin: '-100px' }}
+                    variants={staggerContainerSlow}
+                    className="grid grid-cols-1 sm:grid-cols-2 gap-6"
+                  >
+                    {visibleFeatures.map((feature, idx) => {
+                      const Icon = feature.icon;
+                      return (
+                        <motion.div key={feature.title} variants={fadeInUp} custom={idx}>
+                          <GradientBorderCard>
+                            <Card className="h-full transition-all duration-300 border-border/60 group relative overflow-hidden hover:shadow-xl">
+                              {/* Gradient border overlay on hover */}
+                              <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-r from-emerald-500/10 via-transparent to-violet-500/10 pointer-events-none" />
+                              <CardHeader className="pb-3 relative">
+                                <div className="h-10 w-10 rounded-lg bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center mb-2 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900 transition-colors">
+                                  <Icon className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                                </div>
+                                <CardTitle className="text-base font-semibold">{feature.title}</CardTitle>
+                              </CardHeader>
+                              <CardContent className="relative">
+                                <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+                              </CardContent>
+                            </Card>
+                          </GradientBorderCard>
+                        </motion.div>
+                      );
+                    })}
+                  </motion.div>
 
-                {/* See All Features */}
-                {features.length > 8 && (
-                  <div className="mt-6 text-center">
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowAllFeatures(!showAllFeatures)}
-                      className="gap-2"
-                    >
-                      {showAllFeatures ? 'Show Less' : 'See All Features'}
-                      <ChevronRight className={`h-4 w-4 transition-transform ${showAllFeatures ? 'rotate-90' : ''}`} />
-                    </Button>
-                  </div>
-                )}
-              </div>
+                  {/* See All Features */}
+                  {features.length > 8 && (
+                    <div className="mt-6 text-center">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowAllFeatures(!showAllFeatures)}
+                        className="gap-2"
+                      >
+                        {showAllFeatures ? 'Show Less' : 'See All Features'}
+                        <ChevronRight className={`h-4 w-4 transition-transform ${showAllFeatures ? 'rotate-90' : ''}`} />
+                      </Button>
+                    </div>
+                  )}
+                </div>
 
-              {/* AI Live Demo */}
-              <div className="lg:col-span-1">
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true, margin: '-100px' }}
-                  transition={{ duration: 0.6, delay: 0.3 }}
-                  className="sticky top-24"
-                >
-                  <AILiveDemo />
-                </motion.div>
+                {/* AI Live Demo */}
+                <div className="lg:col-span-1">
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true, margin: '-100px' }}
+                    transition={{ duration: 0.6, delay: 0.3 }}
+                    className="sticky top-24"
+                  >
+                    <AILiveDemo />
+                  </motion.div>
+                </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         </section>
 
         {/* ============ LIVE DASHBOARD PREVIEW ============ */}
@@ -1329,109 +1593,132 @@ export function LandingPage() {
 
         {/* ============ PRICING SECTION ============ */}
         <section id="pricing" className="py-20 sm:py-28">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: '-100px' }}
-              variants={staggerContainer}
-              className="text-center mb-16"
-            >
-              <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
-                Simple, Transparent{' '}
-                <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Pricing</span>
-              </motion.h2>
-              <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-                No hidden fees. No transaction taxes. Start free and scale as you grow.
-              </motion.p>
-
-              {/* Monthly/Annual Toggle */}
-              <motion.div variants={fadeInUp} className="mt-8 flex items-center justify-center gap-3">
-                <span className={`text-sm font-medium ${!isAnnual ? 'text-foreground' : 'text-muted-foreground'}`}>Monthly</span>
-                <button
-                  onClick={() => setIsAnnual(!isAnnual)}
-                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${isAnnual ? 'bg-emerald-600' : 'bg-muted'}`}
-                  aria-label="Toggle annual pricing"
-                >
-                  <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transform transition-transform ${isAnnual ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
-                <span className={`text-sm font-medium ${isAnnual ? 'text-foreground' : 'text-muted-foreground'}`}>
-                  Annual
-                  <Badge className="ml-1.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-[10px] px-1.5 py-0">
-                    2 months free
-                  </Badge>
-                </span>
-              </motion.div>
-            </motion.div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
-              {/* Pricing Cards */}
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: '-80px' }}
+            variants={sectionReveal}
+          >
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
               <motion.div
                 initial="hidden"
                 whileInView="visible"
                 viewport={{ once: true, margin: '-100px' }}
                 variants={staggerContainer}
-                className="grid grid-cols-1 md:grid-cols-3 gap-6"
+                className="text-center mb-16"
               >
-                {pricingPlans.map((plan) => {
-                  const annualPrice = isAnnual ? Math.round(plan.price * 10 / 12) : plan.price;
-                  return (
-                    <motion.div key={plan.id} variants={fadeInUp}>
-                      <GlowBorderCard highlighted={plan.highlighted}>
-                        <Card className={`h-full relative ${plan.highlighted ? 'border-emerald-500 border-2 shadow-xl z-10 bg-card' : 'border-border/60'}`}>
-                          {plan.highlighted && (
-                            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                              <Badge className="bg-emerald-600 text-white hover:bg-emerald-700 px-3 py-0.5">
-                                Most Popular
-                              </Badge>
-                            </div>
-                          )}
-                          <CardHeader className="pb-4">
-                            <CardTitle className="text-lg">{plan.name}</CardTitle>
-                            <CardDescription className="text-sm min-h-[40px]">{plan.description}</CardDescription>
-                            <div className="mt-4">
-                              <span className="text-4xl font-bold text-foreground">${annualPrice}</span>
-                              <span className="text-muted-foreground">{isAnnual ? '/mo (billed annually)' : plan.period}</span>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="pb-2">
-                            <ul className="space-y-3">
-                              {plan.features.map((feature) => (
-                                <li key={feature} className="flex items-start gap-2.5">
-                                  <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
-                                  <span className="text-sm text-muted-foreground">{feature}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </CardContent>
-                          <CardFooter className="pt-4">
-                            <Button
-                              className={`w-full ${plan.highlighted ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
-                              variant={plan.highlighted ? 'default' : 'outline'}
-                              onClick={plan.ctaText === 'Contact Sales' ? enterAdminMode : goToCheckout}
-                            >
-                              {plan.ctaText}
-                            </Button>
-                          </CardFooter>
-                        </Card>
-                      </GlowBorderCard>
-                    </motion.div>
-                  );
-                })}
+                <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+                  Simple, Transparent{' '}
+                  <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Pricing</span>
+                </motion.h2>
+                <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+                  No hidden fees. No transaction taxes. Start free and scale as you grow.
+                </motion.p>
+
+                {/* Monthly/Annual Toggle */}
+                <motion.div variants={fadeInUp} className="mt-8 flex items-center justify-center gap-3">
+                  <span className={`text-sm font-medium ${!isAnnual ? 'text-foreground' : 'text-muted-foreground'}`}>Monthly</span>
+                  <button
+                    onClick={() => setIsAnnual(!isAnnual)}
+                    className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${isAnnual ? 'bg-emerald-600' : 'bg-muted'}`}
+                    aria-label="Toggle annual pricing"
+                  >
+                    <motion.span
+                      className="inline-block h-5 w-5 rounded-full bg-white shadow-sm"
+                      animate={{ x: isAnnual ? 24 : 4 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                    />
+                  </button>
+                  <span className={`text-sm font-medium ${isAnnual ? 'text-foreground' : 'text-muted-foreground'}`}>
+                    Annual
+                    <Badge className="ml-1.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-[10px] px-1.5 py-0">
+                      2 months free
+                    </Badge>
+                  </span>
+                </motion.div>
               </motion.div>
 
-              {/* Savings Calculator */}
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: '-100px' }}
-                transition={{ duration: 0.6, delay: 0.3 }}
-                className="flex items-start"
-              >
-                <SavingsCalculator />
-              </motion.div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
+                {/* Pricing Cards */}
+                <motion.div
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true, margin: '-100px' }}
+                  variants={staggerContainer}
+                  className="grid grid-cols-1 md:grid-cols-3 gap-6"
+                >
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={isAnnual ? 'annual' : 'monthly'}
+                      initial={{ rotateY: isAnnual ? 90 : -90, opacity: 0 }}
+                      animate={{ rotateY: 0, opacity: 1 }}
+                      exit={{ rotateY: isAnnual ? -90 : 90, opacity: 0 }}
+                      transition={{ duration: 0.4, ease: 'easeInOut' }}
+                      className="grid grid-cols-1 md:grid-cols-3 gap-6"
+                      style={{ perspective: 1200 }}
+                    >
+                      {pricingPlans.map((plan) => {
+                        const annualPrice = isAnnual ? Math.round(plan.price * 10 / 12) : plan.price;
+                        return (
+                          <motion.div key={plan.id} variants={fadeInUp} whileHover={{ scale: 1.03, y: -4 }} transition={{ duration: 0.2 }}>
+                            <GlowBorderCard highlighted={plan.highlighted}>
+                              <Card className={`h-full relative ${plan.highlighted ? 'border-emerald-500 border-2 shadow-xl z-10 bg-card' : 'border-border/60'}`}>
+                                {plan.highlighted && (
+                                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                                    <Badge className="bg-emerald-600 text-white hover:bg-emerald-700 px-3 py-0.5">
+                                      Most Popular
+                                    </Badge>
+                                  </div>
+                                )}
+                                <CardHeader className="pb-4">
+                                  <CardTitle className="text-lg">{plan.name}</CardTitle>
+                                  <CardDescription className="text-sm min-h-[40px]">{plan.description}</CardDescription>
+                                  <div className="mt-4">
+                                    <span className="text-4xl font-bold text-foreground">${annualPrice}</span>
+                                    <span className="text-muted-foreground">{isAnnual ? '/mo (billed annually)' : plan.period}</span>
+                                  </div>
+                                </CardHeader>
+                                <CardContent className="pb-2">
+                                  <ul className="space-y-3">
+                                    {plan.features.map((feature) => (
+                                      <li key={feature} className="flex items-start gap-2.5">
+                                        <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+                                        <span className="text-sm text-muted-foreground">{feature}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </CardContent>
+                                <CardFooter className="pt-4">
+                                  <Button
+                                    className={`w-full ${plan.highlighted ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+                                    variant={plan.highlighted ? 'default' : 'outline'}
+                                    onClick={plan.ctaText === 'Contact Sales' ? enterAdminMode : goToCheckout}
+                                  >
+                                    {plan.ctaText}
+                                  </Button>
+                                </CardFooter>
+                              </Card>
+                            </GlowBorderCard>
+                          </motion.div>
+                        );
+                      })}
+                    </motion.div>
+                  </AnimatePresence>
+                </motion.div>
+
+                {/* Savings Calculator */}
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true, margin: '-100px' }}
+                  transition={{ duration: 0.6, delay: 0.3 }}
+                  className="flex items-start"
+                >
+                  <SavingsCalculator />
+                </motion.div>
+              </div>
             </div>
-          </div>
+          </motion.div>
         </section>
 
         {/* ============ COMMUNITY PREVIEW ============ */}
@@ -1439,146 +1726,170 @@ export function LandingPage() {
 
         {/* ============ COMPETITOR COMPARISON ============ */}
         <section id="comparison" className="py-20 sm:py-28">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: '-100px' }}
-              variants={staggerContainer}
-              className="text-center mb-16"
-            >
-              <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
-                How We{' '}
-                <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Compare</span>
-              </motion.h2>
-              <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-                See why thousands of creators choose NextGen LMS over the competition.
-              </motion.p>
-            </motion.div>
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: '-80px' }}
+            variants={sectionReveal}
+          >
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <motion.div
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, margin: '-100px' }}
+                variants={staggerContainer}
+                className="text-center mb-16"
+              >
+                <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+                  How We{' '}
+                  <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Compare</span>
+                </motion.h2>
+                <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+                  See why thousands of creators choose NextGen LMS over the competition.
+                </motion.p>
+              </motion.div>
 
-            <motion.div
-              variants={fadeInUp}
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: '-100px' }}
-              className="overflow-x-auto rounded-xl border border-border bg-card"
-            >
-              <table className="w-full min-w-[700px]">
-                <thead>
-                  <tr className="border-b border-border bg-muted/50">
-                    <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Feature</th>
-                    <th className="text-center py-4 px-4 text-sm font-semibold bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-                      NextGen
-                    </th>
-                    <th className="text-center py-4 px-4 text-sm font-semibold text-muted-foreground">Kajabi</th>
-                    <th className="text-center py-4 px-4 text-sm font-semibold text-muted-foreground">Teachable</th>
-                    <th className="text-center py-4 px-4 text-sm font-semibold text-muted-foreground">Skool</th>
-                    <th className="text-center py-4 px-4 text-sm font-semibold text-muted-foreground">Mighty Networks</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {competitorComparison.map((row, i) => (
-                    <tr key={row.feature} className={i % 2 === 0 ? 'bg-card' : 'bg-muted/20'}>
-                      <td className="py-3 px-4 text-sm font-medium text-foreground">{row.feature}</td>
-                      <td className="py-3 px-4 text-center bg-emerald-50/50 dark:bg-emerald-950/30">
-                        <ComparisonCell value={row.nextgen} isNextgen />
-                      </td>
-                      <td className="py-3 px-4 text-center"><ComparisonCell value={row.kajabi} /></td>
-                      <td className="py-3 px-4 text-center"><ComparisonCell value={row.teachable} /></td>
-                      <td className="py-3 px-4 text-center"><ComparisonCell value={row.skool} /></td>
-                      <td className="py-3 px-4 text-center"><ComparisonCell value={row.mightyNetworks} /></td>
+              <motion.div
+                variants={fadeInUp}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, margin: '-100px' }}
+                className="overflow-x-auto rounded-xl border border-border bg-card"
+              >
+                <table className="w-full min-w-[700px]">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/50">
+                      <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Feature</th>
+                      <th className="text-center py-4 px-4 text-sm font-semibold bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                        NextGen
+                      </th>
+                      <th className="text-center py-4 px-4 text-sm font-semibold text-muted-foreground">Kajabi</th>
+                      <th className="text-center py-4 px-4 text-sm font-semibold text-muted-foreground">Teachable</th>
+                      <th className="text-center py-4 px-4 text-sm font-semibold text-muted-foreground">Skool</th>
+                      <th className="text-center py-4 px-4 text-sm font-semibold text-muted-foreground">Mighty Networks</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </motion.div>
-          </div>
+                  </thead>
+                  <tbody>
+                    {competitorComparison.map((row, i) => (
+                      <tr key={row.feature} className={i % 2 === 0 ? 'bg-card' : 'bg-muted/20'}>
+                        <td className="py-3 px-4 text-sm font-medium text-foreground">{row.feature}</td>
+                        <td className="py-3 px-4 text-center bg-emerald-50/50 dark:bg-emerald-950/30">
+                          <ComparisonCell value={row.nextgen} isNextgen />
+                        </td>
+                        <td className="py-3 px-4 text-center"><ComparisonCell value={row.kajabi} /></td>
+                        <td className="py-3 px-4 text-center"><ComparisonCell value={row.teachable} /></td>
+                        <td className="py-3 px-4 text-center"><ComparisonCell value={row.skool} /></td>
+                        <td className="py-3 px-4 text-center"><ComparisonCell value={row.mightyNetworks} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </motion.div>
+            </div>
+          </motion.div>
         </section>
 
         {/* ============ TESTIMONIALS SECTION ============ */}
-        <section id="testimonials" className="py-20 sm:py-28 bg-muted/30">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: '-100px' }}
-              variants={staggerContainer}
-              className="text-center mb-16"
-            >
-              <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
-                Loved by{' '}
-                <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Creators Worldwide</span>
-              </motion.h2>
-              <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-                Join thousands of educators who are building thriving learning businesses.
-              </motion.p>
-            </motion.div>
+        <section id="testimonials" className="py-20 sm:py-28 bg-muted/30 relative">
+          {/* Dot pattern background */}
+          <DotPatternBackground />
 
-            <TestimonialCarousel />
-          </div>
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: '-80px' }}
+            variants={sectionReveal}
+          >
+            <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <motion.div
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, margin: '-100px' }}
+                variants={staggerContainer}
+                className="text-center mb-16"
+              >
+                <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+                  Loved by{' '}
+                  <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Creators Worldwide</span>
+                </motion.h2>
+                <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+                  Join thousands of educators who are building thriving learning businesses.
+                </motion.p>
+              </motion.div>
+
+              <TestimonialCarousel />
+            </div>
+          </motion.div>
         </section>
 
         {/* ============ INTEGRATIONS SECTION ============ */}
         <section className="py-20 sm:py-28">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: '-100px' }}
-              variants={staggerContainer}
-              className="text-center mb-16"
-            >
-              <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
-                Seamless{' '}
-                <span className="bg-gradient-to-r from-violet-600 to-violet-400 bg-clip-text text-transparent">Integrations</span>
-              </motion.h2>
-              <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-                Connect your favorite tools and automate workflows with our growing integration ecosystem.
-              </motion.p>
-            </motion.div>
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: '-80px' }}
+            variants={sectionReveal}
+          >
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <motion.div
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, margin: '-100px' }}
+                variants={staggerContainer}
+                className="text-center mb-16"
+              >
+                <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+                  Seamless{' '}
+                  <span className="bg-gradient-to-r from-violet-600 to-violet-400 bg-clip-text text-transparent">Integrations</span>
+                </motion.h2>
+                <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+                  Connect your favorite tools and automate workflows with our growing integration ecosystem.
+                </motion.p>
+              </motion.div>
 
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: '-100px' }}
-              variants={staggerContainer}
-              className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-3xl mx-auto"
-            >
-              {integrations.map((integration) => {
-                const Icon = integration.icon;
-                return (
-                  <motion.div
-                    key={integration.name}
-                    variants={fadeInUp}
-                    whileHover={{ scale: 1.05, y: -2 }}
-                    className="cursor-pointer"
-                  >
-                    <Card className="border-border/40 hover:border-border hover:shadow-md transition-all">
-                      <CardContent className="p-4 flex flex-col items-center gap-3 text-center">
-                        <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${integration.color}`}>
-                          <Icon className="h-6 w-6" />
-                        </div>
-                        <span className="text-sm font-medium text-foreground">{integration.name}</span>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                );
-              })}
-            </motion.div>
+              <motion.div
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, margin: '-100px' }}
+                variants={staggerContainer}
+                className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-3xl mx-auto"
+              >
+                {integrations.map((integration) => {
+                  const Icon = integration.icon;
+                  return (
+                    <motion.div
+                      key={integration.name}
+                      variants={fadeInUp}
+                      whileHover={{ scale: 1.05, y: -2 }}
+                      className="cursor-pointer"
+                    >
+                      <Card className="border-border/40 hover:border-border hover:shadow-md transition-all">
+                        <CardContent className="p-4 flex flex-col items-center gap-3 text-center">
+                          <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${integration.color}`}>
+                            <Icon className="h-6 w-6" />
+                          </div>
+                          <span className="text-sm font-medium text-foreground">{integration.name}</span>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
 
-            {/* And 50+ more badge */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.5 }}
-              className="mt-8 text-center"
-            >
-              <Badge variant="secondary" className="px-4 py-2 text-sm bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800">
-                And 50+ more integrations...
-              </Badge>
-            </motion.div>
-          </div>
+              {/* And 50+ more badge */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.5 }}
+                className="mt-8 text-center"
+              >
+                <Badge variant="secondary" className="px-4 py-2 text-sm bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800">
+                  And 50+ more integrations...
+                </Badge>
+              </motion.div>
+            </div>
+          </motion.div>
         </section>
 
         {/* ============ CTA SECTION ============ */}
@@ -1723,6 +2034,9 @@ export function LandingPage() {
 
       {/* ============ FLOATING STATS COUNTER ============ */}
       <FloatingStatsCounter />
+
+      {/* ============ BACK TO TOP BUTTON ============ */}
+      <BackToTopButton />
     </div>
   );
 }

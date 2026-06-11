@@ -114,6 +114,22 @@ export const useAppStore = create<AppState>((set) => ({
     currentView: 'admin-dashboard',
     sidebarOpen: true,
     userRole: 'tenant_admin',
+    currentUser: {
+      id: 'demo-admin-1',
+      tenantId: 'demo-tenant-1',
+      email: 'admin@nextgen-lms.com',
+      name: 'Sarah Mitchell',
+      avatarUrl: '',
+      role: 'tenant_admin',
+      bio: 'Platform administrator and course creator',
+      timezone: 'America/New_York',
+      locale: 'en',
+      streakDays: 14,
+      totalPoints: 2850,
+      isActive: true,
+      lastLoginAt: new Date().toISOString(),
+      createdAt: '2024-01-15T00:00:00Z',
+    },
   }),
   
   enterLearnerMode: () => set({ 

@@ -7,7 +7,6 @@ import {
   Area,
   BarChart,
   Bar,
-  LineChart,
   Line,
   PieChart,
   Pie,
@@ -16,8 +15,10 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ComposedChart,
+  ReferenceLine,
+  ReferenceDot,
+  ResponsiveContainer,
 } from 'recharts';
 import {
   DollarSign,
@@ -34,7 +35,6 @@ import {
   Star,
   ArrowRight,
   Clock,
-  Bell,
   Activity,
 } from 'lucide-react';
 
@@ -63,6 +63,7 @@ import {
   ChartLegendContent,
   type ChartConfig,
 } from '@/components/ui/chart';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   adminKPIs,
   revenueData,
@@ -111,6 +112,52 @@ const categoryChartConfig: ChartConfig = {
 const dropoffChartConfig: ChartConfig = {
   dropoff: { label: 'Drop-off %', color: '#ef4444' },
 };
+
+// ─── Sparkline data for KPI cards (7-day deterministic trends) ──
+const sparklineDataMap: Record<string, number[]> = {
+  'dollar-sign': [38, 41, 39, 43, 42, 45, 47],
+  users: [3100, 3200, 3350, 3400, 3500, 3620, 3847],
+  'graduation-cap': [65, 67, 68, 69, 70, 71, 72],
+  'check-circle': [86, 85, 86, 85, 84, 85, 84],
+  'message-circle': [82, 84, 85, 86, 87, 88, 89],
+  'user-plus': [180, 190, 200, 210, 218, 225, 234],
+};
+
+// ─── KPI card gradient backgrounds ───────────────────────────
+const kpiGradientMap: Record<string, { from: string; to: string; lightFrom: string; lightTo: string }> = {
+  'dollar-sign': { from: 'from-emerald-500/10', to: 'to-emerald-500/5', lightFrom: 'from-emerald-50', lightTo: 'to-emerald-100/50' },
+  users: { from: 'from-violet-500/10', to: 'to-violet-500/5', lightFrom: 'from-violet-50', lightTo: 'to-violet-100/50' },
+  'graduation-cap': { from: 'from-sky-500/10', to: 'to-sky-500/5', lightFrom: 'from-sky-50', lightTo: 'to-sky-100/50' },
+  'check-circle': { from: 'from-amber-500/10', to: 'to-amber-500/5', lightFrom: 'from-amber-50', lightTo: 'to-amber-100/50' },
+  'message-circle': { from: 'from-rose-500/10', to: 'to-rose-500/5', lightFrom: 'from-rose-50', lightTo: 'to-rose-100/50' },
+  'user-plus': { from: 'from-teal-500/10', to: 'to-teal-500/5', lightFrom: 'from-teal-50', lightTo: 'to-teal-100/50' },
+};
+
+// ─── Revenue data variants (weekly & daily) ──────────────────
+const revenueWeeklyData = [
+  { month: 'W1', revenue: 8200, enrollments: 58, completions: 38 },
+  { month: 'W2', revenue: 9400, enrollments: 64, completions: 42 },
+  { month: 'W3', revenue: 10100, enrollments: 70, completions: 48 },
+  { month: 'W4', revenue: 11200, enrollments: 78, completions: 52 },
+  { month: 'W5', revenue: 10800, enrollments: 72, completions: 49 },
+  { month: 'W6', revenue: 11800, enrollments: 82, completions: 56 },
+  { month: 'W7', revenue: 12300, enrollments: 85, completions: 60 },
+  { month: 'W8', revenue: 11900, enrollments: 80, completions: 55 },
+  { month: 'W9', revenue: 13000, enrollments: 90, completions: 64 },
+  { month: 'W10', revenue: 12500, enrollments: 87, completions: 61 },
+  { month: 'W11', revenue: 13500, enrollments: 93, completions: 67 },
+  { month: 'W12', revenue: 14332, enrollments: 98, completions: 72 },
+];
+
+const revenueDailyData = [
+  { month: 'Mon', revenue: 1850, enrollments: 13, completions: 9 },
+  { month: 'Tue', revenue: 2100, enrollments: 15, completions: 11 },
+  { month: 'Wed', revenue: 2400, enrollments: 17, completions: 13 },
+  { month: 'Thu', revenue: 2200, enrollments: 16, completions: 12 },
+  { month: 'Fri', revenue: 2050, enrollments: 14, completions: 10 },
+  { month: 'Sat', revenue: 1400, enrollments: 9, completions: 7 },
+  { month: 'Sun', revenue: 1200, enrollments: 8, completions: 6 },
+];
 
 // ─── Animation variants ──────────────────────────────────────
 const containerVariants = {
@@ -204,7 +251,66 @@ function AnimatedCounter({ value, duration = 1500 }: { value: string; duration?:
   return <span>{displayed}</span>;
 }
 
-// ─── KPI Card ────────────────────────────────────────────────
+// ─── Percentage Animated Counter ─────────────────────────────
+function PercentageCounter({ value, duration = 1200 }: { value: number; duration?: number }) {
+  const [displayed, setDisplayed] = useState(0);
+  const hasAnimated = useRef(false);
+
+  useEffect(() => {
+    if (hasAnimated.current) return;
+    hasAnimated.current = true;
+
+    const startTime = Date.now();
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = value * eased;
+      setDisplayed(current);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }, [value, duration]);
+
+  return <span>{displayed.toFixed(1)}%</span>;
+}
+
+// ─── Sparkline Mini Chart ────────────────────────────────────
+function SparklineMiniChart({ data, color, isPositive }: { data: number[]; color: string; isPositive: boolean }) {
+  const chartData = data.map((v, i) => ({ d: i, v }));
+  const gradientId = `sparkline-${color.replace('#', '')}`;
+
+  return (
+    <div className="w-20 h-8">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={chartData} margin={{ top: 1, right: 0, left: 0, bottom: 1 }}>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+              <stop offset="100%" stopColor={color} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <Area
+            type="monotone"
+            dataKey="v"
+            stroke={color}
+            strokeWidth={1.5}
+            fill={`url(#${gradientId})`}
+            dot={false}
+            isAnimationActive={true}
+            animationDuration={1000}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ─── KPI Card (Enhanced) ─────────────────────────────────────
 function KPICard({ kpi, index }: { kpi: DashboardKPI; index: number }) {
   const Icon = iconMap[kpi.icon] ?? Users;
   const isPositive = kpi.change >= 0;
@@ -215,10 +321,16 @@ function KPICard({ kpi, index }: { kpi: DashboardKPI; index: number }) {
     ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400'
     : 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400';
 
+  const sparklineData = sparklineDataMap[kpi.icon] ?? [10, 12, 11, 14, 13, 15, 16];
+  const sparklineColor = isPositive ? '#10b981' : '#ef4444';
+  const gradients = kpiGradientMap[kpi.icon] ?? kpiGradientMap['users'];
+
   return (
     <motion.div variants={itemVariants} custom={index}>
-      <Card className={`border-l-4 ${accentBorder} h-full shadow-sm hover:shadow-md transition-shadow duration-200`}>
-        <CardContent className="p-6">
+      <Card className={`border-l-4 ${accentBorder} h-full shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden relative`}>
+        {/* Gradient background */}
+        <div className={`absolute inset-0 bg-gradient-to-br ${gradients.from} ${gradients.to} pointer-events-none`} />
+        <CardContent className="p-6 relative z-10">
           <div className="flex items-start justify-between">
             <div className="space-y-1">
               <p className="text-sm font-medium text-muted-foreground">
@@ -232,23 +344,38 @@ function KPICard({ kpi, index }: { kpi: DashboardKPI; index: number }) {
               <Icon className="h-5 w-5" />
             </div>
           </div>
-          <div className="mt-3 flex items-center gap-1.5 text-sm">
-            {isPositive ? (
-              <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            ) : (
-              <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
-            )}
-            <span
-              className={
-                isPositive
-                  ? 'font-medium text-emerald-600 dark:text-emerald-400'
-                  : 'font-medium text-red-600 dark:text-red-400'
-              }
-            >
-              {isPositive ? '+' : ''}
-              {kpi.change}%
-            </span>
-            <span className="text-muted-foreground">{kpi.changeLabel}</span>
+          {/* Sparkline + trend row */}
+          <div className="mt-3 flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-sm">
+              {/* Pulsing indicator dot */}
+              <span className="relative flex h-2.5 w-2.5">
+                {isPositive && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                )}
+                <span
+                  className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                    isPositive ? 'bg-emerald-500' : 'bg-red-500'
+                  }`}
+                />
+              </span>
+              {isPositive ? (
+                <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              ) : (
+                <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
+              )}
+              <span
+                className={
+                  isPositive
+                    ? 'font-medium text-emerald-600 dark:text-emerald-400'
+                    : 'font-medium text-red-600 dark:text-red-400'
+                }
+              >
+                {isPositive ? '+' : ''}
+                {kpi.change}%
+              </span>
+              <span className="text-muted-foreground">{kpi.changeLabel}</span>
+            </div>
+            <SparklineMiniChart data={sparklineData} color={sparklineColor} isPositive={isPositive} />
           </div>
         </CardContent>
       </Card>
@@ -256,28 +383,79 @@ function KPICard({ kpi, index }: { kpi: DashboardKPI; index: number }) {
   );
 }
 
-// ─── Revenue Analytics Chart ─────────────────────────────────
+// ─── Custom Revenue Tooltip ──────────────────────────────────
+function RevenueCustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
+  if (!active || !payload || !payload.length) return null;
+
+  return (
+    <div className="rounded-lg border bg-background/95 backdrop-blur-sm p-3 shadow-xl">
+      <p className="text-sm font-semibold mb-2">{label}</p>
+      {payload.map((entry, idx) => (
+        <div key={idx} className="flex items-center gap-2 text-sm py-0.5">
+          <span
+            className="h-2.5 w-2.5 rounded-full shrink-0"
+            style={{ backgroundColor: entry.color }}
+          />
+          <span className="text-muted-foreground">{entry.name}:</span>
+          <span className="font-medium">
+            {entry.name === 'Revenue'
+              ? `$${entry.value.toLocaleString('en-US')}`
+              : entry.value.toLocaleString('en-US')}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Revenue Analytics Chart (Enhanced) ──────────────────────
 function RevenueChart() {
+  const [view, setView] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
+
+  const chartData = view === 'monthly' ? revenueData : view === 'weekly' ? revenueWeeklyData : revenueDailyData;
+  const xKey = 'month';
+
+  // Annotation markers for key events
+  const annotationIndex = chartData.findIndex((d) =>
+    view === 'monthly' ? d.month === 'May' : view === 'weekly' ? d.month === 'W7' : d.month === 'Wed'
+  );
+
   return (
     <motion.div variants={itemVariants}>
       <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
         <CardHeader className="pb-2">
-          <CardTitle>Revenue Analytics</CardTitle>
-          <CardDescription>
-            Monthly revenue, enrollments & completions trend
-          </CardDescription>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>Revenue Analytics</CardTitle>
+              <CardDescription>
+                Revenue, enrollments & completions trend
+              </CardDescription>
+            </div>
+            <Tabs value={view} onValueChange={(v) => setView(v as 'monthly' | 'weekly' | 'daily')}>
+              <TabsList className="h-8">
+                <TabsTrigger value="monthly" className="text-xs px-2.5 py-1">Monthly</TabsTrigger>
+                <TabsTrigger value="weekly" className="text-xs px-2.5 py-1">Weekly</TabsTrigger>
+                <TabsTrigger value="daily" className="text-xs px-2.5 py-1">Daily</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </CardHeader>
         <CardContent className="pt-0 pb-4 px-6">
           <ChartContainer config={revenueChartConfig} className="h-[320px] w-full">
-            <ComposedChart data={revenueData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
+            <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
               <defs>
                 <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
+                  <stop offset="50%" stopColor="#10b981" stopOpacity={0.15} />
                   <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                </linearGradient>
+                <linearGradient id="enrollmentsGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="month" tickLine={false} axisLine={false} />
+              <XAxis dataKey={xKey} tickLine={false} axisLine={false} />
               <YAxis
                 yAxisId="left"
                 tickLine={false}
@@ -290,15 +468,37 @@ function RevenueChart() {
                 tickLine={false}
                 axisLine={false}
               />
-              <ChartTooltip content={<ChartTooltipContent />} />
+              <Tooltip content={<RevenueCustomTooltip />} cursor={{ strokeDasharray: '3 3', stroke: '#94a3b8' }} />
               <ChartLegend content={<ChartLegendContent />} />
+              {/* Annotation marker for key event */}
+              {annotationIndex >= 0 && (
+                <ReferenceLine
+                  yAxisId="left"
+                  x={chartData[annotationIndex][xKey]}
+                  stroke="#f59e0b"
+                  strokeDasharray="4 4"
+                  strokeWidth={1}
+                />
+              )}
+              {annotationIndex >= 0 && (
+                <ReferenceDot
+                  yAxisId="left"
+                  x={chartData[annotationIndex][xKey]}
+                  y={chartData[annotationIndex].revenue}
+                  r={5}
+                  fill="#f59e0b"
+                  stroke="#fff"
+                  strokeWidth={2}
+                />
+              )}
               <Area
                 yAxisId="left"
                 type="monotone"
                 dataKey="revenue"
                 stroke="#10b981"
                 fill="url(#revenueGrad)"
-                strokeWidth={2}
+                strokeWidth={2.5}
+                animationDuration={1200}
               />
               <Line
                 yAxisId="right"
@@ -307,6 +507,7 @@ function RevenueChart() {
                 stroke="#8b5cf6"
                 strokeWidth={2}
                 dot={{ r: 3 }}
+                animationDuration={1400}
               />
               <Line
                 yAxisId="right"
@@ -315,9 +516,19 @@ function RevenueChart() {
                 stroke="#f59e0b"
                 strokeWidth={2}
                 dot={{ r: 3 }}
+                animationDuration={1600}
               />
             </ComposedChart>
           </ChartContainer>
+          {/* Annotation label */}
+          {annotationIndex >= 0 && (
+            <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+              <span className="h-2 w-2 rounded-full bg-amber-500" />
+              <span>
+                {view === 'monthly' ? 'New Course Launch' : view === 'weekly' ? 'Campaign Peak' : 'Mid-week Spike'}
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
     </motion.div>
@@ -393,16 +604,36 @@ function CategoryChart() {
   );
 }
 
-// ─── Completion Funnel ───────────────────────────────────────
+// ─── Funnel Arrow Component ──────────────────────────────────
+function FunnelArrow() {
+  return (
+    <div className="flex justify-center py-0.5">
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="none" className="text-muted-foreground/40">
+        <path d="M8 12L0 0H16L8 12Z" fill="currentColor" />
+      </svg>
+    </div>
+  );
+}
+
+// ─── Completion Funnel (Enhanced) ────────────────────────────
 function CompletionFunnel() {
   const maxCount = completionFunnelData[0].count;
+  // Gradient colors from emerald to amber across stages
   const funnelColors = [
-    'bg-emerald-500',
-    'bg-teal-500',
-    'bg-cyan-500',
-    'bg-violet-500',
-    'bg-purple-500',
-    'bg-fuchsia-500',
+    'from-emerald-500 to-emerald-400',
+    'from-emerald-400 to-teal-400',
+    'from-teal-400 to-cyan-400',
+    'from-cyan-400 to-sky-400',
+    'from-sky-400 to-amber-400',
+    'from-amber-400 to-amber-500',
+  ];
+  const funnelBorderColors = [
+    'border-emerald-500/30',
+    'border-emerald-400/30',
+    'border-teal-400/30',
+    'border-cyan-400/30',
+    'border-sky-400/30',
+    'border-amber-400/30',
   ];
 
   return (
@@ -415,28 +646,32 @@ function CompletionFunnel() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
+          <div className="space-y-0">
             {completionFunnelData.map((stage, idx) => {
               const widthPct = (stage.count / maxCount) * 100;
               return (
-                <div key={stage.stage} className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">{stage.stage}</span>
-                    <div className="flex items-center gap-3 text-muted-foreground">
-                      <span>{fmtNumber(stage.count)}</span>
-                      <span className="font-semibold text-foreground">
-                        {stage.percentage}%
-                      </span>
+                <div key={stage.stage}>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">{stage.stage}</span>
+                      <div className="flex items-center gap-3 text-muted-foreground">
+                        <span>{fmtNumber(stage.count)}</span>
+                        <span className="font-semibold text-foreground min-w-[50px] text-right">
+                          <PercentageCounter value={stage.percentage} duration={1000 + idx * 200} />
+                        </span>
+                      </div>
+                    </div>
+                    <div className={`h-9 w-full overflow-hidden rounded-md bg-muted border ${funnelBorderColors[idx] ?? ''}`}>
+                      <motion.div
+                        className={`h-full rounded-md bg-gradient-to-r ${funnelColors[idx] ?? 'from-slate-500 to-slate-400'}`}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${widthPct}%` }}
+                        transition={{ duration: 1, delay: idx * 0.15, ease: [0.25, 0.46, 0.45, 0.94] }}
+                      />
                     </div>
                   </div>
-                  <div className="h-8 w-full overflow-hidden rounded-md bg-muted">
-                    <motion.div
-                      className={`h-full rounded-md ${funnelColors[idx] ?? 'bg-slate-500'}`}
-                      initial={{ width: 0 }}
-                      animate={{ width: `${widthPct}%` }}
-                      transition={{ duration: 0.8, delay: idx * 0.1, ease: 'easeOut' }}
-                    />
-                  </div>
+                  {/* Connecting arrow between stages */}
+                  {idx < completionFunnelData.length - 1 && <FunnelArrow />}
                 </div>
               );
             })}
@@ -447,7 +682,7 @@ function CompletionFunnel() {
   );
 }
 
-// ─── Recent Courses Table ────────────────────────────────────
+// ─── Recent Courses Table (Enhanced) ─────────────────────────
 function RecentCoursesTable() {
   return (
     <motion.div variants={itemVariants}>
@@ -473,8 +708,15 @@ function RecentCoursesTable() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {demoCourses.map((course) => (
-                  <TableRow key={course.id}>
+                {demoCourses.map((course, rowIdx) => (
+                  <TableRow
+                    key={course.id}
+                    className={`transition-colors duration-150 ${
+                      rowIdx % 2 === 0
+                        ? 'bg-muted/30 hover:bg-muted/60'
+                        : 'bg-background hover:bg-muted/60'
+                    }`}
+                  >
                     <TableCell className="pl-6 font-medium max-w-[200px] truncate">
                       {course.title}
                     </TableCell>
@@ -495,7 +737,9 @@ function RecentCoursesTable() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Progress value={course.completionRate} className="h-2 w-16" />
+                        <div className="w-20">
+                          <Progress value={course.completionRate} className="h-2" />
+                        </div>
                         <span className="text-xs text-muted-foreground w-8">
                           {course.completionRate}%
                         </span>
@@ -505,8 +749,13 @@ function RecentCoursesTable() {
                       {course.isPublished ? (
                         <Badge
                           variant="secondary"
-                          className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300"
+                          className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300 relative"
                         >
+                          {/* Pulse indicator for Published */}
+                          <span className="relative flex h-2 w-2 mr-1.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                          </span>
                           Published
                         </Badge>
                       ) : (
@@ -566,13 +815,14 @@ function VideoDropoffChart() {
   );
 }
 
-// ─── Quick Actions Panel ─────────────────────────────────────
+// ─── Quick Actions Panel (Enhanced) ──────────────────────────
 const quickActions = [
   {
     title: 'Create New Course',
     description: 'Build and publish a new course with our AI-assisted builder',
     icon: BookOpen,
     accent: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400',
+    gradientBorder: 'from-emerald-400 to-emerald-600',
   },
   {
     title: 'Generate AI Content',
@@ -580,18 +830,21 @@ const quickActions = [
     icon: Sparkles,
     accent: 'bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-400',
     pulse: true,
+    gradientBorder: 'from-violet-400 to-violet-600',
   },
   {
     title: 'View Reports',
     description: 'Export detailed analytics and performance reports',
     icon: FileText,
     accent: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400',
+    gradientBorder: 'from-amber-400 to-amber-600',
   },
   {
     title: 'Manage Community',
     description: 'Moderate posts, manage categories, and engage members',
     icon: Users,
     accent: 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400',
+    gradientBorder: 'from-rose-400 to-rose-600',
   },
 ];
 
@@ -607,34 +860,45 @@ function QuickActionsPanel() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {quickActions.map((action) => {
+            {quickActions.map((action, idx) => {
               const IconComp = action.icon;
               return (
-                <button
+                <motion.button
                   key={action.title}
                   type="button"
-                  className="group flex flex-col items-start gap-3 rounded-lg border p-4 text-left transition-all hover:border-border hover:shadow-md dark:hover:border-slate-600"
+                  whileHover={{ scale: 1.03, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="group relative flex flex-col items-start gap-3 rounded-lg p-[1px] text-left transition-all duration-300 focus:outline-none"
                 >
-                  <div className={`rounded-lg p-2.5 ${action.accent} relative`}>
-                    <IconComp className="h-5 w-5" />
-                    {action.pulse && (
-                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-3 w-3 bg-violet-500" />
-                      </span>
-                    )}
+                  {/* Gradient border wrapper */}
+                  <div className={`absolute inset-0 rounded-lg bg-gradient-to-br ${action.gradientBorder} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
+                  <div className="relative w-full flex flex-col items-start gap-3 rounded-lg border bg-background p-4 transition-colors duration-300">
+                    <motion.div
+                      className={`rounded-lg p-2.5 ${action.accent} relative`}
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.4, delay: idx * 0.1, type: 'spring', stiffness: 200 }}
+                    >
+                      <IconComp className="h-5 w-5" />
+                      {action.pulse && (
+                        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-violet-500" />
+                        </span>
+                      )}
+                    </motion.div>
+                    <div>
+                      <p className="font-semibold text-sm">{action.title}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+                        {action.description}
+                      </p>
+                    </div>
+                    <div className="mt-auto flex items-center gap-1 text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+                      <span>Open</span>
+                      <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-sm">{action.title}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
-                      {action.description}
-                    </p>
-                  </div>
-                  <div className="mt-auto flex items-center gap-1 text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
-                    <span>Open</span>
-                    <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
-                  </div>
-                </button>
+                </motion.button>
               );
             })}
           </div>
@@ -644,39 +908,47 @@ function QuickActionsPanel() {
   );
 }
 
-// ─── Recent Activity Feed ────────────────────────────────────
+// ─── Recent Activity Feed (Enhanced) ─────────────────────────
 const recentActivityItems = [
   {
     id: 'ra-1',
     icon: UserPlus,
     iconColor: 'text-emerald-500',
     iconBg: 'bg-emerald-50 dark:bg-emerald-950/40',
+    dotColor: 'bg-emerald-500',
     title: 'New enrollment: Mike Chen joined Advanced React Masterclass',
     time: '5 minutes ago',
+    type: 'enrollment',
   },
   {
     id: 'ra-2',
     icon: CheckCircle,
     iconColor: 'text-violet-500',
     iconBg: 'bg-violet-50 dark:bg-violet-950/40',
+    dotColor: 'bg-violet-500',
     title: 'Course completed: Lisa Wang finished Data Visualization & Analytics',
     time: '23 minutes ago',
+    type: 'completion',
   },
   {
     id: 'ra-3',
     icon: MessageCircle,
     iconColor: 'text-sky-500',
     iconBg: 'bg-sky-50 dark:bg-sky-950/40',
+    dotColor: 'bg-sky-500',
     title: 'New discussion: "Best practices for API auth?" in Community',
     time: '1 hour ago',
+    type: 'community',
   },
   {
     id: 'ra-4',
     icon: DollarSign,
     iconColor: 'text-emerald-500',
     iconBg: 'bg-emerald-50 dark:bg-emerald-950/40',
+    dotColor: 'bg-amber-500',
     title: 'Revenue milestone: $47K MRR reached!',
     time: '3 hours ago',
+    type: 'milestone',
   },
 ];
 
@@ -686,35 +958,50 @@ function RecentActivityFeed() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+            </span>
             <Activity className="h-4 w-4 text-emerald-500" />
             Recent Activity
           </CardTitle>
+          <CardDescription className="text-xs">Live feed of platform events</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-0">
-            {recentActivityItems.map((item, i) => {
-              const ItemIcon = item.icon;
-              return (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: 0.1 * i }}
-                  className="flex items-start gap-3 py-3 border-b border-border/50 last:border-0"
-                >
-                  <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${item.iconBg}`}>
-                    <ItemIcon className={`h-4 w-4 ${item.iconColor}`} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-foreground line-clamp-2">{item.title}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {item.time}
-                    </p>
-                  </div>
-                </motion.div>
-              );
-            })}
+          <div className="relative">
+            {/* Timeline connecting line */}
+            <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gradient-to-b from-emerald-500/40 via-violet-500/40 to-amber-500/40" />
+
+            <div className="space-y-0">
+              {recentActivityItems.map((item, i) => {
+                const ItemIcon = item.icon;
+                return (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: 0.1 * i }}
+                    className="relative flex items-start gap-3 py-3 border-b border-border/50 last:border-0"
+                  >
+                    {/* Timeline dot */}
+                    <div className="relative z-10 flex items-center justify-center">
+                      <span className={`h-3 w-3 rounded-full ${item.dotColor} ring-2 ring-background shrink-0`} />
+                    </div>
+                    {/* Activity icon */}
+                    <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${item.iconBg}`}>
+                      <ItemIcon className={`h-4 w-4 ${item.iconColor}`} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-foreground line-clamp-2">{item.title}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {item.time}
+                      </p>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
           </div>
         </CardContent>
       </Card>

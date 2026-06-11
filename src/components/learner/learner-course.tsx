@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { VideoPlayer } from '@/components/shared/video-player';
+import type { Chapter } from '@/components/shared/video-player';
 import {
   Play,
   FileText,
@@ -94,6 +95,22 @@ const lessonProgressMap: Record<string, 'completed' | 'in_progress' | 'not_start
   'les-1-1-3': 'in_progress',
   'les-1-2-1': 'not_started',
   'les-1-2-2': 'not_started',
+};
+
+// ─── Demo chapters for video player ────────────────────────────
+const demoChapters: Chapter[] = [
+  { time: 0, title: 'Introduction' },
+  { time: 45, title: 'Core Concepts' },
+  { time: 120, title: 'Setting Up the Environment' },
+  { time: 180, title: 'Building Your First Component' },
+  { time: 240, title: 'Summary & Key Takeaways' },
+];
+
+// ─── Resume positions for lessons (simulated) ─────────────────
+const resumePositions: Record<string, number> = {
+  'les-1-1-3': 120, // Resume from 2 min
+  'les-1-2-1': 0,
+  'les-1-2-2': 0,
 };
 
 // ─── Mock discussion threads ───────────────────────────────
@@ -348,11 +365,12 @@ export function LearnerCourse() {
     return next;
   };
 
-  // If a lesson is active, show the Video Player
+  // If a lesson is active, show the enhanced Video Player
   if (activeLesson) {
     return (
       <div className="p-4 md:p-6">
         <VideoPlayer
+          title={activeLesson.title}
           lesson={activeLesson}
           moduleName={activeLessonModuleName}
           nextLessons={getNextLessons()}
@@ -363,6 +381,12 @@ export function LearnerCourse() {
           }}
           onBack={() => setActiveLesson(null)}
           isCompleted={lessonProgressState[activeLesson.id] === 'completed'}
+          initialPosition={resumePositions[activeLesson.id] || 0}
+          chapters={demoChapters}
+          onProgress={(progress, currentTime) => {
+            // Store resume position
+            resumePositions[activeLesson.id] = currentTime;
+          }}
         />
       </div>
     );
@@ -491,6 +515,78 @@ export function LearnerCourse() {
                   Expand All
                 </Button>
               </div>
+
+              {/* ─── Continue Learning / Video Player Section ──── */}
+              {(() => {
+                // Find the current in-progress or next lesson
+                const inProgressLesson = allLessons.find(l => lessonProgressState[l.id] === 'in_progress');
+                const nextLesson = allLessons.find(l => lessonProgressState[l.id] === 'not_started');
+                const currentLesson = inProgressLesson || nextLesson;
+                const currentModule = currentLesson ? modules.find(m => m.lessons?.some(l => l.id === currentLesson.id)) : null;
+
+                if (!currentLesson) return null;
+
+                return (
+                  <Card className="overflow-hidden border-emerald-200 dark:border-emerald-800/50">
+                    <CardContent className="p-0">
+                      <div className="flex flex-col md:flex-row">
+                        {/* Video Player - Compact */}
+                        <div className="md:w-1/2">
+                          <VideoPlayer
+                            title={currentLesson.title}
+                            lesson={currentLesson}
+                            moduleName={currentModule?.title || ''}
+                            onMarkComplete={handleMarkComplete}
+                            isCompleted={lessonProgressState[currentLesson.id] === 'completed'}
+                            initialPosition={resumePositions[currentLesson.id] || 0}
+                            chapters={demoChapters}
+                            compact
+                            totalDuration={currentLesson.videoDuration || 300}
+                            onProgress={(progress, currentTime) => {
+                              resumePositions[currentLesson.id] = currentTime;
+                            }}
+                          />
+                        </div>
+                        {/* Lesson Info Sidebar */}
+                        <div className="md:w-1/2 p-4 md:p-6 flex flex-col justify-center">
+                          <div className="flex items-center gap-2 mb-2">
+                            {inProgressLesson ? (
+                              <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px]">
+                                <Play className="h-3 w-3 mr-1" /> In Progress
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
+                                Up Next
+                              </Badge>
+                            )}
+                            <Badge variant="secondary" className="text-[10px]">
+                              {currentModule?.title}
+                            </Badge>
+                          </div>
+                          <h3 className="font-semibold text-foreground text-lg mb-2">{currentLesson.title}</h3>
+                          {currentLesson.description && (
+                            <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{currentLesson.description}</p>
+                          )}
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground mb-4">
+                            <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatDuration(currentLesson.videoDuration)}</span>
+                            <span className="flex items-center gap-1">
+                              <ContentTypeIcon type={currentLesson.contentType} className="h-3 w-3" />
+                              {currentLesson.contentType.charAt(0).toUpperCase() + currentLesson.contentType.slice(1).replace('_', ' ')}
+                            </span>
+                          </div>
+                          <Button
+                            onClick={() => handleLessonClick(currentLesson)}
+                            className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                          >
+                            <Play className="h-4 w-4" fill="currentColor" />
+                            {inProgressLesson ? 'Continue Lesson' : 'Start Lesson'}
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
 
               {modules.length > 0 ? (
                 modules.map((mod, idx) => (

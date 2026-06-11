@@ -1,0 +1,827 @@
+     1→'use client';
+     2→
+     3→import { useEffect, useState, useRef } from 'react';
+     4→import { motion } from 'framer-motion';
+     5→import {
+     6→  AreaChart,
+     7→  Area,
+     8→  BarChart,
+     9→  Bar,
+    10→  LineChart,
+    11→  Line,
+    12→  PieChart,
+    13→  Pie,
+    14→  Cell,
+    15→  XAxis,
+    16→  YAxis,
+    17→  CartesianGrid,
+    18→  Tooltip,
+    19→  Legend,
+    20→  ComposedChart,
+    21→} from 'recharts';
+    22→import {
+    23→  DollarSign,
+    24→  Users,
+    25→  GraduationCap,
+    26→  CheckCircle,
+    27→  MessageCircle,
+    28→  UserPlus,
+    29→  TrendingUp,
+    30→  TrendingDown,
+    31→  BookOpen,
+    32→  Sparkles,
+    33→  FileText,
+    34→  Star,
+    35→  ArrowRight,
+    36→  Clock,
+    37→  Bell,
+    38→  Activity,
+    39→} from 'lucide-react';
+    40→
+    41→import {
+    42→  Card,
+    43→  CardContent,
+    44→  CardDescription,
+    45→  CardHeader,
+    46→  CardTitle,
+    47→} from '@/components/ui/card';
+    48→import { Badge } from '@/components/ui/badge';
+    49→import { Progress } from '@/components/ui/progress';
+    50→import {
+    51→  Table,
+    52→  TableBody,
+    53→  TableCell,
+    54→  TableHead,
+    55→  TableHeader,
+    56→  TableRow,
+    57→} from '@/components/ui/table';
+    58→import {
+    59→  ChartContainer,
+    60→  ChartTooltip,
+    61→  ChartTooltipContent,
+    62→  ChartLegend,
+    63→  ChartLegendContent,
+    64→  type ChartConfig,
+    65→} from '@/components/ui/chart';
+    66→import {
+    67→  adminKPIs,
+    68→  revenueData,
+    69→  engagementData,
+    70→  completionFunnelData,
+    71→  categoryData,
+    72→  demoCourses,
+    73→  videoDropoffData,
+    74→} from '@/lib/mock-data';
+    75→import { useAppStore } from '@/store/app-store';
+    76→import type { DashboardKPI, Course } from '@/types';
+    77→
+    78→// ─── Icon mapping ────────────────────────────────────────────
+    79→const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+    80→  'dollar-sign': DollarSign,
+    81→  users: Users,
+    82→  'graduation-cap': GraduationCap,
+    83→  'check-circle': CheckCircle,
+    84→  'message-circle': MessageCircle,
+    85→  'user-plus': UserPlus,
+    86→};
+    87→
+    88→// ─── Chart configs ───────────────────────────────────────────
+    89→const revenueChartConfig: ChartConfig = {
+    90→  revenue: { label: 'Revenue', color: '#10b981' },
+    91→  enrollments: { label: 'Enrollments', color: '#8b5cf6' },
+    92→  completions: { label: 'Completions', color: '#f59e0b' },
+    93→};
+    94→
+    95→const engagementChartConfig: ChartConfig = {
+    96→  activeUsers: { label: 'Active Users', color: '#10b981' },
+    97→  postsCreated: { label: 'Posts Created', color: '#8b5cf6' },
+    98→  quizzesTaken: { label: 'Quizzes Taken', color: '#f59e0b' },
+    99→};
+   100→
+   101→const categoryChartConfig: ChartConfig = {
+   102→  value: { label: 'Enrollments' },
+   103→  'Web Development': { label: 'Web Development', color: '#8b5cf6' },
+   104→  'Data Science': { label: 'Data Science', color: '#10b981' },
+   105→  Design: { label: 'Design', color: '#f59e0b' },
+   106→  Business: { label: 'Business', color: '#ef4444' },
+   107→  Marketing: { label: 'Marketing', color: '#a855f7' },
+   108→  'AI & ML': { label: 'AI & ML', color: '#06b6d4' },
+   109→};
+   110→
+   111→const dropoffChartConfig: ChartConfig = {
+   112→  dropoff: { label: 'Drop-off %', color: '#ef4444' },
+   113→};
+   114→
+   115→// ─── Animation variants ──────────────────────────────────────
+   116→const containerVariants = {
+   117→  hidden: { opacity: 0 },
+   118→  visible: {
+   119→    opacity: 1,
+   120→    transition: { staggerChildren: 0.06 },
+   121→  },
+   122→};
+   123→
+   124→const itemVariants = {
+   125→  hidden: { opacity: 0, y: 20 },
+   126→  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+   127→};
+   128→
+   129→// ─── Level badge helper ──────────────────────────────────────
+   130→function LevelBadge({ level }: { level: Course['level'] }) {
+   131→  const map: Record<string, { variant: 'secondary' | 'outline' | 'destructive' | 'default'; className: string }> = {
+   132→    beginner: { variant: 'secondary', className: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300' },
+   133→    intermediate: { variant: 'secondary', className: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-100 dark:bg-yellow-900/40 dark:text-yellow-300' },
+   134→    advanced: { variant: 'secondary', className: 'bg-orange-100 text-orange-700 hover:bg-orange-100 dark:bg-orange-900/40 dark:text-orange-300' },
+   135→    expert: { variant: 'secondary', className: 'bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-900/40 dark:text-red-300' },
+   136→  };
+   137→  const cfg = map[level] ?? map.beginner;
+   138→  return (
+   139→    <Badge variant={cfg.variant} className={cfg.className}>
+   140→      {level.charAt(0).toUpperCase() + level.slice(1)}
+   141→    </Badge>
+   142→  );
+   143→}
+   144→
+   145→// ─── Number formatting ───────────────────────────────────────
+   146→function fmtNumber(n: number): string {
+   147→  return n.toLocaleString('en-US');
+   148→}
+   149→
+   150→// ─── Animated Counter ────────────────────────────────────────
+   151→function AnimatedCounter({ value, duration = 1500 }: { value: string; duration?: number }) {
+   152→  const [displayed, setDisplayed] = useState('0');
+   153→  const hasAnimated = useRef(false);
+   154→
+   155→  useEffect(() => {
+   156→    if (hasAnimated.current) return;
+   157→    hasAnimated.current = true;
+   158→
+   159→    // Parse the numeric part from the value string
+   160→    const numericMatch = value.match(/[\d,.]+/);
+   161→    if (!numericMatch) {
+   162→      // Non-numeric value, show directly without animation
+   163→      return;
+   164→    }
+   165→
+   166→    const numericStr = numericMatch[0];
+   167→    const prefix = value.slice(0, value.indexOf(numericStr));
+   168→    const suffix = value.slice(value.indexOf(numericStr) + numericStr.length);
+   169→    const cleanNumber = parseFloat(numericStr.replace(/,/g, ''));
+   170→    const hasDecimals = numericStr.includes('.');
+   171→    const decimalPlaces = hasDecimals ? numericStr.split('.')[1].length : 0;
+   172→
+   173→    const startTime = Date.now();
+   174→    const animate = () => {
+   175→      const elapsed = Date.now() - startTime;
+   176→      const progress = Math.min(elapsed / duration, 1);
+   177→      // Ease out cubic
+   178→      const eased = 1 - Math.pow(1 - progress, 3);
+   179→      const current = cleanNumber * eased;
+   180→
+   181→      let formatted: string;
+   182→      if (hasDecimals) {
+   183→        formatted = current.toFixed(decimalPlaces);
+   184→      } else {
+   185→        formatted = Math.round(current).toLocaleString('en-US');
+   186→      }
+   187→
+   188→      setDisplayed(`${prefix}${formatted}${suffix}`);
+   189→
+   190→      if (progress < 1) {
+   191→        requestAnimationFrame(animate);
+   192→      }
+   193→    };
+   194→
+   195→    requestAnimationFrame(animate);
+   196→  }, [value, duration]);
+   197→
+   198→  // If non-numeric, just display the value directly
+   199→  const numericMatch = value.match(/[\d,.]+/);
+   200→  if (!numericMatch) {
+   201→    return <span>{value}</span>;
+   202→  }
+   203→
+   204→  return <span>{displayed}</span>;
+   205→}
+   206→
+   207→// ─── KPI Card ────────────────────────────────────────────────
+   208→function KPICard({ kpi, index }: { kpi: DashboardKPI; index: number }) {
+   209→  const Icon = iconMap[kpi.icon] ?? Users;
+   210→  const isPositive = kpi.change >= 0;
+   211→  const accentBorder = isPositive
+   212→    ? 'border-l-emerald-500'
+   213→    : 'border-l-red-500';
+   214→  const iconBg = isPositive
+   215→    ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400'
+   216→    : 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400';
+   217→
+   218→  return (
+   219→    <motion.div variants={itemVariants} custom={index}>
+   220→      <Card className={`border-l-4 ${accentBorder} h-full shadow-sm hover:shadow-md transition-shadow duration-200`}>
+   221→        <CardContent className="p-6">
+   222→          <div className="flex items-start justify-between">
+   223→            <div className="space-y-1">
+   224→              <p className="text-sm font-medium text-muted-foreground">
+   225→                {kpi.label}
+   226→              </p>
+   227→              <p className="text-3xl font-bold tracking-tight">
+   228→                <AnimatedCounter value={String(kpi.value)} />
+   229→              </p>
+   230→            </div>
+   231→            <div className={`rounded-lg p-2.5 ${iconBg}`}>
+   232→              <Icon className="h-5 w-5" />
+   233→            </div>
+   234→          </div>
+   235→          <div className="mt-3 flex items-center gap-1.5 text-sm">
+   236→            {isPositive ? (
+   237→              <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+   238→            ) : (
+   239→              <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
+   240→            )}
+   241→            <span
+   242→              className={
+   243→                isPositive
+   244→                  ? 'font-medium text-emerald-600 dark:text-emerald-400'
+   245→                  : 'font-medium text-red-600 dark:text-red-400'
+   246→              }
+   247→            >
+   248→              {isPositive ? '+' : ''}
+   249→              {kpi.change}%
+   250→            </span>
+   251→            <span className="text-muted-foreground">{kpi.changeLabel}</span>
+   252→          </div>
+   253→        </CardContent>
+   254→      </Card>
+   255→    </motion.div>
+   256→  );
+   257→}
+   258→
+   259→// ─── Revenue Analytics Chart ─────────────────────────────────
+   260→function RevenueChart() {
+   261→  return (
+   262→    <motion.div variants={itemVariants}>
+   263→      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+   264→        <CardHeader className="pb-2">
+   265→          <CardTitle>Revenue Analytics</CardTitle>
+   266→          <CardDescription>
+   267→            Monthly revenue, enrollments & completions trend
+   268→          </CardDescription>
+   269→        </CardHeader>
+   270→        <CardContent className="pt-0 pb-4 px-6">
+   271→          <ChartContainer config={revenueChartConfig} className="h-[320px] w-full">
+   272→            <ComposedChart data={revenueData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
+   273→              <defs>
+   274→                <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+   275→                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
+   276→                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+   277→                </linearGradient>
+   278→              </defs>
+   279→              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+   280→              <XAxis dataKey="month" tickLine={false} axisLine={false} />
+   281→              <YAxis
+   282→                yAxisId="left"
+   283→                tickLine={false}
+   284→                axisLine={false}
+   285→                tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
+   286→              />
+   287→              <YAxis
+   288→                yAxisId="right"
+   289→                orientation="right"
+   290→                tickLine={false}
+   291→                axisLine={false}
+   292→              />
+   293→              <ChartTooltip content={<ChartTooltipContent />} />
+   294→              <ChartLegend content={<ChartLegendContent />} />
+   295→              <Area
+   296→                yAxisId="left"
+   297→                type="monotone"
+   298→                dataKey="revenue"
+   299→                stroke="#10b981"
+   300→                fill="url(#revenueGrad)"
+   301→                strokeWidth={2}
+   302→              />
+   303→              <Line
+   304→                yAxisId="right"
+   305→                type="monotone"
+   306→                dataKey="enrollments"
+   307→                stroke="#8b5cf6"
+   308→                strokeWidth={2}
+   309→                dot={{ r: 3 }}
+   310→              />
+   311→              <Line
+   312→                yAxisId="right"
+   313→                type="monotone"
+   314→                dataKey="completions"
+   315→                stroke="#f59e0b"
+   316→                strokeWidth={2}
+   317→                dot={{ r: 3 }}
+   318→              />
+   319→            </ComposedChart>
+   320→          </ChartContainer>
+   321→        </CardContent>
+   322→      </Card>
+   323→    </motion.div>
+   324→  );
+   325→}
+   326→
+   327→// ─── Engagement Bar Chart ────────────────────────────────────
+   328→function EngagementChart() {
+   329→  return (
+   330→    <motion.div variants={itemVariants}>
+   331→      <Card className="h-full shadow-sm hover:shadow-md transition-shadow duration-200">
+   332→        <CardHeader className="pb-2">
+   333→          <CardTitle>Weekly Engagement</CardTitle>
+   334→          <CardDescription>
+   335→            Active users, posts & quizzes by day
+   336→          </CardDescription>
+   337→        </CardHeader>
+   338→        <CardContent>
+   339→          <ChartContainer config={engagementChartConfig} className="h-[280px] w-full">
+   340→            <BarChart data={engagementData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+   341→              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+   342→              <XAxis dataKey="day" tickLine={false} axisLine={false} />
+   343→              <YAxis tickLine={false} axisLine={false} />
+   344→              <ChartTooltip content={<ChartTooltipContent />} />
+   345→              <ChartLegend content={<ChartLegendContent />} />
+   346→              <Bar dataKey="activeUsers" fill="var(--color-activeUsers)" radius={[4, 4, 0, 0]} />
+   347→              <Bar dataKey="postsCreated" fill="var(--color-postsCreated)" radius={[4, 4, 0, 0]} />
+   348→              <Bar dataKey="quizzesTaken" fill="var(--color-quizzesTaken)" radius={[4, 4, 0, 0]} />
+   349→            </BarChart>
+   350→          </ChartContainer>
+   351→        </CardContent>
+   352→      </Card>
+   353→    </motion.div>
+   354→  );
+   355→}
+   356→
+   357→// ─── Category Pie Chart ──────────────────────────────────────
+   358→function CategoryChart() {
+   359→  return (
+   360→    <motion.div variants={itemVariants}>
+   361→      <Card className="h-full shadow-sm hover:shadow-md transition-shadow duration-200">
+   362→        <CardHeader className="pb-2">
+   363→          <CardTitle>Category Distribution</CardTitle>
+   364→          <CardDescription>
+   365→            Enrollment by course category
+   366→          </CardDescription>
+   367→        </CardHeader>
+   368→        <CardContent>
+   369→          <ChartContainer config={categoryChartConfig} className="h-[280px] w-full">
+   370→            <PieChart>
+   371→              <Pie
+   372→                data={categoryData}
+   373→                dataKey="value"
+   374→                nameKey="name"
+   375→                cx="50%"
+   376→                cy="50%"
+   377→                innerRadius={55}
+   378→                outerRadius={95}
+   379→                paddingAngle={3}
+   380→                strokeWidth={0}
+   381→              >
+   382→                {categoryData.map((entry, idx) => (
+   383→                  <Cell key={idx} fill={entry.color} />
+   384→                ))}
+   385→              </Pie>
+   386→              <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
+   387→              <ChartLegend content={<ChartLegendContent nameKey="name" />} />
+   388→            </PieChart>
+   389→          </ChartContainer>
+   390→        </CardContent>
+   391→      </Card>
+   392→    </motion.div>
+   393→  );
+   394→}
+   395→
+   396→// ─── Completion Funnel ───────────────────────────────────────
+   397→function CompletionFunnel() {
+   398→  const maxCount = completionFunnelData[0].count;
+   399→  const funnelColors = [
+   400→    'bg-emerald-500',
+   401→    'bg-teal-500',
+   402→    'bg-cyan-500',
+   403→    'bg-violet-500',
+   404→    'bg-purple-500',
+   405→    'bg-fuchsia-500',
+   406→  ];
+   407→
+   408→  return (
+   409→    <motion.div variants={itemVariants}>
+   410→      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+   411→        <CardHeader className="pb-2">
+   412→          <CardTitle>Completion Funnel</CardTitle>
+   413→          <CardDescription>
+   414→            Enrollment-to-certification journey
+   415→          </CardDescription>
+   416→        </CardHeader>
+   417→        <CardContent>
+   418→          <div className="space-y-3">
+   419→            {completionFunnelData.map((stage, idx) => {
+   420→              const widthPct = (stage.count / maxCount) * 100;
+   421→              return (
+   422→                <div key={stage.stage} className="space-y-1">
+   423→                  <div className="flex items-center justify-between text-sm">
+   424→                    <span className="font-medium">{stage.stage}</span>
+   425→                    <div className="flex items-center gap-3 text-muted-foreground">
+   426→                      <span>{fmtNumber(stage.count)}</span>
+   427→                      <span className="font-semibold text-foreground">
+   428→                        {stage.percentage}%
+   429→                      </span>
+   430→                    </div>
+   431→                  </div>
+   432→                  <div className="h-8 w-full overflow-hidden rounded-md bg-muted">
+   433→                    <motion.div
+   434→                      className={`h-full rounded-md ${funnelColors[idx] ?? 'bg-slate-500'}`}
+   435→                      initial={{ width: 0 }}
+   436→                      animate={{ width: `${widthPct}%` }}
+   437→                      transition={{ duration: 0.8, delay: idx * 0.1, ease: 'easeOut' }}
+   438→                    />
+   439→                  </div>
+   440→                </div>
+   441→              );
+   442→            })}
+   443→          </div>
+   444→        </CardContent>
+   445→      </Card>
+   446→    </motion.div>
+   447→  );
+   448→}
+   449→
+   450→// ─── Recent Courses Table ────────────────────────────────────
+   451→function RecentCoursesTable() {
+   452→  return (
+   453→    <motion.div variants={itemVariants}>
+   454→      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+   455→        <CardHeader className="pb-2">
+   456→          <CardTitle>Recent Courses</CardTitle>
+   457→          <CardDescription>
+   458→            Overview of all published courses
+   459→          </CardDescription>
+   460→        </CardHeader>
+   461→        <CardContent className="p-0">
+   462→          <div className="max-h-96 overflow-y-auto">
+   463→            <Table>
+   464→              <TableHeader>
+   465→                <TableRow>
+   466→                  <TableHead className="pl-6">Course</TableHead>
+   467→                  <TableHead>Category</TableHead>
+   468→                  <TableHead>Level</TableHead>
+   469→                  <TableHead className="text-right">Enrollments</TableHead>
+   470→                  <TableHead className="text-right">Rating</TableHead>
+   471→                  <TableHead>Completion</TableHead>
+   472→                  <TableHead>Status</TableHead>
+   473→                </TableRow>
+   474→              </TableHeader>
+   475→              <TableBody>
+   476→                {demoCourses.map((course) => (
+   477→                  <TableRow key={course.id}>
+   478→                    <TableCell className="pl-6 font-medium max-w-[200px] truncate">
+   479→                      {course.title}
+   480→                    </TableCell>
+   481→                    <TableCell className="text-muted-foreground">
+   482→                      {course.category}
+   483→                    </TableCell>
+   484→                    <TableCell>
+   485→                      <LevelBadge level={course.level} />
+   486→                    </TableCell>
+   487→                    <TableCell className="text-right">
+   488→                      {fmtNumber(course.enrollmentCount)}
+   489→                    </TableCell>
+   490→                    <TableCell className="text-right">
+   491→                      <div className="flex items-center justify-end gap-1">
+   492→                        <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+   493→                        <span>{course.avgRating}</span>
+   494→                      </div>
+   495→                    </TableCell>
+   496→                    <TableCell>
+   497→                      <div className="flex items-center gap-2">
+   498→                        <Progress value={course.completionRate} className="h-2 w-16" />
+   499→                        <span className="text-xs text-muted-foreground w-8">
+   500→                          {course.completionRate}%
+   501→                        </span>
+   502→                      </div>
+   503→                    </TableCell>
+   504→                    <TableCell>
+   505→                      {course.isPublished ? (
+   506→                        <Badge
+   507→                          variant="secondary"
+   508→                          className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300"
+   509→                        >
+   510→                          Published
+   511→                        </Badge>
+   512→                      ) : (
+   513→                        <Badge variant="secondary" className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+   514→                          Draft
+   515→                        </Badge>
+   516→                      )}
+   517→                    </TableCell>
+   518→                  </TableRow>
+   519→                ))}
+   520→              </TableBody>
+   521→            </Table>
+   522→          </div>
+   523→        </CardContent>
+   524→      </Card>
+   525→    </motion.div>
+   526→  );
+   527→}
+   528→
+   529→// ─── Video Drop-off Chart ────────────────────────────────────
+   530→function VideoDropoffChart() {
+   531→  const maxDropoff = Math.max(...videoDropoffData.map((d) => d.dropoff));
+   532→
+   533→  return (
+   534→    <motion.div variants={itemVariants}>
+   535→      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+   536→        <CardHeader className="pb-2">
+   537→          <CardTitle>Video Engagement Drop-off</CardTitle>
+   538→          <CardDescription>
+   539→            Viewer drop-off rate by video segment
+   540→          </CardDescription>
+   541→        </CardHeader>
+   542→        <CardContent>
+   543→          <ChartContainer config={dropoffChartConfig} className="h-[260px] w-full">
+   544→            <BarChart data={videoDropoffData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+   545→              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+   546→              <XAxis dataKey="segment" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+   547→              <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => `${v}%`} />
+   548→              <ChartTooltip content={<ChartTooltipContent />} />
+   549→              <Bar dataKey="dropoff" radius={[4, 4, 0, 0]}>
+   550→                {videoDropoffData.map((entry, idx) => {
+   551→                  const ratio = entry.dropoff / maxDropoff;
+   552→                  const color =
+   553→                    ratio < 0.3
+   554→                      ? '#10b981'
+   555→                      : ratio < 0.6
+   556→                        ? '#f59e0b'
+   557→                        : '#ef4444';
+   558→                  return <Cell key={idx} fill={color} />;
+   559→                })}
+   560→              </Bar>
+   561→            </BarChart>
+   562→          </ChartContainer>
+   563→        </CardContent>
+   564→      </Card>
+   565→    </motion.div>
+   566→  );
+   567→}
+   568→
+   569→// ─── Quick Actions Panel ─────────────────────────────────────
+   570→const quickActions = [
+   571→  {
+   572→    title: 'Create New Course',
+   573→    description: 'Build and publish a new course with our AI-assisted builder',
+   574→    icon: BookOpen,
+   575→    accent: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400',
+   576→  },
+   577→  {
+   578→    title: 'Generate AI Content',
+   579→    description: 'Auto-generate lessons, quizzes, and summaries with AI',
+   580→    icon: Sparkles,
+   581→    accent: 'bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-400',
+   582→    pulse: true,
+   583→  },
+   584→  {
+   585→    title: 'View Reports',
+   586→    description: 'Export detailed analytics and performance reports',
+   587→    icon: FileText,
+   588→    accent: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400',
+   589→  },
+   590→  {
+   591→    title: 'Manage Community',
+   592→    description: 'Moderate posts, manage categories, and engage members',
+   593→    icon: Users,
+   594→    accent: 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400',
+   595→  },
+   596→];
+   597→
+   598→function QuickActionsPanel() {
+   599→  return (
+   600→    <motion.div variants={itemVariants}>
+   601→      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+   602→        <CardHeader className="pb-2">
+   603→          <CardTitle>Quick Actions</CardTitle>
+   604→          <CardDescription>
+   605→            Common tasks and shortcuts
+   606→          </CardDescription>
+   607→        </CardHeader>
+   608→        <CardContent>
+   609→          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+   610→            {quickActions.map((action) => {
+   611→              const IconComp = action.icon;
+   612→              return (
+   613→                <button
+   614→                  key={action.title}
+   615→                  type="button"
+   616→                  className="group flex flex-col items-start gap-3 rounded-lg border p-4 text-left transition-all hover:border-border hover:shadow-md dark:hover:border-slate-600"
+   617→                >
+   618→                  <div className={`rounded-lg p-2.5 ${action.accent} relative`}>
+   619→                    <IconComp className="h-5 w-5" />
+   620→                    {action.pulse && (
+   621→                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
+   622→                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
+   623→                        <span className="relative inline-flex rounded-full h-3 w-3 bg-violet-500" />
+   624→                      </span>
+   625→                    )}
+   626→                  </div>
+   627→                  <div>
+   628→                    <p className="font-semibold text-sm">{action.title}</p>
+   629→                    <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+   630→                      {action.description}
+   631→                    </p>
+   632→                  </div>
+   633→                  <div className="mt-auto flex items-center gap-1 text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+   634→                    <span>Open</span>
+   635→                    <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+   636→                  </div>
+   637→                </button>
+   638→              );
+   639→            })}
+   640→          </div>
+   641→        </CardContent>
+   642→      </Card>
+   643→    </motion.div>
+   644→  );
+   645→}
+   646→
+   647→// ─── Recent Activity Feed ────────────────────────────────────
+   648→const recentActivityItems = [
+   649→  {
+   650→    id: 'ra-1',
+   651→    icon: UserPlus,
+   652→    iconColor: 'text-emerald-500',
+   653→    iconBg: 'bg-emerald-50 dark:bg-emerald-950/40',
+   654→    title: 'New enrollment: Mike Chen joined Advanced React Masterclass',
+   655→    time: '5 minutes ago',
+   656→  },
+   657→  {
+   658→    id: 'ra-2',
+   659→    icon: CheckCircle,
+   660→    iconColor: 'text-violet-500',
+   661→    iconBg: 'bg-violet-50 dark:bg-violet-950/40',
+   662→    title: 'Course completed: Lisa Wang finished Data Visualization & Analytics',
+   663→    time: '23 minutes ago',
+   664→  },
+   665→  {
+   666→    id: 'ra-3',
+   667→    icon: MessageCircle,
+   668→    iconColor: 'text-sky-500',
+   669→    iconBg: 'bg-sky-50 dark:bg-sky-950/40',
+   670→    title: 'New discussion: "Best practices for API auth?" in Community',
+   671→    time: '1 hour ago',
+   672→  },
+   673→  {
+   674→    id: 'ra-4',
+   675→    icon: DollarSign,
+   676→    iconColor: 'text-emerald-500',
+   677→    iconBg: 'bg-emerald-50 dark:bg-emerald-950/40',
+   678→    title: 'Revenue milestone: $47K MRR reached!',
+   679→    time: '3 hours ago',
+   680→  },
+   681→];
+   682→
+   683→function RecentActivityFeed() {
+   684→  return (
+   685→    <motion.div variants={itemVariants}>
+   686→      <Card>
+   687→        <CardHeader className="pb-3">
+   688→          <CardTitle className="flex items-center gap-2 text-base">
+   689→            <Activity className="h-4 w-4 text-emerald-500" />
+   690→            Recent Activity
+   691→          </CardTitle>
+   692→        </CardHeader>
+   693→        <CardContent>
+   694→          <div className="space-y-0">
+   695→            {recentActivityItems.map((item, i) => {
+   696→              const ItemIcon = item.icon;
+   697→              return (
+   698→                <motion.div
+   699→                  key={item.id}
+   700→                  initial={{ opacity: 0, x: -10 }}
+   701→                  animate={{ opacity: 1, x: 0 }}
+   702→                  transition={{ duration: 0.3, delay: 0.1 * i }}
+   703→                  className="flex items-start gap-3 py-3 border-b border-border/50 last:border-0"
+   704→                >
+   705→                  <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${item.iconBg}`}>
+   706→                    <ItemIcon className={`h-4 w-4 ${item.iconColor}`} />
+   707→                  </div>
+   708→                  <div className="min-w-0 flex-1">
+   709→                    <p className="text-sm text-foreground line-clamp-2">{item.title}</p>
+   710→                    <p className="mt-0.5 text-xs text-muted-foreground flex items-center gap-1">
+   711→                      <Clock className="h-3 w-3" />
+   712→                      {item.time}
+   713→                    </p>
+   714→                  </div>
+   715→                </motion.div>
+   716→              );
+   717→            })}
+   718→          </div>
+   719→        </CardContent>
+   720→      </Card>
+   721→    </motion.div>
+   722→  );
+   723→}
+   724→
+   725→// ─── Main Dashboard ──────────────────────────────────────────
+   726→export function AdminDashboard() {
+   727→  const { currentUser } = useAppStore();
+   728→  const firstName = currentUser?.name?.split(' ')[0] || 'Sarah';
+   729→
+   730→  const [currentDateTime, setCurrentDateTime] = useState('');
+   731→
+   732→  useEffect(() => {
+   733→    const update = () => {
+   734→      setCurrentDateTime(
+   735→        new Date().toLocaleDateString('en-US', {
+   736→          weekday: 'long',
+   737→          year: 'numeric',
+   738→          month: 'long',
+   739→          day: 'numeric',
+   740→        }) +
+   741→        ' · ' +
+   742→        new Date().toLocaleTimeString('en-US', {
+   743→          hour: '2-digit',
+   744→          minute: '2-digit',
+   745→        })
+   746→      );
+   747→    };
+   748→    update();
+   749→    const interval = setInterval(update, 60000);
+   750→    return () => clearInterval(interval);
+   751→  }, []);
+   752→
+   753→  return (
+   754→    <div className="p-6 space-y-6">
+   755→      {/* Header with greeting */}
+   756→      <motion.div
+   757→        initial={{ opacity: 0, y: -10 }}
+   758→        animate={{ opacity: 1, y: 0 }}
+   759→        transition={{ duration: 0.4 }}
+   760→        className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"
+   761→      >
+   762→        <div>
+   763→          <h1 className="text-2xl font-bold tracking-tight">
+   764→            Welcome back, {firstName}! 👋
+   765→          </h1>
+   766→          <p className="text-muted-foreground text-sm">
+   767→            Overview of your LMS platform performance and metrics
+   768→          </p>
+   769→        </div>
+   770→        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1 sm:mt-0">
+   771→          <Clock className="h-3.5 w-3.5" />
+   772→          {currentDateTime}
+   773→          <span className="text-muted-foreground/60">·</span>
+   774→          <span className="text-muted-foreground/80">Last updated: just now</span>
+   775→        </div>
+   776→      </motion.div>
+   777→
+   778→      <motion.div
+   779→        variants={containerVariants}
+   780→        initial="hidden"
+   781→        animate="visible"
+   782→        className="space-y-6"
+   783→      >
+   784→        {/* Section 1: KPI Cards */}
+   785→        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   786→          {adminKPIs.map((kpi, idx) => (
+   787→            <KPICard key={kpi.label} kpi={kpi} index={idx} />
+   788→          ))}
+   789→        </div>
+   790→
+   791→        {/* Section 1.5: Recent Activity + Quick Actions row */}
+   792→        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+   793→          <div className="lg:col-span-2">
+   794→            <RecentActivityFeed />
+   795→          </div>
+   796→          <div className="hidden lg:block">
+   797→            <QuickActionsPanel />
+   798→          </div>
+   799→        </div>
+   800→
+   801→        {/* Section 2: Revenue Analytics */}
+   802→        <RevenueChart />
+   803→
+   804→        {/* Section 3: Engagement + Category side by side */}
+   805→        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+   806→          <EngagementChart />
+   807→          <CategoryChart />
+   808→        </div>
+   809→
+   810→        {/* Section 4: Completion Funnel */}
+   811→        <CompletionFunnel />
+   812→
+   813→        {/* Section 5: Recent Courses Table */}
+   814→        <RecentCoursesTable />
+   815→
+   816→        {/* Section 6: Video Drop-off */}
+   817→        <VideoDropoffChart />
+   818→
+   819→        {/* Section 7: Quick Actions (visible on smaller screens) */}
+   820→        <div className="lg:hidden">
+   821→          <QuickActionsPanel />
+   822→        </div>
+   823→      </motion.div>
+   824→    </div>
+   825→  );
+   826→}
+   827→
