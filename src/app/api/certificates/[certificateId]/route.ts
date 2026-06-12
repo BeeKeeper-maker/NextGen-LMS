@@ -15,6 +15,13 @@ export async function PUT(
       return NextResponse.json({ error: 'Certificate not found' }, { status: 404 });
     }
 
+    // Verify tenantId if provided (from body or query param)
+    const { searchParams } = new URL(request.url);
+    const tenantId = body.tenantId || searchParams.get('tenantId');
+    if (tenantId && existing.tenantId !== tenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const updateData: Record<string, unknown> = {};
     const allowedFields = ['name', 'template', 'backgroundUrl', 'isActive'];
     for (const field of allowedFields) {
@@ -53,6 +60,13 @@ export async function DELETE(
     const existing = await db.certificate.findUnique({ where: { id: certificateId } });
     if (!existing) {
       return NextResponse.json({ error: 'Certificate not found' }, { status: 404 });
+    }
+
+    // Verify tenantId if provided
+    const { searchParams } = new URL(request.url);
+    const tenantId = searchParams.get('tenantId');
+    if (tenantId && existing.tenantId !== tenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     await db.certificate.delete({ where: { id: certificateId } });

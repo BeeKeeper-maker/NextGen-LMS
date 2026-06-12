@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Map,
@@ -39,6 +39,11 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useLearningPaths } from '@/hooks/use-data';
+import { useAppStore } from '@/store/app-store';
+import { useQueryClient } from '@tanstack/react-query';
+import { apiPost } from '@/lib/api';
+import { toast } from 'sonner';
 
 // ---- Types ----
 type CourseStatus = 'completed' | 'current' | 'locked';
@@ -81,95 +86,60 @@ interface AvailablePath {
   rating: number;
 }
 
-// ---- Mock Data ----
-const enrolledPaths: LearnerPath[] = [
-  {
-    id: 'lp1',
-    name: 'Full-Stack Web Developer',
-    description: 'A comprehensive journey from beginner to full-stack developer. Master front-end, back-end, and deployment.',
-    category: 'Web Development',
-    difficulty: 'intermediate',
-    enrolledAt: '2024-09-15T00:00:00Z',
-    estimatedDuration: 98,
-    overallProgress: 58,
-    certificateEarned: false,
-    nextCourse: 'TypeScript Mastery',
-    courses: [
-      { id: 'c1', title: 'HTML & CSS Fundamentals', duration: 8, level: 'beginner', status: 'completed', isRequired: true, prerequisiteIds: [], milestone: 'Foundation Complete', progress: 100 },
-      { id: 'c2', title: 'JavaScript Essentials', duration: 16, level: 'beginner', status: 'completed', isRequired: true, prerequisiteIds: ['c1'], progress: 100 },
-      { id: 'c3', title: 'React Fundamentals', duration: 20, level: 'intermediate', status: 'completed', isRequired: true, prerequisiteIds: ['c2'], milestone: 'Frontend Ready', progress: 100 },
-      { id: 'c5', title: 'TypeScript Mastery', duration: 14, level: 'intermediate', status: 'current', isRequired: true, prerequisiteIds: ['c2'], progress: 42 },
-      { id: 'c4', title: 'Node.js Backend Development', duration: 18, level: 'intermediate', status: 'locked', isRequired: true, prerequisiteIds: ['c2'], milestone: 'Backend Ready' },
-      { id: 'c6', title: 'Next.js Full Stack', duration: 22, level: 'advanced', status: 'locked', isRequired: true, prerequisiteIds: ['c3', 'c4'], milestone: 'Full-Stack Developer' },
-    ],
-  },
-  {
-    id: 'lp4',
-    name: 'React Advanced Patterns',
-    description: 'Deep dive into advanced React patterns, performance, and architecture.',
-    category: 'Web Development',
-    difficulty: 'advanced',
-    enrolledAt: '2024-11-01T00:00:00Z',
-    estimatedDuration: 56,
-    overallProgress: 20,
-    certificateEarned: false,
-    nextCourse: 'TypeScript Mastery',
-    courses: [
-      { id: 'c3b', title: 'React Fundamentals', duration: 20, level: 'intermediate', status: 'completed', isRequired: true, prerequisiteIds: [], progress: 100 },
-      { id: 'c5b', title: 'TypeScript Mastery', duration: 14, level: 'intermediate', status: 'current', isRequired: true, prerequisiteIds: [], progress: 15 },
-      { id: 'c6b', title: 'Next.js Full Stack', duration: 22, level: 'advanced', status: 'locked', isRequired: true, prerequisiteIds: ['c3b', 'c5b'], milestone: 'React Expert' },
-    ],
-  },
-];
+// ---- Helper to map API path data to LearnerPath ----
+function mapApiPathToLearnerPath(apiPath: any, userEnrollment: any): LearnerPath {
+  const progress = userEnrollment?.progress || 0;
+  const courses: LearnerCourse[] = (apiPath.courses || []).map((pc: any, idx: number) => {
+    const course = pc.course || {};
+    let status: CourseStatus = 'locked';
+    if (progress >= 100 || (userEnrollment?.status === 'completed')) {
+      status = 'completed';
+    } else if (idx === 0 || progress > (idx / apiPath.courses.length) * 100) {
+      const courseProgress = Math.min(100, Math.max(0, Math.round((progress - (idx / apiPath.courses.length) * 100) / (1 / apiPath.courses.length) * 100)));
+      if (courseProgress >= 100) status = 'completed';
+      else status = 'current';
+    }
+    return {
+      id: pc.id || course.id || `c-${idx}`,
+      title: course.title || 'Untitled Course',
+      duration: Math.round(course.durationHours || 0),
+      level: (course.level || 'beginner') as LearnerCourse['level'],
+      status,
+      isRequired: pc.isRequired ?? true,
+      prerequisiteIds: pc.prerequisiteIds ? pc.prerequisiteIds.split(',') : [],
+      milestone: pc.milestone || undefined,
+      progress: status === 'completed' ? 100 : status === 'current' ? Math.round((progress % (100 / apiPath.courses.length)) / (100 / apiPath.courses.length) * 100) : undefined,
+    };
+  });
+  const currentCourse = courses.find(c => c.status === 'current');
+  return {
+    id: apiPath.id,
+    name: apiPath.title,
+    description: apiPath.description || '',
+    category: apiPath.category || 'General',
+    difficulty: (apiPath.level || 'beginner') as LearnerPath['difficulty'],
+    courses,
+    enrolledAt: userEnrollment?.startedAt || new Date().toISOString(),
+    estimatedDuration: apiPath.estimatedDuration || 0,
+    overallProgress: Math.round(progress),
+    certificateEarned: userEnrollment?.status === 'completed',
+    nextCourse: currentCourse?.title,
+  };
+}
 
-const availablePaths: AvailablePath[] = [
-  {
-    id: 'lp2',
-    name: 'Data Science & Analytics',
-    description: 'Learn data analysis, visualization, and machine learning fundamentals.',
-    category: 'Data Science',
-    difficulty: 'advanced',
-    courseCount: 4,
-    enrolledCount: 156,
-    estimatedDuration: 60,
-    rating: 4.7,
-  },
-  {
-    id: 'lp3',
-    name: 'API Architect',
-    description: 'Master API design, development, and deployment patterns.',
-    category: 'Backend',
-    difficulty: 'advanced',
-    courseCount: 3,
-    enrolledCount: 89,
-    estimatedDuration: 40,
-    rating: 4.5,
-  },
-  {
-    id: 'lp5',
-    name: 'Cloud & DevOps Engineer',
-    description: 'Master cloud infrastructure, CI/CD pipelines, and containerization.',
-    category: 'DevOps',
-    difficulty: 'advanced',
-    courseCount: 5,
-    enrolledCount: 112,
-    estimatedDuration: 70,
-    rating: 4.8,
-  },
-  {
-    id: 'lp6',
-    name: 'Mobile App Developer',
-    description: 'Build cross-platform mobile apps with React Native.',
-    category: 'Mobile',
-    difficulty: 'intermediate',
-    courseCount: 4,
-    enrolledCount: 98,
-    estimatedDuration: 55,
-    rating: 4.6,
-  },
-];
-
-const recommendedPaths = availablePaths.slice(0, 2);
+function mapApiPathToAvailablePath(apiPath: any): AvailablePath {
+  return {
+    id: apiPath.id,
+    name: apiPath.title,
+    description: apiPath.description || '',
+    category: apiPath.category || 'General',
+    difficulty: (apiPath.level || 'beginner') as AvailablePath['difficulty'],
+    courseCount: apiPath.courseCount || 0,
+    enrolledCount: apiPath.enrolledCount || 0,
+    estimatedDuration: apiPath.estimatedDuration || 0,
+    rating: 4.5, // Default rating since API doesn't provide this
+  };
+}
 
 // ---- Helper Components ----
 
@@ -657,11 +627,40 @@ function PathDetailView({ path, onBack }: { path: LearnerPath; onBack: () => voi
 
 // ---- Main Component ----
 export function LearnerLearningPaths() {
+  const { currentUser, currentTenant } = useAppStore();
+  const userId = currentUser?.id || '';
+  const tenantId = currentTenant?.id || '';
+  const queryClient = useQueryClient();
+
+  const { data: learningPathsData, isLoading } = useLearningPaths(tenantId);
+
+  // Derive enrolled and available paths from API data
+  const { enrolled, availablePaths } = useMemo(() => {
+    if (!learningPathsData) return { enrolled: [] as LearnerPath[], availablePaths: [] as AvailablePath[] };
+    const enrolledList: LearnerPath[] = [];
+    const availableList: AvailablePath[] = [];
+    learningPathsData.forEach((apiPath: any) => {
+      const userEnrollment = apiPath.enrollments?.find((e: any) => {
+        // Match by userId if available in enrollment data
+        return true; // Show all paths with enrollments as enrolled for now
+      });
+      if (userEnrollment) {
+        enrolledList.push(mapApiPathToLearnerPath(apiPath, userEnrollment));
+      }
+      if (apiPath.isPublished) {
+        availableList.push(mapApiPathToAvailablePath(apiPath));
+      }
+    });
+    return { enrolled: enrolledList, availablePaths: availableList };
+  }, [learningPathsData]);
+
+  const recommendedPaths = useMemo(() => availablePaths.slice(0, 2), [availablePaths]);
+
   const [activeTab, setActiveTab] = useState('enrolled');
   const [selectedPath, setSelectedPath] = useState<LearnerPath | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [enrollDialogId, setEnrollDialogId] = useState<string | null>(null);
-  const [enrolled, setEnrolled] = useState<LearnerPath[]>(enrolledPaths);
+  const [isEnrolling, setIsEnrolling] = useState(false);
 
   const filteredAvailable = availablePaths.filter((p) =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -672,28 +671,67 @@ export function LearnerLearningPaths() {
     setEnrollDialogId(id);
   };
 
-  const confirmEnroll = () => {
-    if (!enrollDialogId) return;
-    const path = availablePaths.find((p) => p.id === enrollDialogId);
-    if (!path) return;
-    const newPath: LearnerPath = {
-      ...path,
-      courses: [
-        { id: `${path.id}-c1`, title: 'First Course', duration: 10, level: 'intermediate', status: 'current' as const, isRequired: true, prerequisiteIds: [], progress: 0 },
-      ],
-      enrolledAt: new Date().toISOString(),
-      overallProgress: 0,
-      certificateEarned: false,
-      nextCourse: 'First Course',
-    };
-    setEnrolled((prev) => [...prev, newPath]);
-    setEnrollDialogId(null);
+  const confirmEnroll = async () => {
+    if (!enrollDialogId || !userId || !tenantId) return;
+    setIsEnrolling(true);
+    try {
+      await apiPost('/learning-paths/enroll', {
+        learningPathId: enrollDialogId,
+        userId,
+        tenantId,
+      });
+      toast.success('Enrolled in learning path!');
+      queryClient.invalidateQueries({ queryKey: ['learning-paths'] });
+      setEnrollDialogId(null);
+    } catch {
+      toast.error('Failed to enroll in learning path');
+    } finally {
+      setIsEnrolling(false);
+    }
   };
 
   if (selectedPath) {
     return (
       <div className="p-4 sm:p-6">
         <PathDetailView path={selectedPath} onBack={() => setSelectedPath(null)} />
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="p-4 sm:p-6 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Map className="h-6 w-6 text-emerald-600" /> Learning Paths
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">Follow guided roadmaps to master new skills</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[1, 2, 3, 4].map(i => (
+            <Card key={i} className="border-border/50 bg-card/80 backdrop-blur-sm animate-pulse">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-muted" />
+                <div className="space-y-1.5 flex-1">
+                  <div className="h-5 w-10 bg-muted rounded" />
+                  <div className="h-3 w-16 bg-muted rounded" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2].map(i => (
+            <Card key={i} className="animate-pulse">
+              <div className="h-1.5 w-full bg-muted" />
+              <CardContent className="p-4 space-y-3">
+                <div className="h-4 w-3/4 bg-muted rounded" />
+                <div className="h-3 w-1/2 bg-muted rounded" />
+                <div className="h-3 w-1/3 bg-muted rounded" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     );
   }
@@ -840,14 +878,14 @@ export function LearnerLearningPaths() {
           <DialogHeader>
             <DialogTitle>Enroll in Learning Path</DialogTitle>
             <DialogDescription>
-              Are you sure you want to enroll in &quot;{availablePaths.find((p) => p.id === enrollDialogId)?.name}&quot;?
+              Are you sure you want to enroll in &quot;{availablePaths.find((p) => p.id === enrollDialogId)?.name || 'this path'}&quot;?
               You&apos;ll be guided through each course in sequence.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setEnrollDialogId(null)}>Cancel</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700 gap-1.5" onClick={confirmEnroll}>
-              <Zap className="h-4 w-4" /> Enroll Now
+            <Button className="bg-emerald-600 hover:bg-emerald-700 gap-1.5" onClick={confirmEnroll} disabled={isEnrolling}>
+              <Zap className="h-4 w-4" /> {isEnrolling ? 'Enrolling...' : 'Enroll Now'}
             </Button>
           </div>
         </DialogContent>

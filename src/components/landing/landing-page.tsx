@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { LegalLinks } from '@/components/shared/legal-content-dialog';
 
 // Static marketing data - pricing plans are not user-generated, kept inline
 const pricingPlans = [
@@ -3087,8 +3088,7 @@ export function LandingPage() {
               &copy; {new Date().getFullYear()} NextGen LMS. All rights reserved.
             </p>
             <div className="flex gap-6">
-              <span className="text-xs text-muted-foreground hover:text-foreground cursor-pointer">Privacy Policy</span>
-              <span className="text-xs text-muted-foreground hover:text-foreground cursor-pointer">Terms of Service</span>
+              <LegalLinks />
             </div>
           </div>
         </div>

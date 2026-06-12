@@ -354,6 +354,193 @@ export async function POST() {
       }
     }
 
+    // Create additional demo users for review authors
+    const reviewAuthors = [
+      { id: 'demo-reviewer-1', email: 'mike.chen@email.com', name: 'Mike Chen', role: 'learner', streakDays: 5, totalPoints: 340 },
+      { id: 'demo-reviewer-2', email: 'sarah.l@email.com', name: 'Sarah Lopez', role: 'learner', streakDays: 3, totalPoints: 210 },
+      { id: 'demo-reviewer-3', email: 'alex.k@email.com', name: 'Alex Kumar', role: 'learner', streakDays: 12, totalPoints: 890 },
+      { id: 'demo-reviewer-4', email: 'emma.w@email.com', name: 'Emma Wilson', role: 'learner', streakDays: 1, totalPoints: 50 },
+      { id: 'demo-reviewer-5', email: 'david.p@email.com', name: 'David Park', role: 'learner', streakDays: 8, totalPoints: 560 },
+      { id: 'demo-reviewer-6', email: 'priya.s@email.com', name: 'Priya Sharma', role: 'learner', streakDays: 6, totalPoints: 420 },
+      { id: 'demo-reviewer-7', email: 'jordan.b@email.com', name: 'Jordan Blake', role: 'learner', streakDays: 2, totalPoints: 180 },
+      { id: 'demo-reviewer-8', email: 'chris.n@email.com', name: 'Chris Nguyen', role: 'learner', streakDays: 15, totalPoints: 1200 },
+      { id: 'demo-reviewer-9', email: 'rachel.t@email.com', name: 'Rachel Torres', role: 'learner', streakDays: 4, totalPoints: 300 },
+      { id: 'demo-reviewer-10', email: 'marcus.l@email.com', name: 'Marcus Lee', role: 'learner', streakDays: 7, totalPoints: 650 },
+    ];
+
+    for (const reviewer of reviewAuthors) {
+      await db.user.upsert({
+        where: { id: reviewer.id },
+        update: {},
+        create: {
+          ...reviewer,
+          tenantId: tenant.id,
+        },
+      });
+    }
+
+    // Create course reviews
+    const reviewData = [
+      { authorId: 'demo-reviewer-1', courseId: courses[0]?.id, rating: 5, content: 'Excellent course! The instructor explains complex concepts in a way that is easy to understand. The real-world projects were incredibly helpful for building my portfolio. I particularly enjoyed the section on server components and data fetching patterns. Highly recommended for anyone looking to level up their React skills.', status: 'pending' },
+      { authorId: 'demo-reviewer-2', courseId: courses[3]?.id, rating: 2, content: 'The content was outdated and several examples didn\'t work with the latest version of the library. The instructor seems knowledgeable but the course needs a major update. Also, some of the quiz questions have incorrect answers marked as correct.', status: 'flagged', flagged: true, flagReason: 'Inappropriate', moderationHistory: JSON.stringify([{ action: 'Flagged', by: 'System', date: '2026-06-09', reason: 'Auto-flagged: multiple user reports' }]) },
+      { authorId: 'demo-reviewer-3', courseId: courses[4]?.id, rating: 4, content: 'Great foundational course for data science with Python. The pandas and numpy sections are particularly well done. I would have liked more coverage of machine learning libraries, but as a starting point it\'s solid. The coding exercises are practical and relevant.', status: 'approved', adminResponse: 'Thank you for the feedback, Alex! We\'re adding ML content in the next update.', moderationHistory: JSON.stringify([{ action: 'Approved', by: 'Admin', date: '2026-06-08' }]) },
+      { authorId: 'demo-reviewer-4', courseId: courses[5]?.id, rating: 1, content: 'BUY MY COURSE INSTEAD!!! Visit spam-site.com for the REAL design course at 90% off!!! Limited time offer!!! Don\'t waste your money here!!!', status: 'flagged', flagged: true, flagReason: 'Spam', moderationHistory: JSON.stringify([{ action: 'Flagged', by: 'System', date: '2026-06-08', reason: 'Auto-flagged: spam detected' }]) },
+      { authorId: 'demo-reviewer-5', courseId: courses[2]?.id, rating: 5, content: 'This is the most comprehensive system design course I\'ve taken. The hands-on labs are incredible and the architecture patterns section alone is worth the price. Excellent instructor who clearly has real-world experience. The section on cost optimization saved my company thousands.', status: 'pending' },
+      { authorId: 'demo-reviewer-6', courseId: courses[1]?.id, rating: 3, content: 'Decent course but could be better organized. Some sections assume prior knowledge that isn\'t mentioned in prerequisites. The math explanations are too brief for beginners. However, the project-based approach in the second half is really good.', status: 'pending' },
+      { authorId: 'demo-reviewer-7', courseId: courses[0]?.id, rating: 4, content: 'Very good course overall. The instructor is clearly an expert. I docked one star because some of the code examples in the middleware section have typos, and the community forum response time could be better. Otherwise, learned a ton!', status: 'approved', moderationHistory: JSON.stringify([{ action: 'Approved', by: 'Admin', date: '2026-06-05' }]) },
+      { authorId: 'demo-reviewer-8', courseId: courses[2]?.id, rating: 2, content: 'Way too basic for an "advanced" bootcamp. The title is misleading. Most of the content is available for free on YouTube. The Docker section is okay but the Kubernetes part is severely lacking.', status: 'rejected', moderationHistory: JSON.stringify([{ action: 'Rejected', by: 'Admin', date: '2026-06-04', reason: 'Off-topic' }]) },
+      { authorId: 'demo-reviewer-9', courseId: courses[3]?.id, rating: 5, content: 'Anna is an incredible teacher! The way she breaks down advanced data visualization concepts makes them accessible. The real-world project at the end ties everything together perfectly. Best analytics course on the platform.', status: 'pending' },
+      { authorId: 'demo-reviewer-10', courseId: courses[4]?.id, rating: 3, content: 'The content is okay but feels very theoretical. I expected more hands-on labs and practical exercises. The section on penetration testing is basically just definitions with no actual practice. Good for beginners wanting an overview, not for practitioners.', status: 'pending' },
+    ];
+
+    for (const review of reviewData) {
+      if (!review.courseId) continue;
+      try {
+        await db.courseReview.create({
+          data: {
+            tenantId: tenant.id,
+            courseId: review.courseId,
+            authorId: review.authorId,
+            rating: review.rating,
+            content: review.content,
+            status: review.status,
+            flagged: review.flagged || false,
+            flagReason: review.flagReason || null,
+            adminResponse: review.adminResponse || null,
+            moderationHistory: review.moderationHistory || null,
+          },
+        });
+      } catch {
+        // Skip if already exists
+      }
+    }
+
+    // ─── Seed Live Cohorts ──────────────────────────────────
+    const demoLiveCohorts = [
+      {
+        title: 'React & Next.js Live Q&A',
+        description: 'Weekly live session for React course students. Bring your questions!',
+        category: 'live_session',
+        startDate: new Date(Date.now() + 86400000 * 1 + 3600000 * 10),
+        endDate: new Date(Date.now() + 86400000 * 1 + 3600000 * 11.5),
+        instructorName: 'Sarah Mitchell',
+        meetingUrl: 'https://meet.nextgen-lms.com/react-qa',
+        color: '#6366F1',
+        enrolledCount: 34,
+        capacity: 50,
+        status: 'upcoming',
+      },
+      {
+        title: 'System Design Cohort Kickoff',
+        description: 'Orientation session for the new System Design cohort. Meet your peers and instructor.',
+        category: 'cohort_start',
+        startDate: new Date(Date.now() + 86400000 * 3 + 3600000 * 18),
+        endDate: new Date(Date.now() + 86400000 * 3 + 3600000 * 19),
+        instructorName: 'David Park',
+        meetingUrl: 'https://meet.nextgen-lms.com/system-design',
+        color: '#EF4444',
+        enrolledCount: 18,
+        capacity: 25,
+        status: 'upcoming',
+      },
+      {
+        title: 'AI Lab: Building with LLMs',
+        description: 'Hands-on workshop: Build an AI-powered chatbot from scratch using modern APIs.',
+        category: 'workshop',
+        startDate: new Date(Date.now() + 86400000 * 5 + 3600000 * 14),
+        endDate: new Date(Date.now() + 86400000 * 5 + 3600000 * 17),
+        instructorName: 'Sarah Mitchell',
+        meetingUrl: 'https://meet.nextgen-lms.com/ai-lab',
+        color: '#10B981',
+        enrolledCount: 22,
+        capacity: 30,
+        status: 'upcoming',
+      },
+      {
+        title: 'Office Hours: Data Visualization',
+        description: 'Drop-in office hours for Data Visualization students. Get help with your projects.',
+        category: 'office_hours',
+        startDate: new Date(Date.now() + 86400000 * 2 + 3600000 * 15),
+        endDate: new Date(Date.now() + 86400000 * 2 + 3600000 * 16),
+        instructorName: 'Lisa Wang',
+        meetingUrl: 'https://meet.nextgen-lms.com/data-viz-office',
+        color: '#F59E0B',
+        enrolledCount: 8,
+        capacity: 15,
+        status: 'upcoming',
+      },
+      {
+        title: 'Webinar: Future of AI in Education',
+        description: 'Special guest panel discussing the impact of AI on learning and education technology.',
+        category: 'webinar',
+        startDate: new Date(Date.now() + 86400000 * 7 + 3600000 * 12),
+        endDate: new Date(Date.now() + 86400000 * 7 + 3600000 * 13.5),
+        color: '#8B5CF6',
+        enrolledCount: 156,
+        capacity: 500,
+        status: 'upcoming',
+      },
+      {
+        title: 'Assessment Deadline: React Quiz',
+        description: 'Final deadline for the React & Next.js Fundamentals Quiz.',
+        category: 'deadline',
+        startDate: new Date(Date.now() + 86400000 * 4 + 3600000 * 23),
+        endDate: new Date(Date.now() + 86400000 * 4 + 3600000 * 23 + 1800000),
+        color: '#DC2626',
+        capacity: 0,
+        enrolledCount: 0,
+        status: 'upcoming',
+      },
+      {
+        title: 'Cohort Wrap-Up: AI Full Stack',
+        description: 'Final presentations and celebration for the AI Full Stack cohort.',
+        category: 'cohort_end',
+        startDate: new Date(Date.now() + 86400000 * 10 + 3600000 * 17),
+        endDate: new Date(Date.now() + 86400000 * 10 + 3600000 * 19),
+        instructorName: 'Sarah Mitchell',
+        color: '#10B981',
+        enrolledCount: 20,
+        capacity: 25,
+        status: 'upcoming',
+      },
+      {
+        title: 'Design Critique Session',
+        description: 'Live design review for UX/UI students. Share your work and get feedback.',
+        category: 'live_session',
+        startDate: new Date(Date.now() + 86400000 * 6 + 3600000 * 16),
+        endDate: new Date(Date.now() + 86400000 * 6 + 3600000 * 17.5),
+        instructorName: 'Lisa Wang',
+        meetingUrl: 'https://meet.nextgen-lms.com/design-crit',
+        color: '#EC4899',
+        enrolledCount: 12,
+        capacity: 20,
+        status: 'upcoming',
+      },
+    ];
+
+    for (const cohort of demoLiveCohorts) {
+      try {
+        await db.liveCohort.create({
+          data: {
+            tenantId: tenant.id,
+            title: cohort.title,
+            description: cohort.description,
+            category: cohort.category,
+            startDate: cohort.startDate,
+            endDate: cohort.endDate,
+            instructorName: cohort.instructorName || null,
+            meetingUrl: cohort.meetingUrl || null,
+            color: cohort.color || null,
+            enrolledCount: cohort.enrolledCount,
+            capacity: cohort.capacity,
+            status: cohort.status,
+          },
+        });
+      } catch {
+        // Skip if already exists
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Database seeded successfully',

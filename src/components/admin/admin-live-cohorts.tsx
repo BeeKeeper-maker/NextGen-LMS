@@ -94,116 +94,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useCourses } from '@/hooks/use-data';
+import { useCourses, useLiveCohorts, useCreateLiveCohort, useDeleteLiveCohort } from '@/hooks/use-data';
+import { useAppStore } from '@/store/app-store';
+import { validateFields, required, minLength, futureDate, positiveNumber } from '@/lib/validations';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { CalendarEvent } from '@/types';
-
-// TODO: Replace with real API when available - calendar events API not yet implemented
-const demoCalendarEvents: CalendarEvent[] = [
-  {
-    id: 'evt-1',
-    title: 'React & Next.js Live Q&A',
-    description: 'Weekly live session for React course students. Bring your questions!',
-    type: 'live_session' as const,
-    startDate: new Date(Date.now() + 86400000 * 1 + 3600000 * 10).toISOString(),
-    endDate: new Date(Date.now() + 86400000 * 1 + 3600000 * 11.5).toISOString(),
-    courseId: 'course-1',
-    instructorName: 'Sarah Mitchell',
-    meetingUrl: 'https://meet.nextgen-lms.com/react-qa',
-    color: '#6366F1',
-    attendees: 34,
-    maxAttendees: 50,
-  },
-  {
-    id: 'evt-2',
-    title: 'System Design Cohort Kickoff',
-    description: 'Orientation session for the new System Design cohort. Meet your peers and instructor.',
-    type: 'cohort_start' as const,
-    startDate: new Date(Date.now() + 86400000 * 3 + 3600000 * 18).toISOString(),
-    endDate: new Date(Date.now() + 86400000 * 3 + 3600000 * 19).toISOString(),
-    courseId: 'course-3',
-    instructorName: 'David Park',
-    meetingUrl: 'https://meet.nextgen-lms.com/system-design',
-    color: '#EF4444',
-    attendees: 18,
-    maxAttendees: 25,
-  },
-  {
-    id: 'evt-3',
-    title: 'AI Lab: Building with LLMs',
-    description: 'Hands-on workshop: Build an AI-powered chatbot from scratch using modern APIs.',
-    type: 'workshop' as const,
-    startDate: new Date(Date.now() + 86400000 * 5 + 3600000 * 14).toISOString(),
-    endDate: new Date(Date.now() + 86400000 * 5 + 3600000 * 17).toISOString(),
-    courseId: 'course-2',
-    instructorName: 'Sarah Mitchell',
-    meetingUrl: 'https://meet.nextgen-lms.com/ai-lab',
-    color: '#10B981',
-    attendees: 22,
-    maxAttendees: 30,
-  },
-  {
-    id: 'evt-4',
-    title: 'Office Hours: Data Visualization',
-    description: 'Drop-in office hours for Data Visualization students. Get help with your projects.',
-    type: 'office_hours' as const,
-    startDate: new Date(Date.now() + 86400000 * 2 + 3600000 * 15).toISOString(),
-    endDate: new Date(Date.now() + 86400000 * 2 + 3600000 * 16).toISOString(),
-    courseId: 'course-4',
-    instructorName: 'Lisa Wang',
-    meetingUrl: 'https://meet.nextgen-lms.com/data-viz-office',
-    color: '#F59E0B',
-    attendees: 8,
-    maxAttendees: 15,
-  },
-  {
-    id: 'evt-5',
-    title: 'Webinar: Future of AI in Education',
-    description: 'Special guest panel discussing the impact of AI on learning and education technology.',
-    type: 'webinar' as const,
-    startDate: new Date(Date.now() + 86400000 * 7 + 3600000 * 12).toISOString(),
-    endDate: new Date(Date.now() + 86400000 * 7 + 3600000 * 13.5).toISOString(),
-    color: '#8B5CF6',
-    attendees: 156,
-    maxAttendees: 500,
-  },
-  {
-    id: 'evt-6',
-    title: 'Assessment Deadline: React Quiz',
-    description: 'Final deadline for the React & Next.js Fundamentals Quiz.',
-    type: 'deadline' as const,
-    startDate: new Date(Date.now() + 86400000 * 4 + 3600000 * 23).toISOString(),
-    endDate: new Date(Date.now() + 86400000 * 4 + 3600000 * 23.05).toISOString(),
-    courseId: 'course-1',
-    color: '#DC2626',
-  },
-  {
-    id: 'evt-7',
-    title: 'Cohort Wrap-Up: AI Full Stack',
-    description: 'Final presentations and celebration for the AI Full Stack cohort.',
-    type: 'cohort_end' as const,
-    startDate: new Date(Date.now() + 86400000 * 10 + 3600000 * 17).toISOString(),
-    endDate: new Date(Date.now() + 86400000 * 10 + 3600000 * 19).toISOString(),
-    courseId: 'course-2',
-    instructorName: 'Sarah Mitchell',
-    color: '#10B981',
-    attendees: 20,
-    maxAttendees: 25,
-  },
-  {
-    id: 'evt-8',
-    title: 'Design Critique Session',
-    description: 'Live design review for UX/UI students. Share your work and get feedback.',
-    type: 'live_session' as const,
-    startDate: new Date(Date.now() + 86400000 * 6 + 3600000 * 16).toISOString(),
-    endDate: new Date(Date.now() + 86400000 * 6 + 3600000 * 17.5).toISOString(),
-    courseId: 'course-5',
-    instructorName: 'Lisa Wang',
-    meetingUrl: 'https://meet.nextgen-lms.com/design-crit',
-    color: '#EC4899',
-    attendees: 12,
-    maxAttendees: 20,
-  },
-];
 
 // Event type color mapping
 const eventTypeColors: Record<string, string> = {
@@ -379,9 +275,27 @@ export function AdminLiveCohorts() {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const { data: coursesData } = useCourses();
   const demoCourses = coursesData || [];
-  // TODO: Replace with real API when available - calendar events API not yet implemented
-  const [events, setEvents] = useState<CalendarEvent[]>(demoCalendarEvents);
+  const currentTenant = useAppStore((s) => s.currentTenant);
+  const tenantId = currentTenant?.id || '';
+  const { data: cohortsData, isLoading: cohortsLoading } = useLiveCohorts(tenantId);
+  const createCohort = useCreateLiveCohort();
+  const deleteCohort = useDeleteLiveCohort();
+  const events: CalendarEvent[] = (cohortsData || []).map((c: any) => ({
+    id: c.id,
+    title: c.title,
+    description: c.description || undefined,
+    type: (c.category || 'live_session') as CalendarEvent['type'],
+    startDate: c.startDate,
+    endDate: c.endDate,
+    courseId: c.courseId || undefined,
+    instructorName: c.instructorName || undefined,
+    meetingUrl: c.meetingUrl || undefined,
+    color: c.color || undefined,
+    attendees: c.attendees ?? undefined,
+    maxAttendees: c.maxAttendees ?? undefined,
+  }));
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [confirmCancelEvent, setConfirmCancelEvent] = useState<string | null>(null);
 
   // Schedule session form state
   const [newEvent, setNewEvent] = useState<Partial<CalendarEvent>>({
@@ -474,10 +388,12 @@ export function AdminLiveCohorts() {
   const validateForm = useCallback((): boolean => {
     const errors: FormErrors = {};
     if (!newEvent.title?.trim()) errors.title = 'Title is required';
+    else if (newEvent.title.trim().length < 3) errors.title = 'Title must be at least 3 characters';
     if (!eventDate) errors.date = 'Date is required';
+    else if (futureDate(eventDate, 'Start date')) errors.date = futureDate(eventDate, 'Start date');
     if (!startTime) errors.time = 'Start time is required';
     if (duration <= 0) errors.duration = 'Duration must be positive';
-    if (newEvent.maxAttendees && newEvent.maxAttendees < 1) errors.maxAttendees = 'At least 1 attendee required';
+    if (!newEvent.maxAttendees || newEvent.maxAttendees < 1) errors.maxAttendees = 'Capacity must be at least 1';
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -487,36 +403,37 @@ export function AdminLiveCohorts() {
   const handleCreateEvent = () => {
     if (!validateForm()) return;
 
-    const startDate = new Date(eventDate!);
+    const startDateVal = new Date(eventDate!);
     const [sh, sm] = startTime.split(':').map(Number);
-    startDate.setHours(sh, sm, 0);
-    const endDate = addMinutes(startDate, duration);
+    startDateVal.setHours(sh, sm, 0);
+    const endDateVal = addMinutes(startDateVal, duration);
 
-    const created: CalendarEvent = {
-      id: `evt-${Date.now()}`,
-      title: newEvent.title || '',
-      description: newEvent.description,
-      type: (newEvent.type as CalendarEvent['type']) || 'live_session',
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-      courseId: newEvent.courseId,
-      instructorName: newEvent.instructorName,
-      meetingUrl: newEvent.meetingUrl,
-      color: newEvent.color || '#6366F1',
-      attendees: 0,
-      maxAttendees: newEvent.maxAttendees,
-      isRecurring: newEvent.isRecurring,
-      recurrencePattern: newEvent.isRecurring ? newEvent.recurrencePattern : undefined,
-    };
-
-    setEvents((prev) => [...prev, created]);
-    setShowSuccess(true);
-
-    setTimeout(() => {
-      setShowSuccess(false);
-      setShowCreateDialog(false);
-      resetForm();
-    }, 1500);
+    createCohort.mutate(
+      {
+        tenantId,
+        title: newEvent.title || '',
+        description: newEvent.description || null,
+        category: newEvent.type || 'live_session',
+        startDate: startDateVal.toISOString(),
+        endDate: endDateVal.toISOString(),
+        courseId: newEvent.courseId || null,
+        instructorName: newEvent.instructorName || null,
+        meetingUrl: newEvent.meetingUrl || null,
+        color: newEvent.color || '#6366F1',
+        capacity: newEvent.maxAttendees || 50,
+        status: 'upcoming',
+      },
+      {
+        onSuccess: () => {
+          setShowSuccess(true);
+          setTimeout(() => {
+            setShowSuccess(false);
+            setShowCreateDialog(false);
+            resetForm();
+          }, 1500);
+        },
+      }
+    );
   };
 
   const resetForm = () => {
@@ -535,7 +452,7 @@ export function AdminLiveCohorts() {
 
   // Cancel event
   const handleCancelEvent = (id: string) => {
-    setEvents((prev) => prev.filter((e) => e.id !== id));
+    deleteCohort.mutate(id);
   };
 
   // Copy meeting link
@@ -600,7 +517,7 @@ export function AdminLiveCohorts() {
   const selectedDayEvents = selectedDay ? getEventsForDay(selectedDay) : [];
 
   // Sort icon helper
-  const SortIcon = ({ field }: { field: typeof sortField }) => {
+  const renderSortIcon = (field: typeof sortField) => {
     if (sortField !== field) return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/50" />;
     return sortDirection === 'asc'
       ? <ArrowUp className="h-3.5 w-3.5 text-foreground" />
@@ -667,77 +584,95 @@ export function AdminLiveCohorts() {
 
       {/* Quick Stats - 4 cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <Card className="border-l-4 border-l-violet-500 hover:shadow-md transition-shadow">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="h-10 w-10 rounded-lg bg-violet-100 dark:bg-violet-950 flex items-center justify-center">
-                <CalendarDays className="h-5 w-5 text-violet-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.sessionsThisMonth}</p>
-                <p className="text-xs text-muted-foreground">Sessions This Month</p>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+        {cohortsLoading ? (
+          <>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-4 flex items-center gap-4">
+                  <Skeleton className="h-10 w-10 rounded-lg" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-6 w-12" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </>
+        ) : (
+          <>
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Card className="border-l-4 border-l-violet-500 hover:shadow-md transition-shadow">
+                <CardContent className="p-4 flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-lg bg-violet-100 dark:bg-violet-950 flex items-center justify-center">
+                    <CalendarDays className="h-5 w-5 text-violet-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">{stats.sessionsThisMonth}</p>
+                    <p className="text-xs text-muted-foreground">Sessions This Month</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.05 }}
-        >
-          <Card className="border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="h-10 w-10 rounded-lg bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center">
-                <Activity className="h-5 w-5 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.upcomingThisWeek}</p>
-                <p className="text-xs text-muted-foreground">Upcoming This Week</p>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.05 }}
+            >
+              <Card className="border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow">
+                <CardContent className="p-4 flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-lg bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center">
+                    <Activity className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">{stats.upcomingThisWeek}</p>
+                    <p className="text-xs text-muted-foreground">Upcoming This Week</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.1 }}
-        >
-          <Card className="border-l-4 border-l-amber-500 hover:shadow-md transition-shadow">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-950 flex items-center justify-center">
-                <TrendingUp className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.avgAttendance}%</p>
-                <p className="text-xs text-muted-foreground">Avg. Attendance Rate</p>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+            >
+              <Card className="border-l-4 border-l-amber-500 hover:shadow-md transition-shadow">
+                <CardContent className="p-4 flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-950 flex items-center justify-center">
+                    <TrendingUp className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">{stats.avgAttendance}%</p>
+                    <p className="text-xs text-muted-foreground">Avg. Attendance Rate</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.15 }}
-        >
-          <Card className="border-l-4 border-l-rose-500 hover:shadow-md transition-shadow">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="h-10 w-10 rounded-lg bg-rose-100 dark:bg-rose-950 flex items-center justify-center">
-                <Users className="h-5 w-5 text-rose-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.totalAttendees}</p>
-                <p className="text-xs text-muted-foreground">Total Attendees</p>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.15 }}
+            >
+              <Card className="border-l-4 border-l-rose-500 hover:shadow-md transition-shadow">
+                <CardContent className="p-4 flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-lg bg-rose-100 dark:bg-rose-950 flex items-center justify-center">
+                    <Users className="h-5 w-5 text-rose-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">{stats.totalAttendees}</p>
+                    <p className="text-xs text-muted-foreground">Total Attendees</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </>
+        )}
       </div>
 
       {/* Calendar View */}
@@ -777,6 +712,24 @@ export function AdminLiveCohorts() {
             </div>
 
             {/* Calendar Grid */}
+            {cohortsLoading ? (
+              <div className="grid grid-cols-7 border-t border-l border-border">
+                {Array.from({ length: 35 }).map((_, i) => (
+                  <div key={i} className="min-h-[80px] md:min-h-[100px] p-1 md:p-2 border-r border-b border-border">
+                    <Skeleton className="h-4 w-4 mb-1" />
+                  </div>
+                ))}
+              </div>
+            ) : events.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <CalendarIcon className="h-12 w-12 text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">No sessions scheduled yet</p>
+                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1.5" onClick={() => { resetForm(); setShowCreateDialog(true); }}>
+                  <Plus className="h-3.5 w-3.5" />
+                  Schedule First Session
+                </Button>
+              </div>
+            ) : (
             <div className="grid grid-cols-7 border-t border-l border-border">
               {calendarDays.map((day) => {
                 const dayEvents = getEventsForDay(day);
@@ -839,6 +792,7 @@ export function AdminLiveCohorts() {
                 );
               })}
             </div>
+            )}
 
             {/* Selected Day Detail */}
             <AnimatePresence>
@@ -942,6 +896,37 @@ export function AdminLiveCohorts() {
             {events.filter((e) => isAfter(parseISO(e.startDate), new Date())).length} sessions
           </Badge>
         </div>
+        {cohortsLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Card key={i}>
+                <Skeleton className="h-1.5 w-full rounded-none" />
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex justify-between">
+                    <Skeleton className="h-5 w-20" />
+                    <Skeleton className="h-5 w-16" />
+                  </div>
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                  <Skeleton className="h-3 w-1/3" />
+                  <Skeleton className="h-8 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : filteredEvents.filter((e) => isAfter(parseISO(e.startDate), new Date())).length === 0 ? (
+          <Card>
+            <CardContent className="p-8 flex flex-col items-center justify-center gap-3">
+              <CalendarDays className="h-10 w-10 text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground">No upcoming sessions</p>
+              <p className="text-xs text-muted-foreground">Schedule a new session to get started</p>
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1.5" onClick={() => { resetForm(); setShowCreateDialog(true); }}>
+                <Plus className="h-3.5 w-3.5" />
+                Schedule Session
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredEvents
             .filter((e) => isAfter(parseISO(e.startDate), new Date()))
@@ -1070,7 +1055,7 @@ export function AdminLiveCohorts() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50"
-                                  onClick={() => handleCancelEvent(event.id)}
+                                  onClick={() => setConfirmCancelEvent(event.id)}
                                 >
                                   <XCircle className="h-3.5 w-3.5" />
                                 </Button>
@@ -1100,34 +1085,57 @@ export function AdminLiveCohorts() {
               );
             })}
         </div>
+        )}
       </div>
 
       {/* List View (Table) */}
       {viewMode === 'list' && (
         <Card>
           <CardContent className="p-0">
+            {cohortsLoading ? (
+              <div className="p-4 space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="h-6 w-16" />
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-5 w-20" />
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                ))}
+              </div>
+            ) : sortedEvents.length === 0 ? (
+              <div className="p-8 flex flex-col items-center justify-center gap-3">
+                <List className="h-10 w-10 text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">No sessions found</p>
+                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1.5" onClick={() => { resetForm(); setShowCreateDialog(true); }}>
+                  <Plus className="h-3.5 w-3.5" />
+                  Schedule Session
+                </Button>
+              </div>
+            ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[100px]">Status</TableHead>
                   <TableHead>
                     <Button variant="ghost" size="sm" className="h-auto p-0 font-medium gap-1 hover:bg-transparent" onClick={() => handleSort('title')}>
-                      Title <SortIcon field="title" />
+                      Title {renderSortIcon('title')}
                     </Button>
                   </TableHead>
                   <TableHead>
                     <Button variant="ghost" size="sm" className="h-auto p-0 font-medium gap-1 hover:bg-transparent" onClick={() => handleSort('type')}>
-                      Type <SortIcon field="type" />
+                      Type {renderSortIcon('type')}
                     </Button>
                   </TableHead>
                   <TableHead>
                     <Button variant="ghost" size="sm" className="h-auto p-0 font-medium gap-1 hover:bg-transparent" onClick={() => handleSort('startDate')}>
-                      Date/Time <SortIcon field="startDate" />
+                      Date/Time {renderSortIcon('startDate')}
                     </Button>
                   </TableHead>
                   <TableHead>
                     <Button variant="ghost" size="sm" className="h-auto p-0 font-medium gap-1 hover:bg-transparent" onClick={() => handleSort('attendees')}>
-                      Attendees <SortIcon field="attendees" />
+                      Attendees {renderSortIcon('attendees')}
                     </Button>
                   </TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -1255,7 +1263,7 @@ export function AdminLiveCohorts() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50"
-                                  onClick={() => handleCancelEvent(event.id)}
+                                  onClick={() => setConfirmCancelEvent(event.id)}
                                 >
                                   <XCircle className="h-3.5 w-3.5" />
                                 </Button>
@@ -1270,6 +1278,7 @@ export function AdminLiveCohorts() {
                 })}
               </TableBody>
             </Table>
+            )}
           </CardContent>
         </Card>
       )}
@@ -1596,16 +1605,29 @@ export function AdminLiveCohorts() {
               </DialogClose>
               <Button
                 onClick={handleCreateEvent}
-                disabled={!newEvent.title || !eventDate}
+                disabled={!newEvent.title || !eventDate || createCohort.isPending}
                 className="bg-emerald-600 hover:bg-emerald-700 gap-2"
               >
                 <CalendarIcon className="h-4 w-4" />
-                Schedule Session
+                {createCohort.isPending ? 'Scheduling...' : 'Schedule Session'}
               </Button>
             </DialogFooter>
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmCancelEvent}
+        onOpenChange={(open) => { if (!open) setConfirmCancelEvent(null); }}
+        title="Cancel Event"
+        description="Are you sure you want to cancel this event? Participants will be notified and the event cannot be restored."
+        confirmLabel="Cancel Event"
+        variant="destructive"
+        onConfirm={() => {
+          if (confirmCancelEvent) handleCancelEvent(confirmCancelEvent);
+          setConfirmCancelEvent(null);
+        }}
+      />
     </div>
   );
 }

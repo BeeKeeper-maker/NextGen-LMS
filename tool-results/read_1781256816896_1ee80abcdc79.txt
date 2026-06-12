@@ -1,0 +1,2002 @@
+     1→'use client';
+     2→
+     3→import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell,
+     7→} from 'recharts';
+     8→import {
+     9→  Search, Filter, Plus, Edit3, Trash2, Eye, GripVertical,
+    10→  ChevronRight, ChevronLeft, ChevronDown, Clock, Target, Shuffle,
+    11→  CheckCircle2, XCircle, HelpCircle, Code, FileText,
+    12→  ArrowUpDown, Play, Save, Send, RotateCcw, X,
+    13→  AlertCircle, MoreHorizontal, Copy, Settings2,
+    14→  ListChecks, Timer, Award, BookOpen, Type, Hash,
+    15→  TrendingUp, TrendingDown, BarChart3, Layers, EyeOff,
+    16→  ArrowUp, ArrowDown, Database, Sparkles, Users,
+    17→  Loader2,
+    18→} from 'lucide-react';
+    19→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+    20→import { Button } from '@/components/ui/button';
+    21→import { Input } from '@/components/ui/input';
+    22→import { Textarea } from '@/components/ui/textarea';
+    23→import { Badge } from '@/components/ui/badge';
+    24→import { Switch } from '@/components/ui/switch';
+    25→import { Label } from '@/components/ui/label';
+    26→import { Separator } from '@/components/ui/separator';
+    27→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    28→import { ScrollArea } from '@/components/ui/scroll-area';
+    29→import {
+    30→  Dialog,
+    31→  DialogContent,
+    32→  DialogDescription,
+    33→  DialogHeader,
+    34→  DialogTitle,
+    35→  DialogFooter,
+    36→} from '@/components/ui/dialog';
+    37→import {
+    38→  Select,
+    39→  SelectContent,
+    40→  SelectItem,
+    41→  SelectTrigger,
+    42→  SelectValue,
+    43→} from '@/components/ui/select';
+    44→import {
+    45→  Table,
+    46→  TableBody,
+    47→  TableCell,
+    48→  TableHead,
+    49→  TableHeader,
+    50→  TableRow,
+    51→} from '@/components/ui/table';
+    52→import {
+    53→  Tooltip,
+    54→  TooltipContent,
+    55→  TooltipProvider,
+    56→  TooltipTrigger,
+    57→} from '@/components/ui/tooltip';
+    58→import { Progress } from '@/components/ui/progress';
+    59→import {
+    60→  useAssessments,
+    61→  useCreateAssessment,
+    62→  useUpdateAssessment,
+    63→  useDeleteAssessment,
+    64→  useCourses,
+    65→} from '@/hooks/use-data';
+    66→import { useAppStore } from '@/store/app-store';
+    67→import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+    68→import { slugify } from '@/lib/slugify';
+    69→import type { Assessment, Question } from '@/types';
+    70→
+    71→// ---- Helper: Parse API assessment data ----
+    72→function parseQuestions(raw: any[]): Question[] {
+    73→  if (!Array.isArray(raw)) return [];
+    74→  return raw.map((q: any) => ({
+    75→    id: q.id,
+    76→    assessmentId: q.assessmentId,
+    77→    type: q.type,
+    78→    question: q.question,
+    79→    options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options,
+    80→    correctAnswer: typeof q.correctAnswer === 'string' ? JSON.parse(q.correctAnswer) : q.correctAnswer,
+    81→    explanation: q.explanation,
+    82→    points: q.points,
+    83→    orderIndex: q.orderIndex,
+    84→    poolGroup: q.poolGroup,
+    85→    difficulty: q.difficulty,
+    86→  }));
+    87→}
+    88→
+    89→function mapAssessmentFromApi(apiData: any): Assessment {
+    90→  return {
+    91→    id: apiData.id,
+    92→    courseId: apiData.courseId,
+    93→    tenantId: apiData.tenantId,
+    94→    title: apiData.title,
+    95→    description: apiData.description,
+    96→    type: apiData.type,
+    97→    passingScore: apiData.passingScore,
+    98→    maxAttempts: apiData.maxAttempts,
+    99→    timeLimit: apiData.timeLimit,
+   100→    isPublished: apiData.isPublished,
+   101→    shuffleQuestions: apiData.shuffleQuestions,
+   102→    questions: parseQuestions(apiData.questions),
+   103→  };
+   104→}
+   105→
+   106→// ---- Helper types ----
+   107→type ViewMode = 'list' | 'builder' | 'preview' | 'analytics';
+   108→type SortField = 'name' | 'date' | 'submissions' | 'avgScore';
+   109→
+   110→interface QuestionFormData {
+   111→  type: Question['type'];
+   112→  question: string;
+   113→  options: string[];
+   114→  correctAnswer: string;
+   115→  explanation: string;
+   116→  points: number;
+   117→  difficulty: Question['difficulty'];
+   118→  poolGroup: string;
+   119→  timeLimit: number;
+   120→  section: string;
+   121→}
+   122→
+   123→interface QuestionBankItem extends Question {
+   124→  category: string;
+   125→  timesAnswered: number;
+   126→  correctPercent: number;
+   127→  avgTimeSeconds: number;
+   128→  discriminationIndex: number;
+   129→  distractorCounts: Record<string, number>;
+   130→}
+   131→
+   132→const emptyQuestionForm: QuestionFormData = {
+   133→  type: 'multiple_choice',
+   134→  question: '',
+   135→  options: ['', '', '', ''],
+   136→  correctAnswer: '',
+   137→  explanation: '',
+   138→  points: 1,
+   139→  difficulty: 'medium',
+   140→  poolGroup: '',
+   141→  timeLimit: 0,
+   142→  section: '',
+   143→};
+   144→
+   145→// ---- Demo Question Bank Data ----
+   146→const questionBank: QuestionBankItem[] = [
+   147→  {
+   148→    id: 'bank-1', assessmentId: '', type: 'multiple_choice',
+   149→    question: 'What is the virtual DOM in React?',
+   150→    options: ['A direct copy of the browser DOM', 'A lightweight representation of the real DOM', 'A CSS framework', 'A testing tool'],
+   151→    correctAnswer: '1', explanation: 'The virtual DOM is a lightweight copy of the actual DOM that React uses for efficient updates.',
+   152→    points: 2, orderIndex: 0, difficulty: 'easy', poolGroup: 'React Basics', category: 'Web Development',
+   153→    timesAnswered: 245, correctPercent: 78, avgTimeSeconds: 32, discriminationIndex: 0.65,
+   154→    distractorCounts: { '0': 45, '2': 8, '3': 1 },
+   155→  },
+   156→  {
+   157→    id: 'bank-2', assessmentId: '', type: 'multiple_choice',
+   158→    question: 'Which hook is used for side effects in React?',
+   159→    options: ['useState', 'useEffect', 'useContext', 'useReducer'],
+   160→    correctAnswer: '1', explanation: 'useEffect is the hook designed for handling side effects like data fetching, subscriptions, etc.',
+   161→    points: 2, orderIndex: 1, difficulty: 'easy', poolGroup: 'React Hooks', category: 'Web Development',
+   162→    timesAnswered: 312, correctPercent: 89, avgTimeSeconds: 18, discriminationIndex: 0.72,
+   163→    distractorCounts: { '0': 22, '2': 10, '3': 3 },
+   164→  },
+   165→  {
+   166→    id: 'bank-3', assessmentId: '', type: 'true_false',
+   167→    question: 'React Server Components can use useState hook.',
+   168→    options: ['True', 'False'],
+   169→    correctAnswer: '1', explanation: 'Server Components cannot use hooks like useState as they run only on the server.',
+   170→    points: 1, orderIndex: 2, difficulty: 'medium', poolGroup: 'RSC', category: 'Web Development',
+   171→    timesAnswered: 178, correctPercent: 42, avgTimeSeconds: 45, discriminationIndex: 0.81,
+   172→    distractorCounts: { '0': 103 },
+   173→  },
+   174→  {
+   175→    id: 'bank-4', assessmentId: '', type: 'multiple_choice',
+   176→    question: 'What is the time complexity of accessing an element in a hash map?',
+   177→    options: ['O(n)', 'O(1) average', 'O(log n)', 'O(n log n)'],
+   178→    correctAnswer: '1', explanation: 'Hash maps provide O(1) average time complexity for lookups.',
+   179→    points: 2, orderIndex: 3, difficulty: 'hard', poolGroup: 'Data Structures', category: 'Computer Science',
+   180→    timesAnswered: 198, correctPercent: 67, avgTimeSeconds: 55, discriminationIndex: 0.88,
+   181→    distractorCounts: { '0': 32, '2': 28, '3': 5 },
+   182→  },
+   183→  {
+   184→    id: 'bank-5', assessmentId: '', type: 'short_answer',
+   185→    question: 'What does SQL stand for?',
+   186→    correctAnswer: 'Structured Query Language',
+   187→    explanation: 'SQL stands for Structured Query Language, used for managing relational databases.',
+   188→    points: 1, orderIndex: 4, difficulty: 'easy', poolGroup: 'Databases', category: 'Computer Science',
+   189→    timesAnswered: 420, correctPercent: 91, avgTimeSeconds: 12, discriminationIndex: 0.45,
+   190→    distractorCounts: {},
+   191→  },
+   192→  {
+   193→    id: 'bank-6', assessmentId: '', type: 'multiple_choice',
+   194→    question: 'Which HTTP method is idempotent?',
+   195→    options: ['POST', 'PUT', 'PATCH', 'None of the above'],
+   196→    correctAnswer: '1', explanation: 'PUT is idempotent - making the same request multiple times produces the same result.',
+   197→    points: 3, orderIndex: 5, difficulty: 'hard', poolGroup: 'APIs', category: 'Web Development',
+   198→    timesAnswered: 156, correctPercent: 38, avgTimeSeconds: 68, discriminationIndex: 0.91,
+   199→    distractorCounts: { '0': 52, '2': 40, '3': 5 },
+   200→  },
+   201→  {
+   202→    id: 'bank-7', assessmentId: '', type: 'multiple_choice',
+   203→    question: 'What is the purpose of the keyof operator in TypeScript?',
+   204→    options: ['Create new keys', 'Extract union of keys from a type', 'Delete keys from objects', 'Iterate over keys'],
+   205→    correctAnswer: '1', explanation: 'keyof creates a union type from the keys of a given type.',
+   206→    points: 2, orderIndex: 6, difficulty: 'medium', poolGroup: 'TypeScript', category: 'Web Development',
+   207→    timesAnswered: 134, correctPercent: 56, avgTimeSeconds: 40, discriminationIndex: 0.77,
+   208→    distractorCounts: { '0': 18, '2': 32, '3': 9 },
+   209→  },
+   210→  {
+   211→    id: 'bank-8', assessmentId: '', type: 'true_false',
+   212→    question: 'Prisma ORM supports MongoDB as a database provider.',
+   213→    options: ['True', 'False'],
+   214→    correctAnswer: '0', explanation: 'Prisma does support MongoDB as a database provider since version 3.0.',
+   215→    points: 1, orderIndex: 7, difficulty: 'easy', poolGroup: 'Databases', category: 'Web Development',
+   216→    timesAnswered: 89, correctPercent: 35, avgTimeSeconds: 22, discriminationIndex: 0.58,
+   217→    distractorCounts: { '1': 58 },
+   218→  },
+   219→];
+   220→
+   221→// ---- Glassmorphism Card Utility ----
+   222→const glassCard = 'bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-white/20 dark:border-slate-700/30 shadow-lg';
+   223→
+   224→// ---- Animated Counter ----
+   225→function AnimatedCounter({ value, duration = 1200 }: { value: number; duration?: number }) {
+   226→  const [display, setDisplay] = useState(0);
+   227→  const startRef = useRef<number | null>(null);
+   228→
+   229→  useEffect(() => {
+   230→    startRef.current = null;
+   231→    const step = (timestamp: number) => {
+   232→      if (!startRef.current) startRef.current = timestamp;
+   233→      const progress = Math.min((timestamp - startRef.current) / duration, 1);
+   234→      setDisplay(Math.floor(progress * value));
+   235→      if (progress < 1) requestAnimationFrame(step);
+   236→    };
+   237→    requestAnimationFrame(step);
+   238→  }, [value, duration]);
+   239→
+   240→  return <>{display}</>;
+   241→}
+   242→
+   243→// ---- Icon helpers ----
+   244→function TypeIcon({ type, className = 'h-4 w-4' }: { type: string; className?: string }) {
+   245→  switch (type) {
+   246→    case 'quiz': return <ListChecks className={className} />;
+   247→    case 'assignment': return <FileText className={className} />;
+   248→    case 'peer_review': return <HelpCircle className={className} />;
+   249→    case 'coding': return <Code className={className} />;
+   250→    case 'file_upload': return <BookOpen className={className} />;
+   251→    case 'multiple_choice': return <ListChecks className={className} />;
+   252→    case 'true_false': return <CheckCircle2 className={className} />;
+   253→    case 'short_answer': return <Type className={className} />;
+   254→    case 'long_answer': return <FileText className={className} />;
+   255→    default: return <HelpCircle className={className} />;
+   256→  }
+   257→}
+   258→
+   259→const difficultyStyles: Record<string, string> = {
+   260→  easy: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+   261→  medium: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+   262→  hard: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800',
+   263→  expert: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800',
+   264→};
+   265→
+   266→function DifficultyBadge({ difficulty }: { difficulty: string }) {
+   267→  return <Badge variant="outline" className={`${difficultyStyles[difficulty] ?? ''} text-xs font-medium`}>{difficulty}</Badge>;
+   268→}
+   269→
+   270→const typeBadgeStyles: Record<string, string> = {
+   271→  quiz: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 border-violet-200 dark:border-violet-800',
+   272→  assignment: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+   273→  peer_review: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+   274→  coding: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+   275→  file_upload: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 border-rose-200 dark:border-rose-800',
+   276→};
+   277→
+   278→const questionTypeStyles: Record<string, string> = {
+   279→  multiple_choice: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+   280→  true_false: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 border-teal-200 dark:border-teal-800',
+   281→  short_answer: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-800',
+   282→  long_answer: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400 border-pink-200 dark:border-pink-800',
+   283→  coding: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+   284→  file_upload: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 border-rose-200 dark:border-rose-800',
+   285→};
+   286→
+   287→function AssessmentTypeBadge({ type }: { type: string }) {
+   288→  return (
+   289→    <Badge variant="outline" className={`${typeBadgeStyles[type] ?? ''} text-xs gap-1`}>
+   290→      <TypeIcon type={type} className="h-3 w-3" />
+   291→      {type.replace('_', ' ')}
+   292→    </Badge>
+   293→  );
+   294→}
+   295→
+   296→function QuestionTypeBadge({ type }: { type: string }) {
+   297→  return (
+   298→    <Badge variant="outline" className={`${questionTypeStyles[type] ?? ''} text-xs gap-1`}>
+   299→      <TypeIcon type={type} className="h-3 w-3" />
+   300→      {type.replace('_', ' ')}
+   301→    </Badge>
+   302→  );
+   303→}
+   304→
+   305→function StatusBadge({ isPublished }: { isPublished: boolean }) {
+   306→  return isPublished
+   307→    ? (
+   308→      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs gap-1">
+   309→        <span className="relative flex h-2 w-2">
+   310→          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+   311→          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+   312→        </span>
+   313→        Active
+   314→      </Badge>
+   315→    )
+   316→    : <Badge variant="outline" className="text-xs text-muted-foreground">Draft</Badge>;
+   317→}
+   318→
+   319→function getCourseTitle(courseId: string, courses: any[]) {
+   320→  const course = courses.find(c => c.id === courseId);
+   321→  return course?.title ?? 'Unknown Course';
+   322→}
+   323→
+   324→function getCourseCategory(courseId: string, courses: any[]) {
+   325→  const course = courses.find(c => c.id === courseId);
+   326→  return course?.category ?? '';
+   327→}
+   328→
+   329→// ---- Difficulty Distribution Chart ----
+   330→function DifficultyDistributionChart({ questions }: { questions: Question[] }) {
+   331→  const data = useMemo(() => {
+   332→    const counts: Record<string, number> = { easy: 0, medium: 0, hard: 0 };
+   333→    questions.forEach(q => { counts[q.difficulty] = (counts[q.difficulty] || 0) + 1; });
+   334→    return [
+   335→      { name: 'Easy', value: counts.easy, color: '#10b981' },
+   336→      { name: 'Medium', value: counts.medium, color: '#f59e0b' },
+   337→      { name: 'Hard', value: counts.hard, color: '#ef4444' },
+   338→    ];
+   339→  }, [questions]);
+   340→
+   341→  if (questions.length === 0) return null;
+   342→
+   343→  return (
+   344→    <div className="h-48">
+   345→      <ResponsiveContainer width="100%" height="100%">
+   346→        <BarChart data={data} barSize={48}>
+   347→          <XAxis dataKey="name" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+   348→          <YAxis allowDecimals={false} tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+   349→          <RechartsTooltip
+   350→            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+   351→          />
+   352→          <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+   353→            {data.map((entry, idx) => (
+   354→              <Cell key={idx} fill={entry.color} />
+   355→            ))}
+   356→          </Bar>
+   357→        </BarChart>
+   358→      </ResponsiveContainer>
+   359→    </div>
+   360→  );
+   361→}
+   362→
+   363→// ---- Per-Question Statistics ----
+   364→function QuestionStatsPanel({ questions }: { questions: Question[] }) {
+   365→  // Generate simulated stats for each question
+   366→  const stats = useMemo(() => {
+   367→    return questions.map((q, idx) => {
+   368→      const seed = q.id.charCodeAt(q.id.length - 1);
+   369→      const timesAnswered = 45 + (seed * 13) % 200;
+   370→      const correctPercent = q.difficulty === 'easy' ? 70 + (seed % 25) : q.difficulty === 'medium' ? 45 + (seed % 30) : 20 + (seed % 35);
+   371→      const avgTime = q.difficulty === 'easy' ? 15 + (seed % 20) : q.difficulty === 'medium' ? 30 + (seed % 40) : 50 + (seed % 60);
+   372→      const discriminationIndex = +(0.3 + ((seed * 7) % 60) / 100).toFixed(2);
+   373→      const distractorCounts: Record<string, number> = {};
+   374→      if (q.type === 'multiple_choice' && q.options) {
+   375→        q.options.forEach((_, oi) => {
+   376→          if (String(oi) !== q.correctAnswer) {
+   377→            distractorCounts[String(oi)] = Math.floor((100 - correctPercent) * (0.2 + ((oi * 13 + seed) % 50) / 100));
+   378→          }
+   379→        });
+   380→      }
+   381→      return { ...q, timesAnswered, correctPercent, avgTime, discriminationIndex, distractorCounts, idx };
+   382→    });
+   383→  }, [questions]);
+   384→
+   385→  const getColorClass = (pct: number) => {
+   386→    if (pct > 80) return 'text-emerald-600 dark:text-emerald-400';
+   387→    if (pct >= 50) return 'text-amber-600 dark:text-amber-400';
+   388→    return 'text-red-600 dark:text-red-400';
+   389→  };
+   390→
+   391→  const getBgClass = (pct: number) => {
+   392→    if (pct > 80) return 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800';
+   393→    if (pct >= 50) return 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800';
+   394→    return 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800';
+   395→  };
+   396→
+   397→  const getDiscriminationLabel = (di: number) => {
+   398→    if (di >= 0.7) return { text: 'Excellent', cls: 'text-emerald-600 dark:text-emerald-400' };
+   399→    if (di >= 0.4) return { text: 'Good', cls: 'text-amber-600 dark:text-amber-400' };
+   400→    return { text: 'Poor', cls: 'text-red-600 dark:text-red-400' };
+   401→  };
+   402→
+   403→  return (
+   404→    <div className="space-y-3 max-h-96 overflow-y-auto pr-1 custom-scrollbar">
+   405→      {stats.map((s, i) => {
+   406→        const disc = getDiscriminationLabel(s.discriminationIndex);
+   407→        return (
+   408→          <motion.div
+   409→            key={s.id}
+   410→            initial={{ opacity: 0, y: 8 }}
+   411→            animate={{ opacity: 1, y: 0 }}
+   412→            transition={{ delay: i * 0.05 }}
+   413→            className={`p-3 rounded-lg border ${getBgClass(s.correctPercent)} transition-all hover:shadow-md`}
+   414→          >
+   415→            <div className="flex items-start justify-between gap-2">
+   416→              <div className="flex-1 min-w-0">
+   417→                <div className="flex items-center gap-2 mb-1">
+   418→                  <span className="text-xs font-mono text-muted-foreground">Q{s.idx + 1}</span>
+   419→                  <QuestionTypeBadge type={s.type} />
+   420→                  <DifficultyBadge difficulty={s.difficulty} />
+   421→                </div>
+   422→                <p className="text-sm font-medium truncate">{s.question}</p>
+   423→              </div>
+   424→              <div className="text-right shrink-0">
+   425→                <div className={`text-lg font-bold ${getColorClass(s.correctPercent)}`}>{s.correctPercent}%</div>
+   426→                <div className="text-xs text-muted-foreground">correct</div>
+   427→              </div>
+   428→            </div>
+   429→
+   430→            <div className="grid grid-cols-3 gap-3 mt-2 pt-2 border-t border-black/5 dark:border-white/5">
+   431→              <div className="text-center">
+   432→                <div className="text-sm font-semibold">{s.timesAnswered}</div>
+   433→                <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+   434→                  <Users className="h-3 w-3" /> answered
+   435→                </div>
+   436→              </div>
+   437→              <div className="text-center">
+   438→                <div className="text-sm font-semibold">{s.avgTime}s</div>
+   439→                <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+   440→                  <Clock className="h-3 w-3" /> avg time
+   441→                </div>
+   442→              </div>
+   443→              <div className="text-center">
+   444→                <div className={`text-sm font-semibold ${disc.cls}`}>{s.discriminationIndex}</div>
+   445→                <div className="text-xs text-muted-foreground">{disc.text}</div>
+   446→              </div>
+   447→            </div>
+   448→
+   449→            {/* Distractor analysis */}
+   450→            {s.type === 'multiple_choice' && s.options && Object.keys(s.distractorCounts).length > 0 && (
+   451→              <div className="mt-2 pt-2 border-t border-black/5 dark:border-white/5">
+   452→                <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
+   453→                  <AlertCircle className="h-3 w-3" /> Distractor Analysis
+   454→                </div>
+   455→                <div className="space-y-1">
+   456→                  {Object.entries(s.distractorCounts)
+   457→                    .sort(([, a], [, b]) => b - a)
+   458→                    .slice(0, 3)
+   459→                    .map(([optIdx, count]) => (
+   460→                      <div key={optIdx} className="flex items-center gap-2 text-xs">
+   461→                        <div className="w-2 h-2 rounded-full bg-red-400" />
+   462→                        <span className="truncate max-w-[180px] text-muted-foreground">
+   463→                          {s.options?.[Number(optIdx)] ?? `Option ${Number(optIdx) + 1}`}
+   464→                        </span>
+   465→                        <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+   466→                          <div className="h-full bg-red-400/60 rounded-full" style={{ width: `${Math.min(100, (count / s.timesAnswered) * 200)}%` }} />
+   467→                        </div>
+   468→                        <span className="text-muted-foreground shrink-0">{count}</span>
+   469→                      </div>
+   470→                    ))}
+   471→                </div>
+   472→              </div>
+   473→            )}
+   474→          </motion.div>
+   475→        );
+   476→      })}
+   477→    </div>
+   478→  );
+   479→}
+   480→
+   481→// ==========================
+   482→// QUESTION DIFFICULTY ANALYSIS PANEL
+   483→// ==========================
+   484→function QuestionDifficultyAnalysis({ assessment, onClose }: { assessment: Assessment; onClose: () => void }) {
+   485→  const questions = assessment.questions ?? [];
+   486→
+   487→  return (
+   488→    <motion.div
+   489→      initial={{ opacity: 0, y: 20 }}
+   490→      animate={{ opacity: 1, y: 0 }}
+   491→      exit={{ opacity: 0, y: 20 }}
+   492→      className="space-y-6"
+   493→    >
+   494→      {/* Header */}
+   495→      <div className="flex items-center justify-between">
+   496→        <div className="flex items-center gap-3">
+   497→          <Button variant="ghost" size="icon" onClick={onClose}>
+   498→            <ChevronLeft className="h-5 w-5" />
+   499→          </Button>
+   500→          <div>
+   501→            <h2 className="text-2xl font-bold bg-gradient-to-r from-violet-600 to-rose-500 bg-clip-text text-transparent">
+   502→              Question Analytics
+   503→            </h2>
+   504→            <p className="text-sm text-muted-foreground">{assessment.title}</p>
+   505→          </div>
+   506→        </div>
+   507→      </div>
+   508→
+   509→      {questions.length === 0 ? (
+   510→        <Card className={glassCard}>
+   511→          <CardContent className="p-8 text-center">
+   512→            <BarChart3 className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
+   513→            <p className="text-muted-foreground">No questions to analyze. Add questions to see analytics.</p>
+   514→          </CardContent>
+   515→        </Card>
+   516→      ) : (
+   517→        <Tabs defaultValue="distribution" className="space-y-4">
+   518→          <TabsList>
+   519→            <TabsTrigger value="distribution" className="gap-1.5">
+   520→              <BarChart3 className="h-3.5 w-3.5" /> Distribution
+   521→            </TabsTrigger>
+   522→            <TabsTrigger value="details" className="gap-1.5">
+   523→              <ListChecks className="h-3.5 w-3.5" /> Per-Question Stats
+   524→            </TabsTrigger>
+   525→          </TabsList>
+   526→
+   527→          <TabsContent value="distribution">
+   528→            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+   529→              {/* Difficulty Distribution Chart */}
+   530→              <Card className={glassCard}>
+   531→                <CardHeader className="pb-2">
+   532→                  <CardTitle className="text-base bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent">
+   533→                    Difficulty Distribution
+   534→                  </CardTitle>
+   535→                  <CardDescription>Breakdown of question difficulty levels</CardDescription>
+   536→                </CardHeader>
+   537→                <CardContent>
+   538→                  <DifficultyDistributionChart questions={questions} />
+   539→                  <div className="flex items-center justify-center gap-4 mt-2">
+   540→                    {[
+   541→                      { label: 'Easy', color: 'bg-emerald-500', count: questions.filter(q => q.difficulty === 'easy').length },
+   542→                      { label: 'Medium', color: 'bg-amber-500', count: questions.filter(q => q.difficulty === 'medium').length },
+   543→                      { label: 'Hard', color: 'bg-red-500', count: questions.filter(q => q.difficulty === 'hard').length },
+   544→                    ].map(d => (
+   545→                      <div key={d.label} className="flex items-center gap-1.5 text-xs">
+   546→                        <div className={`w-2.5 h-2.5 rounded ${d.color}`} />
+   547→                        <span>{d.label}: {d.count}</span>
+   548→                      </div>
+   549→                    ))}
+   550→                  </div>
+   551→                </CardContent>
+   552→              </Card>
+   553→
+   554→              {/* Summary Stats */}
+   555→              <Card className={glassCard}>
+   556→                <CardHeader className="pb-2">
+   557→                  <CardTitle className="text-base bg-gradient-to-r from-violet-500 to-purple-500 bg-clip-text text-transparent">
+   558→                    Quick Insights
+   559→                  </CardTitle>
+   560→                  <CardDescription>Key metrics at a glance</CardDescription>
+   561→                </CardHeader>
+   562→                <CardContent className="space-y-4">
+   563→                  <div className="grid grid-cols-2 gap-3">
+   564→                    {[
+   565→                      { label: 'Total Questions', value: questions.length, icon: HelpCircle, gradient: 'from-violet-500 to-purple-500' },
+   566→                      { label: 'Total Points', value: questions.reduce((s, q) => s + q.points, 0), icon: Target, gradient: 'from-amber-500 to-orange-500' },
+   567→                      { label: 'Question Types', value: new Set(questions.map(q => q.type)).size, icon: Layers, gradient: 'from-emerald-500 to-teal-500' },
+   568→                      { label: 'Hardest Question', value: questions.filter(q => q.difficulty === 'hard').length > 0 ? 'Hard' : questions.filter(q => q.difficulty === 'medium').length > 0 ? 'Medium' : 'Easy', icon: AlertCircle, gradient: 'from-rose-500 to-red-500' },
+   569→                    ].map((stat, i) => (
+   570→                      <motion.div
+   571→                        key={stat.label}
+   572→                        initial={{ opacity: 0, scale: 0.9 }}
+   573→                        animate={{ opacity: 1, scale: 1 }}
+   574→                        transition={{ delay: 0.2 + i * 0.1 }}
+   575→                        className={`p-3 rounded-lg ${glassCard}`}
+   576→                      >
+   577→                        <div className={`h-7 w-7 rounded-md bg-gradient-to-br ${stat.gradient} flex items-center justify-center mb-1.5`}>
+   578→                          <stat.icon className="h-3.5 w-3.5 text-white" />
+   579→                        </div>
+   580→                        <div className="text-lg font-bold">{stat.value}</div>
+   581→                        <div className="text-xs text-muted-foreground">{stat.label}</div>
+   582→                      </motion.div>
+   583→                    ))}
+   584→                  </div>
+   585→
+   586→                  {/* Point Distribution */}
+   587→                  <div>
+   588→                    <div className="text-xs font-medium text-muted-foreground mb-2">Points by Difficulty</div>
+   589→                    {['easy', 'medium', 'hard'].map(d => {
+   590→                      const pts = questions.filter(q => q.difficulty === d).reduce((s, q) => s + q.points, 0);
+   591→                      const totalPts = questions.reduce((s, q) => s + q.points, 0) || 1;
+   592→                      return (
+   593→                        <div key={d} className="flex items-center gap-2 mb-1.5">
+   594→                          <span className="text-xs capitalize w-14">{d}</span>
+   595→                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+   596→                            <motion.div
+   597→                              initial={{ width: 0 }}
+   598→                              animate={{ width: `${(pts / totalPts) * 100}%` }}
+   599→                              transition={{ duration: 0.8, delay: 0.3 }}
+   600→                              className={`h-full rounded-full ${d === 'easy' ? 'bg-emerald-500' : d === 'medium' ? 'bg-amber-500' : 'bg-red-500'}`}
+   601→                            />
+   602→                          </div>
+   603→                          <span className="text-xs font-medium w-8 text-right">{pts}pt{pts !== 1 ? 's' : ''}</span>
+   604→                        </div>
+   605→                      );
+   606→                    })}
+   607→                  </div>
+   608→                </CardContent>
+   609→              </Card>
+   610→            </div>
+   611→          </TabsContent>
+   612→
+   613→          <TabsContent value="details">
+   614→            <Card className={glassCard}>
+   615→              <CardHeader className="pb-2">
+   616→                <CardTitle className="text-base bg-gradient-to-r from-rose-500 to-orange-500 bg-clip-text text-transparent">
+   617→                  Per-Question Performance
+   618→                </CardTitle>
+   619→                <CardDescription>
+   620→                  Detailed statistics for each question. Color indicates correctness rate: green (&gt;80%), yellow (50-80%), red (&lt;50%)
+   621→                </CardDescription>
+   622→              </CardHeader>
+   623→              <CardContent>
+   624→                <QuestionStatsPanel questions={questions} />
+   625→              </CardContent>
+   626→            </Card>
+   627→          </TabsContent>
+   628→        </Tabs>
+   629→      )}
+   630→    </motion.div>
+   631→  );
+   632→}
+   633→
+   634→// ==========================
+   635→// ASSESSMENT LIST VIEW (ENHANCED)
+   636→// ==========================
+   637→function AssessmentList({
+   638→  assessments,
+   639→  courses,
+   640→  onEdit,
+   641→  onPreview,
+   642→  onCreateNew,
+   643→  onViewAnalytics,
+   644→  onDelete,
+   645→}: {
+   646→  assessments: Assessment[];
+   647→  courses: any[];
+   648→  onEdit: (a: Assessment) => void;
+   649→  onPreview: (a: Assessment) => void;
+   650→  onCreateNew: () => void;
+   651→  onViewAnalytics: (a: Assessment) => void;
+   652→  onDelete: (a: Assessment) => void;
+   653→}) {
+   654→  const [search, setSearch] = useState('');
+   655→  const [typeFilter, setTypeFilter] = useState<string>('all');
+   656→  const [statusFilter, setStatusFilter] = useState<string>('all');
+   657→  const [sortField, setSortField] = useState<SortField>('name');
+   658→  const [sortAsc, setSortAsc] = useState(true);
+   659→  const [quickPreviewId, setQuickPreviewId] = useState<string | null>(null);
+   660→  const [viewMode, setViewMode] = useState<'table' | 'cards'>('cards');
+   661→
+   662→  const filtered = assessments.filter(a => {
+   663→    const matchesSearch = a.title.toLowerCase().includes(search.toLowerCase()) ||
+   664→      a.description?.toLowerCase().includes(search.toLowerCase());
+   665→    const matchesType = typeFilter === 'all' || a.type === typeFilter;
+   666→    const matchesStatus = statusFilter === 'all' ||
+   667→      (statusFilter === 'published' && a.isPublished) ||
+   668→      (statusFilter === 'draft' && !a.isPublished);
+   669→    return matchesSearch && matchesType && matchesStatus;
+   670→  });
+   671→
+   672→  // Simulated stats
+   673→  const getSimStats = (a: Assessment) => {
+   674→    const seed = a.id.charCodeAt(a.id.length - 1);
+   675→    return {
+   676→      submissions: 12 + (seed * 7) % 156,
+   677→      avgScore: 55 + (seed * 3) % 35,
+   678→      passRate: 50 + (seed * 5) % 40,
+   679→    };
+   680→  };
+   681→
+   682→  const sorted = [...filtered].sort((a, b) => {
+   683→    let cmp = 0;
+   684→    const sa = getSimStats(a);
+   685→    const sb = getSimStats(b);
+   686→    switch (sortField) {
+   687→      case 'name': cmp = a.title.localeCompare(b.title); break;
+   688→      case 'date': cmp = a.id.localeCompare(b.id); break;
+   689→      case 'submissions': cmp = sa.submissions - sb.submissions; break;
+   690→      case 'avgScore': cmp = sa.avgScore - sb.avgScore; break;
+   691→    }
+   692→    return sortAsc ? cmp : -cmp;
+   693→  });
+   694→
+   695→  const toggleSort = (field: SortField) => {
+   696→    if (sortField === field) setSortAsc(!sortAsc);
+   697→    else { setSortField(field); setSortAsc(true); }
+   698→  };
+   699→
+   700→
+   701→
+   702→  const totalSubmissions = assessments.reduce((s, a) => s + getSimStats(a).submissions, 0);
+   703→  const avgScore = Math.round(assessments.reduce((s, a) => s + getSimStats(a).avgScore, 0) / (assessments.length || 1));
+   704→  const passRate = Math.round(assessments.reduce((s, a) => s + getSimStats(a).passRate, 0) / (assessments.length || 1));
+   705→
+   706→  return (
+   707→    <div className="space-y-6">
+   708→      {/* Gradient Header */}
+   709→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+   710→        <div>
+   711→          <h2 className="text-2xl font-bold bg-gradient-to-r from-violet-600 via-purple-600 to-rose-500 bg-clip-text text-transparent">
+   712→            Assessments
+   713→          </h2>
+   714→          <p className="text-muted-foreground text-sm mt-1">Create and manage quizzes, assignments, and coding challenges</p>
+   715→        </div>
+   716→        <Button onClick={onCreateNew} className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white gap-2 shadow-lg shadow-violet-500/20">
+   717→          <Plus className="h-4 w-4" /> Create Assessment
+   718→        </Button>
+   719→      </div>
+   720→
+   721→      {/* Animated Stats Row */}
+   722→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+   723→        {[
+   724→          { label: 'Total Assessments', value: assessments.length, icon: ListChecks, gradient: 'from-violet-500 to-purple-500' },
+   725→          { label: 'Total Submissions', value: totalSubmissions, icon: Send, gradient: 'from-emerald-500 to-teal-500' },
+   726→          { label: 'Avg Score', value: avgScore, icon: Target, gradient: 'from-amber-500 to-orange-500', suffix: '%' },
+   727→          { label: 'Pass Rate', value: passRate, icon: Award, gradient: 'from-rose-500 to-pink-500', suffix: '%' },
+   728→        ].map((stat, i) => (
+   729→          <motion.div
+   730→            key={stat.label}
+   731→            initial={{ opacity: 0, y: 12, scale: 0.95 }}
+   732→            animate={{ opacity: 1, y: 0, scale: 1 }}
+   733→            transition={{ delay: 0.1 + i * 0.1, type: 'spring', stiffness: 200 }}
+   734→          >
+   735→            <Card className={`${glassCard} overflow-hidden group hover:shadow-xl transition-all duration-300`}>
+   736→              <CardContent className="p-4 flex items-center gap-3">
+   737→                <div className={`p-2.5 rounded-xl bg-gradient-to-br ${stat.gradient} shadow-lg group-hover:scale-110 transition-transform duration-300`}>
+   738→                  <stat.icon className="h-5 w-5 text-white" />
+   739→                </div>
+   740→                <div>
+   741→                  <div className="text-2xl font-bold">
+   742→                    <AnimatedCounter value={stat.value} />
+   743→                    {stat.suffix ?? ''}
+   744→                  </div>
+   745→                  <div className="text-xs text-muted-foreground">{stat.label}</div>
+   746→                </div>
+   747→              </CardContent>
+   748→            </Card>
+   749→          </motion.div>
+   750→        ))}
+   751→      </div>
+   752→
+   753→      {/* Filters */}
+   754→      <Card className={glassCard}>
+   755→        <CardContent className="p-4">
+   756→          <div className="flex flex-col sm:flex-row gap-3">
+   757→            <div className="relative flex-1">
+   758→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   759→              <Input
+   760→                placeholder="Search assessments..."
+   761→                value={search}
+   762→                onChange={e => setSearch(e.target.value)}
+   763→                className="pl-9"
+   764→              />
+   765→            </div>
+   766→            <Select value={typeFilter} onValueChange={setTypeFilter}>
+   767→              <SelectTrigger className="w-[160px]">
+   768→                <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
+   769→                <SelectValue placeholder="Type" />
+   770→              </SelectTrigger>
+   771→              <SelectContent>
+   772→                <SelectItem value="all">All Types</SelectItem>
+   773→                <SelectItem value="quiz">Quiz</SelectItem>
+   774→                <SelectItem value="assignment">Assignment</SelectItem>
+   775→                <SelectItem value="peer_review">Peer Review</SelectItem>
+   776→                <SelectItem value="coding">Coding</SelectItem>
+   777→                <SelectItem value="file_upload">File Upload</SelectItem>
+   778→              </SelectContent>
+   779→            </Select>
+   780→            <Select value={statusFilter} onValueChange={setStatusFilter}>
+   781→              <SelectTrigger className="w-[150px]">
+   782→                <SelectValue placeholder="Status" />
+   783→              </SelectTrigger>
+   784→              <SelectContent>
+   785→                <SelectItem value="all">All Status</SelectItem>
+   786→                <SelectItem value="published">Published</SelectItem>
+   787→                <SelectItem value="draft">Draft</SelectItem>
+   788→              </SelectContent>
+   789→            </Select>
+   790→            <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+   791→              <Button variant={viewMode === 'cards' ? 'default' : 'ghost'} size="sm" className="h-7 px-2.5" onClick={() => setViewMode('cards')}>
+   792→                <Layers className="h-3.5 w-3.5" />
+   793→              </Button>
+   794→              <Button variant={viewMode === 'table' ? 'default' : 'ghost'} size="sm" className="h-7 px-2.5" onClick={() => setViewMode('table')}>
+   795→                <ListChecks className="h-3.5 w-3.5" />
+   796→              </Button>
+   797→            </div>
+   798→          </div>
+   799→
+   800→          {/* Sort Buttons */}
+   801→          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-black/5 dark:border-white/5">
+   802→            <span className="text-xs text-muted-foreground">Sort by:</span>
+   803→            {([
+   804→              { field: 'name' as SortField, label: 'Name' },
+   805→              { field: 'date' as SortField, label: 'Date' },
+   806→              { field: 'submissions' as SortField, label: 'Submissions' },
+   807→              { field: 'avgScore' as SortField, label: 'Avg Score' },
+   808→            ]).map(s => (
+   809→              <Button key={s.field} variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => toggleSort(s.field)}>
+   810→                {sortField !== s.field ? <ArrowUpDown className="h-3 w-3 text-muted-foreground/40" /> : sortAsc ? <ArrowUp className="h-3 w-3 text-violet-600" /> : <ArrowDown className="h-3 w-3 text-violet-600" />} {s.label}
+   811→              </Button>
+   812→            ))}
+   813→          </div>
+   814→        </CardContent>
+   815→      </Card>
+   816→
+   817→      {/* Cards View */}
+   818→      {viewMode === 'cards' && (
+   819→        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+   820→          <AnimatePresence>
+   821→            {sorted.length === 0 ? (
+   822→              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="col-span-full">
+   823→                <Card className={glassCard}>
+   824→                  <CardContent className="p-8 text-center">
+   825→                    <Search className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+   826→                    <p className="text-muted-foreground">No assessments found</p>
+   827→                  </CardContent>
+   828→                </Card>
+   829→              </motion.div>
+   830→            ) : (
+   831→              sorted.map((assessment, idx) => {
+   832→                const stats = getSimStats(assessment);
+   833→                const category = getCourseCategory(assessment.courseId, courses);
+   834→                const isQuickPreview = quickPreviewId === assessment.id;
+   835→                return (
+   836→                  <motion.div
+   837→                    key={assessment.id}
+   838→                    layout
+   839→                    initial={{ opacity: 0, y: 16, scale: 0.97 }}
+   840→                    animate={{ opacity: 1, y: 0, scale: 1 }}
+   841→                    exit={{ opacity: 0, scale: 0.95 }}
+   842→                    transition={{ delay: idx * 0.05, type: 'spring', stiffness: 180 }}
+   843→                  >
+   844→                    <Card className={`${glassCard} group hover:shadow-2xl transition-all duration-300 overflow-hidden`}>
+   845→                      {/* Gradient top accent */}
+   846→                      <div className={`h-1 bg-gradient-to-r ${
+   847→                        assessment.type === 'quiz' ? 'from-violet-500 to-purple-500' :
+   848→                        assessment.type === 'coding' ? 'from-amber-500 to-orange-500' :
+   849→                        assessment.type === 'peer_review' ? 'from-emerald-500 to-teal-500' :
+   850→                        'from-rose-500 to-pink-500'
+   851→                      }`} />
+   852→                      <CardHeader className="pb-2 pt-4">
+   853→                        <div className="flex items-start justify-between">
+   854→                          <div className="flex-1 min-w-0">
+   855→                            <CardTitle className="text-base font-semibold truncate group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+   856→                              {assessment.title || 'Untitled Assessment'}
+   857→                            </CardTitle>
+   858→                            <CardDescription className="text-xs mt-0.5 line-clamp-1">
+   859→                              {assessment.description || getCourseTitle(assessment.courseId, courses)}
+   860→                            </CardDescription>
+   861→                          </div>
+   862→                          <StatusBadge isPublished={assessment.isPublished} />
+   863→                        </div>
+   864→                        <div className="flex items-center gap-1.5 flex-wrap mt-2">
+   865→                          <AssessmentTypeBadge type={assessment.type} />
+   866→                          {category && (
+   867→                            <Badge variant="outline" className="text-xs gap-1 bg-slate-50 dark:bg-slate-800/50">
+   868→                              <BookOpen className="h-3 w-3" /> {category}
+   869→                            </Badge>
+   870→                          )}
+   871→                        </div>
+   872→                      </CardHeader>
+   873→                      <CardContent className="pt-0 pb-4">
+   874→                        {/* Stats row */}
+   875→                        <div className="grid grid-cols-3 gap-2 mb-3">
+   876→                          {[
+   877→                            { label: 'Submissions', value: stats.submissions, icon: Users },
+   878→                            { label: 'Avg Score', value: `${stats.avgScore}%`, icon: Target },
+   879→                            { label: 'Pass Rate', value: `${stats.passRate}%`, icon: Award },
+   880→                          ].map(s => (
+   881→                            <div key={s.label} className="text-center p-2 rounded-lg bg-muted/50">
+   882→                              <s.icon className="h-3.5 w-3.5 mx-auto mb-0.5 text-muted-foreground" />
+   883→                              <div className="text-sm font-bold">{s.value}</div>
+   884→                              <div className="text-[10px] text-muted-foreground">{s.label}</div>
+   885→                            </div>
+   886→                          ))}
+   887→                        </div>
+   888→
+   889→                        {/* Meta row */}
+   890→                        <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
+   891→                          <span className="flex items-center gap-1"><HelpCircle className="h-3 w-3" /> {assessment.questions?.length ?? 0} Qs</span>
+   892→                          <span className="flex items-center gap-1"><Target className="h-3 w-3" /> {assessment.passingScore}%</span>
+   893→                          {assessment.timeLimit && <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {assessment.timeLimit}m</span>}
+   894→                        </div>
+   895→
+   896→                        {/* Quick preview */}
+   897→                        {isQuickPreview && assessment.questions && assessment.questions.length > 0 && (
+   898→                          <motion.div
+   899→                            initial={{ height: 0, opacity: 0 }}
+   900→                            animate={{ height: 'auto', opacity: 1 }}
+   901→                            exit={{ height: 0, opacity: 0 }}
+   902→                            className="mb-3 overflow-hidden"
+   903→                          >
+   904→                            <div className="space-y-1.5 max-h-32 overflow-y-auto custom-scrollbar p-2 bg-muted/30 rounded-lg">
+   905→                              {assessment.questions.map((q, qi) => (
+   906→                                <div key={q.id} className="flex items-center gap-2 text-xs">
+   907→                                  <span className="font-mono text-muted-foreground">{qi + 1}.</span>
+   908→                                  <span className="truncate">{q.question}</span>
+   909→                                  <DifficultyBadge difficulty={q.difficulty} />
+   910→                                </div>
+   911→                              ))}
+   912→                            </div>
+   913→                          </motion.div>
+   914→                        )}
+   915→
+   916→                        {/* Actions */}
+   917→                        <div className="flex items-center gap-1.5">
+   918→                          <TooltipProvider>
+   919→                            <Tooltip>
+   920→                              <TooltipTrigger asChild>
+   921→                                <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setQuickPreviewId(isQuickPreview ? null : assessment.id)}>
+   922→                                  {isQuickPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+   923→                                  {isQuickPreview ? 'Hide' : 'Preview'}
+   924→                                </Button>
+   925→                              </TooltipTrigger>
+   926→                              <TooltipContent>Quick Preview</TooltipContent>
+   927→                            </Tooltip>
+   928→                          </TooltipProvider>
+   929→                          <TooltipProvider>
+   930→                            <Tooltip>
+   931→                              <TooltipTrigger asChild>
+   932→                                <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => onPreview(assessment)}>
+   933→                                  <Play className="h-3.5 w-3.5" /> Take
+   934→                                </Button>
+   935→                              </TooltipTrigger>
+   936→                              <TooltipContent>Take Quiz Preview</TooltipContent>
+   937→                            </Tooltip>
+   938→                          </TooltipProvider>
+   939→                          <div className="flex-1" />
+   940→                          <TooltipProvider>
+   941→                            <Tooltip>
+   942→                              <TooltipTrigger asChild>
+   943→                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onViewAnalytics(assessment)}>
+   944→                                  <BarChart3 className="h-4 w-4" />
+   945→                                </Button>
+   946→                              </TooltipTrigger>
+   947→                              <TooltipContent>Analytics</TooltipContent>
+   948→                            </Tooltip>
+   949→                          </TooltipProvider>
+   950→                          <TooltipProvider>
+   951→                            <Tooltip>
+   952→                              <TooltipTrigger asChild>
+   953→                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(assessment)}>
+   954→                                  <Edit3 className="h-4 w-4" />
+   955→                                </Button>
+   956→                              </TooltipTrigger>
+   957→                              <TooltipContent>Edit</TooltipContent>
+   958→                            </Tooltip>
+   959→                          </TooltipProvider>
+   960→                          <TooltipProvider>
+   961→                            <Tooltip>
+   962→                              <TooltipTrigger asChild>
+   963→                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600" onClick={() => onDelete(assessment)}>
+   964→                                  <Trash2 className="h-4 w-4" />
+   965→                                </Button>
+   966→                              </TooltipTrigger>
+   967→                              <TooltipContent>Delete</TooltipContent>
+   968→                            </Tooltip>
+   969→                          </TooltipProvider>
+   970→                        </div>
+   971→                      </CardContent>
+   972→                    </Card>
+   973→                  </motion.div>
+   974→                );
+   975→              })
+   976→            )}
+   977→          </AnimatePresence>
+   978→        </div>
+   979→      )}
+   980→
+   981→      {/* Table View */}
+   982→      {viewMode === 'table' && (
+   983→        <Card className={glassCard}>
+   984→          <CardContent className="p-0">
+   985→            <div className="overflow-x-auto">
+   986→              <Table>
+   987→                <TableHeader>
+   988→                  <TableRow>
+   989→                    <TableHead className="w-[280px]">
+   990→                      <Button variant="ghost" size="sm" className="h-6 px-1 text-xs gap-1 -ml-1" onClick={() => toggleSort('name')}>
+   991→                        Title {sortField !== 'name' ? <ArrowUpDown className="h-3 w-3 text-muted-foreground/40" /> : sortAsc ? <ArrowUp className="h-3 w-3 text-violet-600" /> : <ArrowDown className="h-3 w-3 text-violet-600" />}
+   992→                      </Button>
+   993→                    </TableHead>
+   994→                    <TableHead>Course</TableHead>
+   995→                    <TableHead>Type</TableHead>
+   996→                    <TableHead className="text-center">Passing</TableHead>
+   997→                    <TableHead className="text-center">
+   998→                      <Button variant="ghost" size="sm" className="h-6 px-1 text-xs gap-1" onClick={() => toggleSort('submissions')}>
+   999→                        Subs {sortField !== 'submissions' ? <ArrowUpDown className="h-3 w-3 text-muted-foreground/40" /> : sortAsc ? <ArrowUp className="h-3 w-3 text-violet-600" /> : <ArrowDown className="h-3 w-3 text-violet-600" />}
+  1000→                      </Button>
+  1001→                    </TableHead>
+  1002→                    <TableHead className="text-center">
+  1003→                      <Button variant="ghost" size="sm" className="h-6 px-1 text-xs gap-1" onClick={() => toggleSort('avgScore')}>
+  1004→                        Avg {sortField !== 'avgScore' ? <ArrowUpDown className="h-3 w-3 text-muted-foreground/40" /> : sortAsc ? <ArrowUp className="h-3 w-3 text-violet-600" /> : <ArrowDown className="h-3 w-3 text-violet-600" />}
+  1005→                      </Button>
+  1006→                    </TableHead>
+  1007→                    <TableHead>Time</TableHead>
+  1008→                    <TableHead>Status</TableHead>
+  1009→                    <TableHead className="text-right">Actions</TableHead>
+  1010→                  </TableRow>
+  1011→                </TableHeader>
+  1012→                <TableBody>
+  1013→                  {sorted.length === 0 ? (
+  1014→                    <TableRow>
+  1015→                      <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
+  1016→                        <div className="flex flex-col items-center gap-2">
+  1017→                          <Search className="h-8 w-8 text-muted-foreground/50" />
+  1018→                          <span>No assessments found</span>
+  1019→                        </div>
+  1020→                      </TableCell>
+  1021→                    </TableRow>
+  1022→                  ) : (
+  1023→                    sorted.map((assessment, idx) => {
+  1024→                      const stats = getSimStats(assessment);
+  1025→                      return (
+  1026→                        <motion.tr
+  1027→                          key={assessment.id}
+  1028→                          initial={{ opacity: 0, y: 8 }}
+  1029→                          animate={{ opacity: 1, y: 0 }}
+  1030→                          transition={{ delay: idx * 0.03 }}
+  1031→                          className="border-b transition-colors hover:bg-muted/50"
+  1032→                        >
+  1033→                          <TableCell className="font-medium">
+  1034→                            <div>
+  1035→                              <div className="font-semibold text-foreground">{assessment.title}</div>
+  1036→                              {assessment.description && (
+  1037→                                <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{assessment.description}</div>
+  1038→                              )}
+  1039→                              <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
+  1040→                                <span>{assessment.questions?.length ?? 0} Qs</span>
+  1041→                                {getCourseCategory(assessment.courseId, courses) && (
+  1042→                                  <Badge variant="outline" className="text-[10px] px-1 py-0">{getCourseCategory(assessment.courseId, courses)}</Badge>
+  1043→                                )}
+  1044→                              </div>
+  1045→                            </div>
+  1046→                          </TableCell>
+  1047→                          <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
+  1048→                            {getCourseTitle(assessment.courseId, courses)}
+  1049→                          </TableCell>
+  1050→                          <TableCell><AssessmentTypeBadge type={assessment.type} /></TableCell>
+  1051→                          <TableCell className="text-center text-sm">{assessment.passingScore}%</TableCell>
+  1052→                          <TableCell className="text-center text-sm font-medium">{stats.submissions}</TableCell>
+  1053→                          <TableCell className="text-center text-sm font-medium">{stats.avgScore}%</TableCell>
+  1054→                          <TableCell className="text-center text-sm">
+  1055→                            {assessment.timeLimit ? `${assessment.timeLimit}m` : '—'}
+  1056→                          </TableCell>
+  1057→                          <TableCell><StatusBadge isPublished={assessment.isPublished} /></TableCell>
+  1058→                          <TableCell className="text-right">
+  1059→                            <div className="flex items-center justify-end gap-1">
+  1060→                              <TooltipProvider>
+  1061→                                <Tooltip>
+  1062→                                  <TooltipTrigger asChild>
+  1063→                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onViewAnalytics(assessment)}>
+  1064→                                      <BarChart3 className="h-4 w-4" />
+  1065→                                    </Button>
+  1066→                                  </TooltipTrigger>
+  1067→                                  <TooltipContent>Analytics</TooltipContent>
+  1068→                                </Tooltip>
+  1069→                              </TooltipProvider>
+  1070→                              <TooltipProvider>
+  1071→                                <Tooltip>
+  1072→                                  <TooltipTrigger asChild>
+  1073→                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onPreview(assessment)}>
+  1074→                                      <Play className="h-4 w-4" />
+  1075→                                    </Button>
+  1076→                                  </TooltipTrigger>
+  1077→                                  <TooltipContent>Preview Quiz</TooltipContent>
+  1078→                                </Tooltip>
+  1079→                              </TooltipProvider>
+  1080→                              <TooltipProvider>
+  1081→                                <Tooltip>
+  1082→                                  <TooltipTrigger asChild>
+  1083→                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(assessment)}>
+  1084→                                      <Edit3 className="h-4 w-4" />
+  1085→                                    </Button>
+  1086→                                  </TooltipTrigger>
+  1087→                                  <TooltipContent>Edit</TooltipContent>
+  1088→                                </Tooltip>
+  1089→                              </TooltipProvider>
+  1090→                              <TooltipProvider>
+  1091→                                <Tooltip>
+  1092→                                  <TooltipTrigger asChild>
+  1093→                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600" onClick={() => onDelete(assessment)}>
+  1094→                                      <Trash2 className="h-4 w-4" />
+  1095→                                    </Button>
+  1096→                                  </TooltipTrigger>
+  1097→                                  <TooltipContent>Delete</TooltipContent>
+  1098→                                </Tooltip>
+  1099→                              </TooltipProvider>
+  1100→                            </div>
+  1101→                          </TableCell>
+  1102→                        </motion.tr>
+  1103→                      );
+  1104→                    })
+  1105→                  )}
+  1106→                </TableBody>
+  1107→              </Table>
+  1108→            </div>
+  1109→          </CardContent>
+  1110→        </Card>
+  1111→      )}
+  1112→    </div>
+  1113→  );
+  1114→}
+  1115→
+  1116→// ==========================
+  1117→// ASSESSMENT BUILDER VIEW (ENHANCED)
+  1118→// ==========================
+  1119→function AssessmentBuilder({
+  1120→  assessment,
+  1121→  courses,
+  1122→  onBack,
+  1123→  onSave,
+  1124→  isSaving,
+  1125→}: {
+  1126→  assessment: Assessment;
+  1127→  courses: any[];
+  1128→  onBack: () => void;
+  1129→  onSave: (a: Assessment) => void;
+  1130→  isSaving: boolean;
+  1131→}) {
+  1132→  const [form, setForm] = useState<Assessment>({ ...assessment });
+  1133→  const [showQuestionForm, setShowQuestionForm] = useState(false);
+  1134→  const [editingQuestionIdx, setEditingQuestionIdx] = useState<number | null>(null);
+  1135→  const [questionForm, setQuestionForm] = useState<QuestionFormData>(emptyQuestionForm);
+  1136→  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  1137→  const [showQuestionBank, setShowQuestionBank] = useState(false);
+  1138→  const [bankSearch, setBankSearch] = useState('');
+  1139→  const [bankTypeFilter, setBankTypeFilter] = useState<string>('all');
+  1140→  const [bankDiffFilter, setBankDiffFilter] = useState<string>('all');
+  1141→  const [bankCatFilter, setBankCatFilter] = useState<string>('all');
+  1142→  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  1143→
+  1144→  const questions = form.questions ?? [];
+  1145→
+  1146→  const updateField = useCallback(<K extends keyof Assessment>(key: K, value: Assessment[K]) => {
+  1147→    setForm(prev => ({ ...prev, [key]: value }));
+  1148→  }, []);
+  1149→
+  1150→  const openAddQuestion = () => {
+  1151→    setEditingQuestionIdx(null);
+  1152→    setQuestionForm(emptyQuestionForm);
+  1153→    setShowQuestionForm(true);
+  1154→  };
+  1155→
+  1156→  const openEditQuestion = (idx: number) => {
+  1157→    const q = questions[idx];
+  1158→    if (!q) return;
+  1159→    setEditingQuestionIdx(idx);
+  1160→    setQuestionForm({
+  1161→      type: q.type,
+  1162→      question: q.question,
+  1163→      options: q.options ?? (q.type === 'multiple_choice' ? ['', '', '', ''] : []),
+  1164→      correctAnswer: q.correctAnswer ?? '',
+  1165→      explanation: q.explanation ?? '',
+  1166→      points: q.points,
+  1167→      difficulty: q.difficulty,
+  1168→      poolGroup: q.poolGroup ?? '',
+  1169→      timeLimit: 0,
+  1170→      section: '',
+  1171→    });
+  1172→    setShowQuestionForm(true);
+  1173→  };
+  1174→
+  1175→  const saveQuestion = () => {
+  1176→    if (!questionForm.question.trim()) return;
+  1177→    const newQ: Question = {
+  1178→      id: editingQuestionIdx !== null ? (questions[editingQuestionIdx]?.id ?? `q-${Date.now()}`) : `q-${Date.now()}`,
+  1179→      assessmentId: form.id,
+  1180→      type: questionForm.type,
+  1181→      question: questionForm.question,
+  1182→      options: ['multiple_choice', 'true_false'].includes(questionForm.type) ? questionForm.options.filter(o => o.trim()) : undefined,
+  1183→      correctAnswer: questionForm.correctAnswer,
+  1184→      explanation: questionForm.explanation || undefined,
+  1185→      points: questionForm.points,
+  1186→      orderIndex: editingQuestionIdx !== null ? (questions[editingQuestionIdx]?.orderIndex ?? 0) : questions.length,
+  1187→      difficulty: questionForm.difficulty,
+  1188→      poolGroup: questionForm.poolGroup || undefined,
+  1189→    };
+  1190→
+  1191→    const updatedQuestions = [...questions];
+  1192→    if (editingQuestionIdx !== null) {
+  1193→      updatedQuestions[editingQuestionIdx] = newQ;
+  1194→    } else {
+  1195→      updatedQuestions.push(newQ);
+  1196→    }
+  1197→    updateField('questions', updatedQuestions);
+  1198→    setShowQuestionForm(false);
+  1199→  };
+  1200→
+  1201→  const deleteQuestion = (idx: number) => {
+  1202→    const updated = [...questions];
+  1203→    updated.splice(idx, 1);
+  1204→    updated.forEach((q, i) => { q.orderIndex = i; });
+  1205→    updateField('questions', updated);
+  1206→  };
+  1207→
+  1208→  const moveQuestion = (from: number, to: number) => {
+  1209→    if (to < 0 || to >= questions.length) return;
+  1210→    const updated = [...questions];
+  1211→    const [moved] = updated.splice(from, 1);
+  1212→    updated.splice(to, 0, moved);
+  1213→    updated.forEach((q, i) => { q.orderIndex = i; });
+  1214→    updateField('questions', updated);
+  1215→  };
+  1216→
+  1217→  const importFromBank = (bankQ: QuestionBankItem) => {
+  1218→    const newQ: Question = {
+  1219→      id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  1220→      assessmentId: form.id,
+  1221→      type: bankQ.type,
+  1222→      question: bankQ.question,
+  1223→      options: bankQ.options,
+  1224→      correctAnswer: bankQ.correctAnswer,
+  1225→      explanation: bankQ.explanation,
+  1226→      points: bankQ.points,
+  1227→      orderIndex: questions.length,
+  1228→      difficulty: bankQ.difficulty,
+  1229→      poolGroup: bankQ.poolGroup || undefined,
+  1230→    };
+  1231→    updateField('questions', [...questions, newQ]);
+  1232→  };
+  1233→
+  1234→  const totalPoints = questions.reduce((sum, q) => sum + q.points, 0);
+  1235→  const estimatedTime = questions.reduce((sum, q) => {
+  1236→    const base = q.type === 'coding' ? 5 : q.type === 'long_answer' ? 4 : q.type === 'short_answer' ? 2 : 1;
+  1237→    const diffMultiplier = q.difficulty === 'hard' ? 1.5 : q.difficulty === 'easy' ? 0.8 : 1;
+  1238→    return sum + Math.round(base * diffMultiplier);
+  1239→  }, 0);
+  1240→
+  1241→  // Group questions by section (poolGroup)
+  1242→  const sections = useMemo(() => {
+  1243→    const sectionMap: Record<string, Question[]> = {};
+  1244→    const ungrouped: Question[] = [];
+  1245→    questions.forEach(q => {
+  1246→      if (q.poolGroup) {
+  1247→        sectionMap[q.poolGroup] = sectionMap[q.poolGroup] || [];
+  1248→        sectionMap[q.poolGroup].push(q);
+  1249→      } else {
+  1250→        ungrouped.push(q);
+  1251→      }
+  1252→    });
+  1253→    return { sectionMap, ungrouped };
+  1254→  }, [questions]);
+  1255→
+  1256→  // Question bank filter
+  1257→  const filteredBank = useMemo(() => {
+  1258→    return questionBank.filter(q => {
+  1259→      const matchSearch = q.question.toLowerCase().includes(bankSearch.toLowerCase()) ||
+  1260→        q.category.toLowerCase().includes(bankSearch.toLowerCase());
+  1261→      const matchType = bankTypeFilter === 'all' || q.type === bankTypeFilter;
+  1262→      const matchDiff = bankDiffFilter === 'all' || q.difficulty === bankDiffFilter;
+  1263→      const matchCat = bankCatFilter === 'all' || q.category === bankCatFilter;
+  1264→      return matchSearch && matchType && matchDiff && matchCat;
+  1265→    });
+  1266→  }, [bankSearch, bankTypeFilter, bankDiffFilter, bankCatFilter]);
+  1267→
+  1268→  const categories = [...new Set(questionBank.map(q => q.category))];
+  1269→
+  1270→  return (
+  1271→    <div className="space-y-6">
+  1272→      {/* Header */}
+  1273→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+  1274→        <div className="flex items-center gap-3">
+  1275→          <Button variant="ghost" size="icon" onClick={onBack}>
+  1276→            <ChevronLeft className="h-5 w-5" />
+  1277→          </Button>
+  1278→          <div>
+  1279→            <h2 className="text-2xl font-bold bg-gradient-to-r from-violet-600 to-rose-500 bg-clip-text text-transparent">
+  1280→              Assessment Builder
+  1281→            </h2>
+  1282→            <p className="text-sm text-muted-foreground">{form.title || 'New Assessment'}</p>
+  1283→          </div>
+  1284→        </div>
+  1285→        <div className="flex items-center gap-2 flex-wrap">
+  1286→          <Button variant="outline" onClick={onBack} className="gap-2" disabled={isSaving}>
+  1287→            <RotateCcw className="h-4 w-4" /> Cancel
+  1288→          </Button>
+  1289→          <Button variant="outline" className="gap-2" onClick={() => onSave({ ...form, isPublished: false })} disabled={isSaving}>
+  1290→            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Draft
+  1291→          </Button>
+  1292→          <Button className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white gap-2 shadow-lg shadow-emerald-500/20" onClick={() => onSave({ ...form, isPublished: true })} disabled={isSaving}>
+  1293→            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Publish
+  1294→          </Button>
+  1295→        </div>
+  1296→      </div>
+  1297→
+  1298→      {/* Summary Banner */}
+  1299→      <motion.div
+  1300→        initial={{ opacity: 0, y: -8 }}
+  1301→        animate={{ opacity: 1, y: 0 }}
+  1302→        className={`p-4 rounded-xl ${glassCard} flex flex-wrap items-center gap-4`}
+  1303→      >
+  1304→        <div className="flex items-center gap-2">
+  1305→          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center">
+  1306→            <HelpCircle className="h-4 w-4 text-white" />
+  1307→          </div>
+  1308→          <div>
+  1309→            <div className="text-lg font-bold">{questions.length}</div>
+  1310→            <div className="text-xs text-muted-foreground">Questions</div>
+  1311→          </div>
+  1312→        </div>
+  1313→        <Separator orientation="vertical" className="h-8" />
+  1314→        <div className="flex items-center gap-2">
+  1315→          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
+  1316→            <Target className="h-4 w-4 text-white" />
+  1317→          </div>
+  1318→          <div>
+  1319→            <div className="text-lg font-bold">{totalPoints}</div>
+  1320→            <div className="text-xs text-muted-foreground">Total Points</div>
+  1321→          </div>
+  1322→        </div>
+  1323→        <Separator orientation="vertical" className="h-8" />
+  1324→        <div className="flex items-center gap-2">
+  1325→          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
+  1326→            <Clock className="h-4 w-4 text-white" />
+  1327→          </div>
+  1328→          <div>
+  1329→            <div className="text-lg font-bold">~{estimatedTime}m</div>
+  1330→            <div className="text-xs text-muted-foreground">Est. Time</div>
+  1331→          </div>
+  1332→        </div>
+  1333→        <Separator orientation="vertical" className="h-8" />
+  1334→        <div className="flex items-center gap-2">
+  1335→          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-rose-500 to-pink-500 flex items-center justify-center">
+  1336→            <Target className="h-4 w-4 text-white" />
+  1337→          </div>
+  1338→          <div>
+  1339→            <div className="text-lg font-bold">{form.passingScore}%</div>
+  1340→            <div className="text-xs text-muted-foreground">Pass Score</div>
+  1341→          </div>
+  1342→        </div>
+  1343→        <div className="flex-1" />
+  1344→        <StatusBadge isPublished={form.isPublished} />
+  1345→      </motion.div>
+  1346→
+  1347→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  1348→        {/* Left column: Settings */}
+  1349→        <div className="lg:col-span-1 space-y-4">
+  1350→          <Card className={`${glassCard} group`}>
+  1351→            <CardHeader className="pb-3">
+  1352→              <CardTitle className="text-base flex items-center gap-2">
+  1353→                <div className="h-6 w-6 rounded-md bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center">
+  1354→                  <Settings2 className="h-3.5 w-3.5 text-white" />
+  1355→                </div>
+  1356→                Assessment Settings
+  1357→              </CardTitle>
+  1358→            </CardHeader>
+  1359→            <CardContent className="space-y-4">
+  1360→              <div className="space-y-2">
+  1361→                <Label htmlFor="title">Title</Label>
+  1362→                <Input id="title" value={form.title} onChange={e => updateField('title', e.target.value)} placeholder="Assessment title" />
+  1363→              </div>
+  1364→              <div className="space-y-2">
+  1365→                <Label htmlFor="description">Description</Label>
+  1366→                <Textarea id="description" value={form.description ?? ''} onChange={e => updateField('description', e.target.value)} placeholder="Describe this assessment" rows={3} />
+  1367→              </div>
+  1368→              <div className="space-y-2">
+  1369→                <Label>Course</Label>
+  1370→                <Select value={form.courseId} onValueChange={v => updateField('courseId', v)}>
+  1371→                  <SelectTrigger><SelectValue /></SelectTrigger>
+  1372→                  <SelectContent>
+  1373→                    {courses.map(c => (
+  1374→                      <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
+  1375→                    ))}
+  1376→                  </SelectContent>
+  1377→                </Select>
+  1378→              </div>
+  1379→              <div className="space-y-2">
+  1380→                <Label>Type</Label>
+  1381→                <Select value={form.type} onValueChange={v => updateField('type', v as Assessment['type'])}>
+  1382→                  <SelectTrigger><SelectValue /></SelectTrigger>
+  1383→                  <SelectContent>
+  1384→                    <SelectItem value="quiz">Quiz</SelectItem>
+  1385→                    <SelectItem value="assignment">Assignment</SelectItem>
+  1386→                    <SelectItem value="peer_review">Peer Review</SelectItem>
+  1387→                    <SelectItem value="coding">Coding</SelectItem>
+  1388→                    <SelectItem value="file_upload">File Upload</SelectItem>
+  1389→                  </SelectContent>
+  1390→                </Select>
+  1391→              </div>
+  1392→
+  1393→              <Separator />
+  1394→
+  1395→              <div className="grid grid-cols-2 gap-3">
+  1396→                <div className="space-y-2">
+  1397→                  <Label htmlFor="passingScore" className="flex items-center gap-1">
+  1398→                    <Target className="h-3 w-3" /> Passing Score
+  1399→                  </Label>
+  1400→                  <div className="flex items-center gap-1">
+  1401→                    <Input id="passingScore" type="number" min={0} max={100} value={form.passingScore} onChange={e => updateField('passingScore', Number(e.target.value))} />
+  1402→                    <span className="text-sm text-muted-foreground">%</span>
+  1403→                  </div>
+  1404→                </div>
+  1405→                <div className="space-y-2">
+  1406→                  <Label htmlFor="maxAttempts" className="flex items-center gap-1">
+  1407→                    <RotateCcw className="h-3 w-3" /> Max Attempts
+  1408→                  </Label>
+  1409→                  <Input id="maxAttempts" type="number" min={1} max={10} value={form.maxAttempts} onChange={e => updateField('maxAttempts', Number(e.target.value))} />
+  1410→                </div>
+  1411→              </div>
+  1412→
+  1413→              <div className="space-y-2">
+  1414→                <Label htmlFor="timeLimit" className="flex items-center gap-1">
+  1415→                  <Timer className="h-3 w-3" /> Time Limit (minutes)
+  1416→                </Label>
+  1417→                <Input id="timeLimit" type="number" min={0} placeholder="0 = no limit" value={form.timeLimit ?? ''} onChange={e => updateField('timeLimit', e.target.value ? Number(e.target.value) : undefined)} />
+  1418→              </div>
+  1419→
+  1420→              <div className="flex items-center justify-between">
+  1421→                <Label htmlFor="shuffle" className="flex items-center gap-1">
+  1422→                  <Shuffle className="h-3 w-3" /> Shuffle Questions
+  1423→                </Label>
+  1424→                <Switch id="shuffle" checked={form.shuffleQuestions} onCheckedChange={v => updateField('shuffleQuestions', v)} />
+  1425→              </div>
+  1426→            </CardContent>
+  1427→          </Card>
+  1428→
+  1429→          {/* Summary card */}
+  1430→          <Card className={glassCard}>
+  1431→            <CardHeader className="pb-3">
+  1432→              <CardTitle className="text-base flex items-center gap-2">
+  1433→                <Sparkles className="h-4 w-4 text-amber-500" /> Summary
+  1434→              </CardTitle>
+  1435→            </CardHeader>
+  1436→            <CardContent className="space-y-3">
+  1437→              <div className="flex justify-between text-sm">
+  1438→                <span className="text-muted-foreground">Questions</span>
+  1439→                <span className="font-medium">{questions.length}</span>
+  1440→              </div>
+  1441→              <div className="flex justify-between text-sm">
+  1442→                <span className="text-muted-foreground">Total Points</span>
+  1443→                <span className="font-medium">{totalPoints}</span>
+  1444→              </div>
+  1445→              <div className="flex justify-between text-sm">
+  1446→                <span className="text-muted-foreground">Est. Time</span>
+  1447→                <span className="font-medium">~{estimatedTime} min</span>
+  1448→              </div>
+  1449→              <div className="flex justify-between text-sm">
+  1450→                <span className="text-muted-foreground">Passing Score</span>
+  1451→                <span className="font-medium">{form.passingScore}%</span>
+  1452→              </div>
+  1453→              <div className="flex justify-between text-sm">
+  1454→                <span className="text-muted-foreground">Status</span>
+  1455→                <StatusBadge isPublished={form.isPublished} />
+  1456→              </div>
+  1457→              <Separator />
+  1458→              {/* Difficulty breakdown */}
+  1459→              <div>
+  1460→                <div className="text-xs font-medium text-muted-foreground mb-2">Difficulty Breakdown</div>
+  1461→                {['easy', 'medium', 'hard'].map(d => {
+  1462→                  const count = questions.filter(q => q.difficulty === d).length;
+  1463→                  const pct = questions.length ? (count / questions.length) * 100 : 0;
+  1464→                  return (
+  1465→                    <div key={d} className="flex items-center gap-2 mb-1.5">
+  1466→                      <span className="text-xs capitalize w-14">{d}</span>
+  1467→                      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+  1468→                        <motion.div
+  1469→                          initial={{ width: 0 }}
+  1470→                          animate={{ width: `${pct}%` }}
+  1471→                          transition={{ duration: 0.6 }}
+  1472→                          className={`h-full rounded-full ${d === 'easy' ? 'bg-emerald-500' : d === 'medium' ? 'bg-amber-500' : 'bg-red-500'}`}
+  1473→                        />
+  1474→                      </div>
+  1475→                      <span className="text-xs font-medium w-6 text-right">{count}</span>
+  1476→                    </div>
+  1477→                  );
+  1478→                })}
+  1479→              </div>
+  1480→            </CardContent>
+  1481→          </Card>
+  1482→        </div>
+  1483→
+  1484→        {/* Right column: Questions */}
+  1485→        <div className="lg:col-span-2 space-y-4">
+  1486→          <Card className={glassCard}>
+  1487→            <CardHeader className="pb-3">
+  1488→              <div className="flex items-center justify-between">
+  1489→                <CardTitle className="text-base flex items-center gap-2">
+  1490→                  <div className="h-6 w-6 rounded-md bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center">
+  1491→                    <HelpCircle className="h-3.5 w-3.5 text-white" />
+  1492→                  </div>
+  1493→                  Questions ({questions.length})
+  1494→                </CardTitle>
+  1495→                <div className="flex items-center gap-2">
+  1496→                  <Button size="sm" variant="outline" onClick={() => setShowQuestionBank(true)} className="gap-1.5">
+  1497→                    <Database className="h-4 w-4" /> Import from Bank
+  1498→                  </Button>
+  1499→                  <Button size="sm" onClick={openAddQuestion} className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white gap-1 shadow-lg shadow-violet-500/20">
+  1500→                    <Plus className="h-4 w-4" /> Add Question
+  1501→                  </Button>
+  1502→                </div>
+  1503→              </div>
+  1504→            </CardHeader>
+  1505→            <CardContent>
+  1506→              {questions.length === 0 ? (
+  1507→                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+  1508→                  <motion.div
+  1509→                    initial={{ scale: 0.8 }}
+  1510→                    animate={{ scale: 1 }}
+  1511→                    transition={{ type: 'spring', stiffness: 200 }}
+  1512→                  >
+  1513→                    <HelpCircle className="h-12 w-12 mb-3 opacity-30" />
+  1514→                  </motion.div>
+  1515→                  <p className="text-sm">No questions yet</p>
+  1516→                  <p className="text-xs mt-1">Click &quot;Add Question&quot; or &quot;Import from Bank&quot; to start building</p>
+  1517→                </div>
+  1518→              ) : (
+  1519→                <div className="space-y-3">
+  1520→                  {/* Grouped sections */}
+  1521→                  {Object.entries(sections.sectionMap).map(([sectionName, sectionQuestions]) => {
+  1522→                    const isExpanded = expandedSections[sectionName] !== false;
+  1523→                    return (
+  1524→                      <div key={sectionName} className="border border-dashed border-violet-300 dark:border-violet-700 rounded-lg overflow-hidden">
+  1525→                        <button
+  1526→                          className="w-full flex items-center gap-2 p-2.5 bg-violet-50 dark:bg-violet-950/20 text-sm font-medium text-violet-700 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-950/30 transition-colors"
+  1527→                          onClick={() => setExpandedSections(prev => ({ ...prev, [sectionName]: !isExpanded }))}
+  1528→                        >
+  1529→                          <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+  1530→                          <Layers className="h-4 w-4" />
+  1531→                          {sectionName}
+  1532→                          <Badge variant="outline" className="text-[10px] ml-1">{sectionQuestions.length} Qs</Badge>
+  1533→                        </button>
+  1534→                        {isExpanded && (
+  1535→                          <div className="p-2 space-y-1.5">
+  1536→                            {sectionQuestions.map((q) => {
+  1537→                              const idx = questions.findIndex(x => x.id === q.id);
+  1538→                              return (
+  1539→                                <QuestionRow key={q.id} q={q} idx={idx} dragIdx={dragIdx} setDragIdx={setDragIdx} moveQuestion={moveQuestion} openEditQuestion={openEditQuestion} deleteQuestion={deleteQuestion} />
+  1540→                              );
+  1541→                            })}
+  1542→                          </div>
+  1543→                        )}
+  1544→                      </div>
+  1545→                    );
+  1546→                  })}
+  1547→
+  1548→                  {/* Ungrouped questions */}
+  1549→                  {sections.ungrouped.length > 0 && (
+  1550→                    Object.keys(sections.sectionMap).length > 0 ? (
+  1551→                      <div className="border border-dashed border-slate-300 dark:border-slate-700 rounded-lg overflow-hidden">
+  1552→                        <button
+  1553→                          className="w-full flex items-center gap-2 p-2.5 bg-slate-50 dark:bg-slate-900/20 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900/30 transition-colors"
+  1554→                          onClick={() => setExpandedSections(prev => ({ ...prev, _ungrouped: prev._ungrouped === false }))}
+  1555→                        >
+  1556→                          <ChevronDown className={`h-4 w-4 transition-transform ${expandedSections._ungrouped !== false ? '' : '-rotate-90'}`} />
+  1557→                          Unassigned
+  1558→                          <Badge variant="outline" className="text-[10px] ml-1">{sections.ungrouped.length} Qs</Badge>
+  1559→                        </button>
+  1560→                        {expandedSections._ungrouped !== false && (
+  1561→                          <div className="p-2 space-y-1.5">
+  1562→                            {sections.ungrouped.map((q) => {
+  1563→                              const idx = questions.findIndex(x => x.id === q.id);
+  1564→                              return (
+  1565→                                <QuestionRow key={q.id} q={q} idx={idx} dragIdx={dragIdx} setDragIdx={setDragIdx} moveQuestion={moveQuestion} openEditQuestion={openEditQuestion} deleteQuestion={deleteQuestion} />
+  1566→                              );
+  1567→                            })}
+  1568→                          </div>
+  1569→                        )}
+  1570→                      </div>
+  1571→                    ) : (
+  1572→                      sections.ungrouped.map((q) => {
+  1573→                        const idx = questions.findIndex(x => x.id === q.id);
+  1574→                        return (
+  1575→                          <QuestionRow key={q.id} q={q} idx={idx} dragIdx={dragIdx} setDragIdx={setDragIdx} moveQuestion={moveQuestion} openEditQuestion={openEditQuestion} deleteQuestion={deleteQuestion} />
+  1576→                        );
+  1577→                      })
+  1578→                    )
+  1579→                  )}
+  1580→                </div>
+  1581→              )}
+  1582→            </CardContent>
+  1583→          </Card>
+  1584→        </div>
+  1585→      </div>
+  1586→
+  1587→      {/* Question Form Dialog */}
+  1588→      <Dialog open={showQuestionForm} onOpenChange={setShowQuestionForm}>
+  1589→        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+  1590→          <DialogHeader>
+  1591→            <DialogTitle>{editingQuestionIdx !== null ? 'Edit Question' : 'Add Question'}</DialogTitle>
+  1592→            <DialogDescription>
+  1593→              {editingQuestionIdx !== null ? 'Modify the question details below.' : 'Fill in the question details below.'}
+  1594→            </DialogDescription>
+  1595→          </DialogHeader>
+  1596→
+  1597→          <div className="space-y-4 py-2">
+  1598→            <div className="grid grid-cols-2 gap-3">
+  1599→              <div className="space-y-2">
+  1600→                <Label>Question Type</Label>
+  1601→                <Select value={questionForm.type} onValueChange={v => {
+  1602→                  const t = v as Question['type'];
+  1603→                  setQuestionForm(prev => ({
+  1604→                    ...prev,
+  1605→                    type: t,
+  1606→                    options: t === 'multiple_choice' ? (prev.options.length > 0 ? prev.options : ['', '', '', '']) :
+  1607→                             t === 'true_false' ? ['True', 'False'] : [],
+  1608→                    correctAnswer: t === 'true_false' ? '' : prev.correctAnswer,
+  1609→                  }));
+  1610→                }}>
+  1611→                  <SelectTrigger><SelectValue /></SelectTrigger>
+  1612→                  <SelectContent>
+  1613→                    <SelectItem value="multiple_choice">Multiple Choice</SelectItem>
+  1614→                    <SelectItem value="true_false">True / False</SelectItem>
+  1615→                    <SelectItem value="short_answer">Short Answer</SelectItem>
+  1616→                    <SelectItem value="long_answer">Long Answer</SelectItem>
+  1617→                    <SelectItem value="coding">Coding</SelectItem>
+  1618→                  </SelectContent>
+  1619→                </Select>
+  1620→              </div>
+  1621→              <div className="space-y-2">
+  1622→                <Label>Difficulty</Label>
+  1623→                <Select value={questionForm.difficulty} onValueChange={v => setQuestionForm(prev => ({ ...prev, difficulty: v as Question['difficulty'] }))}>
+  1624→                  <SelectTrigger><SelectValue /></SelectTrigger>
+  1625→                  <SelectContent>
+  1626→                    <SelectItem value="easy">Easy</SelectItem>
+  1627→                    <SelectItem value="medium">Medium</SelectItem>
+  1628→                    <SelectItem value="hard">Hard</SelectItem>
+  1629→                  </SelectContent>
+  1630→                </Select>
+  1631→              </div>
+  1632→            </div>
+  1633→
+  1634→            <div className="space-y-2">
+  1635→              <Label>Question Text</Label>
+  1636→              <Textarea
+  1637→                value={questionForm.question}
+  1638→                onChange={e => setQuestionForm(prev => ({ ...prev, question: e.target.value }))}
+  1639→                placeholder="Enter your question..."
+  1640→                rows={3}
+  1641→              />
+  1642→            </div>
+  1643→
+  1644→            {/* Options for multiple choice */}
+  1645→            {questionForm.type === 'multiple_choice' && (
+  1646→              <div className="space-y-3">
+  1647→                <Label>Answer Options</Label>
+  1648→                {questionForm.options.map((opt, i) => (
+  1649→                  <div key={i} className="flex items-center gap-2">
+  1650→                    <div
+  1651→                      className={`h-5 w-5 rounded-full border-2 flex items-center justify-center cursor-pointer transition-colors ${questionForm.correctAnswer === String(i) ? 'border-emerald-500 bg-emerald-500' : 'border-muted-foreground/30'}`}
+  1652→                      onClick={() => setQuestionForm(prev => ({ ...prev, correctAnswer: String(i) }))}
+  1653→                    >
+  1654→                      {questionForm.correctAnswer === String(i) && <div className="h-2 w-2 rounded-full bg-card" />}
+  1655→                    </div>
+  1656→                    <Input
+  1657→                      value={opt}
+  1658→                      onChange={e => {
+  1659→                        const updated = [...questionForm.options];
+  1660→                        updated[i] = e.target.value;
+  1661→                        setQuestionForm(prev => ({ ...prev, options: updated }));
+  1662→                      }}
+  1663→                      placeholder={`Option ${i + 1}`}
+  1664→                      className="flex-1"
+  1665→                    />
+  1666→                    {questionForm.options.length > 2 && (
+  1667→                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => {
+  1668→                        const updated = questionForm.options.filter((_, idx) => idx !== i);
+  1669→                        setQuestionForm(prev => ({ ...prev, options: updated, correctAnswer: prev.correctAnswer === String(i) ? '' : prev.correctAnswer }));
+  1670→                      }}>
+  1671→                        <X className="h-4 w-4" />
+  1672→                      </Button>
+  1673→                    )}
+  1674→                  </div>
+  1675→                ))}
+  1676→                <Button variant="outline" size="sm" onClick={() => setQuestionForm(prev => ({ ...prev, options: [...prev.options, ''] }))} className="gap-1">
+  1677→                  <Plus className="h-3 w-3" /> Add Option
+  1678→                </Button>
+  1679→              </div>
+  1680→            )}
+  1681→
+  1682→            {/* True/False selector */}
+  1683→            {questionForm.type === 'true_false' && (
+  1684→              <div className="space-y-2">
+  1685→                <Label>Correct Answer</Label>
+  1686→                <div className="flex gap-3">
+  1687→                  {['True', 'False'].map(ans => (
+  1688→                    <Button
+  1689→                      key={ans}
+  1690→                      variant={questionForm.correctAnswer === ans ? 'default' : 'outline'}
+  1691→                      className={questionForm.correctAnswer === ans ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+  1692→                      onClick={() => setQuestionForm(prev => ({ ...prev, correctAnswer: ans }))}
+  1693→                    >
+  1694→                      {ans === 'True' ? <CheckCircle2 className="h-4 w-4 mr-1" /> : <XCircle className="h-4 w-4 mr-1" />}
+  1695→                      {ans}
+  1696→                    </Button>
+  1697→                  ))}
+  1698→                </div>
+  1699→              </div>
+  1700→            )}
+  1701→
+  1702→            {/* Short answer / coding correct answer */}
+  1703→            {(questionForm.type === 'short_answer' || questionForm.type === 'coding') && (
+  1704→              <div className="space-y-2">
+  1705→                <Label>Correct Answer</Label>
+  1706→                <Input
+  1707→                  value={questionForm.correctAnswer}
+  1708→                  onChange={e => setQuestionForm(prev => ({ ...prev, correctAnswer: e.target.value }))}
+  1709→                  placeholder="Expected answer"
+  1710→                />
+  1711→              </div>
+  1712→            )}
+  1713→
+  1714→            <div className="space-y-2">
+  1715→              <Label>Explanation (optional)</Label>
+  1716→              <Textarea
+  1717→                value={questionForm.explanation}
+  1718→                onChange={e => setQuestionForm(prev => ({ ...prev, explanation: e.target.value }))}
+  1719→                placeholder="Explain why this is the correct answer..."
+  1720→                rows={2}
+  1721→              />
+  1722→            </div>
+  1723→
+  1724→            <div className="grid grid-cols-2 gap-3">
+  1725→              <div className="space-y-2">
+  1726→                <Label>Points</Label>
+  1727→                <Input type="number" min={1} max={100} value={questionForm.points} onChange={e => setQuestionForm(prev => ({ ...prev, points: Number(e.target.value) || 1 }))} />
+  1728→              </div>
+  1729→              <div className="space-y-2">
+  1730→                <Label>Time Limit (seconds, 0 = none)</Label>
+  1731→                <Input type="number" min={0} value={questionForm.timeLimit} onChange={e => setQuestionForm(prev => ({ ...prev, timeLimit: Number(e.target.value) || 0 }))} />
+  1732→              </div>
+  1733→            </div>
+  1734→
+  1735→            <div className="grid grid-cols-2 gap-3">
+  1736→              <div className="space-y-2">
+  1737→                <Label>Section / Pool Group (optional)</Label>
+  1738→                <Input
+  1739→                  value={questionForm.poolGroup}
+  1740→                  onChange={e => setQuestionForm(prev => ({ ...prev, poolGroup: e.target.value }))}
+  1741→                  placeholder="e.g. Module 1"
+  1742→                />
+  1743→              </div>
+  1744→            </div>
+  1745→          </div>
+  1746→
+  1747→          <DialogFooter>
+  1748→            <Button variant="outline" onClick={() => setShowQuestionForm(false)}>Cancel</Button>
+  1749→            <Button onClick={saveQuestion} className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white" disabled={!questionForm.question.trim()}>
+  1750→              {editingQuestionIdx !== null ? 'Save Changes' : 'Add Question'}
+  1751→            </Button>
+  1752→          </DialogFooter>
+  1753→        </DialogContent>
+  1754→      </Dialog>
+  1755→
+  1756→      {/* Question Bank Dialog */}
+  1757→      <Dialog open={showQuestionBank} onOpenChange={setShowQuestionBank}>
+  1758→        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+  1759→          <DialogHeader>
+  1760→            <DialogTitle className="flex items-center gap-2">
+  1761→              <Database className="h-5 w-5 text-violet-600" /> Question Bank
+  1762→            </DialogTitle>
+  1763→            <DialogDescription>Browse and import questions from the question bank</DialogDescription>
+  1764→          </DialogHeader>
+  1765→
+  1766→          {/* Bank filters */}
+  1767→          <div className="flex flex-wrap gap-2 pb-2">
+  1768→            <div className="relative flex-1 min-w-[200px]">
+  1769→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1770→              <Input
+  1771→                placeholder="Search questions..."
+  1772→                value={bankSearch}
+  1773→                onChange={e => setBankSearch(e.target.value)}
+  1774→                className="pl-9"
+  1775→              />
+  1776→            </div>
+  1777→            <Select value={bankTypeFilter} onValueChange={setBankTypeFilter}>
+  1778→              <SelectTrigger className="w-[140px]"><SelectValue placeholder="Type" /></SelectTrigger>
+  1779→              <SelectContent>
+  1780→                <SelectItem value="all">All Types</SelectItem>
+  1781→                <SelectItem value="multiple_choice">Multiple Choice</SelectItem>
+  1782→                <SelectItem value="true_false">True / False</SelectItem>
+  1783→                <SelectItem value="short_answer">Short Answer</SelectItem>
+  1784→              </SelectContent>
+  1785→            </Select>
+  1786→            <Select value={bankDiffFilter} onValueChange={setBankDiffFilter}>
+  1787→              <SelectTrigger className="w-[120px]"><SelectValue placeholder="Difficulty" /></SelectTrigger>
+  1788→              <SelectContent>
+  1789→                <SelectItem value="all">All</SelectItem>
+  1790→                <SelectItem value="easy">Easy</SelectItem>
+  1791→                <SelectItem value="medium">Medium</SelectItem>
+  1792→                <SelectItem value="hard">Hard</SelectItem>
+  1793→              </SelectContent>
+  1794→            </Select>
+  1795→            <Select value={bankCatFilter} onValueChange={setBankCatFilter}>
+  1796→              <SelectTrigger className="w-[150px]"><SelectValue placeholder="Category" /></SelectTrigger>
+  1797→              <SelectContent>
+  1798→                <SelectItem value="all">All Categories</SelectItem>
+  1799→                {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+  1800→              </SelectContent>
+  1801→            </Select>
+  1802→          </div>
+  1803→
+  1804→          {/* Bank questions list */}
+  1805→          <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1">
+  1806→            {filteredBank.length === 0 ? (
+  1807→              <div className="text-center py-8 text-muted-foreground">
+  1808→                <Database className="h-8 w-8 mx-auto mb-2 opacity-30" />
+  1809→                <p className="text-sm">No matching questions found</p>
+  1810→              </div>
+  1811→            ) : (
+  1812→              filteredBank.map((bq, i) => (
+  1813→                <motion.div
+  1814→                  key={bq.id}
+  1815→                  initial={{ opacity: 0, y: 4 }}
+  1816→                  animate={{ opacity: 1, y: 0 }}
+  1817→                  transition={{ delay: i * 0.03 }}
+  1818→                  className="p-3 rounded-lg border border-border hover:border-violet-300 dark:hover:border-violet-700 hover:shadow-md transition-all"
+  1819→                >
+  1820→                  <div className="flex items-start gap-3">
+  1821→                    <div className="flex-1 min-w-0">
+  1822→                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+  1823→                        <QuestionTypeBadge type={bq.type} />
+  1824→                        <DifficultyBadge difficulty={bq.difficulty} />
+  1825→                        <Badge variant="outline" className="text-[10px] bg-slate-50 dark:bg-slate-800/50">{bq.category}</Badge>
+  1826→                      </div>
+  1827→                      <p className="text-sm font-medium">{bq.question}</p>
+  1828→                      <div className="flex items-center gap-4 mt-1.5 text-xs text-muted-foreground">
+  1829→                        <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {bq.timesAnswered} answered</span>
+  1830→                        <span className="flex items-center gap-1"><Target className="h-3 w-3" /> {bq.correctPercent}% correct</span>
+  1831→                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {bq.avgTimeSeconds}s avg</span>
+  1832→                        <span className="flex items-center gap-1"><TrendingUp className="h-3 w-3" /> DI: {bq.discriminationIndex}</span>
+  1833→                      </div>
+  1834→                      {bq.type === 'multiple_choice' && bq.options && (
+  1835→                        <div className="grid grid-cols-2 gap-1 mt-2">
+  1836→                          {bq.options.map((opt, oi) => (
+  1837→                            <div key={oi} className={`text-xs px-2 py-1 rounded ${String(oi) === bq.correctAnswer ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-medium' : 'text-muted-foreground'}`}>
+  1838→                              {String(oi) === bq.correctAnswer && '✓ '}{opt}
+  1839→                            </div>
+  1840→                          ))}
+  1841→                        </div>
+  1842→                      )}
+  1843→                    </div>
+  1844→                    <Button size="sm" variant="outline" className="shrink-0 gap-1" onClick={() => importFromBank(bq)}>
+  1845→                      <Plus className="h-3.5 w-3.5" /> Import
+  1846→                    </Button>
+  1847→                  </div>
+  1848→                </motion.div>
+  1849→              ))
+  1850→            )}
+  1851→          </div>
+  1852→
+  1853→          <DialogFooter>
+  1854→            <Button variant="outline" onClick={() => setShowQuestionBank(false)}>Close</Button>
+  1855→          </DialogFooter>
+  1856→        </DialogContent>
+  1857→      </Dialog>
+  1858→    </div>
+  1859→  );
+  1860→}
+  1861→
+  1862→// ---- Question Row Component for Builder ----
+  1863→function QuestionRow({
+  1864→  q, idx, dragIdx, setDragIdx, moveQuestion, openEditQuestion, deleteQuestion,
+  1865→}: {
+  1866→  q: Question; idx: number; dragIdx: number | null;
+  1867→  setDragIdx: (i: number | null) => void;
+  1868→  moveQuestion: (from: number, to: number) => void;
+  1869→  openEditQuestion: (i: number) => void;
+  1870→  deleteQuestion: (i: number) => void;
+  1871→}) {
+  1872→  const [confirmDelete, setConfirmDelete] = useState(false);
+  1873→  return (
+  1874→    <>
+  1875→    <motion.div
+  1876→      layout
+  1877→      initial={{ opacity: 0, x: -10 }}
+  1878→      animate={{ opacity: 1, x: 0 }}
+  1879→      transition={{ delay: idx * 0.02 }}
+  1880→      className={`flex items-start gap-2 p-3 rounded-lg border transition-all hover:shadow-sm ${dragIdx === idx ? 'border-violet-400 bg-violet-50 dark:bg-violet-950/20 shadow-md' : 'border-border hover:bg-muted/50'}`}
+  1881→      draggable
+  1882→      onDragStart={() => setDragIdx(idx)}
+  1883→      onDragOver={e => e.preventDefault()}
+  1884→      onDrop={() => {
+  1885→        if (dragIdx !== null && dragIdx !== idx) moveQuestion(dragIdx, idx);
+  1886→        setDragIdx(null);
+  1887→      }}
+  1888→      onDragEnd={() => setDragIdx(null)}
+  1889→    >
+  1890→      <div className="flex items-center gap-2 pt-0.5">
+  1891→        <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab active:cursor-grabbing" />
+  1892→        <span className="text-xs font-mono text-muted-foreground w-5">{idx + 1}.</span>
+  1893→      </div>
+  1894→      <div className="flex-1 min-w-0">
+  1895→        <div className="flex items-center gap-2 mb-1">
+  1896→          <QuestionTypeBadge type={q.type} />
+  1897→          <span className="text-sm font-medium truncate">{q.question}</span>
+  1898→        </div>
+  1899→        <div className="flex items-center gap-2 flex-wrap">
+  1900→          <DifficultyBadge difficulty={q.difficulty} />
+  1901→          <Badge variant="outline" className="text-xs">{q.points} pt{q.points !== 1 ? 's' : ''}</Badge>
+  1902→          {q.poolGroup && <Badge variant="outline" className="text-xs text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-800">Section: {q.poolGroup}</Badge>}
+  1903→        </div>
+  1904→      </div>
+  1905→      <div className="flex items-center gap-1 shrink-0">
+  1906→        <TooltipProvider>
+  1907→          <Tooltip>
+  1908→            <TooltipTrigger asChild>
+  1909→              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditQuestion(idx)}>
+  1910→                <Edit3 className="h-3.5 w-3.5" />
+  1911→              </Button>
+  1912→            </TooltipTrigger>
+  1913→            <TooltipContent>Edit</TooltipContent>
+  1914→          </Tooltip>
+  1915→        </TooltipProvider>
+  1916→        <TooltipProvider>
+  1917→          <Tooltip>
+  1918→            <TooltipTrigger asChild>
+  1919→              <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" onClick={() => setConfirmDelete(true)}>
+  1920→                <Trash2 className="h-3.5 w-3.5" />
+  1921→              </Button>
+  1922→            </TooltipTrigger>
+  1923→            <TooltipContent>Delete</TooltipContent>
+  1924→          </Tooltip>
+  1925→        </TooltipProvider>
+  1926→      </div>
+  1927→    </motion.div>
+  1928→    <ConfirmDialog
+  1929→      open={confirmDelete}
+  1930→      onOpenChange={(open) => { if (!open) setConfirmDelete(false); }}
+  1931→      title="Delete Question"
+  1932→      description="Are you sure you want to delete this question? This action cannot be undone."
+  1933→      confirmLabel="Delete"
+  1934→      variant="destructive"
+  1935→      onConfirm={() => {
+  1936→        deleteQuestion(idx);
+  1937→        setConfirmDelete(false);
+  1938→      }}
+  1939→    />
+  1940→    </>
+  1941→  );
+  1942→}
+  1943→
+  1944→// ==========================
+  1945→// QUIZ TAKING PREVIEW (ENHANCED)
+  1946→// ==========================
+  1947→function QuizPreview({
+  1948→  assessment,
+  1949→  onClose,
+  1950→}: {
+  1951→  assessment: Assessment;
+  1952→  onClose: () => void;
+  1953→}) {
+  1954→  const questions = assessment.questions ?? [];
+  1955→  const [currentIdx, setCurrentIdx] = useState(0);
+  1956→  const [answers, setAnswers] = useState<Record<string, string>>({});
+  1957→  const [submitted, setSubmitted] = useState(false);
+  1958→  const [timeLeft, setTimeLeft] = useState(assessment.timeLimit ? assessment.timeLimit * 60 : null);
+  1959→  const [showStudentView, setShowStudentView] = useState(true);
+  1960→  const [showExplanations, setShowExplanations] = useState(false);
+  1961→  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  1962→
+  1963→  useEffect(() => {
+  1964→    if (timeLeft !== null && timeLeft > 0 && !submitted) {
+  1965→      timerRef.current = setInterval(() => {
+  1966→        setTimeLeft(prev => {
+  1967→          if (prev === null || prev <= 1) {
+  1968→            if (timerRef.current) clearInterval(timerRef.current);
+  1969→            setSubmitted(true);
+  1970→            return 0;
+  1971→          }
+  1972→          return prev - 1;
+  1973→        });
+  1974→      }, 1000);
+  1975→    }
+  1976→    return () => {
+  1977→      if (timerRef.current) clearInterval(timerRef.current);
+  1978→    };
+  1979→  }, [timeLeft, submitted]);
+  1980→
+  1981→  const formatTime = (s: number) => {
+  1982→    const m = Math.floor(s / 60);
+  1983→    const sec = s % 60;
+  1984→    return `${m}:${sec.toString().padStart(2, '0')}`;
+  1985→  };
+  1986→
+  1987→  const currentQ = questions[currentIdx];
+  1988→  if (!currentQ) {
+  1989→    return (
+  1990→      <Dialog open={true} onOpenChange={onClose}>
+  1991→        <DialogContent className="max-w-lg">
+  1992→          <DialogHeader>
+  1993→            <DialogTitle>No Questions</DialogTitle>
+  1994→            <DialogDescription>This assessment has no questions to preview.</DialogDescription>
+  1995→          </DialogHeader>
+  1996→          <DialogFooter>
+  1997→            <Button onClick={onClose}>Close</Button>
+  1998→          </DialogFooter>
+  1999→        </DialogContent>
+  2000→      </Dialog>
+
+[showing lines 1-2000 of 2541; use offset=2001 with limit to continue reading]

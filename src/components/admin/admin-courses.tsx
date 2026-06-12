@@ -88,7 +88,7 @@ import {
 } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-// TODO: Replace with real API when available - review API not yet implemented
+// Course review display type used by the Review Management tab
 interface CourseReview {
   id: string;
   courseId: string;
@@ -113,31 +113,43 @@ interface CourseReview {
   isOwnReview?: boolean;
 }
 
-// TODO: Replace with real API when available - review data not yet in the API
-const allMockReviews: CourseReview[] = [
-  { id: 'rev-1', courseId: 'course-1', userId: 'user-2', userName: 'Emma Rodriguez', userAvatar: 'ER', rating: 5, title: 'Absolutely Incredible Course!', content: 'This course completely transformed how I think about React architecture.', date: '2024-10-14T10:30:00Z', helpfulCount: 24, isHelpful: false, courseProgress: 100, isVerifiedPurchase: true, tags: ['Great Content', 'Life Changing', 'Well Structured'], status: 'published', instructorReply: { instructorName: 'Sarah Mitchell', content: 'Thank you so much, Emma!', date: '2024-10-15T08:00:00Z' } },
-  { id: 'rev-2', courseId: 'course-1', userId: 'user-1', userName: 'Mike Chen', userAvatar: 'MC', rating: 5, title: 'Best React Course I\'ve Ever Taken', content: 'I\'ve taken multiple React courses over the years, and this one stands head and shoulders above the rest.', date: '2024-10-10T15:45:00Z', helpfulCount: 18, isHelpful: true, courseProgress: 85, isVerifiedPurchase: true, tags: ['Great Content', 'Practical'], status: 'published' },
-  { id: 'rev-3', courseId: 'course-1', userId: 'user-6', userName: 'Priya Sharma', userAvatar: 'PS', rating: 4, title: 'Great Content, Minor Gaps in Testing', content: 'Great content overall. The TypeScript patterns section was excellent.', date: '2024-10-05T09:20:00Z', helpfulCount: 12, isHelpful: false, courseProgress: 72, isVerifiedPurchase: true, tags: ['Well Structured', 'Advanced'], status: 'published' },
-  { id: 'rev-4', courseId: 'course-1', userId: 'user-7', userName: 'Alex Johnson', userAvatar: 'AJ', rating: 5, title: 'Game-Changer for My Career', content: 'This course is a game-changer. I went from struggling with React concepts to building production apps confidently.', date: '2024-09-28T14:00:00Z', helpfulCount: 31, isHelpful: false, courseProgress: 100, isVerifiedPurchase: true, tags: ['Life Changing', 'Practical', 'Great Content'], status: 'published', instructorReply: { instructorName: 'Sarah Mitchell', content: 'Congratulations on the new role, Alex!', date: '2024-09-29T10:00:00Z' } },
-  { id: 'rev-5', courseId: 'course-1', userId: 'user-8', userName: 'Tom Wilson', userAvatar: 'TW', rating: 4, title: 'Comprehensive Deep Dive', content: 'Very comprehensive course. The App Router deep-dive was particularly helpful.', date: '2024-09-20T11:30:00Z', helpfulCount: 8, isHelpful: false, courseProgress: 60, isVerifiedPurchase: true, tags: ['Advanced', 'Well Structured'], status: 'published' },
-  { id: 'rev-6', courseId: 'course-2', userId: 'user-1', userName: 'Mike Chen', userAvatar: 'MC', rating: 5, title: 'AI Development Made Accessible', content: 'This course demystified AI integration for me.', date: '2024-10-12T16:00:00Z', helpfulCount: 22, isHelpful: true, courseProgress: 100, isVerifiedPurchase: true, tags: ['Life Changing', 'Practical', 'Great Content'], status: 'published', instructorReply: { instructorName: 'Sarah Mitchell', content: 'So glad you found it useful, Mike!', date: '2024-10-13T09:00:00Z' } },
-  { id: 'rev-7', courseId: 'course-2', userId: 'user-3', userName: 'David Park', userAvatar: 'DP', rating: 5, title: 'Essential for Modern Full-Stack', content: 'As an instructor myself, I appreciate the pedagogical approach here.', date: '2024-10-08T13:20:00Z', helpfulCount: 15, isHelpful: false, courseProgress: 90, isVerifiedPurchase: true, tags: ['Practical', 'Well Structured', 'Advanced'], status: 'published' },
-  { id: 'rev-8', courseId: 'course-2', userId: 'user-9', userName: 'Jordan Lee', userAvatar: 'JL', rating: 4, title: 'Solid AI Foundation', content: 'Great course for getting started with AI integration.', date: '2024-10-01T10:45:00Z', helpfulCount: 9, isHelpful: false, courseProgress: 65, isVerifiedPurchase: true, tags: ['Great Content', 'Beginner Friendly'], status: 'published' },
-  { id: 'rev-9', courseId: 'course-3', userId: 'user-7', userName: 'Alex Johnson', userAvatar: 'AJ', rating: 5, title: 'FAANG-Level Preparation', content: 'This course is exactly what you need for system design interviews.', date: '2024-10-11T08:30:00Z', helpfulCount: 28, isHelpful: true, courseProgress: 100, isVerifiedPurchase: true, tags: ['Life Changing', 'Advanced', 'Practical'], status: 'published' },
-  { id: 'rev-10', courseId: 'course-3', userId: 'user-5', userName: 'Lisa Wang', userAvatar: 'LW', rating: 4, title: 'Thorough but Demanding', content: 'Very thorough coverage of system design concepts.', date: '2024-09-25T17:15:00Z', helpfulCount: 14, isHelpful: false, courseProgress: 80, isVerifiedPurchase: true, tags: ['Advanced', 'Well Structured'], status: 'published' },
-  { id: 'rev-11', courseId: 'course-4', userId: 'user-4', userName: 'Nina Kovac', userAvatar: 'NK', rating: 5, title: 'Beautiful Visualizations Made Easy', content: 'I never thought I could create such stunning data visualizations.', date: '2024-10-09T12:00:00Z', helpfulCount: 16, isHelpful: false, courseProgress: 100, isVerifiedPurchase: true, tags: ['Great Content', 'Practical', 'Well Structured'], status: 'published' },
-  { id: 'rev-12', courseId: 'course-4', userId: 'user-8', userName: 'Tom Wilson', userAvatar: 'TW', rating: 4, title: 'Great for Dashboard Builders', content: 'Solid course for anyone building analytics dashboards.', date: '2024-10-03T09:00:00Z', helpfulCount: 7, isHelpful: false, courseProgress: 55, isVerifiedPurchase: true, tags: ['Practical', 'Beginner Friendly'], status: 'published' },
-  { id: 'rev-13', courseId: 'course-5', userId: 'user-9', userName: 'Jordan Lee', userAvatar: 'JL', rating: 5, title: 'Design Thinking Transformed', content: 'As a developer, I was skeptical about a design course. But this changed my perspective entirely.', date: '2024-10-07T14:30:00Z', helpfulCount: 19, isHelpful: true, courseProgress: 100, isVerifiedPurchase: true, tags: ['Life Changing', 'Beginner Friendly', 'Practical'], status: 'published' },
-  { id: 'rev-14', courseId: 'course-5', userId: 'user-6', userName: 'Priya Sharma', userAvatar: 'PS', rating: 4, title: 'Good Introduction to UX/UI', content: 'A well-structured introduction to UX/UI principles.', date: '2024-09-30T16:45:00Z', helpfulCount: 10, isHelpful: false, courseProgress: 70, isVerifiedPurchase: true, tags: ['Beginner Friendly', 'Well Structured'], status: 'published' },
-  { id: 'rev-15', courseId: 'course-6', userId: 'user-3', userName: 'David Park', userAvatar: 'DP', rating: 5, title: 'DevOps Mastery Achieved', content: 'The Kubernetes and Docker sections are incredibly detailed.', date: '2024-10-06T11:00:00Z', helpfulCount: 13, isHelpful: false, courseProgress: 88, isVerifiedPurchase: true, tags: ['Advanced', 'Practical', 'Great Content'], status: 'published' },
-  { id: 'rev-16', courseId: 'course-1', userId: 'user-10', userName: 'Sam Taylor', userAvatar: 'ST', rating: 3, title: 'Good but Needs Updates', content: 'The core content is strong, but some sections feel outdated.', date: '2024-09-15T08:00:00Z', helpfulCount: 5, isHelpful: false, courseProgress: 45, isVerifiedPurchase: true, tags: ['Well Structured'], status: 'published' },
-  { id: 'rev-17', courseId: 'course-2', userId: 'user-10', userName: 'Sam Taylor', userAvatar: 'ST', rating: 2, title: 'Not Enough Depth on Fine-Tuning', content: 'The course covers AI integration basics well, but I was expecting more on fine-tuning.', date: '2024-09-10T07:30:00Z', helpfulCount: 3, isHelpful: false, courseProgress: 30, isVerifiedPurchase: true, tags: ['Beginner Friendly'], status: 'published' },
-  { id: 'rev-18', courseId: 'course-3', userId: 'user-11', userName: 'Chris Adams', userAvatar: 'CA', rating: 1, title: 'Too Theoretical', content: 'I was expecting hands-on system design exercises but found the course too theoretical.', date: '2024-08-20T19:00:00Z', helpfulCount: 2, isHelpful: false, courseProgress: 20, isVerifiedPurchase: false, tags: [], status: 'flagged' },
-  { id: 'rev-19', courseId: 'course-1', userId: 'demo-learner-1', userName: 'You', userAvatar: 'YO', rating: 5, title: 'Excellent Learning Experience', content: 'I\'m still working through this course but I can already tell it\'s one of the best investments I\'ve made.', date: '2024-10-13T20:00:00Z', helpfulCount: 6, isHelpful: false, courseProgress: 68, isVerifiedPurchase: true, tags: ['Great Content', 'Well Structured'], status: 'published', isOwnReview: true },
-  { id: 'rev-20', courseId: 'course-6', userId: 'user-11', userName: 'Chris Adams', userAvatar: 'CA', rating: 4, title: 'Solid Cloud Architecture Guide', content: 'Comprehensive coverage of cloud-native patterns.', date: '2024-09-18T13:00:00Z', helpfulCount: 8, isHelpful: false, courseProgress: 75, isVerifiedPurchase: true, tags: ['Practical', 'Advanced'], status: 'published' },
-];
+/** Map API review data to the CourseReview display type */
+function mapApiReviewToDisplay(apiReview: any): CourseReview {
+  const authorName = apiReview.author?.name || 'Unknown User';
+  const initials = authorName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+  // Extract title from content: first sentence or first 60 chars
+  const firstSentence = apiReview.content?.split(/[.!\n]/)[0] || '';
+  const title = firstSentence.length > 60 ? firstSentence.slice(0, 57) + '...' : firstSentence || 'Course Review';
+  // Map API status to display status
+  let displayStatus: CourseReview['status'] = 'published';
+  if (apiReview.status === 'flagged' || apiReview.flagged) displayStatus = 'flagged';
+  else if (apiReview.status === 'rejected') displayStatus = 'hidden';
+  else if (apiReview.status === 'pending' || apiReview.status === 'approved') displayStatus = 'published';
+  return {
+    id: apiReview.id,
+    courseId: apiReview.courseId,
+    userId: apiReview.authorId,
+    userName: authorName,
+    userAvatar: initials,
+    rating: apiReview.rating,
+    title,
+    content: apiReview.content || '',
+    date: apiReview.createdAt,
+    helpfulCount: 0,
+    isHelpful: false,
+    courseProgress: 0,
+    isVerifiedPurchase: (apiReview.author?._count?.enrollments ?? 0) > 0,
+    tags: [],
+    status: displayStatus,
+    instructorReply: apiReview.adminResponse
+      ? { instructorName: 'Admin', content: apiReview.adminResponse, date: apiReview.updatedAt }
+      : undefined,
+    isOwnReview: false,
+  };
+}
 import type { Course, Module, Lesson } from '@/types';
 import { cn } from '@/lib/utils';
+import { validateFields, required, minLength, maxLength, numeric, min } from '@/lib/validations';
 import { useAppStore } from '@/store/app-store';
 import { slugify } from '@/lib/slugify';
 import {
@@ -151,6 +163,8 @@ import {
   useCreateLesson,
   useUpdateLesson,
   useDeleteLesson,
+  useCommunityReviews,
+  useModerateReview,
 } from '@/hooks/use-data';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
@@ -473,9 +487,45 @@ function NewCourseDialog() {
   const [level, setLevel] = useState('beginner');
   const [price, setPrice] = useState('0');
   const [compareAtPrice, setCompareAtPrice] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const validate = (): boolean => {
+    const errs = validateFields({
+      title: [required(title, 'Title'), minLength(title, 3, 'Title'), maxLength(title, 200, 'Title')],
+      description: [required(description, 'Description'), minLength(description, 10, 'Description')],
+      category: [required(category, 'Category')],
+      level: [required(level, 'Level')],
+      price: [numeric(price, 'Price'), min(price, 0, 'Price')],
+    });
+    setErrors(errs);
+    setTouched({ title: true, description: true, category: true, level: true, price: true });
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleBlur = (field: string) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+    // Validate just this field on blur
+    const errs = validateFields({
+      title: [required(title, 'Title'), minLength(title, 3, 'Title'), maxLength(title, 200, 'Title')],
+      description: [required(description, 'Description'), minLength(description, 10, 'Description')],
+      category: [required(category, 'Category')],
+      level: [required(level, 'Level')],
+      price: [numeric(price, 'Price'), min(price, 0, 'Price')],
+    });
+    // Only show error for touched field
+    setErrors(prev => {
+      const next = { ...prev };
+      if (touched[field] || errs[field]) {
+        next[field] = errs[field] || '';
+        if (!next[field]) delete next[field];
+      }
+      return next;
+    });
+  };
 
   const handleCreate = () => {
-    if (!title.trim()) return;
+    if (!validate()) return;
     createCourseMutation.mutate(
       {
         tenantId,
@@ -498,6 +548,8 @@ function NewCourseDialog() {
           setLevel('beginner');
           setPrice('0');
           setCompareAtPrice('');
+          setErrors({});
+          setTouched({});
         },
       }
     );
@@ -521,18 +573,20 @@ function NewCourseDialog() {
         <div className="grid gap-5 py-4">
           <div className="grid gap-2">
             <Label htmlFor="course-title">Course Title</Label>
-            <Input id="course-title" placeholder="e.g. Advanced TypeScript Patterns" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <Input id="course-title" placeholder="e.g. Advanced TypeScript Patterns" value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => handleBlur('title')} className={errors.title ? 'border-destructive focus-visible:ring-destructive' : ''} />
+            {errors.title && <p className="text-sm text-destructive mt-1">{errors.title}</p>}
           </div>
           <div className="grid gap-2">
             <Label htmlFor="course-desc">Description</Label>
-            <Textarea id="course-desc" placeholder="Brief description of the course..." rows={3} className="resize-none" value={description} onChange={(e) => setDescription(e.target.value)} />
+            <Textarea id="course-desc" placeholder="Brief description of the course..." rows={3} value={description} onChange={(e) => setDescription(e.target.value)} onBlur={() => handleBlur('description')} className={errors.description ? 'border-destructive focus-visible:ring-destructive resize-none' : 'resize-none'} />
+            {errors.description && <p className="text-sm text-destructive mt-1">{errors.description}</p>}
           </div>
           <Separator />
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label>Category</Label>
               <Select value={category || 'Web Development'} onValueChange={setCategory}>
-                <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                <SelectTrigger className={errors.category ? 'border-destructive' : ''}><SelectValue placeholder="Select..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Web Development">Web Development</SelectItem>
                   <SelectItem value="AI & ML">AI & ML</SelectItem>
@@ -542,11 +596,12 @@ function NewCourseDialog() {
                   <SelectItem value="Marketing">Marketing</SelectItem>
                 </SelectContent>
               </Select>
+              {errors.category && <p className="text-sm text-destructive mt-1">{errors.category}</p>}
             </div>
             <div className="grid gap-2">
               <Label>Level</Label>
               <Select value={level} onValueChange={setLevel}>
-                <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                <SelectTrigger className={errors.level ? 'border-destructive' : ''}><SelectValue placeholder="Select..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="beginner">Beginner</SelectItem>
                   <SelectItem value="intermediate">Intermediate</SelectItem>
@@ -554,12 +609,14 @@ function NewCourseDialog() {
                   <SelectItem value="expert">Expert</SelectItem>
                 </SelectContent>
               </Select>
+              {errors.level && <p className="text-sm text-destructive mt-1">{errors.level}</p>}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="course-price">Price ($)</Label>
-              <Input id="course-price" type="number" placeholder="0" value={price} onChange={(e) => setPrice(e.target.value)} />
+              <Input id="course-price" type="number" placeholder="0" value={price} onChange={(e) => setPrice(e.target.value)} onBlur={() => handleBlur('price')} className={errors.price ? 'border-destructive focus-visible:ring-destructive' : ''} />
+              {errors.price && <p className="text-sm text-destructive mt-1">{errors.price}</p>}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="course-compare">Compare-at Price ($)</Label>
@@ -569,7 +626,7 @@ function NewCourseDialog() {
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={handleCreate} disabled={createCourseMutation.isPending || !title.trim()}>
+          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={handleCreate} disabled={createCourseMutation.isPending}>
             {createCourseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookOpen className="h-4 w-4" />}
             {createCourseMutation.isPending ? 'Creating...' : 'Create Course'}
           </Button>
@@ -2943,8 +3000,43 @@ function EnhancedCourseSettingsDialog({
   const [metaTitle, setMetaTitle] = useState(course.title);
   const [metaDescription, setMetaDescription] = useState(course.description?.slice(0, 160) || '');
   const [saved, setSaved] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const validate = (): boolean => {
+    const errs = validateFields({
+      title: [required(title, 'Title'), minLength(title, 3, 'Title'), maxLength(title, 200, 'Title')],
+      description: [required(description, 'Description'), minLength(description, 10, 'Description')],
+      category: [required(category, 'Category')],
+      level: [required(level, 'Level')],
+      price: [numeric(price, 'Price'), min(price, 0, 'Price')],
+    });
+    setErrors(errs);
+    setTouched({ title: true, description: true, category: true, level: true, price: true });
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleBlur = (field: string) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+    const errs = validateFields({
+      title: [required(title, 'Title'), minLength(title, 3, 'Title'), maxLength(title, 200, 'Title')],
+      description: [required(description, 'Description'), minLength(description, 10, 'Description')],
+      category: [required(category, 'Category')],
+      level: [required(level, 'Level')],
+      price: [numeric(price, 'Price'), min(price, 0, 'Price')],
+    });
+    setErrors(prev => {
+      const next = { ...prev };
+      if (touched[field] || errs[field]) {
+        next[field] = errs[field] || '';
+        if (!next[field]) delete next[field];
+      }
+      return next;
+    });
+  };
 
   const handleSave = () => {
+    if (!validate()) return;
     updateCourseMutation.mutate(
       {
         id: course.id,
@@ -3001,11 +3093,13 @@ function EnhancedCourseSettingsDialog({
             {/* Course title & description */}
             <div className="grid gap-2">
               <Label htmlFor="settings-title">Course Title</Label>
-              <Input id="settings-title" value={title} onChange={(e) => setTitle(e.target.value)} />
+              <Input id="settings-title" value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => handleBlur('title')} className={errors.title ? 'border-destructive focus-visible:ring-destructive' : ''} />
+              {errors.title && <p className="text-sm text-destructive mt-1">{errors.title}</p>}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="settings-desc">Description</Label>
-              <Textarea id="settings-desc" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="resize-none" />
+              <Textarea id="settings-desc" value={description} onChange={(e) => setDescription(e.target.value)} onBlur={() => handleBlur('description')} rows={3} className={errors.description ? 'border-destructive focus-visible:ring-destructive resize-none' : 'resize-none'} />
+              {errors.description && <p className="text-sm text-destructive mt-1">{errors.description}</p>}
             </div>
 
             <Separator />
@@ -3015,7 +3109,7 @@ function EnhancedCourseSettingsDialog({
               <div className="grid gap-2">
                 <Label>Category</Label>
                 <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                  <SelectTrigger className={errors.category ? 'border-destructive' : ''}><SelectValue placeholder="Select..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Web Development">Web Development</SelectItem>
                     <SelectItem value="AI & ML">AI & ML</SelectItem>
@@ -3025,11 +3119,12 @@ function EnhancedCourseSettingsDialog({
                     <SelectItem value="Marketing">Marketing</SelectItem>
                   </SelectContent>
                 </Select>
+                {errors.category && <p className="text-sm text-destructive mt-1">{errors.category}</p>}
               </div>
               <div className="grid gap-2">
                 <Label>Level</Label>
                 <Select value={level} onValueChange={(v) => setLevel(v as Course['level'])}>
-                  <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                  <SelectTrigger className={errors.level ? 'border-destructive' : ''}><SelectValue placeholder="Select..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="beginner">Beginner</SelectItem>
                     <SelectItem value="intermediate">Intermediate</SelectItem>
@@ -3037,6 +3132,7 @@ function EnhancedCourseSettingsDialog({
                     <SelectItem value="expert">Expert</SelectItem>
                   </SelectContent>
                 </Select>
+                {errors.level && <p className="text-sm text-destructive mt-1">{errors.level}</p>}
               </div>
               <div className="grid gap-2">
                 <Label>Language</Label>
@@ -3066,10 +3162,13 @@ function EnhancedCourseSettingsDialog({
                     type="number"
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
+                    onBlur={() => handleBlur('price')}
                     placeholder="0.00"
                     min={0}
                     step={0.01}
+                    className={errors.price ? 'border-destructive focus-visible:ring-destructive' : ''}
                   />
+                  {errors.price && <p className="text-sm text-destructive mt-1">{errors.price}</p>}
                 </div>
                 <div className="grid gap-1.5">
                   <Label className="text-xs text-muted-foreground">Compare-at price ($)</Label>
@@ -3283,7 +3382,12 @@ function CoursePreviewDialog({
 
 function ReviewManagementTab() {
   const { courses } = useCoursesData();
-  const [reviews, setReviews] = useState<CourseReview[]>(allMockReviews);
+  const tenantId = useAppStore((s) => s.currentTenant?.id) || '';
+  const { data: reviewsData, isLoading: reviewsLoading } = useCommunityReviews({
+    status: 'all',
+    tenantId: tenantId || undefined,
+  });
+  const moderateReviewMutation = useModerateReview();
   const [search, setSearch] = useState('');
   const [courseFilter, setCourseFilter] = useState('all');
   const [ratingFilter, setRatingFilter] = useState('all');
@@ -3293,6 +3397,12 @@ function ReviewManagementTab() {
   const [replyText, setReplyText] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteReviewId, setDeleteReviewId] = useState<string | null>(null);
+
+  // Map API reviews to display type
+  const reviews: CourseReview[] = useMemo(() => {
+    const apiReviews = reviewsData?.reviews || [];
+    return apiReviews.map(mapApiReviewToDisplay);
+  }, [reviewsData]);
 
   // Filter reviews
   const filteredReviews = useMemo(() => {
@@ -3319,54 +3429,39 @@ function ReviewManagementTab() {
     ? Math.round((reviews.filter((r) => r.instructorReply).length / totalReviews) * 100)
     : 0;
 
-  // Flag/unflag review
+  // Flag/unflag review via API
   const handleToggleFlag = (id: string) => {
-    setReviews((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? { ...r, status: r.status === 'flagged' ? 'published' : 'flagged' }
-          : r
-      )
-    );
+    const review = reviews.find((r) => r.id === id);
+    if (!review) return;
+    const action = review.status === 'flagged' ? 'approved' : 'flagged';
+    moderateReviewMutation.mutate({ reviewId: id, action });
   };
 
-  // Hide review
+  // Hide/reject review via API
   const handleHideReview = (id: string) => {
-    setReviews((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? { ...r, status: r.status === 'hidden' ? 'published' : 'hidden' }
-          : r
-      )
-    );
+    const review = reviews.find((r) => r.id === id);
+    if (!review) return;
+    const action = review.status === 'hidden' ? 'approved' : 'rejected';
+    moderateReviewMutation.mutate({ reviewId: id, action });
   };
 
-  // Submit reply
+  // Submit reply via API
   const handleSubmitReply = () => {
     if (!replyReviewId || !replyText.trim()) return;
-    setReviews((prev) =>
-      prev.map((r) =>
-        r.id === replyReviewId
-          ? {
-              ...r,
-              instructorReply: {
-                instructorName: 'Sarah Mitchell',
-                content: replyText.trim(),
-                date: new Date().toISOString(),
-              },
-            }
-          : r
-      )
-    );
+    moderateReviewMutation.mutate({
+      reviewId: replyReviewId,
+      action: 'approved',
+      reason: replyText.trim(),
+    });
     setReplyText('');
     setReplyReviewId(null);
     setReplyDialogOpen(false);
   };
 
-  // Delete review
+  // Delete review via API (reject it)
   const handleDeleteReview = () => {
     if (!deleteReviewId) return;
-    setReviews((prev) => prev.filter((r) => r.id !== deleteReviewId));
+    moderateReviewMutation.mutate({ reviewId: deleteReviewId, action: 'rejected' });
     setDeleteReviewId(null);
     setDeleteDialogOpen(false);
   };
@@ -3411,6 +3506,42 @@ function ReviewManagementTab() {
     flagged: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
     hidden: 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300',
   };
+
+  // Loading skeleton
+  if (reviewsLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-4">
+                <div className="h-16 bg-muted animate-pulse rounded" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card>
+          <CardContent className="p-4">
+            <div className="h-10 bg-muted animate-pulse rounded mb-4" />
+          </CardContent>
+        </Card>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Card key={i}>
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="h-9 w-9 bg-muted animate-pulse rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-muted animate-pulse rounded w-1/3" />
+                  <div className="h-3 bg-muted animate-pulse rounded w-2/3" />
+                  <div className="h-3 bg-muted animate-pulse rounded w-1/2" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

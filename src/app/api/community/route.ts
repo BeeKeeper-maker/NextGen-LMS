@@ -1,9 +1,16 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const tenantId = searchParams.get('tenantId');
+
+    const postWhere = tenantId ? { tenantId } : {};
+    const categoryWhere = tenantId ? { tenantId } : {};
+
     const posts = await db.communityPost.findMany({
+      where: postWhere,
       include: {
         author: {
           select: { id: true, name: true, avatarUrl: true, role: true },
@@ -27,6 +34,7 @@ export async function GET() {
     });
 
     const categories = await db.communityCategory.findMany({
+      where: categoryWhere,
       orderBy: { orderIndex: 'asc' },
     });
 

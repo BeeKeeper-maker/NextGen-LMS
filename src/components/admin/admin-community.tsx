@@ -40,16 +40,17 @@ import {
   useCreateCommunityPost,
   useUpdateCommunityPost,
   useDeleteCommunityPost,
+  useCommunityReviews,
+  useModerateReview,
+  useRespondToReview,
 } from '@/hooks/use-data';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useAppStore } from '@/store/app-store';
+import { validateFields, required, minLength } from '@/lib/validations';
 import type { CommunityPost, CommunityCategory } from '@/types';
 
-// ─── Mock Review Data ──────────────────────────────────────────────────────────
-// TODO: Replace with real API hooks once a review/rating moderation API is available.
-// Currently there is no /api/reviews endpoint, so this mock data is kept for the
-// Review Moderation tab UI only. When the API is ready, create useReviews() and
-// useModerateReview() hooks in @/hooks/use-data and replace the local state below.
+// ─── Review Types ────────────────────────────────────────────────────────────
+// Types derived from the CourseReview Prisma model + API includes
 
 type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'flagged';
 
@@ -74,7 +75,49 @@ interface CourseReview {
   moderationHistory: { action: string; by: string; date: string; reason?: string }[];
 }
 
-const mockReviews: CourseReview[] = [
+// Map API review data to the component's CourseReview interface
+function mapApiReviewToCourseReview(apiReview: any): CourseReview {
+  let moderationHistory: CourseReview['moderationHistory'] = [];
+  if (apiReview.moderationHistory) {
+    try {
+      moderationHistory = JSON.parse(apiReview.moderationHistory);
+    } catch {
+      moderationHistory = [];
+    }
+  }
+
+  const authorName = apiReview.author?.name || 'Unknown';
+  const nameParts = authorName.split(' ');
+  const avatarInitials = nameParts.length >= 2
+    ? nameParts[0][0] + nameParts[nameParts.length - 1][0]
+    : authorName.substring(0, 2).toUpperCase();
+
+  return {
+    id: apiReview.id,
+    courseName: apiReview.course?.title || 'Unknown Course',
+    courseThumbnail: apiReview.course?.thumbnailUrl || '',
+    reviewer: authorName,
+    reviewerEmail: apiReview.author?.email || '',
+    reviewerAvatar: avatarInitials,
+    reviewerEnrollDate: apiReview.author?.createdAt
+      ? new Date(apiReview.author.createdAt).toISOString().split('T')[0]
+      : '',
+    reviewerCoursesEnrolled: apiReview.author?._count?.enrollments || 0,
+    courseInstructor: '', // Not stored directly in review; could be derived from course data
+    courseAvgRating: apiReview.course?.avgRating || 0,
+    rating: apiReview.rating,
+    text: apiReview.content,
+    status: apiReview.status as ReviewStatus,
+    date: apiReview.createdAt ? new Date(apiReview.createdAt).toISOString().split('T')[0] : '',
+    flagged: apiReview.flagged || false,
+    flagReason: apiReview.flagReason || undefined,
+    adminResponse: apiReview.adminResponse || undefined,
+    moderationHistory,
+  };
+}
+
+// Fallback reviews used when API returns no data yet (empty DB)
+const fallbackReviews: CourseReview[] = [
   {
     id: 'r1', courseName: 'Advanced React & Next.js Masterclass', courseThumbnail: '/courses/react-next.jpg',
     reviewer: 'Mike Chen', reviewerEmail: 'mike.chen@email.com', reviewerAvatar: 'MC',
@@ -266,6 +309,8 @@ export function AdminCommunity() {
   const [newCategory, setNewCategory] = useState({ name: '', description: '', icon: '💬', color: '#10B981', isDefault: false });
   const [postDialogTab, setPostDialogTab] = useState<'compose' | 'preview'>('compose');
   const [activeMainTab, setActiveMainTab] = useState('posts');
+  const [postErrors, setPostErrors] = useState<Record<string, string>>({});
+  const [postTouched, setPostTouched] = useState<Record<string, boolean>>({});
 
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; postId: string; postTitle: string }>({
@@ -278,8 +323,6 @@ export function AdminCommunity() {
   const categories = apiCategories.length > 0 ? [...apiCategories, ...localCategories] : [...fallbackCategories, ...localCategories];
 
   // Review moderation state
-  // TODO: Replace mockReviews with real API data when review API is available
-  const [reviews, setReviews] = useState<CourseReview[]>(mockReviews);
   const [reviewStatusFilter, setReviewStatusFilter] = useState<string>('all');
   const [reviewCourseFilter, setReviewCourseFilter] = useState<string>('all');
   const [reviewRatingFilter, setReviewRatingFilter] = useState<string>('all');
@@ -289,6 +332,22 @@ export function AdminCommunity() {
   const [selectedReview, setSelectedReview] = useState<CourseReview | null>(null);
   const [rejectReason, setRejectReason] = useState<string>('');
   const [adminResponse, setAdminResponse] = useState('');
+
+  // Review moderation — real API data
+  const { data: reviewsData, isLoading: reviewsLoading } = useCommunityReviews({
+    status: reviewStatusFilter,
+    sort: reviewSort,
+    tenantId: tenantId || undefined,
+  });
+  const reviews = useMemo(() => {
+    if (reviewsData?.reviews && reviewsData.reviews.length > 0) {
+      return reviewsData.reviews.map(mapApiReviewToCourseReview);
+    }
+    return fallbackReviews;
+  }, [reviewsData]);
+
+  const moderateReviewMutation = useModerateReview();
+  const respondToReviewMutation = useRespondToReview();
 
   // Filter posts
   const filteredPosts = posts.filter((post) => {
@@ -341,6 +400,15 @@ export function AdminCommunity() {
   // ── CRUD handlers using real API mutations ──
 
   const handleCreatePost = useCallback(() => {
+    const errs = validateFields({
+      title: [required(newPost.title, 'Title'), minLength(newPost.title, 3, 'Title')],
+      content: [required(newPost.content, 'Content'), minLength(newPost.content, 10, 'Content')],
+      categoryId: [required(newPost.categoryId, 'Category')],
+    });
+    setPostErrors(errs);
+    setPostTouched({ title: true, content: true, categoryId: true });
+    if (Object.keys(errs).length > 0) return;
+
     const tags = newPost.tags ? newPost.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
     createPostMutation.mutate({
       tenantId,
@@ -357,6 +425,8 @@ export function AdminCommunity() {
         setShowCreateDialog(false);
         setNewPost({ title: '', content: '', type: 'discussion', categoryId: 'cat-1', tags: '', isPinned: false, isLocked: false, scheduledDate: '', featuredImage: '' });
         setPostDialogTab('compose');
+        setPostErrors({});
+        setPostTouched({});
       },
     });
   }, [createPostMutation, newPost, tenantId, userId]);
@@ -420,30 +490,39 @@ export function AdminCommunity() {
     setLocalCategories(updated);
   };
 
-  // Review moderation handlers
-  // TODO: Replace with real API calls when review API is available
-  const handleReviewAction = (reviewId: string, action: 'approved' | 'rejected' | 'flagged', reason?: string) => {
-    setReviews(reviews.map(r => {
-      if (r.id !== reviewId) return r;
-      return {
-        ...r,
-        status: action,
-        flagged: action === 'flagged',
-        flagReason: action === 'flagged' ? (reason || 'Flagged by admin') : r.flagReason,
-        moderationHistory: [...r.moderationHistory, { action: action.charAt(0).toUpperCase() + action.slice(1), by: 'Admin', date: new Date().toISOString().split('T')[0], reason }]
-      };
-    }));
-  };
+  // Review moderation handlers — real API mutations
+  const handleReviewAction = useCallback((reviewId: string, action: 'approved' | 'rejected' | 'flagged', reason?: string) => {
+    moderateReviewMutation.mutate({
+      reviewId,
+      action,
+      reason,
+      adminName: currentUser?.name || 'Admin',
+    });
+  }, [moderateReviewMutation, currentUser?.name]);
 
-  const handleBulkAction = (action: 'approved' | 'rejected' | 'flagged') => {
-    selectedReviews.forEach(id => handleReviewAction(id, action));
+  const handleBulkAction = useCallback((action: 'approved' | 'rejected' | 'flagged') => {
+    selectedReviews.forEach(id => {
+      moderateReviewMutation.mutate({
+        reviewId: id,
+        action,
+        reason: action === 'flagged' ? 'Bulk flagged by admin' : undefined,
+        adminName: currentUser?.name || 'Admin',
+      });
+    });
     setSelectedReviews([]);
-  };
+  }, [selectedReviews, moderateReviewMutation, currentUser?.name]);
 
-  const handleRespondToReview = (reviewId: string) => {
-    setReviews(reviews.map(r => r.id === reviewId ? { ...r, adminResponse } : r));
-    setAdminResponse('');
-  };
+  const handleRespondToReview = useCallback((reviewId: string, response: string) => {
+    if (!response.trim()) return;
+    respondToReviewMutation.mutate({
+      reviewId,
+      adminResponse: response,
+    }, {
+      onSuccess: () => {
+        setAdminResponse('');
+      },
+    });
+  }, [respondToReviewMutation, setAdminResponse]);
 
   const toggleReviewSelection = (id: string) => {
     setSelectedReviews(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
@@ -459,6 +538,7 @@ export function AdminCommunity() {
 
   // Determine if any mutation is in progress
   const isMutating = createPostMutation.isPending || updatePostMutation.isPending || deletePostMutation.isPending;
+  const isReviewMutating = moderateReviewMutation.isPending || respondToReviewMutation.isPending;
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
@@ -713,7 +793,53 @@ export function AdminCommunity() {
 
         {/* ─── Review Moderation Tab ─────────────────────────────────────────── */}
         <TabsContent value="reviews" className="space-y-4">
+          {/* Loading State */}
+          {reviewsLoading && (
+            <div className="space-y-4">
+              {/* Skeleton analytics cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Card key={i} className="border-border">
+                    <CardContent className="p-3 md:p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse">
+                          <div className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <div className="h-6 w-12 bg-slate-100 dark:bg-slate-800 rounded animate-pulse mb-1" />
+                      <div className="h-3 w-24 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+              {/* Skeleton review cards */}
+              <div className="space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Card key={i} className="border-border">
+                    <CardContent className="p-4">
+                      <div className="flex gap-4">
+                        <div className="w-5 h-5 bg-slate-100 dark:bg-slate-800 rounded animate-pulse shrink-0 mt-1" />
+                        <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <div className="flex gap-2">
+                            <div className="h-5 w-16 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+                            <div className="h-5 w-20 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+                          </div>
+                          <div className="h-4 w-48 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+                          <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+                          <div className="h-3 w-2/3 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Review Analytics */}
+          {!reviewsLoading && (
+          <>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             {[
               { label: 'Reviews This Month', value: reviewAnalytics.totalThisMonth, icon: Star, color: 'emerald' },
@@ -819,13 +945,13 @@ export function AdminCommunity() {
                 {selectedReviews.length > 0 && (
                   <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950 rounded-lg border border-emerald-200 dark:border-emerald-800">
                     <span className="text-sm text-emerald-700 font-medium">{selectedReviews.length} selected</span>
-                    <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => handleBulkAction('approved')}>
-                      <CheckCircle2 className="h-3 w-3 mr-1" /> Approve
+                    <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => handleBulkAction('approved')} disabled={isReviewMutating}>
+                      {isReviewMutating ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <CheckCircle2 className="h-3 w-3 mr-1" />} Approve
                     </Button>
-                    <Button size="sm" className="h-7 text-xs bg-red-600 hover:bg-red-700 text-white" onClick={() => handleBulkAction('rejected')}>
+                    <Button size="sm" className="h-7 text-xs bg-red-600 hover:bg-red-700 text-white" onClick={() => handleBulkAction('rejected')} disabled={isReviewMutating}>
                       <XCircle className="h-3 w-3 mr-1" /> Reject
                     </Button>
-                    <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white" onClick={() => handleBulkAction('flagged')}>
+                    <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white" onClick={() => handleBulkAction('flagged')} disabled={isReviewMutating}>
                       <Flag className="h-3 w-3 mr-1" /> Flag
                     </Button>
                   </div>
@@ -910,10 +1036,10 @@ export function AdminCommunity() {
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-400 hover:text-slate-700" onClick={() => { setSelectedReview(review); setShowReviewDetailDialog(true); }}>
                             <Eye className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-500 hover:text-emerald-700" onClick={() => handleReviewAction(review.id, 'approved')}>
-                            <CheckCircle2 className="h-4 w-4" />
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-500 hover:text-emerald-700" onClick={() => handleReviewAction(review.id, 'approved')} disabled={isReviewMutating}>
+                            {isReviewMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                           </Button>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-400 hover:text-red-600" onClick={() => handleReviewAction(review.id, 'rejected')}>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-400 hover:text-red-600" onClick={() => handleReviewAction(review.id, 'rejected')} disabled={isReviewMutating}>
                             <XCircle className="h-4 w-4" />
                           </Button>
                         </div>
@@ -927,9 +1053,12 @@ export function AdminCommunity() {
               <div className="text-center py-12">
                 <Shield className="h-12 w-12 text-slate-300 mx-auto mb-3" />
                 <p className="text-slate-500 text-lg">No reviews match your filters</p>
+                <p className="text-slate-400 text-sm mt-1">Try adjusting your status or course filters</p>
               </div>
             )}
           </div>
+          </>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -956,12 +1085,13 @@ export function AdminCommunity() {
               <>
                 <div>
                   <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Title</Label>
-                  <Input placeholder="Enter post title..." value={newPost.title} onChange={(e) => setNewPost({ ...newPost, title: e.target.value })} className="border-border focus:border-emerald-400" />
+                  <Input placeholder="Enter post title..." value={newPost.title} onChange={(e) => { setNewPost({ ...newPost, title: e.target.value }); if (postErrors.title) setPostErrors(prev => { const n = {...prev}; delete n.title; return n; }); }} onBlur={() => { setPostTouched(prev => ({...prev, title: true})); const e = validateFields({ title: [required(newPost.title, 'Title'), minLength(newPost.title, 3, 'Title')] }); if (e.title) setPostErrors(prev => ({...prev, title: e.title})); }} className={`border-border focus:border-emerald-400 ${postErrors.title ? 'border-destructive focus:border-destructive' : ''}`} />
+                  {postErrors.title && <p className="text-sm text-destructive mt-1">{postErrors.title}</p>}
                 </div>
                 {/* Rich Text Toolbar */}
                 <div>
                   <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Content</Label>
-                  <div className="border border-border rounded-lg overflow-hidden focus-within:border-emerald-400 focus-within:ring-1 focus-within:ring-emerald-400">
+                  <div className={`border border-border rounded-lg overflow-hidden focus-within:border-emerald-400 focus-within:ring-1 focus-within:ring-emerald-400 ${postErrors.content ? 'border-destructive focus-within:border-destructive focus-within:ring-destructive' : ''}`}>
                     <div className="flex items-center gap-1 p-2 bg-slate-50 dark:bg-slate-900 border-b border-border flex-wrap">
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700"><Bold className="h-3.5 w-3.5" /></Button>
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700"><Italic className="h-3.5 w-3.5" /></Button>
@@ -972,8 +1102,9 @@ export function AdminCommunity() {
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700"><Link2 className="h-3.5 w-3.5" /></Button>
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700"><ImageIcon className="h-3.5 w-3.5" /></Button>
                     </div>
-                    <Textarea placeholder="Write your post content..." value={newPost.content} onChange={(e) => setNewPost({ ...newPost, content: e.target.value })} rows={6} className="border-0 focus-visible:ring-0 resize-none" />
+                    <Textarea placeholder="Write your post content..." value={newPost.content} onChange={(e) => { setNewPost({ ...newPost, content: e.target.value }); if (postErrors.content) setPostErrors(prev => { const n = {...prev}; delete n.content; return n; }); }} onBlur={() => { setPostTouched(prev => ({...prev, content: true})); const e = validateFields({ content: [required(newPost.content, 'Content'), minLength(newPost.content, 10, 'Content')] }); if (e.content) setPostErrors(prev => ({...prev, content: e.content})); }} rows={6} className="border-0 focus-visible:ring-0 resize-none" />
                   </div>
+                  {postErrors.content && <p className="text-sm text-destructive mt-1">{postErrors.content}</p>}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -990,14 +1121,15 @@ export function AdminCommunity() {
                   </div>
                   <div>
                     <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Category</Label>
-                    <Select value={newPost.categoryId} onValueChange={(v) => setNewPost({ ...newPost, categoryId: v })}>
-                      <SelectTrigger className="border-border"><SelectValue /></SelectTrigger>
+                    <Select value={newPost.categoryId} onValueChange={(v) => { setNewPost({ ...newPost, categoryId: v }); if (postErrors.categoryId) setPostErrors(prev => { const n = {...prev}; delete n.categoryId; return n; }); }}>
+                      <SelectTrigger className={`border-border ${postErrors.categoryId ? 'border-destructive' : ''}`}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {categories.map(cat => (
                           <SelectItem key={cat.id} value={cat.id}>{cat.icon} {cat.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    {postErrors.categoryId && <p className="text-sm text-destructive mt-1">{postErrors.categoryId}</p>}
                   </div>
                 </div>
                 <div>
@@ -1063,7 +1195,7 @@ export function AdminCommunity() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowCreateDialog(false); setPostDialogTab('compose'); }} className="border-border">Cancel</Button>
-            <Button onClick={handleCreatePost} disabled={!newPost.title.trim() || !newPost.content.trim() || createPostMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Button onClick={handleCreatePost} disabled={createPostMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 text-white">
               {createPostMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {newPost.scheduledDate ? 'Schedule Post' : 'Create Post'}
             </Button>
@@ -1201,8 +1333,8 @@ export function AdminCommunity() {
                 <div>
                   <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Respond to Review</Label>
                   <Textarea placeholder="Write your response..." value={adminResponse} onChange={(e) => setAdminResponse(e.target.value)} rows={3} className="border-border focus:border-emerald-400 resize-none" />
-                  <Button size="sm" className="mt-2 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => handleRespondToReview(selectedReview.id)} disabled={!adminResponse.trim()}>
-                    <MessageSquare className="h-3.5 w-3.5 mr-1" /> Send Response
+                  <Button size="sm" className="mt-2 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => handleRespondToReview(selectedReview.id, adminResponse)} disabled={!adminResponse.trim() || respondToReviewMutation.isPending}>
+                    {respondToReviewMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <MessageSquare className="h-3.5 w-3.5 mr-1" />} Send Response
                   </Button>
                 </div>
 
@@ -1236,13 +1368,13 @@ export function AdminCommunity() {
 
                 {/* Moderation Actions */}
                 <div className="flex flex-wrap gap-2">
-                  <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5" onClick={() => { handleReviewAction(selectedReview.id, 'approved'); setShowReviewDetailDialog(false); }}>
-                    <CheckCircle2 className="h-4 w-4" /> Approve
+                  <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5" onClick={() => { handleReviewAction(selectedReview.id, 'approved'); setShowReviewDetailDialog(false); }} disabled={isReviewMutating}>
+                    {isReviewMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Approve
                   </Button>
-                  <Button className="bg-red-600 hover:bg-red-700 text-white gap-1.5" onClick={() => { handleReviewAction(selectedReview.id, 'rejected', rejectReason || 'Inappropriate'); setShowReviewDetailDialog(false); }}>
+                  <Button className="bg-red-600 hover:bg-red-700 text-white gap-1.5" onClick={() => { handleReviewAction(selectedReview.id, 'rejected', rejectReason || 'Inappropriate'); setShowReviewDetailDialog(false); }} disabled={isReviewMutating}>
                     <XCircle className="h-4 w-4" /> Reject
                   </Button>
-                  <Button className="bg-amber-600 hover:bg-amber-700 text-white gap-1.5" onClick={() => { handleReviewAction(selectedReview.id, 'flagged', 'Flagged by admin'); setShowReviewDetailDialog(false); }}>
+                  <Button className="bg-amber-600 hover:bg-amber-700 text-white gap-1.5" onClick={() => { handleReviewAction(selectedReview.id, 'flagged', 'Flagged by admin'); setShowReviewDetailDialog(false); }} disabled={isReviewMutating}>
                     <Flag className="h-4 w-4" /> Flag for Review
                   </Button>
                 </div>

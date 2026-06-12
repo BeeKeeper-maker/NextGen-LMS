@@ -1,0 +1,1627 @@
+     1→'use client';
+     2→
+     3→import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+     4→import {
+     5→  format,
+     6→  startOfMonth,
+     7→  endOfMonth,
+     8→  startOfWeek,
+     9→  endOfWeek,
+    10→  eachDayOfInterval,
+    11→  isSameMonth,
+    12→  isSameDay,
+    13→  isToday,
+    14→  addMonths,
+    15→  subMonths,
+    16→  parseISO,
+    17→  isAfter,
+    18→  isBefore,
+    19→  addMinutes,
+    20→  differenceInSeconds,
+    21→  differenceInMinutes,
+    22→  addWeeks,
+    23→  startOfWeek as getStartOfWeek,
+    24→  endOfWeek as getEndOfWeek,
+    25→  isWithinInterval,
+    26→} from 'date-fns';
+    27→import { motion, AnimatePresence } from 'framer-motion';
+    28→import {
+    29→  Plus,
+    30→  Calendar as CalendarIcon,
+    31→  List,
+    32→  ChevronLeft,
+    33→  ChevronRight,
+    34→  Clock,
+    35→  Users,
+    36→  Video,
+    37→  Copy,
+    38→  Edit3,
+    39→  XCircle,
+    40→  ExternalLink,
+    41→  Filter,
+    42→  TrendingUp,
+    43→  UserCheck,
+    44→  CalendarDays,
+    45→  Play,
+    46→  CheckCircle2,
+    47→  XCircle as XCircleIcon,
+    48→  AlertCircle,
+    49→  ArrowUpDown,
+    50→  ArrowUp,
+    51→  ArrowDown,
+    52→  Zap,
+    53→  Timer,
+    54→  Activity,
+    55→} from 'lucide-react';
+    56→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    57→import { Button } from '@/components/ui/button';
+    58→import { Input } from '@/components/ui/input';
+    59→import { Label } from '@/components/ui/label';
+    60→import { Textarea } from '@/components/ui/textarea';
+    61→import { Badge } from '@/components/ui/badge';
+    62→import { Separator } from '@/components/ui/separator';
+    63→import { Switch } from '@/components/ui/switch';
+    64→import { Progress } from '@/components/ui/progress';
+    65→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    66→import {
+    67→  Dialog,
+    68→  DialogContent,
+    69→  DialogHeader,
+    70→  DialogTitle,
+    71→  DialogFooter,
+    72→  DialogClose,
+    73→  DialogDescription,
+    74→} from '@/components/ui/dialog';
+    75→import {
+    76→  Select,
+    77→  SelectContent,
+    78→  SelectItem,
+    79→  SelectTrigger,
+    80→  SelectValue,
+    81→} from '@/components/ui/select';
+    82→import {
+    83→  Popover,
+    84→  PopoverContent,
+    85→  PopoverTrigger,
+    86→} from '@/components/ui/popover';
+    87→import { Calendar } from '@/components/ui/calendar';
+    88→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+    89→import {
+    90→  Table,
+    91→  TableBody,
+    92→  TableCell,
+    93→  TableHead,
+    94→  TableHeader,
+    95→  TableRow,
+    96→} from '@/components/ui/table';
+    97→import { useCourses } from '@/hooks/use-data';
+    98→import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+    99→import type { CalendarEvent } from '@/types';
+   100→
+   101→// TODO: Replace with real API when available - calendar events API not yet implemented
+   102→const demoCalendarEvents: CalendarEvent[] = [
+   103→  {
+   104→    id: 'evt-1',
+   105→    title: 'React & Next.js Live Q&A',
+   106→    description: 'Weekly live session for React course students. Bring your questions!',
+   107→    type: 'live_session' as const,
+   108→    startDate: new Date(Date.now() + 86400000 * 1 + 3600000 * 10).toISOString(),
+   109→    endDate: new Date(Date.now() + 86400000 * 1 + 3600000 * 11.5).toISOString(),
+   110→    courseId: 'course-1',
+   111→    instructorName: 'Sarah Mitchell',
+   112→    meetingUrl: 'https://meet.nextgen-lms.com/react-qa',
+   113→    color: '#6366F1',
+   114→    attendees: 34,
+   115→    maxAttendees: 50,
+   116→  },
+   117→  {
+   118→    id: 'evt-2',
+   119→    title: 'System Design Cohort Kickoff',
+   120→    description: 'Orientation session for the new System Design cohort. Meet your peers and instructor.',
+   121→    type: 'cohort_start' as const,
+   122→    startDate: new Date(Date.now() + 86400000 * 3 + 3600000 * 18).toISOString(),
+   123→    endDate: new Date(Date.now() + 86400000 * 3 + 3600000 * 19).toISOString(),
+   124→    courseId: 'course-3',
+   125→    instructorName: 'David Park',
+   126→    meetingUrl: 'https://meet.nextgen-lms.com/system-design',
+   127→    color: '#EF4444',
+   128→    attendees: 18,
+   129→    maxAttendees: 25,
+   130→  },
+   131→  {
+   132→    id: 'evt-3',
+   133→    title: 'AI Lab: Building with LLMs',
+   134→    description: 'Hands-on workshop: Build an AI-powered chatbot from scratch using modern APIs.',
+   135→    type: 'workshop' as const,
+   136→    startDate: new Date(Date.now() + 86400000 * 5 + 3600000 * 14).toISOString(),
+   137→    endDate: new Date(Date.now() + 86400000 * 5 + 3600000 * 17).toISOString(),
+   138→    courseId: 'course-2',
+   139→    instructorName: 'Sarah Mitchell',
+   140→    meetingUrl: 'https://meet.nextgen-lms.com/ai-lab',
+   141→    color: '#10B981',
+   142→    attendees: 22,
+   143→    maxAttendees: 30,
+   144→  },
+   145→  {
+   146→    id: 'evt-4',
+   147→    title: 'Office Hours: Data Visualization',
+   148→    description: 'Drop-in office hours for Data Visualization students. Get help with your projects.',
+   149→    type: 'office_hours' as const,
+   150→    startDate: new Date(Date.now() + 86400000 * 2 + 3600000 * 15).toISOString(),
+   151→    endDate: new Date(Date.now() + 86400000 * 2 + 3600000 * 16).toISOString(),
+   152→    courseId: 'course-4',
+   153→    instructorName: 'Lisa Wang',
+   154→    meetingUrl: 'https://meet.nextgen-lms.com/data-viz-office',
+   155→    color: '#F59E0B',
+   156→    attendees: 8,
+   157→    maxAttendees: 15,
+   158→  },
+   159→  {
+   160→    id: 'evt-5',
+   161→    title: 'Webinar: Future of AI in Education',
+   162→    description: 'Special guest panel discussing the impact of AI on learning and education technology.',
+   163→    type: 'webinar' as const,
+   164→    startDate: new Date(Date.now() + 86400000 * 7 + 3600000 * 12).toISOString(),
+   165→    endDate: new Date(Date.now() + 86400000 * 7 + 3600000 * 13.5).toISOString(),
+   166→    color: '#8B5CF6',
+   167→    attendees: 156,
+   168→    maxAttendees: 500,
+   169→  },
+   170→  {
+   171→    id: 'evt-6',
+   172→    title: 'Assessment Deadline: React Quiz',
+   173→    description: 'Final deadline for the React & Next.js Fundamentals Quiz.',
+   174→    type: 'deadline' as const,
+   175→    startDate: new Date(Date.now() + 86400000 * 4 + 3600000 * 23).toISOString(),
+   176→    endDate: new Date(Date.now() + 86400000 * 4 + 3600000 * 23.05).toISOString(),
+   177→    courseId: 'course-1',
+   178→    color: '#DC2626',
+   179→  },
+   180→  {
+   181→    id: 'evt-7',
+   182→    title: 'Cohort Wrap-Up: AI Full Stack',
+   183→    description: 'Final presentations and celebration for the AI Full Stack cohort.',
+   184→    type: 'cohort_end' as const,
+   185→    startDate: new Date(Date.now() + 86400000 * 10 + 3600000 * 17).toISOString(),
+   186→    endDate: new Date(Date.now() + 86400000 * 10 + 3600000 * 19).toISOString(),
+   187→    courseId: 'course-2',
+   188→    instructorName: 'Sarah Mitchell',
+   189→    color: '#10B981',
+   190→    attendees: 20,
+   191→    maxAttendees: 25,
+   192→  },
+   193→  {
+   194→    id: 'evt-8',
+   195→    title: 'Design Critique Session',
+   196→    description: 'Live design review for UX/UI students. Share your work and get feedback.',
+   197→    type: 'live_session' as const,
+   198→    startDate: new Date(Date.now() + 86400000 * 6 + 3600000 * 16).toISOString(),
+   199→    endDate: new Date(Date.now() + 86400000 * 6 + 3600000 * 17.5).toISOString(),
+   200→    courseId: 'course-5',
+   201→    instructorName: 'Lisa Wang',
+   202→    meetingUrl: 'https://meet.nextgen-lms.com/design-crit',
+   203→    color: '#EC4899',
+   204→    attendees: 12,
+   205→    maxAttendees: 20,
+   206→  },
+   207→];
+   208→
+   209→// Event type color mapping
+   210→const eventTypeColors: Record<string, string> = {
+   211→  live_session: '#6366F1',
+   212→  cohort_start: '#10B981',
+   213→  cohort_end: '#10B981',
+   214→  office_hours: '#F59E0B',
+   215→  workshop: '#3B82F6',
+   216→  webinar: '#8B5CF6',
+   217→  deadline: '#EF4444',
+   218→};
+   219→
+   220→const eventTypeLabels: Record<string, string> = {
+   221→  live_session: 'Live Session',
+   222→  cohort_start: 'Cohort Start',
+   223→  cohort_end: 'Cohort End',
+   224→  office_hours: 'Office Hours',
+   225→  workshop: 'Workshop',
+   226→  webinar: 'Webinar',
+   227→  deadline: 'Deadline',
+   228→};
+   229→
+   230→const presetColors = [
+   231→  '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#EF4444',
+   232→  '#EC4899', '#14B8A6', '#F97316', '#64748B',
+   233→];
+   234→
+   235→// Session status type
+   236→type SessionStatus = 'upcoming' | 'live' | 'completed' | 'cancelled';
+   237→
+   238→// Derive session status from event
+   239→function getSessionStatus(event: CalendarEvent): SessionStatus {
+   240→  if ((event as CalendarEvent & { status?: SessionStatus }).status === 'cancelled') return 'cancelled';
+   241→  const now = new Date();
+   242→  const start = parseISO(event.startDate);
+   243→  const end = parseISO(event.endDate);
+   244→  if (isBefore(end, now)) return 'completed';
+   245→  if (isAfter(start, now)) return 'upcoming';
+   246→  return 'live';
+   247→}
+   248→
+   249→const statusConfig: Record<SessionStatus, { label: string; color: string; bgColor: string; icon: React.ComponentType<{ className?: string }> }> = {
+   250→  upcoming: { label: 'Upcoming', color: '#3B82F6', bgColor: 'bg-blue-100 dark:bg-blue-950', icon: Clock },
+   251→  live: { label: 'Live Now', color: '#EF4444', bgColor: 'bg-red-100 dark:bg-red-950', icon: Zap },
+   252→  completed: { label: 'Completed', color: '#64748B', bgColor: 'bg-slate-100 dark:bg-slate-900', icon: CheckCircle2 },
+   253→  cancelled: { label: 'Cancelled', color: '#EF4444', bgColor: 'bg-red-100 dark:bg-red-950', icon: XCircleIcon },
+   254→};
+   255→
+   256→// Duration options
+   257→const durationOptions = [
+   258→  { value: 15, label: '15 min' },
+   259→  { value: 30, label: '30 min' },
+   260→  { value: 45, label: '45 min' },
+   261→  { value: 60, label: '1 hour' },
+   262→  { value: 90, label: '1.5 hours' },
+   263→  { value: 120, label: '2 hours' },
+   264→  { value: 180, label: '3 hours' },
+   265→];
+   266→
+   267→// Attendee name pool for avatar generation
+   268→const attendeeNames = [
+   269→  'AK', 'BJ', 'CL', 'DM', 'EN', 'FS', 'GT', 'HW', 'IR', 'JS',
+   270→  'KT', 'LM', 'MN', 'NO', 'PR', 'QS', 'RT', 'SU', 'TV', 'UW',
+   271→];
+   272→
+   273→// Countdown Timer Component
+   274→function CountdownTimer({ targetDate, color }: { targetDate: string; color: string }) {
+   275→  const [timeLeft, setTimeLeft] = useState('');
+   276→  const [isUrgent, setIsUrgent] = useState(false);
+   277→  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+   278→
+   279→  useEffect(() => {
+   280→    const updateTimer = () => {
+   281→      const now = new Date();
+   282→      const target = parseISO(targetDate);
+   283→      const diffSeconds = differenceInSeconds(target, now);
+   284→
+   285→      if (diffSeconds <= 0) {
+   286→        setTimeLeft('Starting now');
+   287→        setIsUrgent(true);
+   288→        if (intervalRef.current) clearInterval(intervalRef.current);
+   289→        return;
+   290→      }
+   291→
+   292→      setIsUrgent(diffSeconds < 900); // 15 minutes
+   293→
+   294→      const days = Math.floor(diffSeconds / 86400);
+   295→      const hours = Math.floor((diffSeconds % 86400) / 3600);
+   296→      const minutes = Math.floor((diffSeconds % 3600) / 60);
+   297→      const seconds = diffSeconds % 60;
+   298→
+   299→      if (days > 0) {
+   300→        setTimeLeft(`${days}d ${hours}h ${minutes}m`);
+   301→      } else if (hours > 0) {
+   302→        setTimeLeft(`${hours}h ${minutes}m ${seconds}s`);
+   303→      } else if (minutes > 0) {
+   304→        setTimeLeft(`${minutes}m ${seconds}s`);
+   305→      } else {
+   306→        setTimeLeft(`${seconds}s`);
+   307→      }
+   308→    };
+   309→
+   310→    updateTimer();
+   311→    intervalRef.current = setInterval(updateTimer, 1000);
+   312→
+   313→    return () => {
+   314→      if (intervalRef.current) clearInterval(intervalRef.current);
+   315→    };
+   316→  }, [targetDate]);
+   317→
+   318→  return (
+   319→    <motion.div
+   320→      className="flex items-center gap-1.5 text-xs font-mono"
+   321→      animate={isUrgent ? { scale: [1, 1.02, 1] } : {}}
+   322→      transition={isUrgent ? { duration: 0.8, repeat: Infinity } : {}}
+   323→    >
+   324→      <Timer className="h-3.5 w-3.5" style={{ color }} />
+   325→      <span className={isUrgent ? 'text-red-500 font-bold' : 'text-muted-foreground'}>
+   326→        {timeLeft}
+   327→      </span>
+   328→    </motion.div>
+   329→  );
+   330→}
+   331→
+   332→// Attendee Avatars Component
+   333→function AttendeeAvatars({ attendees, maxAttendees }: { attendees: number; maxAttendees: number }) {
+   334→  const displayCount = Math.min(attendees, 5);
+   335→  const overflow = attendees - displayCount;
+   336→  const percent = Math.round((attendees / maxAttendees) * 100);
+   337→
+   338→  return (
+   339→    <div className="flex items-center gap-2">
+   340→      <div className="flex -space-x-2">
+   341→        {Array.from({ length: displayCount }).map((_, i) => (
+   342→          <Avatar key={i} className="h-6 w-6 border-2 border-background">
+   343→            <AvatarFallback className="text-[8px] font-medium" style={{ backgroundColor: presetColors[i % presetColors.length] + '30', color: presetColors[i % presetColors.length] }}>
+   344→              {attendeeNames[i]}
+   345→            </AvatarFallback>
+   346→          </Avatar>
+   347→        ))}
+   348→        {overflow > 0 && (
+   349→          <Avatar className="h-6 w-6 border-2 border-background">
+   350→            <AvatarFallback className="text-[8px] font-medium bg-muted text-muted-foreground">
+   351→              +{overflow}
+   352→            </AvatarFallback>
+   353→          </Avatar>
+   354→        )}
+   355→      </div>
+   356→      <div className="flex items-center gap-2 min-w-[100px]">
+   357→        <Progress value={percent} className="h-1.5 flex-1" />
+   358→        <span className="text-[10px] text-muted-foreground whitespace-nowrap font-medium">
+   359→          {attendees}/{maxAttendees}
+   360→        </span>
+   361→      </div>
+   362→    </div>
+   363→  );
+   364→}
+   365→
+   366→// Form validation
+   367→interface FormErrors {
+   368→  title?: string;
+   369→  date?: string;
+   370→  time?: string;
+   371→  duration?: string;
+   372→  maxAttendees?: string;
+   373→}
+   374→
+   375→export function AdminLiveCohorts() {
+   376→  const [currentMonth, setCurrentMonth] = useState(new Date());
+   377→  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+   378→  const [filterType, setFilterType] = useState<string>('all');
+   379→  const [showCreateDialog, setShowCreateDialog] = useState(false);
+   380→  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+   381→  const { data: coursesData } = useCourses();
+   382→  const demoCourses = coursesData || [];
+   383→  // TODO: Replace with real API when available - calendar events API not yet implemented
+   384→  const [events, setEvents] = useState<CalendarEvent[]>(demoCalendarEvents);
+   385→  const [copiedId, setCopiedId] = useState<string | null>(null);
+   386→  const [confirmCancelEvent, setConfirmCancelEvent] = useState<string | null>(null);
+   387→
+   388→  // Schedule session form state
+   389→  const [newEvent, setNewEvent] = useState<Partial<CalendarEvent>>({
+   390→    type: 'live_session',
+   391→    color: '#6366F1',
+   392→    isRecurring: false,
+   393→    recurrencePattern: 'weekly',
+   394→    maxAttendees: 50,
+   395→  });
+   396→  const [eventDate, setEventDate] = useState<Date>();
+   397→  const [startTime, setStartTime] = useState('10:00');
+   398→  const [duration, setDuration] = useState<number>(60);
+   399→  const [formErrors, setFormErrors] = useState<FormErrors>({});
+   400→  const [showSuccess, setShowSuccess] = useState(false);
+   401→
+   402→  // Sort state for list view
+   403→  const [sortField, setSortField] = useState<'startDate' | 'title' | 'type' | 'attendees'>('startDate');
+   404→  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+   405→
+   406→  // Filtered events
+   407→  const filteredEvents = useMemo(() => {
+   408→    if (filterType === 'all') return events;
+   409→    return events.filter((e) => e.type === filterType);
+   410→  }, [events, filterType]);
+   411→
+   412→  // Calendar grid data
+   413→  const calendarDays = useMemo(() => {
+   414→    const monthStart = startOfMonth(currentMonth);
+   415→    const monthEnd = endOfMonth(currentMonth);
+   416→    const calStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+   417→    const calEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+   418→    return eachDayOfInterval({ start: calStart, end: calEnd });
+   419→  }, [currentMonth]);
+   420→
+   421→  // Events for a specific day
+   422→  const getEventsForDay = useCallback(
+   423→    (day: Date) => {
+   424→      return filteredEvents.filter((event) => {
+   425→        try {
+   426→          const eventStart = parseISO(event.startDate);
+   427→          return isSameDay(eventStart, day);
+   428→        } catch {
+   429→          return false;
+   430→        }
+   431→      });
+   432→    },
+   433→    [filteredEvents]
+   434→  );
+   435→
+   436→  // Quick Stats
+   437→  const stats = useMemo(() => {
+   438→    const now = new Date();
+   439→    const monthStart = startOfMonth(now);
+   440→    const monthEnd = endOfMonth(now);
+   441→    const weekStart = getStartOfWeek(now, { weekStartsOn: 1 });
+   442→    const weekEnd = getEndOfWeek(now, { weekStartsOn: 1 });
+   443→
+   444→    const sessionsThisMonth = events.filter((e) => {
+   445→      try {
+   446→        const start = parseISO(e.startDate);
+   447→        return isWithinInterval(start, { start: monthStart, end: monthEnd });
+   448→      } catch {
+   449→        return false;
+   450→      }
+   451→    }).length;
+   452→
+   453→    const upcomingThisWeek = events.filter((e) => {
+   454→      try {
+   455→        const start = parseISO(e.startDate);
+   456→        return isAfter(start, now) && isWithinInterval(start, { start: weekStart, end: weekEnd });
+   457→      } catch {
+   458→        return false;
+   459→      }
+   460→    }).length;
+   461→
+   462→    const totalAttendees = events.reduce((sum, e) => sum + (e.attendees || 0), 0);
+   463→
+   464→    const withAttendees = events.filter((e) => e.attendees && e.maxAttendees);
+   465→    const avgAttendance = withAttendees.length === 0
+   466→      ? 0
+   467→      : Math.round(
+   468→          withAttendees.reduce((sum, e) => sum + ((e.attendees || 0) / (e.maxAttendees || 1)) * 100, 0) /
+   469→            withAttendees.length
+   470→        );
+   471→
+   472→    return { sessionsThisMonth, upcomingThisWeek, totalAttendees, avgAttendance };
+   473→  }, [events]);
+   474→
+   475→  // Validate form
+   476→  const validateForm = useCallback((): boolean => {
+   477→    const errors: FormErrors = {};
+   478→    if (!newEvent.title?.trim()) errors.title = 'Title is required';
+   479→    if (!eventDate) errors.date = 'Date is required';
+   480→    if (!startTime) errors.time = 'Start time is required';
+   481→    if (duration <= 0) errors.duration = 'Duration must be positive';
+   482→    if (newEvent.maxAttendees && newEvent.maxAttendees < 1) errors.maxAttendees = 'At least 1 attendee required';
+   483→
+   484→    setFormErrors(errors);
+   485→    return Object.keys(errors).length === 0;
+   486→  }, [newEvent, eventDate, startTime, duration]);
+   487→
+   488→  // Create event handler
+   489→  const handleCreateEvent = () => {
+   490→    if (!validateForm()) return;
+   491→
+   492→    const startDate = new Date(eventDate!);
+   493→    const [sh, sm] = startTime.split(':').map(Number);
+   494→    startDate.setHours(sh, sm, 0);
+   495→    const endDate = addMinutes(startDate, duration);
+   496→
+   497→    const created: CalendarEvent = {
+   498→      id: `evt-${Date.now()}`,
+   499→      title: newEvent.title || '',
+   500→      description: newEvent.description,
+   501→      type: (newEvent.type as CalendarEvent['type']) || 'live_session',
+   502→      startDate: startDate.toISOString(),
+   503→      endDate: endDate.toISOString(),
+   504→      courseId: newEvent.courseId,
+   505→      instructorName: newEvent.instructorName,
+   506→      meetingUrl: newEvent.meetingUrl,
+   507→      color: newEvent.color || '#6366F1',
+   508→      attendees: 0,
+   509→      maxAttendees: newEvent.maxAttendees,
+   510→      isRecurring: newEvent.isRecurring,
+   511→      recurrencePattern: newEvent.isRecurring ? newEvent.recurrencePattern : undefined,
+   512→    };
+   513→
+   514→    setEvents((prev) => [...prev, created]);
+   515→    setShowSuccess(true);
+   516→
+   517→    setTimeout(() => {
+   518→      setShowSuccess(false);
+   519→      setShowCreateDialog(false);
+   520→      resetForm();
+   521→    }, 1500);
+   522→  };
+   523→
+   524→  const resetForm = () => {
+   525→    setNewEvent({
+   526→      type: 'live_session',
+   527→      color: '#6366F1',
+   528→      isRecurring: false,
+   529→      recurrencePattern: 'weekly',
+   530→      maxAttendees: 50,
+   531→    });
+   532→    setEventDate(undefined);
+   533→    setStartTime('10:00');
+   534→    setDuration(60);
+   535→    setFormErrors({});
+   536→  };
+   537→
+   538→  // Cancel event
+   539→  const handleCancelEvent = (id: string) => {
+   540→    setEvents((prev) => prev.filter((e) => e.id !== id));
+   541→  };
+   542→
+   543→  // Copy meeting link
+   544→  const handleCopyLink = (url: string, id: string) => {
+   545→    navigator.clipboard.writeText(url);
+   546→    setCopiedId(id);
+   547→    setTimeout(() => setCopiedId(null), 2000);
+   548→  };
+   549→
+   550→  // Check if event starts within 15 minutes
+   551→  const isStartingWithin15 = (event: CalendarEvent) => {
+   552→    const start = parseISO(event.startDate);
+   553→    const now = new Date();
+   554→    const fifteenMinFromNow = addMinutes(now, 15);
+   555→    return isAfter(start, now) && isBefore(start, fifteenMinFromNow);
+   556→  };
+   557→
+   558→  // Check if event is currently live
+   559→  const isEventLive = (event: CalendarEvent) => {
+   560→    const now = new Date();
+   561→    const start = parseISO(event.startDate);
+   562→    const end = parseISO(event.endDate);
+   563→    return isBefore(start, now) && isAfter(end, now);
+   564→  };
+   565→
+   566→  // Sort handler
+   567→  const handleSort = (field: typeof sortField) => {
+   568→    if (sortField === field) {
+   569→      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+   570→    } else {
+   571→      setSortField(field);
+   572→      setSortDirection('asc');
+   573→    }
+   574→  };
+   575→
+   576→  // Sorted events for list view
+   577→  const sortedEvents = useMemo(() => {
+   578→    const sorted = [...filteredEvents]
+   579→      .filter((e) => isAfter(parseISO(e.startDate), subMonths(new Date(), 1)))
+   580→      .sort((a, b) => {
+   581→        let cmp = 0;
+   582→        switch (sortField) {
+   583→          case 'startDate':
+   584→            cmp = parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime();
+   585→            break;
+   586→          case 'title':
+   587→            cmp = a.title.localeCompare(b.title);
+   588→            break;
+   589→          case 'type':
+   590→            cmp = a.type.localeCompare(b.type);
+   591→            break;
+   592→          case 'attendees':
+   593→            cmp = (a.attendees || 0) - (b.attendees || 0);
+   594→            break;
+   595→        }
+   596→        return sortDirection === 'asc' ? cmp : -cmp;
+   597→      });
+   598→    return sorted;
+   599→  }, [filteredEvents, sortField, sortDirection]);
+   600→
+   601→  // Day detail popover
+   602→  const selectedDayEvents = selectedDay ? getEventsForDay(selectedDay) : [];
+   603→
+   604→  // Sort icon helper
+   605→  const SortIcon = ({ field }: { field: typeof sortField }) => {
+   606→    if (sortField !== field) return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/50" />;
+   607→    return sortDirection === 'asc'
+   608→      ? <ArrowUp className="h-3.5 w-3.5 text-foreground" />
+   609→      : <ArrowDown className="h-3.5 w-3.5 text-foreground" />;
+   610→  };
+   611→
+   612→  return (
+   613→    <div className="p-4 md:p-6 space-y-6 max-w-[1400px] mx-auto">
+   614→      {/* Header */}
+   615→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+   616→        <div>
+   617→          <h1 className="text-2xl font-bold text-foreground">Live Cohorts</h1>
+   618→          <p className="text-sm text-muted-foreground mt-1">Schedule and manage live sessions, workshops, and cohort events</p>
+   619→        </div>
+   620→        <Button onClick={() => { resetForm(); setShowCreateDialog(true); }} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+   621→          <Plus className="h-4 w-4" />
+   622→          Schedule Session
+   623→        </Button>
+   624→      </div>
+   625→
+   626→      {/* Top Bar: View Toggle + Filter */}
+   627→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+   628→        <div className="flex items-center gap-2">
+   629→          <div className="inline-flex rounded-lg border border-border bg-card p-1">
+   630→            <Button
+   631→              variant={viewMode === 'calendar' ? 'default' : 'ghost'}
+   632→              size="sm"
+   633→              onClick={() => setViewMode('calendar')}
+   634→              className="gap-1.5"
+   635→            >
+   636→              <CalendarIcon className="h-4 w-4" />
+   637→              Calendar
+   638→            </Button>
+   639→            <Button
+   640→              variant={viewMode === 'list' ? 'default' : 'ghost'}
+   641→              size="sm"
+   642→              onClick={() => setViewMode('list')}
+   643→              className="gap-1.5"
+   644→            >
+   645→              <List className="h-4 w-4" />
+   646→              List
+   647→            </Button>
+   648→          </div>
+   649→        </div>
+   650→        <div className="flex items-center gap-2">
+   651→          <Filter className="h-4 w-4 text-muted-foreground" />
+   652→          <Select value={filterType} onValueChange={setFilterType}>
+   653→            <SelectTrigger className="w-[180px]">
+   654→              <SelectValue placeholder="Filter by type" />
+   655→            </SelectTrigger>
+   656→            <SelectContent>
+   657→              <SelectItem value="all">All Event Types</SelectItem>
+   658→              <SelectItem value="live_session">Live Session</SelectItem>
+   659→              <SelectItem value="cohort_start">Cohort Start</SelectItem>
+   660→              <SelectItem value="cohort_end">Cohort End</SelectItem>
+   661→              <SelectItem value="office_hours">Office Hours</SelectItem>
+   662→              <SelectItem value="workshop">Workshop</SelectItem>
+   663→              <SelectItem value="webinar">Webinar</SelectItem>
+   664→              <SelectItem value="deadline">Deadline</SelectItem>
+   665→            </SelectContent>
+   666→          </Select>
+   667→        </div>
+   668→      </div>
+   669→
+   670→      {/* Quick Stats - 4 cards */}
+   671→      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   672→        <motion.div
+   673→          initial={{ opacity: 0, y: 12 }}
+   674→          animate={{ opacity: 1, y: 0 }}
+   675→          transition={{ duration: 0.3 }}
+   676→        >
+   677→          <Card className="border-l-4 border-l-violet-500 hover:shadow-md transition-shadow">
+   678→            <CardContent className="p-4 flex items-center gap-4">
+   679→              <div className="h-10 w-10 rounded-lg bg-violet-100 dark:bg-violet-950 flex items-center justify-center">
+   680→                <CalendarDays className="h-5 w-5 text-violet-600" />
+   681→              </div>
+   682→              <div>
+   683→                <p className="text-2xl font-bold text-foreground">{stats.sessionsThisMonth}</p>
+   684→                <p className="text-xs text-muted-foreground">Sessions This Month</p>
+   685→              </div>
+   686→            </CardContent>
+   687→          </Card>
+   688→        </motion.div>
+   689→
+   690→        <motion.div
+   691→          initial={{ opacity: 0, y: 12 }}
+   692→          animate={{ opacity: 1, y: 0 }}
+   693→          transition={{ duration: 0.3, delay: 0.05 }}
+   694→        >
+   695→          <Card className="border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow">
+   696→            <CardContent className="p-4 flex items-center gap-4">
+   697→              <div className="h-10 w-10 rounded-lg bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center">
+   698→                <Activity className="h-5 w-5 text-emerald-600" />
+   699→              </div>
+   700→              <div>
+   701→                <p className="text-2xl font-bold text-foreground">{stats.upcomingThisWeek}</p>
+   702→                <p className="text-xs text-muted-foreground">Upcoming This Week</p>
+   703→              </div>
+   704→            </CardContent>
+   705→          </Card>
+   706→        </motion.div>
+   707→
+   708→        <motion.div
+   709→          initial={{ opacity: 0, y: 12 }}
+   710→          animate={{ opacity: 1, y: 0 }}
+   711→          transition={{ duration: 0.3, delay: 0.1 }}
+   712→        >
+   713→          <Card className="border-l-4 border-l-amber-500 hover:shadow-md transition-shadow">
+   714→            <CardContent className="p-4 flex items-center gap-4">
+   715→              <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-950 flex items-center justify-center">
+   716→                <TrendingUp className="h-5 w-5 text-amber-600" />
+   717→              </div>
+   718→              <div>
+   719→                <p className="text-2xl font-bold text-foreground">{stats.avgAttendance}%</p>
+   720→                <p className="text-xs text-muted-foreground">Avg. Attendance Rate</p>
+   721→              </div>
+   722→            </CardContent>
+   723→          </Card>
+   724→        </motion.div>
+   725→
+   726→        <motion.div
+   727→          initial={{ opacity: 0, y: 12 }}
+   728→          animate={{ opacity: 1, y: 0 }}
+   729→          transition={{ duration: 0.3, delay: 0.15 }}
+   730→        >
+   731→          <Card className="border-l-4 border-l-rose-500 hover:shadow-md transition-shadow">
+   732→            <CardContent className="p-4 flex items-center gap-4">
+   733→              <div className="h-10 w-10 rounded-lg bg-rose-100 dark:bg-rose-950 flex items-center justify-center">
+   734→                <Users className="h-5 w-5 text-rose-600" />
+   735→              </div>
+   736→              <div>
+   737→                <p className="text-2xl font-bold text-foreground">{stats.totalAttendees}</p>
+   738→                <p className="text-xs text-muted-foreground">Total Attendees</p>
+   739→              </div>
+   740→            </CardContent>
+   741→          </Card>
+   742→        </motion.div>
+   743→      </div>
+   744→
+   745→      {/* Calendar View */}
+   746→      {viewMode === 'calendar' && (
+   747→        <Card className="shadow-sm hover:shadow-md transition-shadow">
+   748→          <CardContent className="p-4 md:p-6">
+   749→            {/* Month Navigation */}
+   750→            <div className="flex items-center justify-between mb-6">
+   751→              <Button variant="ghost" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+   752→                <ChevronLeft className="h-5 w-5" />
+   753→              </Button>
+   754→              <h2 className="text-lg font-semibold text-foreground">
+   755→                {format(currentMonth, 'MMMM yyyy')}
+   756→              </h2>
+   757→              <Button variant="ghost" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+   758→                <ChevronRight className="h-5 w-5" />
+   759→              </Button>
+   760→            </div>
+   761→
+   762→            {/* Color Legend */}
+   763→            <div className="flex flex-wrap gap-3 mb-4">
+   764→              {Object.entries(eventTypeLabels).map(([type, label]) => (
+   765→                <div key={type} className="flex items-center gap-1.5">
+   766→                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: eventTypeColors[type] }} />
+   767→                  <span className="text-[10px] text-muted-foreground">{label}</span>
+   768→                </div>
+   769→              ))}
+   770→            </div>
+   771→
+   772→            {/* Day-of-week headers */}
+   773→            <div className="grid grid-cols-7 mb-2">
+   774→              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
+   775→                <div key={day} className="text-center text-xs font-medium text-muted-foreground py-2">
+   776→                  {day}
+   777→                </div>
+   778→              ))}
+   779→            </div>
+   780→
+   781→            {/* Calendar Grid */}
+   782→            <div className="grid grid-cols-7 border-t border-l border-border">
+   783→              {calendarDays.map((day) => {
+   784→                const dayEvents = getEventsForDay(day);
+   785→                const isCurrentMonth = isSameMonth(day, currentMonth);
+   786→                const isDayToday = isToday(day);
+   787→                const isSelected = selectedDay && isSameDay(day, selectedDay);
+   788→                const maxVisible = 3;
+   789→                const overflow = dayEvents.length - maxVisible;
+   790→
+   791→                return (
+   792→                  <div
+   793→                    key={day.toISOString()}
+   794→                    onClick={() => setSelectedDay(isSelected ? null : day)}
+   795→                    className={`
+   796→                      min-h-[80px] md:min-h-[100px] p-1 md:p-2 border-r border-b border-border cursor-pointer transition-colors
+   797→                      ${!isCurrentMonth ? 'bg-muted/30' : 'bg-background hover:bg-muted/50'}
+   798→                      ${isSelected ? 'ring-2 ring-inset ring-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20' : ''}
+   799→                    `}
+   800→                  >
+   801→                    <div className={`
+   802→                      text-xs md:text-sm font-medium mb-1 
+   803→                      ${!isCurrentMonth ? 'text-muted-foreground/50' : ''}
+   804→                      ${isDayToday ? 'bg-emerald-600 text-white rounded-full w-6 h-6 md:w-7 md:h-7 flex items-center justify-center' : 'text-foreground'}
+   805→                    `}>
+   806→                      {format(day, 'd')}
+   807→                    </div>
+   808→                    <div className="space-y-0.5">
+   809→                      {dayEvents.slice(0, maxVisible).map((event) => (
+   810→                        <motion.div
+   811→                          key={event.id}
+   812→                          initial={{ opacity: 0, scale: 0.9 }}
+   813→                          animate={{ opacity: 1, scale: 1 }}
+   814→                          transition={{ duration: 0.2 }}
+   815→                          className="text-[10px] md:text-xs truncate rounded px-1 py-0.5 text-white font-medium leading-tight"
+   816→                          style={{ backgroundColor: event.color || eventTypeColors[event.type] }}
+   817→                          title={event.title}
+   818→                        >
+   819→                          {event.title}
+   820→                        </motion.div>
+   821→                      ))}
+   822→                      {overflow > 0 && (
+   823→                        <div className="text-[10px] md:text-xs text-muted-foreground font-medium px-1">
+   824→                          +{overflow} more
+   825→                        </div>
+   826→                      )}
+   827→                    </div>
+   828→                    {/* Dot indicators for small screens */}
+   829→                    {dayEvents.length > 0 && (
+   830→                      <div className="flex gap-0.5 mt-1 md:hidden">
+   831→                        {dayEvents.slice(0, 5).map((event) => (
+   832→                          <div
+   833→                            key={event.id}
+   834→                            className="h-1.5 w-1.5 rounded-full"
+   835→                            style={{ backgroundColor: event.color || eventTypeColors[event.type] }}
+   836→                          />
+   837→                        ))}
+   838→                      </div>
+   839→                    )}
+   840→                  </div>
+   841→                );
+   842→              })}
+   843→            </div>
+   844→
+   845→            {/* Selected Day Detail */}
+   846→            <AnimatePresence>
+   847→              {selectedDay && (
+   848→                <motion.div
+   849→                  initial={{ opacity: 0, height: 0 }}
+   850→                  animate={{ opacity: 1, height: 'auto' }}
+   851→                  exit={{ opacity: 0, height: 0 }}
+   852→                  className="mt-4 overflow-hidden"
+   853→                >
+   854→                  <div className="bg-muted/30 rounded-lg p-4">
+   855→                    <div className="flex items-center justify-between mb-3">
+   856→                      <h3 className="text-sm font-semibold text-foreground">
+   857→                        {format(selectedDay, 'EEEE, MMMM d, yyyy')}
+   858→                      </h3>
+   859→                      <Button variant="ghost" size="sm" onClick={() => setSelectedDay(null)}>
+   860→                        Clear
+   861→                      </Button>
+   862→                    </div>
+   863→                    {selectedDayEvents.length === 0 ? (
+   864→                      <p className="text-sm text-muted-foreground">No sessions on this day</p>
+   865→                    ) : (
+   866→                      <div className="space-y-3">
+   867→                        {selectedDayEvents.map((event) => {
+   868→                          const status = getSessionStatus(event);
+   869→                          const statusCfg = statusConfig[status];
+   870→                          const StatusIcon = statusCfg.icon;
+   871→
+   872→                          return (
+   873→                            <motion.div
+   874→                              key={event.id}
+   875→                              initial={{ opacity: 0, x: -10 }}
+   876→                              animate={{ opacity: 1, x: 0 }}
+   877→                              transition={{ duration: 0.2 }}
+   878→                              className="flex items-center gap-3 p-3 rounded-lg bg-background border border-border hover:shadow-sm transition-shadow"
+   879→                            >
+   880→                              <div
+   881→                                className="w-1 h-12 rounded-full shrink-0"
+   882→                                style={{ backgroundColor: event.color || eventTypeColors[event.type] }}
+   883→                              />
+   884→                              <div className="flex-1 min-w-0 space-y-1">
+   885→                                <div className="flex items-center gap-2 flex-wrap">
+   886→                                  <p className="text-sm font-medium text-foreground truncate">{event.title}</p>
+   887→                                  <Badge
+   888→                                    variant="secondary"
+   889→                                    className="text-[10px] shrink-0"
+   890→                                    style={{
+   891→                                      backgroundColor: `${event.color || eventTypeColors[event.type]}20`,
+   892→                                      color: event.color || eventTypeColors[event.type],
+   893→                                    }}
+   894→                                  >
+   895→                                    {eventTypeLabels[event.type]}
+   896→                                  </Badge>
+   897→                                  <Badge
+   898→                                    variant="secondary"
+   899→                                    className={`text-[10px] shrink-0 gap-1 ${statusCfg.bgColor}`}
+   900→                                    style={{ color: statusCfg.color }}
+   901→                                  >
+   902→                                    <StatusIcon className="h-3 w-3" />
+   903→                                    {statusCfg.label}
+   904→                                  </Badge>
+   905→                                </div>
+   906→                                <p className="text-xs text-muted-foreground">
+   907→                                  {format(parseISO(event.startDate), 'h:mm a')} – {format(parseISO(event.endDate), 'h:mm a')}
+   908→                                  {event.instructorName && ` · ${event.instructorName}`}
+   909→                                </p>
+   910→                                {/* Countdown for upcoming */}
+   911→                                {status === 'upcoming' && (
+   912→                                  <CountdownTimer targetDate={event.startDate} color={event.color || eventTypeColors[event.type]} />
+   913→                                )}
+   914→                                {/* Attendee avatars */}
+   915→                                {event.attendees !== undefined && event.maxAttendees && (
+   916→                                  <AttendeeAvatars attendees={event.attendees} maxAttendees={event.maxAttendees} />
+   917→                                )}
+   918→                                {/* Start Session button */}
+   919→                                {(isStartingWithin15(event) || isEventLive(event)) && event.meetingUrl && (
+   920→                                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1.5 text-xs h-7 mt-1">
+   921→                                    <Play className="h-3 w-3" />
+   922→                                    {isEventLive(event) ? 'Join Live' : 'Start Session'}
+   923→                                  </Button>
+   924→                                )}
+   925→                              </div>
+   926→                            </motion.div>
+   927→                          );
+   928→                        })}
+   929→                      </div>
+   930→                    )}
+   931→                  </div>
+   932→                </motion.div>
+   933→              )}
+   934→            </AnimatePresence>
+   935→          </CardContent>
+   936→        </Card>
+   937→      )}
+   938→
+   939→      {/* Enhanced Session Cards (Upcoming Sessions) - shown in both views */}
+   940→      <div className="space-y-4">
+   941→        <div className="flex items-center justify-between">
+   942→          <h2 className="text-lg font-semibold text-foreground">Upcoming Sessions</h2>
+   943→          <Badge variant="secondary" className="text-xs">
+   944→            {events.filter((e) => isAfter(parseISO(e.startDate), new Date())).length} sessions
+   945→          </Badge>
+   946→        </div>
+   947→        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+   948→          {filteredEvents
+   949→            .filter((e) => isAfter(parseISO(e.startDate), new Date()))
+   950→            .sort((a, b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime())
+   951→            .slice(0, 6)
+   952→            .map((event, index) => {
+   953→              const status = getSessionStatus(event);
+   954→              const statusCfg = statusConfig[status];
+   955→              const StatusIcon = statusCfg.icon;
+   956→              const courseName = demoCourses.find((c: any) => c.id === event.courseId)?.title;
+   957→              const canStart = isStartingWithin15(event) || isEventLive(event);
+   958→
+   959→              return (
+   960→                <motion.div
+   961→                  key={event.id}
+   962→                  initial={{ opacity: 0, y: 20 }}
+   963→                  animate={{ opacity: 1, y: 0 }}
+   964→                  transition={{ duration: 0.3, delay: index * 0.05 }}
+   965→                  whileHover={{ y: -2, transition: { duration: 0.15 } }}
+   966→                >
+   967→                  <Card className="overflow-hidden hover:shadow-lg transition-all duration-200 border border-border">
+   968→                    {/* Color bar top */}
+   969→                    <div
+   970→                      className="h-1.5"
+   971→                      style={{ backgroundColor: event.color || eventTypeColors[event.type] }}
+   972→                    />
+   973→                    <CardContent className="p-4 space-y-3">
+   974→                      {/* Header: Status + Type */}
+   975→                      <div className="flex items-center justify-between">
+   976→                        <Badge
+   977→                          variant="secondary"
+   978→                          className="text-[10px] gap-1"
+   979→                          style={{
+   980→                            backgroundColor: `${event.color || eventTypeColors[event.type]}20`,
+   981→                            color: event.color || eventTypeColors[event.type],
+   982→                          }}
+   983→                        >
+   984→                          {eventTypeLabels[event.type]}
+   985→                        </Badge>
+   986→                        <Badge
+   987→                          variant="secondary"
+   988→                          className={`text-[10px] gap-1 ${statusCfg.bgColor}`}
+   989→                          style={{ color: statusCfg.color }}
+   990→                        >
+   991→                          {status === 'live' && <span className="inline-block w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />}
+   992→                          <StatusIcon className="h-3 w-3" />
+   993→                          {statusCfg.label}
+   994→                        </Badge>
+   995→                      </div>
+   996→
+   997→                      {/* Title */}
+   998→                      <h3 className="font-semibold text-foreground text-sm leading-tight">{event.title}</h3>
+   999→
+  1000→                      {/* Date/Time */}
+  1001→                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+  1002→                        <Clock className="h-3.5 w-3.5 shrink-0" />
+  1003→                        <span>
+  1004→                          {format(parseISO(event.startDate), 'EEE, MMM d · h:mm a')} – {format(parseISO(event.endDate), 'h:mm a')}
+  1005→                        </span>
+  1006→                      </div>
+  1007→
+  1008→                      {/* Instructor */}
+  1009→                      {event.instructorName && (
+  1010→                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+  1011→                          <UserCheck className="h-3.5 w-3.5 shrink-0" />
+  1012→                          <span>{event.instructorName}</span>
+  1013→                        </div>
+  1014→                      )}
+  1015→
+  1016→                      {/* Countdown Timer */}
+  1017→                      {(status === 'upcoming' || status === 'live') && (
+  1018→                        <CountdownTimer targetDate={event.startDate} color={event.color || eventTypeColors[event.type]} />
+  1019→                      )}
+  1020→
+  1021→                      {/* Attendee Avatars + Progress */}
+  1022→                      {event.attendees !== undefined && event.maxAttendees && (
+  1023→                        <AttendeeAvatars attendees={event.attendees} maxAttendees={event.maxAttendees} />
+  1024→                      )}
+  1025→
+  1026→                      {/* Course Badge */}
+  1027→                      {courseName && (
+  1028→                        <Badge variant="outline" className="text-[10px]">
+  1029→                          {courseName}
+  1030→                        </Badge>
+  1031→                      )}
+  1032→
+  1033→                      {/* Actions */}
+  1034→                      <Separator />
+  1035→                      <div className="flex items-center justify-between">
+  1036→                        <div className="flex items-center gap-1">
+  1037→                          {event.meetingUrl && (
+  1038→                            <TooltipProvider>
+  1039→                              <Tooltip>
+  1040→                                <TooltipTrigger asChild>
+  1041→                                  <Button
+  1042→                                    variant="ghost"
+  1043→                                    size="icon"
+  1044→                                    className="h-7 w-7"
+  1045→                                    onClick={() => handleCopyLink(event.meetingUrl!, event.id)}
+  1046→                                  >
+  1047→                                    {copiedId === event.id ? (
+  1048→                                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+  1049→                                    ) : (
+  1050→                                      <Copy className="h-3.5 w-3.5" />
+  1051→                                    )}
+  1052→                                  </Button>
+  1053→                                </TooltipTrigger>
+  1054→                                <TooltipContent>Copy Link</TooltipContent>
+  1055→                              </Tooltip>
+  1056→                            </TooltipProvider>
+  1057→                          )}
+  1058→                          <TooltipProvider>
+  1059→                            <Tooltip>
+  1060→                              <TooltipTrigger asChild>
+  1061→                                <Button variant="ghost" size="icon" className="h-7 w-7">
+  1062→                                  <Edit3 className="h-3.5 w-3.5" />
+  1063→                                </Button>
+  1064→                              </TooltipTrigger>
+  1065→                              <TooltipContent>Edit</TooltipContent>
+  1066→                            </Tooltip>
+  1067→                          </TooltipProvider>
+  1068→                          <TooltipProvider>
+  1069→                            <Tooltip>
+  1070→                              <TooltipTrigger asChild>
+  1071→                                <Button
+  1072→                                  variant="ghost"
+  1073→                                  size="icon"
+  1074→                                  className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50"
+  1075→                                  onClick={() => setConfirmCancelEvent(event.id)}
+  1076→                                >
+  1077→                                  <XCircle className="h-3.5 w-3.5" />
+  1078→                                </Button>
+  1079→                              </TooltipTrigger>
+  1080→                              <TooltipContent>Cancel</TooltipContent>
+  1081→                            </Tooltip>
+  1082→                          </TooltipProvider>
+  1083→                        </div>
+  1084→                        {/* Start/Join Session Button */}
+  1085→                        {canStart && event.meetingUrl ? (
+  1086→                          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1.5 text-xs h-7">
+  1087→                            <Play className="h-3 w-3" />
+  1088→                            {isEventLive(event) ? 'Join Live' : 'Start Session'}
+  1089→                          </Button>
+  1090→                        ) : event.meetingUrl ? (
+  1091→                          <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7" asChild>
+  1092→                            <a href={event.meetingUrl} target="_blank" rel="noopener noreferrer">
+  1093→                              <ExternalLink className="h-3 w-3" />
+  1094→                              Link
+  1095→                            </a>
+  1096→                          </Button>
+  1097→                        ) : null}
+  1098→                      </div>
+  1099→                    </CardContent>
+  1100→                  </Card>
+  1101→                </motion.div>
+  1102→              );
+  1103→            })}
+  1104→        </div>
+  1105→      </div>
+  1106→
+  1107→      {/* List View (Table) */}
+  1108→      {viewMode === 'list' && (
+  1109→        <Card>
+  1110→          <CardContent className="p-0">
+  1111→            <Table>
+  1112→              <TableHeader>
+  1113→                <TableRow>
+  1114→                  <TableHead className="w-[100px]">Status</TableHead>
+  1115→                  <TableHead>
+  1116→                    <Button variant="ghost" size="sm" className="h-auto p-0 font-medium gap-1 hover:bg-transparent" onClick={() => handleSort('title')}>
+  1117→                      Title <SortIcon field="title" />
+  1118→                    </Button>
+  1119→                  </TableHead>
+  1120→                  <TableHead>
+  1121→                    <Button variant="ghost" size="sm" className="h-auto p-0 font-medium gap-1 hover:bg-transparent" onClick={() => handleSort('type')}>
+  1122→                      Type <SortIcon field="type" />
+  1123→                    </Button>
+  1124→                  </TableHead>
+  1125→                  <TableHead>
+  1126→                    <Button variant="ghost" size="sm" className="h-auto p-0 font-medium gap-1 hover:bg-transparent" onClick={() => handleSort('startDate')}>
+  1127→                      Date/Time <SortIcon field="startDate" />
+  1128→                    </Button>
+  1129→                  </TableHead>
+  1130→                  <TableHead>
+  1131→                    <Button variant="ghost" size="sm" className="h-auto p-0 font-medium gap-1 hover:bg-transparent" onClick={() => handleSort('attendees')}>
+  1132→                      Attendees <SortIcon field="attendees" />
+  1133→                    </Button>
+  1134→                  </TableHead>
+  1135→                  <TableHead className="text-right">Actions</TableHead>
+  1136→                </TableRow>
+  1137→              </TableHeader>
+  1138→              <TableBody>
+  1139→                {sortedEvents.map((event, index) => {
+  1140→                  const status = getSessionStatus(event);
+  1141→                  const statusCfg = statusConfig[status];
+  1142→                  const StatusIcon = statusCfg.icon;
+  1143→                  const canStart = isStartingWithin15(event) || isEventLive(event);
+  1144→                  const courseName = demoCourses.find((c: any) => c.id === event.courseId)?.title;
+  1145→
+  1146→                  return (
+  1147→                    <motion.tr
+  1148→                      key={event.id}
+  1149→                      initial={{ opacity: 0, x: -10 }}
+  1150→                      animate={{ opacity: 1, x: 0 }}
+  1151→                      transition={{ duration: 0.2, delay: index * 0.02 }}
+  1152→                      className="border-b border-border hover:bg-muted/30 transition-colors"
+  1153→                    >
+  1154→                      <TableCell className="py-3">
+  1155→                        <Badge
+  1156→                          variant="secondary"
+  1157→                          className={`text-[10px] gap-1 ${statusCfg.bgColor}`}
+  1158→                          style={{ color: statusCfg.color }}
+  1159→                        >
+  1160→                          {status === 'live' && <span className="inline-block w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />}
+  1161→                          <StatusIcon className="h-3 w-3" />
+  1162→                          {statusCfg.label}
+  1163→                        </Badge>
+  1164→                      </TableCell>
+  1165→                      <TableCell>
+  1166→                        <div className="flex items-center gap-2">
+  1167→                          <div
+  1168→                            className="w-2 h-2 rounded-full shrink-0"
+  1169→                            style={{ backgroundColor: event.color || eventTypeColors[event.type] }}
+  1170→                          />
+  1171→                          <div className="min-w-0">
+  1172→                            <p className="text-sm font-medium text-foreground truncate">{event.title}</p>
+  1173→                            {courseName && (
+  1174→                              <p className="text-[10px] text-muted-foreground truncate">{courseName}</p>
+  1175→                            )}
+  1176→                          </div>
+  1177→                        </div>
+  1178→                      </TableCell>
+  1179→                      <TableCell>
+  1180→                        <Badge
+  1181→                          variant="secondary"
+  1182→                          className="text-[10px]"
+  1183→                          style={{
+  1184→                            backgroundColor: `${event.color || eventTypeColors[event.type]}20`,
+  1185→                            color: event.color || eventTypeColors[event.type],
+  1186→                          }}
+  1187→                        >
+  1188→                          {eventTypeLabels[event.type]}
+  1189→                        </Badge>
+  1190→                      </TableCell>
+  1191→                      <TableCell>
+  1192→                        <div className="text-xs">
+  1193→                          <p className="text-foreground">{format(parseISO(event.startDate), 'MMM d, yyyy')}</p>
+  1194→                          <p className="text-muted-foreground">
+  1195→                            {format(parseISO(event.startDate), 'h:mm a')} – {format(parseISO(event.endDate), 'h:mm a')}
+  1196→                          </p>
+  1197→                        </div>
+  1198→                      </TableCell>
+  1199→                      <TableCell>
+  1200→                        {event.attendees !== undefined && event.maxAttendees ? (
+  1201→                          <div className="flex items-center gap-2">
+  1202→                            <Progress
+  1203→                              value={Math.round((event.attendees / event.maxAttendees) * 100)}
+  1204→                              className="h-1.5 w-16"
+  1205→                            />
+  1206→                            <span className="text-[10px] text-muted-foreground font-medium">
+  1207→                              {event.attendees}/{event.maxAttendees}
+  1208→                            </span>
+  1209→                          </div>
+  1210→                        ) : (
+  1211→                          <span className="text-xs text-muted-foreground">—</span>
+  1212→                        )}
+  1213→                      </TableCell>
+  1214→                      <TableCell className="text-right">
+  1215→                        <div className="flex items-center justify-end gap-1">
+  1216→                          {canStart && event.meetingUrl && (
+  1217→                            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1 text-xs h-7">
+  1218→                              <Play className="h-3 w-3" />
+  1219→                              Start
+  1220→                            </Button>
+  1221→                          )}
+  1222→                          {event.meetingUrl && !canStart && (
+  1223→                            <TooltipProvider>
+  1224→                              <Tooltip>
+  1225→                                <TooltipTrigger asChild>
+  1226→                                  <Button
+  1227→                                    variant="ghost"
+  1228→                                    size="icon"
+  1229→                                    className="h-7 w-7"
+  1230→                                    onClick={() => handleCopyLink(event.meetingUrl!, event.id)}
+  1231→                                  >
+  1232→                                    {copiedId === event.id ? (
+  1233→                                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+  1234→                                    ) : (
+  1235→                                      <Copy className="h-3.5 w-3.5" />
+  1236→                                    )}
+  1237→                                  </Button>
+  1238→                                </TooltipTrigger>
+  1239→                                <TooltipContent>Copy Link</TooltipContent>
+  1240→                              </Tooltip>
+  1241→                            </TooltipProvider>
+  1242→                          )}
+  1243→                          <TooltipProvider>
+  1244→                            <Tooltip>
+  1245→                              <TooltipTrigger asChild>
+  1246→                                <Button variant="ghost" size="icon" className="h-7 w-7">
+  1247→                                  <Edit3 className="h-3.5 w-3.5" />
+  1248→                                </Button>
+  1249→                              </TooltipTrigger>
+  1250→                              <TooltipContent>Edit</TooltipContent>
+  1251→                            </Tooltip>
+  1252→                          </TooltipProvider>
+  1253→                          <TooltipProvider>
+  1254→                            <Tooltip>
+  1255→                              <TooltipTrigger asChild>
+  1256→                                <Button
+  1257→                                  variant="ghost"
+  1258→                                  size="icon"
+  1259→                                  className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50"
+  1260→                                  onClick={() => setConfirmCancelEvent(event.id)}
+  1261→                                >
+  1262→                                  <XCircle className="h-3.5 w-3.5" />
+  1263→                                </Button>
+  1264→                              </TooltipTrigger>
+  1265→                              <TooltipContent>Cancel</TooltipContent>
+  1266→                            </Tooltip>
+  1267→                          </TooltipProvider>
+  1268→                        </div>
+  1269→                      </TableCell>
+  1270→                    </motion.tr>
+  1271→                  );
+  1272→                })}
+  1273→              </TableBody>
+  1274→            </Table>
+  1275→          </CardContent>
+  1276→        </Card>
+  1277→      )}
+  1278→
+  1279→      {/* Schedule Session Dialog */}
+  1280→      <Dialog open={showCreateDialog} onOpenChange={(open) => { if (!open) resetForm(); setShowCreateDialog(open); }}>
+  1281→        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+  1282→          <DialogHeader>
+  1283→            <DialogTitle className="flex items-center gap-2">
+  1284→              <CalendarIcon className="h-5 w-5 text-emerald-600" />
+  1285→              Schedule New Session
+  1286→            </DialogTitle>
+  1287→            <DialogDescription>
+  1288→              Create a new live session, workshop, or event for your cohorts.
+  1289→            </DialogDescription>
+  1290→          </DialogHeader>
+  1291→
+  1292→          {/* Success Animation */}
+  1293→          <AnimatePresence>
+  1294→            {showSuccess && (
+  1295→              <motion.div
+  1296→                initial={{ opacity: 0, scale: 0.8 }}
+  1297→                animate={{ opacity: 1, scale: 1 }}
+  1298→                exit={{ opacity: 0, scale: 0.8 }}
+  1299→                className="flex flex-col items-center justify-center py-8 gap-3"
+  1300→              >
+  1301→                <motion.div
+  1302→                  initial={{ scale: 0 }}
+  1303→                  animate={{ scale: 1 }}
+  1304→                  transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.1 }}
+  1305→                >
+  1306→                  <CheckCircle2 className="h-16 w-16 text-emerald-500" />
+  1307→                </motion.div>
+  1308→                <motion.p
+  1309→                  initial={{ opacity: 0, y: 10 }}
+  1310→                  animate={{ opacity: 1, y: 0 }}
+  1311→                  transition={{ delay: 0.3 }}
+  1312→                  className="text-lg font-semibold text-foreground"
+  1313→                >
+  1314→                  Session Scheduled!
+  1315→                </motion.p>
+  1316→                <motion.p
+  1317→                  initial={{ opacity: 0 }}
+  1318→                  animate={{ opacity: 1 }}
+  1319→                  transition={{ delay: 0.5 }}
+  1320→                  className="text-sm text-muted-foreground"
+  1321→                >
+  1322→                  Your session has been added to the calendar.
+  1323→                </motion.p>
+  1324→              </motion.div>
+  1325→            )}
+  1326→          </AnimatePresence>
+  1327→
+  1328→          {!showSuccess && (
+  1329→            <div className="space-y-4 py-2">
+  1330→              {/* Title */}
+  1331→              <div className="space-y-2">
+  1332→                <Label htmlFor="event-title">
+  1333→                  Title <span className="text-red-500">*</span>
+  1334→                </Label>
+  1335→                <Input
+  1336→                  id="event-title"
+  1337→                  placeholder="e.g., React Live Q&A"
+  1338→                  value={newEvent.title || ''}
+  1339→                  onChange={(e) => {
+  1340→                    setNewEvent((prev) => ({ ...prev, title: e.target.value }));
+  1341→                    if (formErrors.title) setFormErrors((prev) => ({ ...prev, title: undefined }));
+  1342→                  }}
+  1343→                  className={formErrors.title ? 'border-red-500 focus-visible:ring-red-500' : ''}
+  1344→                />
+  1345→                {formErrors.title && (
+  1346→                  <motion.p initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="text-xs text-red-500 flex items-center gap-1">
+  1347→                    <AlertCircle className="h-3 w-3" />
+  1348→                    {formErrors.title}
+  1349→                  </motion.p>
+  1350→                )}
+  1351→              </div>
+  1352→
+  1353→              {/* Description */}
+  1354→              <div className="space-y-2">
+  1355→                <Label htmlFor="event-desc">Description</Label>
+  1356→                <Textarea
+  1357→                  id="event-desc"
+  1358→                  placeholder="Describe the session..."
+  1359→                  value={newEvent.description || ''}
+  1360→                  onChange={(e) => setNewEvent((prev) => ({ ...prev, description: e.target.value }))}
+  1361→                  rows={3}
+  1362→                />
+  1363→              </div>
+  1364→
+  1365→              {/* Event Type & Course */}
+  1366→              <div className="grid grid-cols-2 gap-4">
+  1367→                <div className="space-y-2">
+  1368→                  <Label>Type</Label>
+  1369→                  <Select
+  1370→                    value={newEvent.type}
+  1371→                    onValueChange={(val) =>
+  1372→                      setNewEvent((prev) => ({
+  1373→                        ...prev,
+  1374→                        type: val as CalendarEvent['type'],
+  1375→                        color: eventTypeColors[val] || prev.color,
+  1376→                      }))
+  1377→                    }
+  1378→                  >
+  1379→                    <SelectTrigger>
+  1380→                      <SelectValue />
+  1381→                    </SelectTrigger>
+  1382→                    <SelectContent>
+  1383→                      <SelectItem value="live_session">Live Session</SelectItem>
+  1384→                      <SelectItem value="cohort_start">Cohort Start</SelectItem>
+  1385→                      <SelectItem value="cohort_end">Cohort End</SelectItem>
+  1386→                      <SelectItem value="office_hours">Office Hours</SelectItem>
+  1387→                      <SelectItem value="workshop">Workshop</SelectItem>
+  1388→                      <SelectItem value="webinar">Webinar</SelectItem>
+  1389→                      <SelectItem value="deadline">Deadline</SelectItem>
+  1390→                    </SelectContent>
+  1391→                  </Select>
+  1392→                </div>
+  1393→                <div className="space-y-2">
+  1394→                  <Label>Course</Label>
+  1395→                  <Select
+  1396→                    value={newEvent.courseId || 'none'}
+  1397→                    onValueChange={(val) =>
+  1398→                      setNewEvent((prev) => ({ ...prev, courseId: val === 'none' ? undefined : val }))
+  1399→                    }
+  1400→                  >
+  1401→                    <SelectTrigger>
+  1402→                      <SelectValue placeholder="Select course" />
+  1403→                    </SelectTrigger>
+  1404→                    <SelectContent>
+  1405→                      <SelectItem value="none">No Course</SelectItem>
+  1406→                      {demoCourses.map((course: any) => (
+  1407→                        <SelectItem key={course.id} value={course.id}>
+  1408→                          {course.title}
+  1409→                        </SelectItem>
+  1410→                      ))}
+  1411→                    </SelectContent>
+  1412→                  </Select>
+  1413→                </div>
+  1414→              </div>
+  1415→
+  1416→              {/* Date */}
+  1417→              <div className="space-y-2">
+  1418→                <Label>
+  1419→                  Date <span className="text-red-500">*</span>
+  1420→                </Label>
+  1421→                <Popover>
+  1422→                  <PopoverTrigger asChild>
+  1423→                    <Button
+  1424→                      variant="outline"
+  1425→                      className={`w-full justify-start text-left font-normal ${formErrors.date ? 'border-red-500' : ''} ${!eventDate && 'text-muted-foreground'}`}
+  1426→                    >
+  1427→                      <CalendarIcon className="mr-2 h-4 w-4" />
+  1428→                      {eventDate ? format(eventDate, 'PPP') : 'Pick a date'}
+  1429→                    </Button>
+  1430→                  </PopoverTrigger>
+  1431→                  <PopoverContent className="w-auto p-0" align="start">
+  1432→                    <Calendar
+  1433→                      mode="single"
+  1434→                      selected={eventDate}
+  1435→                      onSelect={(date) => {
+  1436→                        setEventDate(date);
+  1437→                        if (formErrors.date) setFormErrors((prev) => ({ ...prev, date: undefined }));
+  1438→                      }}
+  1439→                    />
+  1440→                  </PopoverContent>
+  1441→                </Popover>
+  1442→                {formErrors.date && (
+  1443→                  <motion.p initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="text-xs text-red-500 flex items-center gap-1">
+  1444→                    <AlertCircle className="h-3 w-3" />
+  1445→                    {formErrors.date}
+  1446→                  </motion.p>
+  1447→                )}
+  1448→              </div>
+  1449→
+  1450→              {/* Start Time & Duration */}
+  1451→              <div className="grid grid-cols-2 gap-4">
+  1452→                <div className="space-y-2">
+  1453→                  <Label htmlFor="start-time">
+  1454→                    Start Time <span className="text-red-500">*</span>
+  1455→                  </Label>
+  1456→                  <Input
+  1457→                    id="start-time"
+  1458→                    type="time"
+  1459→                    value={startTime}
+  1460→                    onChange={(e) => {
+  1461→                      setStartTime(e.target.value);
+  1462→                      if (formErrors.time) setFormErrors((prev) => ({ ...prev, time: undefined }));
+  1463→                    }}
+  1464→                    className={formErrors.time ? 'border-red-500 focus-visible:ring-red-500' : ''}
+  1465→                  />
+  1466→                  {formErrors.time && (
+  1467→                    <motion.p initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="text-xs text-red-500 flex items-center gap-1">
+  1468→                      <AlertCircle className="h-3 w-3" />
+  1469→                      {formErrors.time}
+  1470→                    </motion.p>
+  1471→                  )}
+  1472→                </div>
+  1473→                <div className="space-y-2">
+  1474→                  <Label>Duration</Label>
+  1475→                  <Select
+  1476→                    value={String(duration)}
+  1477→                    onValueChange={(val) => setDuration(Number(val))}
+  1478→                  >
+  1479→                    <SelectTrigger>
+  1480→                      <SelectValue />
+  1481→                    </SelectTrigger>
+  1482→                    <SelectContent>
+  1483→                      {durationOptions.map((opt) => (
+  1484→                        <SelectItem key={opt.value} value={String(opt.value)}>
+  1485→                          {opt.label}
+  1486→                        </SelectItem>
+  1487→                      ))}
+  1488→                    </SelectContent>
+  1489→                  </Select>
+  1490→                </div>
+  1491→              </div>
+  1492→
+  1493→              {/* Instructor & Meeting URL */}
+  1494→              <div className="grid grid-cols-2 gap-4">
+  1495→                <div className="space-y-2">
+  1496→                  <Label htmlFor="instructor">Instructor Name</Label>
+  1497→                  <Input
+  1498→                    id="instructor"
+  1499→                    placeholder="e.g., Sarah Mitchell"
+  1500→                    value={newEvent.instructorName || ''}
+  1501→                    onChange={(e) => setNewEvent((prev) => ({ ...prev, instructorName: e.target.value }))}
+  1502→                  />
+  1503→                </div>
+  1504→                <div className="space-y-2">
+  1505→                  <Label htmlFor="meeting-url">Meeting URL</Label>
+  1506→                  <Input
+  1507→                    id="meeting-url"
+  1508→                    placeholder="https://meet.example.com/..."
+  1509→                    value={newEvent.meetingUrl || ''}
+  1510→                    onChange={(e) => setNewEvent((prev) => ({ ...prev, meetingUrl: e.target.value }))}
+  1511→                  />
+  1512→                </div>
+  1513→              </div>
+  1514→
+  1515→              {/* Max Attendees */}
+  1516→              <div className="space-y-2">
+  1517→                <Label htmlFor="max-attendees">Max Attendees</Label>
+  1518→                <Input
+  1519→                  id="max-attendees"
+  1520→                  type="number"
+  1521→                  min={1}
+  1522→                  value={newEvent.maxAttendees || 50}
+  1523→                  onChange={(e) => setNewEvent((prev) => ({ ...prev, maxAttendees: parseInt(e.target.value) || 50 }))}
+  1524→                  className={formErrors.maxAttendees ? 'border-red-500' : ''}
+  1525→                />
+  1526→                {formErrors.maxAttendees && (
+  1527→                  <motion.p initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="text-xs text-red-500 flex items-center gap-1">
+  1528→                    <AlertCircle className="h-3 w-3" />
+  1529→                    {formErrors.maxAttendees}
+  1530→                  </motion.p>
+  1531→                )}
+  1532→              </div>
+  1533→
+  1534→              {/* Recurring */}
+  1535→              <div className="flex items-center justify-between rounded-lg border border-border p-3">
+  1536→                <div>
+  1537→                  <Label className="text-sm font-medium">Recurring Event</Label>
+  1538→                  <p className="text-xs text-muted-foreground">Repeat this session on a schedule</p>
+  1539→                </div>
+  1540→                <Switch
+  1541→                  checked={newEvent.isRecurring || false}
+  1542→                  onCheckedChange={(checked) =>
+  1543→                    setNewEvent((prev) => ({ ...prev, isRecurring: checked }))
+  1544→                  }
+  1545→                />
+  1546→              </div>
+  1547→
+  1548→              {newEvent.isRecurring && (
+  1549→                <motion.div
+  1550→                  initial={{ opacity: 0, height: 0 }}
+  1551→                  animate={{ opacity: 1, height: 'auto' }}
+  1552→                  exit={{ opacity: 0, height: 0 }}
+  1553→                  className="space-y-2 overflow-hidden"
+  1554→                >
+  1555→                  <Label>Recurrence Pattern</Label>
+  1556→                  <Select
+  1557→                    value={newEvent.recurrencePattern || 'weekly'}
+  1558→                    onValueChange={(val) =>
+  1559→                      setNewEvent((prev) => ({ ...prev, recurrencePattern: val }))
+  1560→                    }
+  1561→                  >
+  1562→                    <SelectTrigger>
+  1563→                      <SelectValue />
+  1564→                    </SelectTrigger>
+  1565→                    <SelectContent>
+  1566→                      <SelectItem value="daily">Daily</SelectItem>
+  1567→                      <SelectItem value="weekly">Weekly</SelectItem>
+  1568→                      <SelectItem value="biweekly">Bi-weekly</SelectItem>
+  1569→                      <SelectItem value="monthly">Monthly</SelectItem>
+  1570→                    </SelectContent>
+  1571→                  </Select>
+  1572→                </motion.div>
+  1573→              )}
+  1574→
+  1575→              {/* Color Picker */}
+  1576→              <div className="space-y-2">
+  1577→                <Label>Event Color</Label>
+  1578→                <div className="flex gap-2 flex-wrap">
+  1579→                  {presetColors.map((color) => (
+  1580→                    <button
+  1581→                      key={color}
+  1582→                      className={`w-8 h-8 rounded-full border-2 transition-all ${
+  1583→                        newEvent.color === color ? 'border-foreground scale-110' : 'border-transparent'
+  1584→                      }`}
+  1585→                      style={{ backgroundColor: color }}
+  1586→                      onClick={() => setNewEvent((prev) => ({ ...prev, color }))}
+  1587→                    />
+  1588→                  ))}
+  1589→                </div>
+  1590→              </div>
+  1591→            </div>
+  1592→          )}
+  1593→
+  1594→          {!showSuccess && (
+  1595→            <DialogFooter>
+  1596→              <DialogClose asChild>
+  1597→                <Button variant="outline">Cancel</Button>
+  1598→              </DialogClose>
+  1599→              <Button
+  1600→                onClick={handleCreateEvent}
+  1601→                disabled={!newEvent.title || !eventDate}
+  1602→                className="bg-emerald-600 hover:bg-emerald-700 gap-2"
+  1603→              >
+  1604→                <CalendarIcon className="h-4 w-4" />
+  1605→                Schedule Session
+  1606→              </Button>
+  1607→            </DialogFooter>
+  1608→          )}
+  1609→        </DialogContent>
+  1610→      </Dialog>
+  1611→
+  1612→      <ConfirmDialog
+  1613→        open={!!confirmCancelEvent}
+  1614→        onOpenChange={(open) => { if (!open) setConfirmCancelEvent(null); }}
+  1615→        title="Cancel Event"
+  1616→        description="Are you sure you want to cancel this event? Participants will be notified and the event cannot be restored."
+  1617→        confirmLabel="Cancel Event"
+  1618→        variant="destructive"
+  1619→        onConfirm={() => {
+  1620→          if (confirmCancelEvent) handleCancelEvent(confirmCancelEvent);
+  1621→          setConfirmCancelEvent(null);
+  1622→        }}
+  1623→      />
+  1624→    </div>
+  1625→  );
+  1626→}
+  1627→

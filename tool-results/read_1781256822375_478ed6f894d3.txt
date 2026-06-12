@@ -1,0 +1,2002 @@
+     1→'use client';
+     2→
+     3→import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { useAppStore } from '@/store/app-store';
+     6→import {
+     7→  useCourse,
+     8→  useEnrollments,
+     9→  useLessonProgress,
+    10→  useUpdateProgress,
+    11→  useEnroll,
+    12→  useCourses,
+    13→  useCommunityPosts,
+    14→  useAddComment,
+    15→  useToggleReaction,
+    16→  useCommunityReviews,
+    17→  useLessonDiscussions,
+    18→  useCreateDiscussion,
+    19→} from '@/hooks/use-data';
+    20→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    21→import { Button } from '@/components/ui/button';
+    22→import { Badge } from '@/components/ui/badge';
+    23→import { Progress } from '@/components/ui/progress';
+    24→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    25→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    26→import { Separator } from '@/components/ui/separator';
+    27→import { Input } from '@/components/ui/input';
+    28→import { Textarea } from '@/components/ui/textarea';
+    29→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+    30→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    31→import { VideoPlayer } from '@/components/shared/video-player';
+    32→import type { Chapter } from '@/components/shared/video-player';
+    33→import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+    34→import {
+    35→  Play,
+    36→  FileText,
+    37→  Headphones,
+    38→  Video,
+    39→  Monitor,
+    40→  Clock,
+    41→  Star,
+    42→  Users,
+    43→  ChevronDown,
+    44→  ChevronRight,
+    45→  CheckCircle2,
+    46→  Circle,
+    47→  Eye,
+    48→  MessageSquare,
+    49→  Download,
+    50→  ExternalLink,
+    51→  GitBranch,
+    52→  ThumbsUp,
+    53→  ThumbsDown,
+    54→  Send,
+    55→  BookOpen,
+    56→  Award,
+    57→  Search,
+    58→  Filter,
+    59→  Pin,
+    60→  Tag,
+    61→  Flame,
+    62→  TrendingUp,
+    63→  TrendingDown,
+    64→  Minus,
+    65→  BarChart3,
+    66→  Calendar,
+    67→  Zap,
+    68→  Target,
+    69→  Trophy,
+    70→  ArrowRight,
+    71→  Copy,
+    72→  Sparkles,
+    73→  StickyNote,
+    74→  Code2,
+    75→  HelpCircle,
+    76→  Bookmark,
+    77→  Edit3,
+    78→  Check,
+    79→  X,
+    80→  ChevronUp,
+    81→  MessageCircle,
+    82→  GraduationCap,
+    83→  Globe,
+    84→  Briefcase,
+    85→  Heart,
+    86→  Share2,
+    87→  MoreHorizontal,
+    88→  ArrowUpRight,
+    89→  Loader2,
+    90→  FileCode,
+    91→  Notebook,
+    92→  Timer,
+    93→  Activity,
+    94→  Milestone,
+    95→  MessageCircleQuestion,
+    96→  Plus,
+    97→  Bold,
+    98→  Italic,
+    99→  Link2,
+   100→  Trash2,
+   101→} from 'lucide-react';
+   102→import { cn } from '@/lib/utils';
+   103→import type { Lesson, Module } from '@/types';
+   104→
+   105→// ─── Content type icon mapping ─────────────────────────────
+   106→function ContentTypeIcon({ type, className }: { type: Lesson['contentType']; className?: string }) {
+   107→  switch (type) {
+   108→    case 'video':
+   109→      return <Video className={className} />;
+   110→    case 'text':
+   111→      return <FileText className={className} />;
+   112→    case 'audio':
+   113→      return <Headphones className={className} />;
+   114→    case 'document':
+   115→      return <FileText className={className} />;
+   116→    case 'live_session':
+   117→      return <Monitor className={className} />;
+   118→    default:
+   119→      return <FileText className={className} />;
+   120→  }
+   121→}
+   122→
+   123→// ─── Format duration ───────────────────────────────────────
+   124→function formatDuration(seconds?: number): string {
+   125→  if (!seconds) return '';
+   126→  const mins = Math.floor(seconds / 60);
+   127→  if (mins < 60) return `${mins} min`;
+   128→  const hours = Math.floor(mins / 60);
+   129→  const remainMins = mins % 60;
+   130→  return `${hours}h ${remainMins}m`;
+   131→}
+   132→
+   133→// ─── Level color mapping ───────────────────────────────────
+   134→function getLevelColor(level: string) {
+   135→  const colors: Record<string, string> = {
+   136→    beginner: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+   137→    intermediate: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+   138→    advanced: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+   139→    expert: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+   140→  };
+   141→  return colors[level] || 'bg-slate-100 text-slate-700';
+   142→}
+   143→
+   144→function getLevelAccent(level: string) {
+   145→  const accents: Record<string, string> = {
+   146→    beginner: 'from-emerald-600 to-emerald-800',
+   147→    intermediate: 'from-amber-600 to-amber-800',
+   148→    advanced: 'from-orange-600 to-orange-800',
+   149→    expert: 'from-red-600 to-red-800',
+   150→  };
+   151→  return accents[level] || 'from-slate-600 to-slate-800';
+   152→}
+   153→
+   154→// ─── LocalStorage Notes Hook ─────────────────────────────────
+   155→interface Note {
+   156→  id: string;
+   157→  lessonId: string;
+   158→  lessonTitle: string;
+   159→  content: string;
+   160→  category: 'personal' | 'study_guide' | 'code_snippet' | 'question';
+   161→  timestamp?: number;
+   162→  createdAt: string;
+   163→  updatedAt: string;
+   164→}
+   165→
+   166→function useLessonNotes(courseId: string | undefined) {
+   167→  const storageKey = `lms-notes-${courseId || 'default'}`;
+   168→
+   169→  const [notes, setNotes] = useState<Note[]>(() => {
+   170→    if (typeof window === 'undefined') return [];
+   171→    try {
+   172→      const stored = localStorage.getItem(storageKey);
+   173→      return stored ? JSON.parse(stored) : [];
+   174→    } catch {
+   175→      return [];
+   176→    }
+   177→  });
+   178→
+   179→  const persistNotes = useCallback((updated: Note[]) => {
+   180→    setNotes(updated);
+   181→    if (typeof window !== 'undefined') {
+   182→      try {
+   183→        localStorage.setItem(storageKey, JSON.stringify(updated));
+   184→      } catch {
+   185→        // ignore quota errors
+   186→      }
+   187→    }
+   188→  }, [storageKey]);
+   189→
+   190→  const addNote = useCallback((note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => {
+   191→    const newNote: Note = {
+   192→      ...note,
+   193→      id: `note-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+   194→      createdAt: new Date().toISOString(),
+   195→      updatedAt: new Date().toISOString(),
+   196→    };
+   197→    persistNotes([...notes, newNote]);
+   198→    return newNote;
+   199→  }, [notes, persistNotes]);
+   200→
+   201→  const updateNote = useCallback((id: string, updates: Partial<Note>) => {
+   202→    const updated = notes.map(n =>
+   203→      n.id === id ? { ...n, ...updates, updatedAt: new Date().toISOString() } : n
+   204→    );
+   205→    persistNotes(updated);
+   206→  }, [notes, persistNotes]);
+   207→
+   208→  const deleteNote = useCallback((id: string) => {
+   209→    persistNotes(notes.filter(n => n.id !== id));
+   210→  }, [notes, persistNotes]);
+   211→
+   212→  return { notes, addNote, updateNote, deleteNote };
+   213→}
+   214→
+   215→// ─── Animation variants ────────────────────────────────────
+   216→const containerVariants = {
+   217→  hidden: { opacity: 0 },
+   218→  visible: { opacity: 1, transition: { staggerChildren: 0.05 } },
+   219→};
+   220→
+   221→const itemVariants = {
+   222→  hidden: { opacity: 0, y: 12 },
+   223→  visible: { opacity: 1, y: 0, transition: { duration: 0.35 } },
+   224→};
+   225→
+   226→const tabContentVariants = {
+   227→  hidden: { opacity: 0, x: 10 },
+   228→  visible: { opacity: 1, x: 0, transition: { duration: 0.3 } },
+   229→  exit: { opacity: 0, x: -10, transition: { duration: 0.2 } },
+   230→};
+   231→
+   232→// ─── Glassmorphism card class ─────────────────────────────
+   233→const glassCard = 'backdrop-blur-xl bg-white/70 dark:bg-slate-900/70 border border-white/20 dark:border-slate-700/30';
+   234→
+   235→// ─── Note Category Config ──────────────────────────────────
+   236→const noteCategoryConfig: Record<Note['category'], { label: string; icon: React.ReactNode; color: string }> = {
+   237→  personal: { label: 'Personal', icon: <StickyNote className="h-3.5 w-3.5" />, color: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
+   238→  study_guide: { label: 'Study Guide', icon: <BookOpen className="h-3.5 w-3.5" />, color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+   239→  code_snippet: { label: 'Code Snippet', icon: <Code2 className="h-3.5 w-3.5" />, color: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
+   240→  question: { label: 'Question', icon: <HelpCircle className="h-3.5 w-3.5" />, color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+   241→};
+   242→
+   243→// ─── Time ago helper ──────────────────────────────────────
+   244→function timeAgo(dateStr: string): string {
+   245→  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+   246→  if (seconds < 60) return 'just now';
+   247→  const minutes = Math.floor(seconds / 60);
+   248→  if (minutes < 60) return `${minutes}m ago`;
+   249→  const hours = Math.floor(minutes / 60);
+   250→  if (hours < 24) return `${hours}h ago`;
+   251→  const days = Math.floor(hours / 24);
+   252→  if (days < 30) return `${days}d ago`;
+   253→  const months = Math.floor(days / 30);
+   254→  return `${months}mo ago`;
+   255→}
+   256→
+   257→// ─── Difficulty Meter Component ────────────────────────────
+   258→function DifficultyMeter({ level }: { level: string }) {
+   259→  const levelValues: Record<string, number> = {
+   260→    beginner: 25,
+   261→    intermediate: 50,
+   262→    advanced: 75,
+   263→    expert: 100,
+   264→  };
+   265→  const value = levelValues[level] || 25;
+   266→  const gradientClass = level === 'beginner' ? 'from-emerald-400 to-emerald-600'
+   267→    : level === 'intermediate' ? 'from-amber-400 to-amber-600'
+   268→    : level === 'advanced' ? 'from-orange-400 to-orange-600'
+   269→    : 'from-red-400 to-red-600';
+   270→
+   271→  return (
+   272→    <div className="space-y-1.5">
+   273→      <div className="flex items-center justify-between text-xs">
+   274→        <span className="text-muted-foreground">Difficulty</span>
+   275→        <span className={cn('font-semibold capitalize', getLevelColor(level).replace('bg-', 'text-').split(' ')[0])}>{level}</span>
+   276→      </div>
+   277→      <div className="h-2 rounded-full bg-muted overflow-hidden">
+   278→        <motion.div
+   279→          className={cn('h-full rounded-full bg-gradient-to-r', gradientClass)}
+   280→          initial={{ width: 0 }}
+   281→          animate={{ width: `${value}%` }}
+   282→          transition={{ duration: 1, ease: 'easeOut' }}
+   283→        />
+   284→      </div>
+   285→      <div className="flex justify-between text-[10px] text-muted-foreground">
+   286→        <span>Easy</span>
+   287→        <span>Expert</span>
+   288→      </div>
+   289→    </div>
+   290→  );
+   291→}
+   292→
+   293→// ─── Module Section Component (Enhanced) ───────────────────
+   294→function ModuleSection({ module: mod, moduleIndex, onLessonClick, progressMap }: { module: Module; moduleIndex: number; onLessonClick: (lesson: Lesson) => void; progressMap: Record<string, 'completed' | 'in_progress' | 'not_started'> }) {
+   295→  const [isOpen, setIsOpen] = useState(moduleIndex === 0);
+   296→  const lessons = mod.lessons || [];
+   297→  const completedLessons = lessons.filter(
+   298→    (l) => progressMap[l.id] === 'completed'
+   299→  ).length;
+   300→  const totalDuration = lessons.reduce((sum, l) => sum + (l.videoDuration || 0), 0);
+   301→  const moduleProgress = lessons.length > 0 ? Math.round((completedLessons / lessons.length) * 100) : 0;
+   302→
+   303→  return (
+   304→    <motion.div
+   305→      className={cn('rounded-xl overflow-hidden', glassCard)}
+   306→      whileHover={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
+   307→      transition={{ duration: 0.2 }}
+   308→    >
+   309→      {/* Module Header */}
+   310→      <button
+   311→        onClick={() => setIsOpen(!isOpen)}
+   312→        className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors text-left"
+   313→      >
+   314→        <div className="flex items-center gap-3">
+   315→          <motion.div
+   316→            animate={{ rotate: isOpen ? 0 : 0 }}
+   317→            transition={{ duration: 0.2 }}
+   318→            className="text-muted-foreground"
+   319→          >
+   320→            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+   321→          </motion.div>
+   322→          <div>
+   323→            <div className="flex items-center gap-2">
+   324→              <span className="text-xs font-medium text-muted-foreground">Module {moduleIndex + 1}</span>
+   325→              {mod.isPublished ? (
+   326→                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Published</Badge>
+   327→              ) : (
+   328→                <Badge variant="outline" className="text-[10px] px-1.5 py-0">Draft</Badge>
+   329→              )}
+   330→            </div>
+   331→            <h4 className="font-semibold text-foreground text-sm mt-0.5">{mod.title}</h4>
+   332→          </div>
+   333→        </div>
+   334→        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+   335→          <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {lessons.length} lessons</span>
+   336→          {totalDuration > 0 && <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatDuration(totalDuration)}</span>}
+   337→          {/* Module progress percentage */}
+   338→          <div className="flex items-center gap-2">
+   339→            <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+   340→              <div
+   341→                className={cn(
+   342→                  'h-full rounded-full transition-all duration-500',
+   343→                  moduleProgress === 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-400 to-amber-600'
+   344→                )}
+   345→                style={{ width: `${moduleProgress}%` }}
+   346→              />
+   347→            </div>
+   348→            <span className="text-[10px] font-medium">{moduleProgress}%</span>
+   349→          </div>
+   350→          {completedLessons > 0 && (
+   351→            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
+   352→              {completedLessons}/{lessons.length} done
+   353→            </Badge>
+   354→          )}
+   355→        </div>
+   356→      </button>
+   357→
+   358→      {/* Module Lessons */}
+   359→      <AnimatePresence>
+   360→        {isOpen && (
+   361→          <motion.div
+   362→            initial={{ height: 0, opacity: 0 }}
+   363→            animate={{ height: 'auto', opacity: 1 }}
+   364→            exit={{ height: 0, opacity: 0 }}
+   365→            transition={{ duration: 0.2 }}
+   366→            className="overflow-hidden"
+   367→          >
+   368→            <div className="border-t border-white/10 dark:border-slate-700/20 bg-muted/10">
+   369→              {lessons.map((lesson, lessonIdx) => {
+   370→                const status = progressMap[lesson.id] || 'not_started';
+   371→                const isNextUp = status === 'in_progress';
+   372→                return (
+   373→                  <div
+   374→                    key={lesson.id}
+   375→                    className={cn(
+   376→                      'flex items-center justify-between p-3 pl-12 hover:bg-muted/30 transition-all duration-200',
+   377→                      lessonIdx < lessons.length - 1 && 'border-b border-border/30',
+   378→                      isNextUp && 'bg-amber-50/50 dark:bg-amber-900/10 border-l-2 border-l-amber-500'
+   379→                    )}
+   380→                  >
+   381→                    <div className="flex items-center gap-3">
+   382→                      {/* Status Icon with animated fill */}
+   383→                      {status === 'completed' ? (
+   384→                        <motion.div
+   385→                          initial={{ scale: 0 }}
+   386→                          animate={{ scale: 1 }}
+   387→                          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+   388→                        >
+   389→                          <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+   390→                        </motion.div>
+   391→                      ) : status === 'in_progress' ? (
+   392→                        <div className="h-5 w-5 rounded-full border-2 border-amber-500 border-t-transparent animate-spin shrink-0" />
+   393→                      ) : (
+   394→                        <Circle className="h-5 w-5 text-muted-foreground/40 shrink-0" />
+   395→                      )}
+   396→
+   397→                      {/* Content Type Icon */}
+   398→                      <ContentTypeIcon type={lesson.contentType} className="h-4 w-4 text-muted-foreground shrink-0" />
+   399→
+   400→                      {/* Lesson Info */}
+   401→                      <div>
+   402→                        <div className="flex items-center gap-2">
+   403→                          <p className={cn(
+   404→                            'text-sm font-medium',
+   405→                            status === 'completed' ? 'text-muted-foreground line-through' : 'text-foreground'
+   406→                          )}>
+   407→                            {lesson.title}
+   408→                          </p>
+   409→                          {isNextUp && (
+   410→                            <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[9px] px-1.5 py-0 gap-0.5">
+   411→                              <Play className="h-2.5 w-2.5" /> Next Up
+   412→                            </Badge>
+   413→                          )}
+   414→                        </div>
+   415→                        <div className="flex items-center gap-2 mt-0.5">
+   416→                          {lesson.videoDuration && (
+   417→                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+   418→                              <Clock className="h-3 w-3" /> {formatDuration(lesson.videoDuration)}
+   419→                            </span>
+   420→                          )}
+   421→                          {lesson.isPreview && (
+   422→                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-0.5">
+   423→                              <Eye className="h-2.5 w-2.5" /> Preview
+   424→                            </Badge>
+   425→                          )}
+   426→                          {/* Download icon for downloadable resources */}
+   427→                          {lesson.resources && <Download className="h-3 w-3 text-muted-foreground/50 hover:text-muted-foreground cursor-pointer transition-colors" />}
+   428→                        </div>
+   429→                      </div>
+   430→                    </div>
+   431→
+   432→                    {/* Action Button */}
+   433→                    <div>
+   434→                      {status === 'completed' ? (
+   435→                        <div className="flex items-center gap-2">
+   436→                          <Badge variant="outline" className="text-emerald-600 border-emerald-500/30 dark:border-emerald-800 text-xs">
+   437→                            Completed
+   438→                          </Badge>
+   439→                          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-emerald-600 hover:text-emerald-700" onClick={() => onLessonClick(lesson)}>
+   440→                            <Play className="h-3 w-3" /> Rewatch
+   441→                          </Button>
+   442→                        </div>
+   443→                      ) : status === 'in_progress' ? (
+   444→                        <Button size="sm" className="h-8 text-xs gap-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-md shadow-amber-500/20" onClick={() => onLessonClick(lesson)}>
+   445→                          <Play className="h-3 w-3" fill="currentColor" /> Resume
+   446→                        </Button>
+   447→                      ) : lesson.isPreview ? (
+   448→                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onLessonClick(lesson)}>
+   449→                          <Play className="h-3 w-3" /> Preview
+   450→                        </Button>
+   451→                      ) : (
+   452→                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onLessonClick(lesson)}>
+   453→                          <Play className="h-3 w-3" /> Start
+   454→                        </Button>
+   455→                      )}
+   456→                    </div>
+   457→                  </div>
+   458→                );
+   459→              })}
+   460→            </div>
+   461→          </motion.div>
+   462→        )}
+   463→      </AnimatePresence>
+   464→    </motion.div>
+   465→  );
+   466→}
+   467→
+   468→// ─── Discussion Q&A Tab ────────────────────────────────────
+   469→function DiscussionTab({ courseId, userId }: { courseId: string; userId: string }) {
+   470→  const { data: discussionsData, isLoading } = useLessonDiscussions({ courseId });
+   471→  const createDiscussion = useCreateDiscussion();
+   472→
+   473→  const [sortBy, setSortBy] = useState<'recent' | 'upvoted' | 'unanswered'>('recent');
+   474→  const [searchQuery, setSearchQuery] = useState('');
+   475→  const [expandedQuestion, setExpandedQuestion] = useState<string | null>(null);
+   476→  const [showAskForm, setShowAskForm] = useState(false);
+   477→  const [askTitle, setAskTitle] = useState('');
+   478→  const [askContent, setAskContent] = useState('');
+   479→  const [replyContent, setReplyContent] = useState('');
+   480→  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+   481→
+   482→  const discussions = discussionsData?.discussions || [];
+   483→
+   484→  // Separate top-level questions from replies & build reply map
+   485→  const { topLevelDiscussions, repliesMap } = useMemo(() => {
+   486→    const top: any[] = [];
+   487→    const map: Record<string, any[]> = {};
+   488→    discussions.forEach((d: any) => {
+   489→      if (d.parentId) {
+   490→        if (!map[d.parentId]) map[d.parentId] = [];
+   491→        map[d.parentId].push(d);
+   492→      } else {
+   493→        top.push(d);
+   494→      }
+   495→    });
+   496→    return { topLevelDiscussions: top, repliesMap: map };
+   497→  }, [discussions]);
+   498→
+   499→  const unansweredCount = topLevelDiscussions.filter((q: any) => !(repliesMap[q.id]?.length > 0)).length;
+   500→
+   501→  const sortedQuestions = [...topLevelDiscussions].sort((a: any, b: any) => {
+   502→    if (sortBy === 'recent') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+   503→    if (sortBy === 'upvoted') return 0;
+   504→    if (sortBy === 'unanswered') {
+   505→      const aReplies = repliesMap[a.id]?.length || 0;
+   506→      const bReplies = repliesMap[b.id]?.length || 0;
+   507→      return aReplies === bReplies ? 0 : aReplies > bReplies ? 1 : -1;
+   508→    }
+   509→    return 0;
+   510→  });
+   511→
+   512→  const filteredQuestions = sortedQuestions.filter((q: any) =>
+   513→    q.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+   514→    (q.lesson?.title || '').toLowerCase().includes(searchQuery.toLowerCase())
+   515→  );
+   516→
+   517→  const handlePostQuestion = () => {
+   518→    if (!askContent.trim()) return;
+   519→    createDiscussion.mutate({
+   520→      lessonId: discussions[0]?.lessonId || '',
+   521→      userId,
+   522→      content: askTitle ? `**${askTitle}**\n\n${askContent}` : askContent,
+   523→    }, {
+   524→      onSuccess: () => {
+   525→        setAskTitle('');
+   526→        setAskContent('');
+   527→        setShowAskForm(false);
+   528→      },
+   529→    });
+   530→  };
+   531→
+   532→  const handleReply = (parentId: string) => {
+   533→    if (!replyContent.trim()) return;
+   534→    const parent = discussions.find((d: any) => d.id === parentId);
+   535→    createDiscussion.mutate({
+   536→      lessonId: parent?.lessonId || '',
+   537→      userId,
+   538→      content: replyContent,
+   539→      parentId,
+   540→    }, {
+   541→      onSuccess: () => {
+   542→        setReplyContent('');
+   543→        setReplyingTo(null);
+   544→      },
+   545→    });
+   546→  };
+   547→
+   548→  if (isLoading) {
+   549→    return (
+   550→      <div className="space-y-3">
+   551→        {Array.from({ length: 3 }).map((_, i) => (
+   552→          <div key={i} className="rounded-xl p-4 bg-muted/30 animate-pulse space-y-3">
+   553→            <div className="h-4 bg-muted rounded w-1/2" />
+   554→            <div className="h-3 bg-muted rounded w-3/4" />
+   555→            <div className="h-3 bg-muted rounded w-1/3" />
+   556→          </div>
+   557→        ))}
+   558→      </div>
+   559→    );
+   560→  }
+   561→
+   562→  return (
+   563→    <div className="space-y-4">
+   564→      {/* Header */}
+   565→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+   566→        <div>
+   567→          <div className="flex items-center gap-2">
+   568→            <h3 className="font-semibold text-foreground">Lesson Discussions</h3>
+   569→            {unansweredCount > 0 && (
+   570→              <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px]">
+   571→                {unansweredCount} unanswered
+   572→              </Badge>
+   573→            )}
+   574→          </div>
+   575→          <p className="text-sm text-muted-foreground">Ask questions and share insights with fellow learners</p>
+   576→        </div>
+   577→        <Button size="sm" className="gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20" onClick={() => setShowAskForm(!showAskForm)}>
+   578→          <Send className="h-3.5 w-3.5" />
+   579→          Ask a Question
+   580→        </Button>
+   581→      </div>
+   582→
+   583→      {/* Search and Sort */}
+   584→      <div className="flex flex-col sm:flex-row gap-3">
+   585→        <div className="relative flex-1">
+   586→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   587→          <Input
+   588→            placeholder="Search discussions..."
+   589→            value={searchQuery}
+   590→            onChange={(e) => setSearchQuery(e.target.value)}
+   591→            className="pl-9 h-9"
+   592→          />
+   593→        </div>
+   594→        <div className="flex gap-1.5">
+   595→          {[
+   596→            { key: 'recent' as const, label: 'Most Recent' },
+   597→            { key: 'upvoted' as const, label: 'Most Upvoted' },
+   598→            { key: 'unanswered' as const, label: 'Unanswered' },
+   599→          ].map((opt) => (
+   600→            <Button
+   601→              key={opt.key}
+   602→              size="sm"
+   603→              variant={sortBy === opt.key ? 'default' : 'outline'}
+   604→              className={cn('text-xs h-9', sortBy === opt.key && 'bg-gradient-to-r from-slate-700 to-slate-800 dark:from-slate-600 dark:to-slate-700')}
+   605→              onClick={() => setSortBy(opt.key)}
+   606→            >
+   607→              {opt.label}
+   608→            </Button>
+   609→          ))}
+   610→        </div>
+   611→      </div>
+   612→
+   613→      {/* Ask Question Form */}
+   614→      <AnimatePresence>
+   615→        {showAskForm && (
+   616→          <motion.div
+   617→            initial={{ height: 0, opacity: 0 }}
+   618→            animate={{ height: 'auto', opacity: 1 }}
+   619→            exit={{ height: 0, opacity: 0 }}
+   620→            transition={{ duration: 0.2 }}
+   621→            className="overflow-hidden"
+   622→          >
+   623→            <Card className={cn('border-emerald-200 dark:border-emerald-800/50', glassCard)}>
+   624→              <CardContent className="p-4 space-y-3">
+   625→                <Input
+   626→                  placeholder="What's your question? (optional title)"
+   627→                  value={askTitle}
+   628→                  onChange={(e) => setAskTitle(e.target.value)}
+   629→                  className="font-medium"
+   630→                />
+   631→                <Textarea
+   632→                  placeholder="Provide more details about your question... (Supports **bold**, *italic*, `code`)"
+   633→                  value={askContent}
+   634→                  onChange={(e) => setAskContent(e.target.value)}
+   635→                  rows={4}
+   636→                  className="resize-none"
+   637→                />
+   638→                <div className="flex items-center justify-between">
+   639→                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   640→                    <Tag className="h-3 w-3" />
+   641→                    <span>Supports Markdown formatting</span>
+   642→                  </div>
+   643→                  <div className="flex items-center gap-2">
+   644→                    <Button size="sm" variant="outline" onClick={() => setShowAskForm(false)}>Cancel</Button>
+   645→                    <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" onClick={handlePostQuestion} disabled={createDiscussion.isPending}>
+   646→                      {createDiscussion.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} Post Question
+   647→                    </Button>
+   648→                  </div>
+   649→                </div>
+   650→              </CardContent>
+   651→            </Card>
+   652→          </motion.div>
+   653→        )}
+   654→      </AnimatePresence>
+   655→
+   656→      {/* Questions List */}
+   657→      <div className="space-y-3">
+   658→        <AnimatePresence mode="popLayout">
+   659→          {filteredQuestions.map((question: any) => {
+   660→            const qReplies = repliesMap[question.id] || [];
+   661→            const isAnswered = qReplies.length > 0;
+   662→            return (
+   663→              <motion.div
+   664→                key={question.id}
+   665→                layout
+   666→                initial={{ opacity: 0, y: 10 }}
+   667→                animate={{ opacity: 1, y: 0 }}
+   668→                exit={{ opacity: 0, y: -10 }}
+   669→              >
+   670→                <Card className={cn(
+   671→                  'hover:shadow-md transition-all duration-200 cursor-pointer',
+   672→                  glassCard,
+   673→                  isAnswered && 'border-emerald-200 dark:border-emerald-800/40'
+   674→                )}>
+   675→                  <CardContent className="p-4">
+   676→                    <div className="flex items-start gap-3">
+   677→                      {/* Vote column */}
+   678→                      <div className="flex flex-col items-center gap-1 pt-1">
+   679→                        <button className="p-1 rounded hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+   680→                          <ChevronUp className="h-4 w-4" />
+   681→                        </button>
+   682→                        <span className="text-sm font-semibold text-foreground">{qReplies.length}</span>
+   683→                        <button className="p-1 rounded hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+   684→                          <ChevronDown className="h-4 w-4" />
+   685→                        </button>
+   686→                      </div>
+   687→
+   688→                      {/* Content */}
+   689→                      <div className="flex-1 min-w-0" onClick={() => setExpandedQuestion(expandedQuestion === question.id ? null : question.id)}>
+   690→                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+   691→                          {isAnswered && (
+   692→                            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] gap-0.5">
+   693→                              <CheckCircle2 className="h-3 w-3" /> Answered
+   694→                            </Badge>
+   695→                          )}
+   696→                          {question.lesson?.title && (
+   697→                            <Badge variant="outline" className="text-[10px] gap-0.5">
+   698→                              <BookOpen className="h-2.5 w-2.5" /> {question.lesson.title}
+   699→                            </Badge>
+   700→                          )}
+   701→                          {question.isPinned && (
+   702→                            <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] gap-0.5">
+   703→                              <Pin className="h-2.5 w-2.5" /> Pinned
+   704→                            </Badge>
+   705→                          )}
+   706→                        </div>
+   707→                        <p className="text-sm text-muted-foreground line-clamp-3">{question.content}</p>
+   708→                        <div className="flex items-center gap-3 mt-2">
+   709→                          <span className="text-xs text-muted-foreground">· {timeAgo(question.createdAt)}</span>
+   710→                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+   711→                            <MessageCircle className="h-3 w-3" /> {qReplies.length}
+   712→                          </span>
+   713→                        </div>
+   714→                      </div>
+   715→                    </div>
+   716→
+   717→                    {/* Expanded Replies */}
+   718→                    <AnimatePresence>
+   719→                      {expandedQuestion === question.id && (
+   720→                        <motion.div
+   721→                          initial={{ height: 0, opacity: 0 }}
+   722→                          animate={{ height: 'auto', opacity: 1 }}
+   723→                          exit={{ height: 0, opacity: 0 }}
+   724→                          transition={{ duration: 0.2 }}
+   725→                          className="overflow-hidden"
+   726→                        >
+   727→                          <div className="mt-4 pt-4 border-t border-border/50 space-y-3">
+   728→                            {qReplies.map((reply: any) => (
+   729→                              <div key={reply.id} className={cn('ml-8 p-3 rounded-lg bg-muted/30')}>
+   730→                                <p className="text-xs text-muted-foreground leading-relaxed">{reply.content}</p>
+   731→                                <div className="flex items-center gap-3 mt-2">
+   732→                                  <span className="text-[10px] text-muted-foreground">{timeAgo(reply.createdAt)}</span>
+   733→                                  <button className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+   734→                                    <ThumbsUp className="h-3 w-3" />
+   735→                                  </button>
+   736→                                </div>
+   737→                              </div>
+   738→                            ))}
+   739→
+   740→                            {/* Reply input */}
+   741→                            <div className="ml-8 flex gap-2">
+   742→                              <Input
+   743→                                placeholder="Write a reply..."
+   744→                                value={replyingTo === question.id ? replyContent : ''}
+   745→                                onChange={(e) => { setReplyingTo(question.id); setReplyContent(e.target.value); }}
+   746→                                className="h-8 text-xs"
+   747→                                onFocus={() => setReplyingTo(question.id)}
+   748→                              />
+   749→                              <Button
+   750→                                size="sm"
+   751→                                className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-700 shrink-0"
+   752→                                onClick={() => handleReply(question.id)}
+   753→                                disabled={createDiscussion.isPending}
+   754→                              >
+   755→                                {createDiscussion.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+   756→                              </Button>
+   757→                            </div>
+   758→                          </div>
+   759→                        </motion.div>
+   760→                      )}
+   761→                    </AnimatePresence>
+   762→                  </CardContent>
+   763→                </Card>
+   764→              </motion.div>
+   765→            );
+   766→          })}
+   767→        </AnimatePresence>
+   768→      </div>
+   769→
+   770→      {filteredQuestions.length === 0 && (
+   771→        <div className="text-center py-8">
+   772→          <MessageCircleQuestion className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+   773→          <p className="text-sm text-muted-foreground">No discussions yet. Be the first to ask a question!</p>
+   774→        </div>
+   775→      )}
+   776→
+   777→      <Button variant="outline" className="w-full">View All Discussions</Button>
+   778→    </div>
+   779→  );
+   780→}
+   781→
+   782→// ─── Q&A Discussion Tab ────────────────────────────────────
+   783→function QADiscussionTab({ courseId, userId, modules }: { courseId: string; userId: string; modules: Module[] }) {
+   784→  const { data: discussionsData, isLoading } = useLessonDiscussions({ courseId });
+   785→  const createDiscussion = useCreateDiscussion();
+   786→
+   787→  const [selectedLessonId, setSelectedLessonId] = useState<string>('all');
+   788→  const [searchQuery, setSearchQuery] = useState('');
+   789→  const [sortBy, setSortBy] = useState<'newest' | 'voted' | 'unresolved' | 'resolved'>('newest');
+   790→  const [filterBy, setFilterBy] = useState<'all' | 'my' | 'unresolved' | 'resolved'>('all');
+   791→  const [selectedQuestion, setSelectedQuestion] = useState<any | null>(null);
+   792→  const [showAskDialog, setShowAskDialog] = useState(false);
+   793→  const [askContent, setAskContent] = useState('');
+   794→  const [askLessonId, setAskLessonId] = useState<string>(selectedLessonId === 'all' ? '' : selectedLessonId);
+   795→  const [answerContent, setAnswerContent] = useState('');
+   796→  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set(modules.map(m => m.id)));
+   797→
+   798→  const discussions = discussionsData?.discussions || [];
+   799→
+   800→  // Separate top-level from replies & build reply map
+   801→  const { qaTopLevel, repliesMap } = useMemo(() => {
+   802→    const top: any[] = [];
+   803→    const map: Record<string, any[]> = {};
+   804→    discussions.forEach((d: any) => {
+   805→      if (d.parentId) {
+   806→        if (!map[d.parentId]) map[d.parentId] = [];
+   807→        map[d.parentId].push(d);
+   808→      } else {
+   809→        top.push(d);
+   810→      }
+   811→    });
+   812→    return { qaTopLevel: top, repliesMap: map };
+   813→  }, [discussions]);
+   814→
+   815→  // Build lesson map from modules
+   816→  const lessonMap = new Map<string, { title: string; moduleId: string; moduleTitle: string }>();
+   817→  modules.forEach(mod => {
+   818→    (mod.lessons || []).forEach(lesson => {
+   819→      lessonMap.set(lesson.id, { title: lesson.title, moduleId: mod.id, moduleTitle: mod.title });
+   820→    });
+   821→  });
+   822→
+   823→  // Filter questions
+   824→  const filteredQuestions = qaTopLevel.filter((q: any) => {
+   825→    if (selectedLessonId !== 'all' && q.lessonId !== selectedLessonId) return false;
+   826→    if (filterBy === 'my' && q.userId !== userId) return false;
+   827→    const qReplies = repliesMap[q.id] || [];
+   828→    const isResolved = qReplies.length > 0;
+   829→    if (filterBy === 'unresolved' && isResolved) return false;
+   830→    if (filterBy === 'resolved' && !isResolved) return false;
+   831→    if (searchQuery) {
+   832→      const lq = searchQuery.toLowerCase();
+   833→      if (!q.content.toLowerCase().includes(lq)) return false;
+   834→    }
+   835→    return true;
+   836→  });
+   837→
+   838→  // Sort questions
+   839→  const sortedQuestions = [...filteredQuestions].sort((a: any, b: any) => {
+   840→    if (sortBy === 'newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+   841→    if (sortBy === 'voted') return (repliesMap[b.id]?.length || 0) - (repliesMap[a.id]?.length || 0);
+   842→    if (sortBy === 'unresolved') {
+   843→      const aResolved = (repliesMap[a.id]?.length || 0) > 0;
+   844→      const bResolved = (repliesMap[b.id]?.length || 0) > 0;
+   845→      return aResolved === bResolved ? 0 : aResolved ? 1 : -1;
+   846→    }
+   847→    if (sortBy === 'resolved') {
+   848→      const aResolved = (repliesMap[a.id]?.length || 0) > 0;
+   849→      const bResolved = (repliesMap[b.id]?.length || 0) > 0;
+   850→      return aResolved === bResolved ? 0 : aResolved ? -1 : 1;
+   851→    }
+   852→    return 0;
+   853→  });
+   854→
+   855→  const toggleModule = (moduleId: string) => {
+   856→    setExpandedModules(prev => {
+   857→      const next = new Set(prev);
+   858→      if (next.has(moduleId)) next.delete(moduleId);
+   859→      else next.add(moduleId);
+   860→      return next;
+   861→    });
+   862→  };
+   863→
+   864→  // Count questions per lesson
+   865→  const questionCountsByLesson = new Map<string, number>();
+   866→  const unresolvedCountsByLesson = new Map<string, number>();
+   867→  qaTopLevel.forEach((q: any) => {
+   868→    questionCountsByLesson.set(q.lessonId, (questionCountsByLesson.get(q.lessonId) || 0) + 1);
+   869→    if (!(repliesMap[q.id]?.length > 0)) unresolvedCountsByLesson.set(q.lessonId, (unresolvedCountsByLesson.get(q.lessonId) || 0) + 1);
+   870→  });
+   871→
+   872→  const unresolvedTotal = qaTopLevel.filter((q: any) => !(repliesMap[q.id]?.length > 0)).length;
+   873→
+   874→  // Render content with markdown
+   875→  const renderContent = (content: string) => {
+   876→    const parts = content.split(/(```[\s\S]*?```)/g);
+   877→    return parts.map((part, i) => {
+   878→      if (part.startsWith('```') && part.endsWith('```')) {
+   879→        const codeContent = part.slice(3, -3).replace(/^\w+\n/, '');
+   880→        return (
+   881→          <pre key={i} className="bg-slate-900 dark:bg-slate-950 text-green-400 p-3 rounded-lg text-xs font-mono overflow-x-auto my-2 leading-relaxed">
+   882→            <code>{codeContent}</code>
+   883→          </pre>
+   884→        );
+   885→      }
+   886→      const inlineParts = part.split(/(`[^`]+`)/g);
+   887→      return (
+   888→        <span key={i}>
+   889→          {inlineParts.map((ip, j) => {
+   890→            if (ip.startsWith('`') && ip.endsWith('`')) {
+   891→              return <code key={j} className="bg-slate-100 dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded text-xs font-mono">{ip.slice(1, -1)}</code>;
+   892→            }
+   893→            const boldParts = ip.split(/(\*\*[^*]+\*\*)/g);
+   894→            return boldParts.map((bp, k) => {
+   895→              if (bp.startsWith('**') && bp.endsWith('**')) {
+   896→                return <strong key={`${j}-${k}`} className="font-semibold text-foreground">{bp.slice(2, -2)}</strong>;
+   897→              }
+   898→              return <span key={`${j}-${k}`}>{bp}</span>;
+   899→            });
+   900→          })}
+   901→        </span>
+   902→      );
+   903→    });
+   904→  };
+   905→
+   906→  // Handle submit question
+   907→  const handleSubmitQuestion = () => {
+   908→    if (!askContent.trim() || !askLessonId) return;
+   909→    createDiscussion.mutate({
+   910→      lessonId: askLessonId,
+   911→      userId,
+   912→      content: askContent,
+   913→    }, {
+   914→      onSuccess: () => {
+   915→        setAskContent('');
+   916→        setShowAskDialog(false);
+   917→      },
+   918→    });
+   919→  };
+   920→
+   921→  // Handle submit answer
+   922→  const handleSubmitAnswer = () => {
+   923→    if (!answerContent.trim() || !selectedQuestion) return;
+   924→    createDiscussion.mutate({
+   925→      lessonId: selectedQuestion.lessonId,
+   926→      userId,
+   927→      content: answerContent,
+   928→      parentId: selectedQuestion.id,
+   929→    }, {
+   930→      onSuccess: () => {
+   931→        setAnswerContent('');
+   932→      },
+   933→    });
+   934→  };
+   935→
+   936→  if (isLoading) {
+   937→    return (
+   938→      <div className="space-y-3">
+   939→        {Array.from({ length: 3 }).map((_, i) => (
+   940→          <div key={i} className="rounded-xl p-4 bg-muted/30 animate-pulse space-y-3">
+   941→            <div className="h-4 bg-muted rounded w-1/2" />
+   942→            <div className="h-3 bg-muted rounded w-3/4" />
+   943→          </div>
+   944→        ))}
+   945→      </div>
+   946→    );
+   947→  }
+   948→
+   949→  // ─── Thread Detail View ─────────────────────────────────
+   950→  if (selectedQuestion) {
+   951→    const q = selectedQuestion;
+   952→    const qReplies = repliesMap[q.id] || [];
+   953→    const isResolved = qReplies.length > 0;
+   954→
+   955→    return (
+   956→      <div className="space-y-4">
+   957→        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => setSelectedQuestion(null)}>
+   958→          <ChevronDown className="h-4 w-4 rotate-90" />
+   959→          Back to Questions
+   960→        </Button>
+   961→
+   962→        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+   963→          <Card className={cn(glassCard, 'border-orange-200/50 dark:border-orange-800/30')}>
+   964→            <CardContent className="p-6">
+   965→              <div className="flex-1 min-w-0">
+   966→                <div className="flex items-center gap-2 mb-2 flex-wrap">
+   967→                  {isResolved ? (
+   968→                    <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] gap-0.5">
+   969→                      <CheckCircle2 className="h-3 w-3" /> Resolved
+   970→                    </Badge>
+   971→                  ) : (
+   972→                    <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px] gap-0.5">
+   973→                      <Circle className="h-3 w-3" /> Unresolved
+   974→                    </Badge>
+   975→                  )}
+   976→                  {q.lesson?.title && (
+   977→                    <Badge variant="outline" className="text-[10px] gap-0.5">
+   978→                      <BookOpen className="h-2.5 w-2.5" /> {q.lesson.title}
+   979→                    </Badge>
+   980→                  )}
+   981→                </div>
+   982→                <div className="text-sm text-muted-foreground leading-relaxed mb-3">
+   983→                  {renderContent(q.content)}
+   984→                </div>
+   985→                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   986→                  <span>{timeAgo(q.createdAt)}</span>
+   987→                  <span>· {qReplies.length} {qReplies.length === 1 ? 'reply' : 'replies'}</span>
+   988→                </div>
+   989→              </div>
+   990→            </CardContent>
+   991→          </Card>
+   992→        </motion.div>
+   993→
+   994→        {/* Replies */}
+   995→        <div className="space-y-3">
+   996→          <h4 className="font-semibold text-foreground text-sm">
+   997→            {qReplies.length} {qReplies.length === 1 ? 'Reply' : 'Replies'}
+   998→          </h4>
+   999→
+  1000→          {qReplies.map((reply: any) => (
+  1001→            <motion.div key={reply.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+  1002→              <Card className={cn(glassCard)}>
+  1003→                <CardContent className="p-4">
+  1004→                  <div className="text-sm text-muted-foreground leading-relaxed">
+  1005→                    {renderContent(reply.content)}
+  1006→                  </div>
+  1007→                  <div className="flex items-center gap-3 mt-2">
+  1008→                    <span className="text-[10px] text-muted-foreground">{timeAgo(reply.createdAt)}</span>
+  1009→                  </div>
+  1010→                </CardContent>
+  1011→              </Card>
+  1012→            </motion.div>
+  1013→          ))}
+  1014→
+  1015→          {qReplies.length === 0 && (
+  1016→            <div className="text-center py-8">
+  1017→              <MessageCircleQuestion className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+  1018→              <p className="text-sm text-muted-foreground">No replies yet. Be the first to help!</p>
+  1019→            </div>
+  1020→          )}
+  1021→        </div>
+  1022→
+  1023→        {/* Add Answer Form */}
+  1024→        <Card className={cn(glassCard, 'border-dashed')}>
+  1025→          <CardContent className="p-4 space-y-3">
+  1026→            <div className="flex items-center gap-2">
+  1027→              <Edit3 className="h-4 w-4 text-muted-foreground" />
+  1028→              <span className="text-sm font-medium text-foreground">Your Answer</span>
+  1029→            </div>
+  1030→            <Textarea
+  1031→              placeholder="Write your answer... Supports **bold**, *italic*, and `code`"
+  1032→              value={answerContent}
+  1033→              onChange={e => setAnswerContent(e.target.value)}
+  1034→              rows={4}
+  1035→              className="resize-none"
+  1036→            />
+  1037→            <div className="flex items-center justify-end">
+  1038→              <Button size="sm" className="gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20" onClick={handleSubmitAnswer} disabled={createDiscussion.isPending}>
+  1039→                {createDiscussion.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} Submit Answer
+  1040→              </Button>
+  1041→            </div>
+  1042→          </CardContent>
+  1043→        </Card>
+  1044→      </div>
+  1045→    );
+  1046→  }
+  1047→
+  1048→  // ─── Question List View ─────────────────────────────────
+  1049→  return (
+  1050→    <div className="space-y-4">
+  1051→      {/* Header */}
+  1052→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+  1053→        <div>
+  1054→          <div className="flex items-center gap-2">
+  1055→            <h3 className="font-semibold text-foreground">Q&amp;A Discussion</h3>
+  1056→            {unresolvedTotal > 0 && (
+  1057→              <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px]">
+  1058→                {unresolvedTotal} unresolved
+  1059→              </Badge>
+  1060→            )}
+  1061→          </div>
+  1062→          <p className="text-sm text-muted-foreground">Ask questions and get answers from peers and instructors</p>
+  1063→        </div>
+  1064→        <Dialog open={showAskDialog} onOpenChange={setShowAskDialog}>
+  1065→          <DialogTrigger asChild>
+  1066→            <Button size="sm" className="gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20">
+  1067→              <Plus className="h-3.5 w-3.5" />
+  1068→              Ask Question
+  1069→            </Button>
+  1070→          </DialogTrigger>
+  1071→          <DialogContent className="sm:max-w-lg">
+  1072→            <DialogHeader>
+  1073→              <DialogTitle className="flex items-center gap-2">
+  1074→                <MessageCircleQuestion className="h-5 w-5 text-emerald-600" />
+  1075→                Ask a Question
+  1076→              </DialogTitle>
+  1077→            </DialogHeader>
+  1078→            <div className="space-y-4">
+  1079→              <div>
+  1080→                <label className="text-sm font-medium text-foreground mb-1.5 block">Details</label>
+  1081→                <div className="flex items-center gap-1 mb-2 p-1 rounded-lg border bg-muted/30">
+  1082→                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Bold className="h-3.5 w-3.5" /></Button>
+  1083→                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Italic className="h-3.5 w-3.5" /></Button>
+  1084→                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Code2 className="h-3.5 w-3.5" /></Button>
+  1085→                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Link2 className="h-3.5 w-3.5" /></Button>
+  1086→                </div>
+  1087→                <Textarea
+  1088→                  placeholder="Provide more details about your question... Supports **bold**, *italic*, `code`"
+  1089→                  value={askContent}
+  1090→                  onChange={e => setAskContent(e.target.value)}
+  1091→                  rows={5}
+  1092→                  className="resize-none"
+  1093→                />
+  1094→              </div>
+  1095→              <div>
+  1096→                <label className="text-sm font-medium text-foreground mb-1.5 block">Related Lesson</label>
+  1097→                <Select value={askLessonId} onValueChange={setAskLessonId}>
+  1098→                  <SelectTrigger className="h-9">
+  1099→                    <SelectValue placeholder="Select a lesson" />
+  1100→                  </SelectTrigger>
+  1101→                  <SelectContent>
+  1102→                    {modules.map(mod => (
+  1103→                      (mod.lessons || []).map(lesson => (
+  1104→                        <SelectItem key={lesson.id} value={lesson.id}>
+  1105→                          {mod.title} → {lesson.title}
+  1106→                        </SelectItem>
+  1107→                      ))
+  1108→                    ))}
+  1109→                  </SelectContent>
+  1110→                </Select>
+  1111→              </div>
+  1112→            </div>
+  1113→            <DialogFooter className="gap-2">
+  1114→              <DialogClose asChild>
+  1115→                <Button variant="outline">Cancel</Button>
+  1116→              </DialogClose>
+  1117→              <Button className="gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20" onClick={handleSubmitQuestion} disabled={createDiscussion.isPending}>
+  1118→                {createDiscussion.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Submit Question
+  1119→              </Button>
+  1120→            </DialogFooter>
+  1121→          </DialogContent>
+  1122→        </Dialog>
+  1123→      </div>
+  1124→
+  1125→      <div className="flex flex-col lg:flex-row gap-4">
+  1126→        {/* Left Panel - Lesson Selector */}
+  1127→        <div className="lg:w-64 shrink-0">
+  1128→          <Card className={cn(glassCard, 'sticky top-4')}>
+  1129→            <CardContent className="p-3">
+  1130→              <h4 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Filter by Lesson</h4>
+  1131→              <div className="space-y-1 max-h-96 overflow-y-auto">
+  1132→                <button
+  1133→                  className={cn(
+  1134→                    'w-full text-left p-2 rounded-lg text-xs transition-all duration-200',
+  1135→                    selectedLessonId === 'all' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium' : 'hover:bg-muted/50 text-muted-foreground'
+  1136→                  )}
+  1137→                  onClick={() => setSelectedLessonId('all')}
+  1138→                >
+  1139→                  <div className="flex items-center justify-between">
+  1140→                    <span>All Questions</span>
+  1141→                    <Badge variant="secondary" className="text-[9px] h-4 px-1">{qaTopLevel.length}</Badge>
+  1142→                  </div>
+  1143→                </button>
+  1144→                {modules.map(mod => {
+  1145→                  const isExpanded = expandedModules.has(mod.id);
+  1146→                  const lessons = mod.lessons || [];
+  1147→                  return (
+  1148→                    <div key={mod.id}>
+  1149→                      <button
+  1150→                        className="w-full flex items-center gap-1.5 p-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+  1151→                        onClick={() => toggleModule(mod.id)}
+  1152→                      >
+  1153→                        {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+  1154→                        <span className="line-clamp-1">{mod.title}</span>
+  1155→                      </button>
+  1156→                      {isExpanded && (
+  1157→                        <div className="ml-4 space-y-0.5">
+  1158→                          {lessons.map(lesson => {
+  1159→                            const qCount = questionCountsByLesson.get(lesson.id) || 0;
+  1160→                            const unresolved = unresolvedCountsByLesson.get(lesson.id) || 0;
+  1161→                            const isActive = selectedLessonId === lesson.id;
+  1162→                            return (
+  1163→                              <button
+  1164→                                key={lesson.id}
+  1165→                                className={cn(
+  1166→                                  'w-full text-left p-2 rounded-lg text-xs transition-all duration-200',
+  1167→                                  isActive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium' : 'hover:bg-muted/50 text-muted-foreground'
+  1168→                                )}
+  1169→                                onClick={() => setSelectedLessonId(lesson.id)}
+  1170→                              >
+  1171→                                <div className="flex items-center gap-1.5">
+  1172→                                  {unresolved > 0 && <span className="h-1.5 w-1.5 rounded-full bg-orange-500 shrink-0" />}
+  1173→                                  <span className="line-clamp-1 flex-1">{lesson.title}</span>
+  1174→                                  {qCount > 0 && (
+  1175→                                    <Badge variant="secondary" className="text-[9px] h-4 px-1 ml-auto shrink-0">{qCount}</Badge>
+  1176→                                  )}
+  1177→                                </div>
+  1178→                              </button>
+  1179→                            );
+  1180→                          })}
+  1181→                        </div>
+  1182→                      )}
+  1183→                    </div>
+  1184→                  );
+  1185→                })}
+  1186→              </div>
+  1187→            </CardContent>
+  1188→          </Card>
+  1189→        </div>
+  1190→
+  1191→        {/* Right Panel - Q&A Threads */}
+  1192→        <div className="flex-1 space-y-3">
+  1193→          {/* Search and Sort */}
+  1194→          <div className="flex flex-col sm:flex-row gap-3">
+  1195→            <div className="relative flex-1">
+  1196→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1197→              <Input
+  1198→                placeholder="Search questions..."
+  1199→                value={searchQuery}
+  1200→                onChange={e => setSearchQuery(e.target.value)}
+  1201→                className="pl-9 h-9"
+  1202→              />
+  1203→            </div>
+  1204→            <div className="flex gap-1.5 overflow-x-auto">
+  1205→              {([
+  1206→                { key: 'newest' as const, label: 'Newest' },
+  1207→                { key: 'voted' as const, label: 'Most Voted' },
+  1208→                { key: 'unresolved' as const, label: 'Unresolved' },
+  1209→                { key: 'resolved' as const, label: 'Resolved' },
+  1210→              ]).map(opt => (
+  1211→                <Button
+  1212→                  key={opt.key}
+  1213→                  size="sm"
+  1214→                  variant={sortBy === opt.key ? 'default' : 'outline'}
+  1215→                  className={cn('text-xs h-9 shrink-0', sortBy === opt.key && 'bg-gradient-to-r from-slate-700 to-slate-800 dark:from-slate-600 dark:to-slate-700')}
+  1216→                  onClick={() => setSortBy(opt.key)}
+  1217→                >
+  1218→                  {opt.label}
+  1219→                </Button>
+  1220→              ))}
+  1221→            </div>
+  1222→          </div>
+  1223→
+  1224→          {/* Filter Row */}
+  1225→          <div className="flex gap-1.5 overflow-x-auto">
+  1226→            {([
+  1227→              { key: 'all' as const, label: 'All' },
+  1228→              { key: 'my' as const, label: 'My Questions' },
+  1229→              { key: 'unresolved' as const, label: 'Unresolved' },
+  1230→              { key: 'resolved' as const, label: 'Resolved' },
+  1231→            ]).map(opt => (
+  1232→              <Button
+  1233→                key={opt.key}
+  1234→                size="sm"
+  1235→                variant={filterBy === opt.key ? 'secondary' : 'ghost'}
+  1236→                className={cn('text-xs h-7 shrink-0', filterBy === opt.key && 'font-medium')}
+  1237→                onClick={() => setFilterBy(opt.key)}
+  1238→              >
+  1239→                {opt.label}
+  1240→              </Button>
+  1241→            ))}
+  1242→          </div>
+  1243→
+  1244→          {/* Thread Cards */}
+  1245→          <AnimatePresence mode="popLayout">
+  1246→            {sortedQuestions.map((question: any, idx: number) => {
+  1247→              const qReplies = repliesMap[question.id] || [];
+  1248→              const isResolved = qReplies.length > 0;
+  1249→              return (
+  1250→                <motion.div
+  1251→                  key={question.id}
+  1252→                  layout
+  1253→                  initial={{ opacity: 0, y: 10 }}
+  1254→                  animate={{ opacity: 1, y: 0 }}
+  1255→                  exit={{ opacity: 0, y: -10 }}
+  1256→                  transition={{ delay: idx * 0.05 }}
+  1257→                >
+  1258→                  <Card
+  1259→                    className={cn(
+  1260→                      'hover:shadow-md transition-all duration-200 cursor-pointer',
+  1261→                      glassCard,
+  1262→                      isResolved ? 'border-emerald-200/50 dark:border-emerald-800/30' : 'border-orange-100/50 dark:border-orange-800/20'
+  1263→                    )}
+  1264→                    onClick={() => setSelectedQuestion(question)}
+  1265→                  >
+  1266→                    <CardContent className="p-4">
+  1267→                      <div className="flex items-start gap-3">
+  1268→                        {/* Vote column */}
+  1269→                        <div className="flex flex-col items-center gap-1 pt-1" onClick={e => e.stopPropagation()}>
+  1270→                          <button className="p-1 rounded transition-all duration-200 hover:bg-muted/50 text-muted-foreground hover:text-foreground">
+  1271→                            <ChevronUp className="h-4 w-4" />
+  1272→                          </button>
+  1273→                          <span className="text-sm font-semibold text-foreground">{qReplies.length}</span>
+  1274→                        </div>
+  1275→
+  1276→                        {/* Content */}
+  1277→                        <div className="flex-1 min-w-0">
+  1278→                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+  1279→                            {isResolved ? (
+  1280→                              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] gap-0.5">
+  1281→                                <Check className="h-3 w-3" /> Resolved
+  1282→                              </Badge>
+  1283→                            ) : (
+  1284→                              <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px] gap-0.5">
+  1285→                                <Circle className="h-2.5 w-2.5" /> Unresolved
+  1286→                              </Badge>
+  1287→                            )}
+  1288→                            {question.lesson?.title && (
+  1289→                              <Badge variant="outline" className="text-[10px] gap-0.5">
+  1290→                                <BookOpen className="h-2.5 w-2.5" /> {question.lesson.title}
+  1291→                              </Badge>
+  1292→                            )}
+  1293→                          </div>
+  1294→                          <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{question.content}</p>
+  1295→
+  1296→                          {/* Meta row */}
+  1297→                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+  1298→                            <span className="flex items-center gap-1">
+  1299→                              <Clock className="h-3 w-3" /> {timeAgo(question.createdAt)}
+  1300→                            </span>
+  1301→                            <span className={cn('flex items-center gap-1', isResolved ? 'text-emerald-600' : '')}>
+  1302→                              {isResolved ? <Check className="h-3 w-3" /> : <MessageCircle className="h-3 w-3" />}
+  1303→                              {qReplies.length} {qReplies.length === 1 ? 'reply' : 'replies'}
+  1304→                            </span>
+  1305→                          </div>
+  1306→                        </div>
+  1307→                      </div>
+  1308→                    </CardContent>
+  1309→                  </Card>
+  1310→                </motion.div>
+  1311→              );
+  1312→            })}
+  1313→          </AnimatePresence>
+  1314→
+  1315→          {sortedQuestions.length === 0 && (
+  1316→            <div className="text-center py-12">
+  1317→              <MessageCircleQuestion className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+  1318→              <p className="text-sm text-muted-foreground">No questions found. Be the first to ask!</p>
+  1319→            </div>
+  1320→          )}
+  1321→        </div>
+  1322→      </div>
+  1323→    </div>
+  1324→  );
+  1325→}
+  1326→
+  1327→// ─── Notes Tab ─────────────────────────────────────────────
+  1328→function NotesTab({ notes, onAddNote, onUpdateNote, onDeleteNote, allLessons, onJumpToTimestamp }: {
+  1329→  notes: Note[];
+  1330→  onAddNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  1331→  onUpdateNote: (id: string, updates: Partial<Note>) => void;
+  1332→  onDeleteNote: (id: string) => void;
+  1333→  allLessons: { id: string; title: string }[];
+  1334→  onJumpToTimestamp?: (time: number) => void;
+  1335→}) {
+  1336→  const [selectedLesson, setSelectedLesson] = useState<string>('all');
+  1337→  const [searchQuery, setSearchQuery] = useState('');
+  1338→  const [selectedCategory, setSelectedCategory] = useState<Note['category'] | 'all'>('all');
+  1339→  const [editingNote, setEditingNote] = useState<string | null>(null);
+  1340→  const [editContent, setEditContent] = useState('');
+  1341→  const [newNoteContent, setNewNoteContent] = useState('');
+  1342→  const [newNoteCategory, setNewNoteCategory] = useState<Note['category']>('personal');
+  1343→  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  1344→  const [showAiSummary, setShowAiSummary] = useState(false);
+  1345→
+  1346→  // Group notes by lesson
+  1347→  const lessonsWithNotes = Array.from(new Set(notes.map(n => n.lessonId)));
+  1348→
+  1349→  const filteredNotes = notes.filter(n => {
+  1350→    if (selectedLesson !== 'all' && n.lessonId !== selectedLesson) return false;
+  1351→    if (selectedCategory !== 'all' && n.category !== selectedCategory) return false;
+  1352→    if (searchQuery && !n.content.toLowerCase().includes(searchQuery.toLowerCase()) && !n.lessonTitle.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+  1353→    return true;
+  1354→  });
+  1355→
+  1356→  const handleSaveNote = useCallback(() => {
+  1357→    setSaveStatus('saving');
+  1358→    setTimeout(() => {
+  1359→      setSaveStatus('saved');
+  1360→      setTimeout(() => setSaveStatus('idle'), 2000);
+  1361→    }, 400);
+  1362→  }, []);
+  1363→
+  1364→  const handleExportNotes = () => {
+  1365→    const text = filteredNotes.map(n =>
+  1366→      `--- ${n.lessonTitle} [${noteCategoryConfig[n.category].label}] ---\n${n.content}\n`
+  1367→    ).join('\n');
+  1368→    navigator.clipboard.writeText(text).catch(() => {});
+  1369→    setSaveStatus('saved');
+  1370→    setTimeout(() => setSaveStatus('idle'), 2000);
+  1371→  };
+  1372→
+  1373→  const handleAddNote = () => {
+  1374→    if (!newNoteContent.trim()) return;
+  1375→    // Find the current lesson for context
+  1376→    const currentLesson = selectedLesson !== 'all'
+  1377→      ? allLessons.find(l => l.id === selectedLesson)
+  1378→      : allLessons[0];
+  1379→    onAddNote({
+  1380→      lessonId: currentLesson?.id || '',
+  1381→      lessonTitle: currentLesson?.title || 'Unknown Lesson',
+  1382→      content: newNoteContent,
+  1383→      category: newNoteCategory,
+  1384→    });
+  1385→    setNewNoteContent('');
+  1386→    handleSaveNote();
+  1387→  };
+  1388→
+  1389→  return (
+  1390→    <div className="space-y-4">
+  1391→      {/* Header */}
+  1392→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+  1393→        <div>
+  1394→          <h3 className="font-semibold text-foreground">My Notes</h3>
+  1395→          <p className="text-sm text-muted-foreground">{notes.length} notes across {lessonsWithNotes.length} lessons</p>
+  1396→        </div>
+  1397→        <div className="flex items-center gap-2">
+  1398→          {saveStatus === 'saving' && (
+  1399→            <motion.div
+  1400→              initial={{ opacity: 0, x: 10 }}
+  1401→              animate={{ opacity: 1, x: 0 }}
+  1402→              className="flex items-center gap-1 text-xs text-amber-600"
+  1403→            >
+  1404→              <Loader2 className="h-3 w-3 animate-spin" /> Saving...
+  1405→            </motion.div>
+  1406→          )}
+  1407→          {saveStatus === 'saved' && (
+  1408→            <motion.div
+  1409→              initial={{ opacity: 0, scale: 0.8 }}
+  1410→              animate={{ opacity: 1, scale: 1 }}
+  1411→              className="flex items-center gap-1 text-xs text-emerald-600"
+  1412→            >
+  1413→              <Check className="h-3 w-3" /> Saved
+  1414→            </motion.div>
+  1415→          )}
+  1416→          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowAiSummary(!showAiSummary)}>
+  1417→            <Sparkles className="h-3.5 w-3.5" /> AI Summarize
+  1418→          </Button>
+  1419→          <Button size="sm" variant="outline" className="gap-1.5" onClick={handleExportNotes}>
+  1420→            <Copy className="h-3.5 w-3.5" /> Export
+  1421→          </Button>
+  1422→        </div>
+  1423→      </div>
+  1424→
+  1425→      {/* AI Summary */}
+  1426→      <AnimatePresence>
+  1427→        {showAiSummary && (
+  1428→          <motion.div
+  1429→            initial={{ height: 0, opacity: 0 }}
+  1430→            animate={{ height: 'auto', opacity: 1 }}
+  1431→            exit={{ height: 0, opacity: 0 }}
+  1432→            transition={{ duration: 0.3 }}
+  1433→            className="overflow-hidden"
+  1434→          >
+  1435→            <Card className={cn('border-violet-200 dark:border-violet-800/40', glassCard)}>
+  1436→              <CardContent className="p-4">
+  1437→                <div className="flex items-center gap-2 mb-2">
+  1438→                  <Sparkles className="h-4 w-4 text-violet-600" />
+  1439→                  <span className="text-sm font-semibold text-foreground">AI Summary of Your Notes</span>
+  1440→                </div>
+  1441→                <div className="text-sm text-muted-foreground leading-relaxed space-y-2">
+  1442→                  {notes.length > 0 ? (
+  1443→                    <>
+  1444→                      <p><strong>Total Notes:</strong> {notes.length} across {lessonsWithNotes.length} lessons</p>
+  1445→                      <p><strong>Categories:</strong> {Object.entries(
+  1446→                        notes.reduce((acc, n) => { acc[n.category] = (acc[n.category] || 0) + 1; return acc; }, {} as Record<string, number>)
+  1447→                      ).map(([k, v]) => `${noteCategoryConfig[k as Note['category']].label} (${v})`).join(', ')}</p>
+  1448→                      <p><strong>Tip:</strong> Consider adding more code snippets for hands-on practice!</p>
+  1449→                    </>
+  1450→                  ) : (
+  1451→                    <p>Start taking notes to get personalized AI summaries and study insights.</p>
+  1452→                  )}
+  1453→                </div>
+  1454→              </CardContent>
+  1455→            </Card>
+  1456→          </motion.div>
+  1457→        )}
+  1458→      </AnimatePresence>
+  1459→
+  1460→      {/* Search and Filters */}
+  1461→      <div className="flex flex-col sm:flex-row gap-3">
+  1462→        <div className="relative flex-1">
+  1463→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1464→          <Input
+  1465→            placeholder="Search notes..."
+  1466→            value={searchQuery}
+  1467→            onChange={(e) => setSearchQuery(e.target.value)}
+  1468→            className="pl-9 h-9"
+  1469→          />
+  1470→        </div>
+  1471→        <div className="flex gap-1.5 overflow-x-auto">
+  1472→          <Button
+  1473→            size="sm"
+  1474→            variant={selectedCategory === 'all' ? 'default' : 'outline'}
+  1475→            className="text-xs h-9 shrink-0"
+  1476→            onClick={() => setSelectedCategory('all')}
+  1477→          >
+  1478→            All
+  1479→          </Button>
+  1480→          {Object.entries(noteCategoryConfig).map(([key, config]) => (
+  1481→            <Button
+  1482→              key={key}
+  1483→              size="sm"
+  1484→              variant={selectedCategory === key ? 'default' : 'outline'}
+  1485→              className="text-xs h-9 gap-1 shrink-0"
+  1486→              onClick={() => setSelectedCategory(key as Note['category'])}
+  1487→            >
+  1488→              {config.icon} {config.label}
+  1489→            </Button>
+  1490→          ))}
+  1491→        </div>
+  1492→      </div>
+  1493→
+  1494→      <div className="flex flex-col lg:flex-row gap-4">
+  1495→        {/* Sidebar - Lesson Navigation */}
+  1496→        <div className="lg:w-56 shrink-0">
+  1497→          <Card className={glassCard}>
+  1498→            <CardContent className="p-3">
+  1499→              <h4 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Lessons</h4>
+  1500→              <div className="space-y-1 max-h-96 overflow-y-auto">
+  1501→                <button
+  1502→                  className={cn(
+  1503→                    'w-full text-left p-2 rounded-lg text-xs transition-colors',
+  1504→                    selectedLesson === 'all' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/50 text-muted-foreground'
+  1505→                  )}
+  1506→                  onClick={() => setSelectedLesson('all')}
+  1507→                >
+  1508→                  All Notes ({notes.length})
+  1509→                </button>
+  1510→                {lessonsWithNotes.map((lessonId) => {
+  1511→                  const lessonNotes = notes.filter(n => n.lessonId === lessonId);
+  1512→                  const lessonTitle = lessonNotes[0]?.lessonTitle || allLessons.find(l => l.id === lessonId)?.title || lessonId;
+  1513→                  return (
+  1514→                    <button
+  1515→                      key={lessonId}
+  1516→                      className={cn(
+  1517→                        'w-full text-left p-2 rounded-lg text-xs transition-colors',
+  1518→                        selectedLesson === lessonId ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/50 text-muted-foreground'
+  1519→                      )}
+  1520→                      onClick={() => setSelectedLesson(lessonId)}
+  1521→                    >
+  1522→                      <span className="line-clamp-1">{lessonTitle}</span>
+  1523→                      <span className="text-[10px] text-muted-foreground">{lessonNotes.length} notes</span>
+  1524→                    </button>
+  1525→                  );
+  1526→                })}
+  1527→              </div>
+  1528→            </CardContent>
+  1529→          </Card>
+  1530→        </div>
+  1531→
+  1532→        {/* Notes Content */}
+  1533→        <div className="flex-1 space-y-3">
+  1534→          {/* New Note Input */}
+  1535→          <Card className={cn('border-dashed', glassCard)}>
+  1536→            <CardContent className="p-4 space-y-3">
+  1537→              <div className="flex items-center gap-2">
+  1538→                <Edit3 className="h-4 w-4 text-muted-foreground" />
+  1539→                <span className="text-sm font-medium text-foreground">Add a Note</span>
+  1540→              </div>
+  1541→              <Textarea
+  1542→                placeholder="Write your note here... Supports **bold**, *italic*, and `code`"
+  1543→                value={newNoteContent}
+  1544→                onChange={(e) => setNewNoteContent(e.target.value)}
+  1545→                rows={3}
+  1546→                className="resize-none"
+  1547→              />
+  1548→              <div className="flex items-center justify-between">
+  1549→                <div className="flex gap-1.5">
+  1550→                  {Object.entries(noteCategoryConfig).map(([key, config]) => (
+  1551→                    <Button
+  1552→                      key={key}
+  1553→                      size="sm"
+  1554→                      variant={newNoteCategory === key ? 'default' : 'outline'}
+  1555→                      className="text-[10px] h-6 gap-1 px-2"
+  1556→                      onClick={() => setNewNoteCategory(key as Note['category'])}
+  1557→                    >
+  1558→                      {config.icon} {config.label}
+  1559→                    </Button>
+  1560→                  ))}
+  1561→                </div>
+  1562→                <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" onClick={handleAddNote}>
+  1563→                  <Bookmark className="h-3 w-3" /> Save Note
+  1564→                </Button>
+  1565→              </div>
+  1566→            </CardContent>
+  1567→          </Card>
+  1568→
+  1569→          {/* Notes List */}
+  1570→          <AnimatePresence mode="popLayout">
+  1571→            {filteredNotes.map((note) => (
+  1572→              <motion.div
+  1573→                key={note.id}
+  1574→                layout
+  1575→                initial={{ opacity: 0, y: 10 }}
+  1576→                animate={{ opacity: 1, y: 0 }}
+  1577→                exit={{ opacity: 0, y: -10 }}
+  1578→              >
+  1579→                <Card className={cn(glassCard, 'hover:shadow-md transition-all duration-200')}>
+  1580→                  <CardContent className="p-4">
+  1581→                    <div className="flex items-start justify-between mb-2">
+  1582→                      <div className="flex items-center gap-2 flex-wrap">
+  1583→                        <Badge className={cn('text-[10px] gap-0.5', noteCategoryConfig[note.category].color)}>
+  1584→                          {noteCategoryConfig[note.category].icon} {noteCategoryConfig[note.category].label}
+  1585→                        </Badge>
+  1586→                        <span className="text-xs text-muted-foreground">{note.lessonTitle}</span>
+  1587→                        {note.timestamp !== undefined && (
+  1588→                          <button
+  1589→                            className="flex items-center gap-1 text-[10px] text-violet-600 hover:text-violet-700 dark:text-violet-400 transition-colors"
+  1590→                            onClick={() => onJumpToTimestamp?.(note.timestamp!)}
+  1591→                          >
+  1592→                            <Clock className="h-2.5 w-2.5" /> {formatDuration(note.timestamp * 60)}
+  1593→                          </button>
+  1594→                        )}
+  1595→                      </div>
+  1596→                      <div className="flex items-center gap-1">
+  1597→                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingNote(note.id); setEditContent(note.content); }}>
+  1598→                          <Edit3 className="h-3 w-3" />
+  1599→                        </Button>
+  1600→                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500 hover:text-red-600" onClick={() => onDeleteNote(note.id)}>
+  1601→                          <Trash2 className="h-3 w-3" />
+  1602→                        </Button>
+  1603→                      </div>
+  1604→                    </div>
+  1605→                    {editingNote === note.id ? (
+  1606→                      <div className="space-y-2">
+  1607→                        <Textarea
+  1608→                          value={editContent}
+  1609→                          onChange={(e) => setEditContent(e.target.value)}
+  1610→                          rows={4}
+  1611→                          className="resize-none text-sm"
+  1612→                        />
+  1613→                        <div className="flex gap-2 justify-end">
+  1614→                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingNote(null)}>
+  1615→                            <X className="h-3 w-3" /> Cancel
+  1616→                          </Button>
+  1617→                          <Button size="sm" className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => { onUpdateNote(note.id, { content: editContent }); setEditingNote(null); handleSaveNote(); }}>
+  1618→                            <Check className="h-3 w-3" /> Save
+  1619→                          </Button>
+  1620→                        </div>
+  1621→                      </div>
+  1622→                    ) : (
+  1623→                      <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+  1624→                        {note.content}
+  1625→                      </div>
+  1626→                    )}
+  1627→                    <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+  1628→                      <span>Created {new Date(note.createdAt).toLocaleDateString()}</span>
+  1629→                      <span>·</span>
+  1630→                      <span>Updated {new Date(note.updatedAt).toLocaleDateString()}</span>
+  1631→                    </div>
+  1632→                  </CardContent>
+  1633→                </Card>
+  1634→              </motion.div>
+  1635→            ))}
+  1636→          </AnimatePresence>
+  1637→
+  1638→          {filteredNotes.length === 0 && (
+  1639→            <div className="text-center py-8">
+  1640→              <Notebook className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+  1641→              <p className="text-sm text-muted-foreground">No notes found. Start taking notes!</p>
+  1642→            </div>
+  1643→          )}
+  1644→        </div>
+  1645→      </div>
+  1646→    </div>
+  1647→  );
+  1648→}
+  1649→
+  1650→// ─── Progress Timeline Tab ─────────────────────────────────
+  1651→function ProgressTab({ progressData, enrollmentProgress, course, streakDays }: {
+  1652→  progressData: any[];
+  1653→  enrollmentProgress: number;
+  1654→  course: any;
+  1655→  streakDays: number;
+  1656→}) {
+  1657→  // Derive timeline events from progress data
+  1658→  const timelineEvents = useMemo(() => {
+  1659→    if (!progressData || !course) return [];
+  1660→    const events: { id: string; lessonTitle: string; moduleName: string; date: string; timeSpent: number; type: 'completed' | 'started' }[] = [];
+  1661→
+  1662→    // Build lesson lookup from course modules
+  1663→    const lessonLookup = new Map<string, { title: string; moduleName: string }>();
+  1664→    (course.modules || []).forEach((mod: any) => {
+  1665→      (mod.lessons || []).forEach((lesson: any) => {
+  1666→        lessonLookup.set(lesson.id, { title: lesson.title, moduleName: mod.title });
+  1667→      });
+  1668→    });
+  1669→
+  1670→    progressData.forEach((p: any) => {
+  1671→      const lessonInfo = lessonLookup.get(p.lessonId);
+  1672→      if (!lessonInfo) return;
+  1673→
+  1674→      const date = p.completedAt
+  1675→        ? new Date(p.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  1676→        : new Date(p.updatedAt || p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  1677→
+  1678→      events.push({
+  1679→        id: p.id,
+  1680→        lessonTitle: lessonInfo.title,
+  1681→        moduleName: lessonInfo.moduleName,
+  1682→        date,
+  1683→        timeSpent: Math.round((p.timeSpent || 0) / 60),
+  1684→        type: p.status === 'completed' ? 'completed' : 'started',
+  1685→      });
+  1686→    });
+  1687→
+  1688→    // Sort by date (most recent first)
+  1689→    events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  1690→    return events;
+  1691→  }, [progressData, course]);
+  1692→
+  1693→  // Compute weekly activity from progress
+  1694→  const weeklyActivity = useMemo(() => {
+  1695→    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  1696→    const now = new Date();
+  1697→    const dayOfWeek = now.getDay();
+  1698→    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  1699→
+  1700→    return days.map((day, i) => {
+  1701→      const date = new Date(now);
+  1702→      date.setDate(now.getDate() + mondayOffset + i);
+  1703→      const dateStr = date.toDateString();
+  1704→
+  1705→      let totalMinutes = 0;
+  1706→      progressData?.forEach((p: any) => {
+  1707→        const updatedDate = new Date(p.updatedAt || p.createdAt).toDateString();
+  1708→        if (updatedDate === dateStr) {
+  1709→          totalMinutes += (p.timeSpent || 0) / 60;
+  1710→        }
+  1711→      });
+  1712→
+  1713→      return { day, hours: Math.round(totalMinutes * 10) / 10 };
+  1714→    });
+  1715→  }, [progressData]);
+  1716→
+  1717→  // Compute milestones from progress data
+  1718→  const completedCount = progressData?.filter((p: any) => p.status === 'completed').length || 0;
+  1719→  const totalLessons = (course?.modules || []).flatMap((m: any) => m.lessons || []).length;
+  1720→  const modulesComplete = (course?.modules || []).filter((mod: any) =>
+  1721→    (mod.lessons || []).every((l: any) => progressData?.some((p: any) => p.lessonId === l.id && p.status === 'completed'))
+  1722→  ).length;
+  1723→
+  1724→  const milestones = [
+  1725→    { id: 'ms-1', title: 'First Lesson Completed', description: 'Completed your first lesson', icon: '🎯', achieved: completedCount >= 1, date: completedCount >= 1 ? timelineEvents.find(e => e.type === 'completed')?.date || '' : '' },
+  1726→    { id: 'ms-2', title: 'Quick Learner', description: 'Complete 2 lessons', icon: '⚡', achieved: completedCount >= 2, date: '' },
+  1727→    { id: 'ms-3', title: 'Module Master', description: 'Complete all lessons in a module', icon: '🏆', achieved: modulesComplete > 0, date: '' },
+  1728→    { id: 'ms-4', title: 'Halfway There', description: 'Complete 50% of the course', icon: '🎓', achieved: enrollmentProgress >= 50, date: '' },
+  1729→    { id: 'ms-5', title: 'Streak Champion', description: 'Maintain a 7-day learning streak', icon: '🔥', achieved: streakDays >= 7, date: '' },
+  1730→    { id: 'ms-6', title: 'Course Graduate', description: 'Complete the entire course', icon: '🏅', achieved: enrollmentProgress >= 100, date: '' },
+  1731→  ];
+  1732→
+  1733→  const totalTime = Math.round(progressData?.reduce((sum: number, p: any) => sum + (p.timeSpent || 0), 0) / 60) || 0;
+  1734→  const maxHours = Math.max(...weeklyActivity.map(d => d.hours), 0.1);
+  1735→
+  1736→  const learningPace = enrollmentProgress >= 50 ? 'ahead' as const : enrollmentProgress >= 20 ? 'on_track' as const : 'behind' as const;
+  1737→  const paceConfig = {
+  1738→    ahead: { label: 'Ahead of Schedule', color: 'text-emerald-600 dark:text-emerald-400', icon: <TrendingUp className="h-4 w-4" />, bg: 'bg-emerald-50 dark:bg-emerald-900/10' },
+  1739→    on_track: { label: 'On Track', color: 'text-amber-600 dark:text-amber-400', icon: <Minus className="h-4 w-4" />, bg: 'bg-amber-50 dark:bg-amber-900/10' },
+  1740→    behind: { label: 'Behind Schedule', color: 'text-red-600 dark:text-red-400', icon: <TrendingDown className="h-4 w-4" />, bg: 'bg-red-50 dark:bg-red-900/10' },
+  1741→  };
+  1742→  const pace = paceConfig[learningPace];
+  1743→
+  1744→  const estimatedDate = new Date();
+  1745→  estimatedDate.setDate(estimatedDate.getDate() + Math.ceil((100 - enrollmentProgress) / 5));
+  1746→
+  1747→  return (
+  1748→    <div className="space-y-6">
+  1749→      {/* Stats Cards */}
+  1750→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+  1751→        <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
+  1752→          <Card className={cn(glassCard)}>
+  1753→            <CardContent className="p-4 text-center">
+  1754→              <div className="flex items-center justify-center gap-1.5 mb-1">
+  1755→                <Flame className="h-5 w-5 text-orange-500" />
+  1756→                <span className="text-2xl font-bold text-foreground">{streakDays}</span>
+  1757→              </div>
+  1758→              <p className="text-xs text-muted-foreground">Day Streak</p>
+  1759→            </CardContent>
+  1760→          </Card>
+  1761→        </motion.div>
+  1762→
+  1763→        <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
+  1764→          <Card className={cn(glassCard)}>
+  1765→            <CardContent className="p-4 text-center">
+  1766→              <div className="flex items-center justify-center gap-1.5 mb-1">
+  1767→                <Timer className="h-5 w-5 text-violet-500" />
+  1768→                <span className="text-2xl font-bold text-foreground">{Math.floor(totalTime / 60)}h {totalTime % 60}m</span>
+  1769→              </div>
+  1770→              <p className="text-xs text-muted-foreground">Time Invested</p>
+  1771→            </CardContent>
+  1772→          </Card>
+  1773→        </motion.div>
+  1774→
+  1775→        <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
+  1776→          <Card className={cn(glassCard)}>
+  1777→            <CardContent className="p-4 text-center">
+  1778→              <div className={cn('flex items-center justify-center gap-1.5 mb-1', pace.color)}>
+  1779→                {pace.icon}
+  1780→                <span className="text-sm font-bold">{pace.label}</span>
+  1781→              </div>
+  1782→              <p className="text-xs text-muted-foreground">Learning Pace</p>
+  1783→            </CardContent>
+  1784→          </Card>
+  1785→        </motion.div>
+  1786→
+  1787→        <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
+  1788→          <Card className={cn(glassCard)}>
+  1789→            <CardContent className="p-4 text-center">
+  1790→              <div className="flex items-center justify-center gap-1.5 mb-1">
+  1791→                <Calendar className="h-5 w-5 text-emerald-500" />
+  1792→                <span className="text-sm font-bold text-foreground">{estimatedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+  1793→              </div>
+  1794→              <p className="text-xs text-muted-foreground">Est. Completion</p>
+  1795→            </CardContent>
+  1796→          </Card>
+  1797→        </motion.div>
+  1798→      </div>
+  1799→
+  1800→      {/* Weekly Activity Chart */}
+  1801→      <Card className={cn(glassCard)}>
+  1802→        <CardHeader className="pb-3">
+  1803→          <CardTitle className="text-sm flex items-center gap-2">
+  1804→            <Activity className="h-4 w-4 text-violet-600" />
+  1805→            Weekly Activity
+  1806→          </CardTitle>
+  1807→        </CardHeader>
+  1808→        <CardContent>
+  1809→          <div className="flex items-end gap-2 h-32">
+  1810→            {weeklyActivity.map((day) => (
+  1811→              <div key={day.day} className="flex-1 flex flex-col items-center gap-1">
+  1812→                <span className="text-[10px] text-muted-foreground">{day.hours}h</span>
+  1813→                <div className="w-full bg-muted rounded-t-sm overflow-hidden" style={{ height: '80px' }}>
+  1814→                  <motion.div
+  1815→                    className={cn(
+  1816→                      'w-full rounded-t-sm bg-gradient-to-t',
+  1817→                      day.hours > 1.5 ? 'from-emerald-500 to-emerald-400' : day.hours > 0 ? 'from-amber-500 to-amber-400' : 'from-slate-300 to-slate-200 dark:from-slate-600 dark:to-slate-500'
+  1818→                    )}
+  1819→                    initial={{ height: 0 }}
+  1820→                    animate={{ height: `${(day.hours / maxHours) * 100}%` }}
+  1821→                    transition={{ duration: 0.5, ease: 'easeOut' }}
+  1822→                    style={{ marginTop: 'auto' }}
+  1823→                  />
+  1824→                </div>
+  1825→                <span className="text-[10px] text-muted-foreground font-medium">{day.day}</span>
+  1826→              </div>
+  1827→            ))}
+  1828→          </div>
+  1829→        </CardContent>
+  1830→      </Card>
+  1831→
+  1832→      {/* Learning Timeline */}
+  1833→      <Card className={cn(glassCard)}>
+  1834→        <CardHeader className="pb-3">
+  1835→          <CardTitle className="text-sm flex items-center gap-2">
+  1836→            <Clock className="h-4 w-4 text-emerald-600" />
+  1837→            Learning Timeline
+  1838→          </CardTitle>
+  1839→        </CardHeader>
+  1840→        <CardContent>
+  1841→          {timelineEvents.length > 0 ? (
+  1842→            <div className="relative">
+  1843→              <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gradient-to-b from-emerald-500 via-amber-500 to-slate-300 dark:to-slate-600" />
+  1844→              <div className="space-y-4">
+  1845→                {timelineEvents.map((event, index) => (
+  1846→                  <motion.div
+  1847→                    key={event.id}
+  1848→                    initial={{ opacity: 0, x: -20 }}
+  1849→                    animate={{ opacity: 1, x: 0 }}
+  1850→                    transition={{ delay: index * 0.1 }}
+  1851→                    className="relative pl-10"
+  1852→                  >
+  1853→                    <div className={cn(
+  1854→                      'absolute left-2.5 top-1 w-3 h-3 rounded-full border-2',
+  1855→                      event.type === 'completed' ? 'bg-emerald-500 border-emerald-300' : 'bg-amber-500 border-amber-300'
+  1856→                    )} />
+  1857→                    <div className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+  1858→                      <div className="flex items-center gap-2 mb-1">
+  1859→                        <Badge className={cn(
+  1860→                          'text-[9px]',
+  1861→                          event.type === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+  1862→                        )}>
+  1863→                          {event.type === 'completed' ? '✓ Completed' : '▶ Started'}
+  1864→                        </Badge>
+  1865→                        <span className="text-[10px] text-muted-foreground">{event.date}</span>
+  1866→                      </div>
+  1867→                      <p className="text-sm font-medium text-foreground">{event.lessonTitle}</p>
+  1868→                      <p className="text-xs text-muted-foreground">{event.moduleName}</p>
+  1869→                      {event.timeSpent > 0 && (
+  1870→                        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+  1871→                          <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {event.timeSpent} min</span>
+  1872→                        </div>
+  1873→                      )}
+  1874→                    </div>
+  1875→                  </motion.div>
+  1876→                ))}
+  1877→              </div>
+  1878→            </div>
+  1879→          ) : (
+  1880→            <div className="text-center py-8">
+  1881→              <Clock className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+  1882→              <p className="text-sm text-muted-foreground">No learning activity yet. Start a lesson to track your progress!</p>
+  1883→            </div>
+  1884→          )}
+  1885→        </CardContent>
+  1886→      </Card>
+  1887→
+  1888→      {/* Milestones */}
+  1889→      <Card className={cn(glassCard)}>
+  1890→        <CardHeader className="pb-3">
+  1891→          <CardTitle className="text-sm flex items-center gap-2">
+  1892→            <Trophy className="h-4 w-4 text-amber-600" />
+  1893→            Milestones
+  1894→          </CardTitle>
+  1895→        </CardHeader>
+  1896→        <CardContent>
+  1897→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1898→            {milestones.map((milestone) => (
+  1899→              <motion.div
+  1900→                key={milestone.id}
+  1901→                whileHover={{ scale: 1.02 }}
+  1902→                className={cn(
+  1903→                  'flex items-center gap-3 p-3 rounded-lg border transition-colors',
+  1904→                  milestone.achieved
+  1905→                    ? 'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800/30'
+  1906→                    : 'bg-muted/20 border-border/50'
+  1907→                )}
+  1908→              >
+  1909→                <span className="text-2xl">{milestone.icon}</span>
+  1910→                <div className="flex-1">
+  1911→                  <p className={cn('text-sm font-medium', milestone.achieved ? 'text-foreground' : 'text-muted-foreground')}>
+  1912→                    {milestone.title}
+  1913→                  </p>
+  1914→                  <p className="text-xs text-muted-foreground">{milestone.description}</p>
+  1915→                  {milestone.achieved && milestone.date && (
+  1916→                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">Achieved {milestone.date}</p>
+  1917→                  )}
+  1918→                </div>
+  1919→                {milestone.achieved ? (
+  1920→                  <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+  1921→                ) : (
+  1922→                  <Circle className="h-5 w-5 text-muted-foreground/30 shrink-0" />
+  1923→                )}
+  1924→              </motion.div>
+  1925→            ))}
+  1926→          </div>
+  1927→        </CardContent>
+  1928→      </Card>
+  1929→    </div>
+  1930→  );
+  1931→}
+  1932→
+  1933→// ─── Skeleton for loading states ──────────────────────────────
+  1934→function SectionSkeleton({ count = 3 }: { count?: number }) {
+  1935→  return (
+  1936→    <div className="space-y-3">
+  1937→      {Array.from({ length: count }).map((_, i) => (
+  1938→        <div key={i} className="rounded-xl p-4 bg-muted/30 animate-pulse space-y-3">
+  1939→          <div className="h-4 bg-muted rounded w-1/2" />
+  1940→          <div className="h-3 bg-muted rounded w-3/4" />
+  1941→          <div className="h-3 bg-muted rounded w-1/3" />
+  1942→        </div>
+  1943→      ))}
+  1944→    </div>
+  1945→  );
+  1946→}
+  1947→
+  1948→// ─── Main Component ────────────────────────────────────────
+  1949→export function LearnerCourse() {
+  1950→  const userId = useAppStore(s => s.currentUser?.id) || '';
+  1951→  const currentUser = useAppStore(s => s.currentUser);
+  1952→  const tenantId = useAppStore(s => s.currentTenant?.id) || '';
+  1953→  const [showUnenrollConfirm, setShowUnenrollConfirm] = useState(false);
+  1954→
+  1955→  // Fetch courses to determine the first course ID
+  1956→  const { data: coursesData, isLoading: coursesLoading } = useCourses();
+  1957→  const firstCourseId = coursesData && coursesData.length > 0 ? coursesData[0].id : null;
+  1958→
+  1959→  // Fetch course with modules/lessons
+  1960→  const { data: course, isLoading: courseLoading } = useCourse(firstCourseId);
+  1961→
+  1962→  // Fetch enrollments for this user
+  1963→  const { data: enrollmentsData, isLoading: enrollmentsLoading } = useEnrollments(userId || undefined);
+  1964→
+  1965→  // Fetch lesson progress for this user
+  1966→  const { data: progressData, isLoading: progressLoading } = useLessonProgress(userId || undefined);
+  1967→
+  1968→  // Fetch course reviews
+  1969→  const { data: reviewsData, isLoading: reviewsLoading } = useCommunityReviews(
+  1970→    firstCourseId ? { courseId: firstCourseId, status: 'approved' } : undefined
+  1971→  );
+  1972→
+  1973→  // Mutations
+  1974→  const updateProgress = useUpdateProgress();
+  1975→  const enrollMutation = useEnroll();
+  1976→
+  1977→  // Notes via localStorage
+  1978→  const { notes, addNote, updateNote, deleteNote } = useLessonNotes(firstCourseId || undefined);
+  1979→
+  1980→  // Find enrollment for this course
+  1981→  const enrollment = useMemo(() => {
+  1982→    if (!enrollmentsData || !course) return null;
+  1983→    return enrollmentsData.find((e: any) => e.courseId === course.id) || null;
+  1984→  }, [enrollmentsData, course]);
+  1985→
+  1986→  // Build lesson progress map from API data
+  1987→  const lessonProgressState = useMemo<Record<string, 'completed' | 'in_progress' | 'not_started'>>(() => {
+  1988→    const map: Record<string, 'completed' | 'in_progress' | 'not_started'> = {};
+  1989→    if (progressData && Array.isArray(progressData)) {
+  1990→      progressData.forEach((p: any) => {
+  1991→        const status = p.status === 'completed' ? 'completed'
+  1992→          : p.progressPercent > 0 ? 'in_progress'
+  1993→          : 'not_started';
+  1994→        map[p.lessonId] = status;
+  1995→      });
+  1996→    }
+  1997→    return map;
+  1998→  }, [progressData]);
+  1999→
+  2000→  // Build resume positions from progress data
+
+[showing lines 1-2000 of 3040; use offset=2001 with limit to continue reading]

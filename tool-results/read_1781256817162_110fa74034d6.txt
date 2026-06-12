@@ -1,0 +1,1186 @@
+     1→'use client';
+     2→
+     3→import { useState, useCallback, useMemo } from 'react';
+     4→import { motion, AnimatePresence, Reorder } from 'framer-motion';
+     5→import {
+     6→  Map,
+     7→  Plus,
+     8→  Search,
+     9→  Filter,
+    10→  MoreVertical,
+    11→  Edit3,
+    12→  Copy,
+    13→  Trash2,
+    14→  Eye,
+    15→  GripVertical,
+    16→  X,
+    17→  Check,
+    18→  Lock,
+    19→  Unlock,
+    20→  Flag,
+    21→  ArrowRight,
+    22→  Users,
+    23→  BookOpen,
+    24→  Clock,
+    25→  TrendingUp,
+    26→  BarChart3,
+    27→  Save,
+    28→  Globe,
+    29→  Target,
+    30→  Award,
+    31→} from 'lucide-react';
+    32→import { Button } from '@/components/ui/button';
+    33→import { Input } from '@/components/ui/input';
+    34→import { Badge } from '@/components/ui/badge';
+    35→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    36→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    37→import {
+    38→  Select,
+    39→  SelectContent,
+    40→  SelectItem,
+    41→  SelectTrigger,
+    42→  SelectValue,
+    43→} from '@/components/ui/select';
+    44→import {
+    45→  Dialog,
+    46→  DialogContent,
+    47→  DialogHeader,
+    48→  DialogTitle,
+    49→  DialogDescription,
+    50→  DialogFooter,
+    51→} from '@/components/ui/dialog';
+    52→import {
+    53→  DropdownMenu,
+    54→  DropdownMenuContent,
+    55→  DropdownMenuItem,
+    56→  DropdownMenuSeparator,
+    57→  DropdownMenuTrigger,
+    58→} from '@/components/ui/dropdown-menu';
+    59→import { Switch } from '@/components/ui/switch';
+    60→import { Label } from '@/components/ui/label';
+    61→import { Textarea } from '@/components/ui/textarea';
+    62→import { Separator } from '@/components/ui/separator';
+    63→import { Skeleton } from '@/components/ui/skeleton';
+    64→import { cn } from '@/lib/utils';
+    65→import {
+    66→  BarChart,
+    67→  Bar,
+    68→  XAxis,
+    69→  YAxis,
+    70→  CartesianGrid,
+    71→  Tooltip as RechartsTooltip,
+    72→  ResponsiveContainer,
+    73→  LineChart,
+    74→  Line,
+    75→  PieChart,
+    76→  Pie,
+    77→  Cell,
+    78→} from 'recharts';
+    79→import {
+    80→  useLearningPaths,
+    81→  useCourses,
+    82→  useCreateLearningPath,
+    83→  useUpdateLearningPath,
+    84→  useDeleteLearningPath,
+    85→} from '@/hooks/use-data';
+    86→import { useAppStore } from '@/store/app-store';
+    87→
+    88→// ---- Types ----
+    89→interface PathCourse {
+    90→  id: string;
+    91→  title: string;
+    92→  duration: number;
+    93→  level: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+    94→  isRequired: boolean;
+    95→  prerequisiteIds: string[];
+    96→  milestone?: string;
+    97→}
+    98→
+    99→interface LearningPath {
+   100→  id: string;
+   101→  name: string;
+   102→  description: string;
+   103→  category: string;
+   104→  difficulty: 'beginner' | 'intermediate' | 'advanced';
+   105→  status: 'published' | 'draft' | 'archived';
+   106→  thumbnailUrl?: string;
+   107→  courseCount: number;
+   108→  enrolledCount: number;
+   109→  completionRate: number;
+   110→  estimatedDuration: number;
+   111→  courses: PathCourse[];
+   112→  createdAt: string;
+   113→}
+   114→
+   115→// ---- Chart Data (static analytics mock) ----
+   116→const enrollmentTrendData = [
+   117→  { month: 'Jul', enrollments: 45 },
+   118→  { month: 'Aug', enrollments: 62 },
+   119→  { month: 'Sep', enrollments: 78 },
+   120→  { month: 'Oct', enrollments: 95 },
+   121→  { month: 'Nov', enrollments: 120 },
+   122→  { month: 'Dec', enrollments: 156 },
+   123→  { month: 'Jan', enrollments: 189 },
+   124→  { month: 'Feb', enrollments: 234 },
+   125→];
+   126→
+   127→const dropoffData = [
+   128→  { course: 'HTML & CSS', dropoff: 12 },
+   129→  { course: 'JavaScript', dropoff: 28 },
+   130→  { course: 'React', dropoff: 35 },
+   131→  { course: 'TypeScript', dropoff: 22 },
+   132→  { course: 'Node.js', dropoff: 18 },
+   133→  { course: 'Next.js', dropoff: 42 },
+   134→];
+   135→
+   136→const completionPieData = [
+   137→  { name: 'Completed', value: 68, color: '#10b981' },
+   138→  { name: 'In Progress', value: 22, color: '#f59e0b' },
+   139→  { name: 'Not Started', value: 10, color: '#94a3b8' },
+   140→];
+   141→
+   142→// ---- API Data Mappers ----
+   143→function mapApiPathToLearningPath(apiPath: any): LearningPath {
+   144→  return {
+   145→    id: apiPath.id,
+   146→    name: apiPath.title,
+   147→    description: apiPath.description || '',
+   148→    category: apiPath.category || '',
+   149→    difficulty: (apiPath.level as 'beginner' | 'intermediate' | 'advanced') || 'beginner',
+   150→    status: apiPath.isPublished ? 'published' : 'draft',
+   151→    thumbnailUrl: apiPath.thumbnailUrl || undefined,
+   152→    courseCount: apiPath.courseCount ?? apiPath.courses?.length ?? 0,
+   153→    enrolledCount: apiPath.enrolledCount ?? apiPath.enrollments?.length ?? 0,
+   154→    completionRate: apiPath.completionRate ?? 0,
+   155→    estimatedDuration: apiPath.estimatedDuration ?? 0,
+   156→    courses: (apiPath.courses || []).map((pc: any) => ({
+   157→      id: pc.courseId || pc.course?.id,
+   158→      title: pc.course?.title || '',
+   159→      duration: pc.course?.durationHours || 0,
+   160→      level: (pc.course?.level as 'beginner' | 'intermediate' | 'advanced' | 'expert') || 'beginner',
+   161→      isRequired: pc.isRequired ?? true,
+   162→      prerequisiteIds: pc.prerequisiteIds ? pc.prerequisiteIds.split(',').filter(Boolean) : [],
+   163→      milestone: pc.milestone || undefined,
+   164→    })),
+   165→    createdAt: apiPath.createdAt,
+   166→  };
+   167→}
+   168→
+   169→function mapApiCourseToPathCourseSource(apiCourse: any) {
+   170→  return {
+   171→    id: apiCourse.id,
+   172→    title: apiCourse.title,
+   173→    duration: apiCourse.durationHours || 0,
+   174→    level: (apiCourse.level as 'beginner' | 'intermediate' | 'advanced' | 'expert') || 'beginner',
+   175→  };
+   176→}
+   177→
+   178→// ---- Sub-Components ----
+   179→
+   180→function PathCard({ path, onEdit, onDuplicate, onDelete, onView }: {
+   181→  path: LearningPath;
+   182→  onEdit: () => void;
+   183→  onDuplicate: () => void;
+   184→  onDelete: () => void;
+   185→  onView: () => void;
+   186→}) {
+   187→  const statusColor = {
+   188→    published: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300',
+   189→    draft: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
+   190→    archived: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+   191→  };
+   192→
+   193→  const difficultyColor = {
+   194→    beginner: 'text-emerald-600',
+   195→    intermediate: 'text-amber-600',
+   196→    advanced: 'text-rose-600',
+   197→  };
+   198→
+   199→  return (
+   200→    <motion.div
+   201→      initial={{ opacity: 0, y: 20 }}
+   202→      animate={{ opacity: 1, y: 0 }}
+   203→      exit={{ opacity: 0, y: -10 }}
+   204→      whileHover={{ y: -2 }}
+   205→      transition={{ duration: 0.3 }}
+   206→    >
+   207→      <Card className="group relative overflow-hidden border-border/50 bg-card/80 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
+   208→        {/* Gradient accent bar */}
+   209→        <div className={cn(
+   210→          'h-1.5 w-full',
+   211→          path.status === 'published' ? 'bg-gradient-to-r from-emerald-500 to-teal-500' :
+   212→          path.status === 'draft' ? 'bg-gradient-to-r from-amber-400 to-orange-400' :
+   213→          'bg-gradient-to-r from-slate-400 to-slate-500'
+   214→        )} />
+   215→        <CardHeader className="pb-3">
+   216→          <div className="flex items-start justify-between gap-2">
+   217→            <div className="flex-1 min-w-0">
+   218→              <CardTitle className="text-base font-semibold truncate">{path.name}</CardTitle>
+   219→              <CardDescription className="text-xs mt-1 line-clamp-2">{path.description}</CardDescription>
+   220→            </div>
+   221→            <DropdownMenu>
+   222→              <DropdownMenuTrigger asChild>
+   223→                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+   224→                  <MoreVertical className="h-4 w-4" />
+   225→                </Button>
+   226→              </DropdownMenuTrigger>
+   227→              <DropdownMenuContent align="end" className="w-40">
+   228→                <DropdownMenuItem onClick={onView}><Eye className="mr-2 h-4 w-4" /> View</DropdownMenuItem>
+   229→                <DropdownMenuItem onClick={onEdit}><Edit3 className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
+   230→                <DropdownMenuItem onClick={onDuplicate}><Copy className="mr-2 h-4 w-4" /> Duplicate</DropdownMenuItem>
+   231→                <DropdownMenuSeparator />
+   232→                <DropdownMenuItem className="text-red-600" onClick={onDelete}><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
+   233→              </DropdownMenuContent>
+   234→            </DropdownMenu>
+   235→          </div>
+   236→          <div className="flex items-center gap-2 mt-2">
+   237→            <Badge variant="secondary" className={cn('text-[10px] px-2 py-0.5', statusColor[path.status])}>
+   238→              {path.status.charAt(0).toUpperCase() + path.status.slice(1)}
+   239→            </Badge>
+   240→            <Badge variant="outline" className="text-[10px] px-2 py-0.5">
+   241→              {path.category}
+   242→            </Badge>
+   243→            <span className={cn('text-[10px] font-medium', difficultyColor[path.difficulty])}>
+   244→              {path.difficulty.charAt(0).toUpperCase() + path.difficulty.slice(1)}
+   245→            </span>
+   246→          </div>
+   247→        </CardHeader>
+   248→        <CardContent className="pt-0">
+   249→          <div className="grid grid-cols-3 gap-3 text-center">
+   250→            <div>
+   251→              <div className="flex items-center justify-center gap-1 text-emerald-600 dark:text-emerald-400">
+   252→                <BookOpen className="h-3.5 w-3.5" />
+   253→                <span className="text-sm font-bold">{path.courseCount}</span>
+   254→              </div>
+   255→              <p className="text-[10px] text-muted-foreground mt-0.5">Courses</p>
+   256→            </div>
+   257→            <div>
+   258→              <div className="flex items-center justify-center gap-1 text-amber-600 dark:text-amber-400">
+   259→                <Users className="h-3.5 w-3.5" />
+   260→                <span className="text-sm font-bold">{path.enrolledCount}</span>
+   261→              </div>
+   262→              <p className="text-[10px] text-muted-foreground mt-0.5">Enrolled</p>
+   263→            </div>
+   264→            <div>
+   265→              <div className="flex items-center justify-center gap-1 text-blue-600 dark:text-blue-400">
+   266→                <TrendingUp className="h-3.5 w-3.5" />
+   267→                <span className="text-sm font-bold">{path.completionRate}%</span>
+   268→              </div>
+   269→              <p className="text-[10px] text-muted-foreground mt-0.5">Complete</p>
+   270→            </div>
+   271→          </div>
+   272→          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+   273→            <Clock className="h-3 w-3" />
+   274→            <span>{path.estimatedDuration}h estimated</span>
+   275→          </div>
+   276→        </CardContent>
+   277→      </Card>
+   278→    </motion.div>
+   279→  );
+   280→}
+   281→
+   282→function PathVisualPreview({ courses }: { courses: PathCourse[] }) {
+   283→  return (
+   284→    <div className="relative p-4 overflow-x-auto">
+   285→      <div className="flex items-center gap-0 min-w-max">
+   286→        {courses.map((course, idx) => {
+   287→          const hasPrereq = course.prerequisiteIds.length > 0;
+   288→          return (
+   289→            <div key={course.id} className="flex items-center">
+   290→              {idx > 0 && (
+   291→                <div className="flex items-center mx-1">
+   292→                  <div className="w-6 h-0.5 bg-border" />
+   293→                  {hasPrereq && (
+   294→                    <ArrowRight className="h-3 w-3 text-muted-foreground mx-0.5" />
+   295→                  )}
+   296→                  <div className="w-6 h-0.5 bg-border" />
+   297→                </div>
+   298→              )}
+   299→              <motion.div
+   300→                initial={{ opacity: 0, scale: 0.8 }}
+   301→                animate={{ opacity: 1, scale: 1 }}
+   302→                transition={{ delay: idx * 0.1 }}
+   303→                className={cn(
+   304→                  'flex flex-col items-center gap-1 p-3 rounded-xl border min-w-[100px] max-w-[120px]',
+   305→                  'bg-card/80 backdrop-blur-sm border-border/50',
+   306→                  course.isRequired ? 'border-emerald-300 dark:border-emerald-700' : 'border-amber-300 dark:border-amber-700 border-dashed'
+   307→                )}
+   308→              >
+   309→                <div className={cn(
+   310→                  'h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold',
+   311→                  course.isRequired
+   312→                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300'
+   313→                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+   314→                )}>
+   315→                  {idx + 1}
+   316→                </div>
+   317→                <span className="text-[10px] font-medium text-center leading-tight line-clamp-2">{course.title}</span>
+   318→                <span className="text-[9px] text-muted-foreground">{course.duration}h</span>
+   319→                {course.milestone && (
+   320→                  <Badge className="text-[8px] px-1.5 py-0 h-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0">
+   321→                    <Flag className="h-2.5 w-2.5 mr-0.5" />
+   322→                    {course.milestone}
+   323→                  </Badge>
+   324→                )}
+   325→                {!course.isRequired && (
+   326→                  <Badge variant="outline" className="text-[8px] px-1 py-0 h-4">
+   327→                    Optional
+   328→                  </Badge>
+   329→                )}
+   330→              </motion.div>
+   331→            </div>
+   332→          );
+   333→        })}
+   334→      </div>
+   335→    </div>
+   336→  );
+   337→}
+   338→
+   339→function PathBuilderPanel({
+   340→  editingPath,
+   341→  onSave,
+   342→  onCancel,
+   343→  availableCourses,
+   344→}: {
+   345→  editingPath: LearningPath | null;
+   346→  onSave: (path: LearningPath) => void;
+   347→  onCancel: () => void;
+   348→  availableCourses: { id: string; title: string; duration: number; level: 'beginner' | 'intermediate' | 'advanced' | 'expert' }[];
+   349→}) {
+   350→  const [name, setName] = useState(editingPath?.name || '');
+   351→  const [description, setDescription] = useState(editingPath?.description || '');
+   352→  const [category, setCategory] = useState(editingPath?.category || '');
+   353→  const [difficulty, setDifficulty] = useState<'beginner' | 'intermediate' | 'advanced'>(editingPath?.difficulty || 'beginner');
+   354→  const [status, setStatus] = useState<'published' | 'draft'>(editingPath?.status === 'archived' ? 'draft' : (editingPath?.status as 'published' | 'draft') || 'draft');
+   355→  const [courses, setCourses] = useState<PathCourse[]>(editingPath?.courses || []);
+   356→  const [courseSearch, setCourseSearch] = useState('');
+   357→  const [showCourseDropdown, setShowCourseDropdown] = useState(false);
+   358→  const [selectedCourseForPrereq, setSelectedCourseForPrereq] = useState<string | null>(null);
+   359→
+   360→  const filteredAvailableCourses = availableCourses.filter(
+   361→    (c) => !courses.find((pc) => pc.id === c.id) &&
+   362→      c.title.toLowerCase().includes(courseSearch.toLowerCase())
+   363→  );
+   364→
+   365→  const addCourse = (courseId: string) => {
+   366→    const course = availableCourses.find((c) => c.id === courseId);
+   367→    if (!course) return;
+   368→    const newCourse: PathCourse = {
+   369→      id: course.id,
+   370→      title: course.title,
+   371→      duration: course.duration,
+   372→      level: course.level,
+   373→      isRequired: true,
+   374→      prerequisiteIds: courses.length > 0 ? [courses[courses.length - 1].id] : [],
+   375→    };
+   376→    setCourses([...courses, newCourse]);
+   377→    setCourseSearch('');
+   378→    setShowCourseDropdown(false);
+   379→  };
+   380→
+   381→  const removeCourse = (courseId: string) => {
+   382→    setCourses(courses.filter((c) => c.id !== courseId).map((c) => ({
+   383→      ...c,
+   384→      prerequisiteIds: c.prerequisiteIds.filter((pid) => pid !== courseId),
+   385→    })));
+   386→  };
+   387→
+   388→  const toggleRequired = (courseId: string) => {
+   389→    setCourses(courses.map((c) => c.id === courseId ? { ...c, isRequired: !c.isRequired } : c));
+   390→  };
+   391→
+   392→  const setMilestone = (courseId: string, milestone: string) => {
+   393→    setCourses(courses.map((c) => c.id === courseId ? { ...c, milestone: milestone || undefined } : c));
+   394→  };
+   395→
+   396→  const togglePrerequisite = (courseId: string, prereqId: string) => {
+   397→    setCourses(courses.map((c) => {
+   398→      if (c.id !== courseId) return c;
+   399→      const hasPrereq = c.prerequisiteIds.includes(prereqId);
+   400→      return {
+   401→        ...c,
+   402→        prerequisiteIds: hasPrereq
+   403→          ? c.prerequisiteIds.filter((p) => p !== prereqId)
+   404→          : [...c.prerequisiteIds, prereqId],
+   405→      };
+   406→    }));
+   407→  };
+   408→
+   409→  const totalDuration = courses.reduce((sum, c) => sum + c.duration, 0);
+   410→
+   411→  const handleSave = (publishStatus: 'published' | 'draft') => {
+   412→    const path: LearningPath = {
+   413→      id: editingPath?.id || `lp-${Date.now()}`,
+   414→      name,
+   415→      description,
+   416→      category,
+   417→      difficulty,
+   418→      status: publishStatus,
+   419→      courseCount: courses.length,
+   420→      enrolledCount: editingPath?.enrolledCount || 0,
+   421→      completionRate: editingPath?.completionRate || 0,
+   422→      estimatedDuration: totalDuration,
+   423→      courses,
+   424→      createdAt: editingPath?.createdAt || new Date().toISOString(),
+   425→    };
+   426→    onSave(path);
+   427→  };
+   428→
+   429→  return (
+   430→    <div className="space-y-6">
+   431→      {/* Header */}
+   432→      <div className="flex items-center justify-between">
+   433→        <div>
+   434→          <h2 className="text-lg font-semibold">{editingPath ? 'Edit Learning Path' : 'Create Learning Path'}</h2>
+   435→          <p className="text-sm text-muted-foreground">Design a guided course sequence for your learners</p>
+   436→        </div>
+   437→        <div className="flex items-center gap-2">
+   438→          <Button variant="outline" size="sm" onClick={onCancel}>
+   439→            <X className="h-4 w-4 mr-1" /> Cancel
+   440→          </Button>
+   441→          <Button variant="outline" size="sm" onClick={() => handleSave('draft')} className={cn(status === 'draft' && 'border-amber-500')}>
+   442→            <Save className="h-4 w-4 mr-1" /> Save Draft
+   443→          </Button>
+   444→          <Button size="sm" onClick={() => handleSave('published')} className="bg-emerald-600 hover:bg-emerald-700">
+   445→            <Globe className="h-4 w-4 mr-1" /> Publish
+   446→          </Button>
+   447→        </div>
+   448→      </div>
+   449→
+   450→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   451→        {/* Left: Form */}
+   452→        <div className="lg:col-span-1 space-y-4">
+   453→          <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   454→            <CardHeader className="pb-3">
+   455→              <CardTitle className="text-sm">Path Details</CardTitle>
+   456→            </CardHeader>
+   457→            <CardContent className="space-y-4">
+   458→              <div className="space-y-2">
+   459→                <Label className="text-xs">Path Name</Label>
+   460→                <Input
+   461→                  value={name}
+   462→                  onChange={(e) => setName(e.target.value)}
+   463→                  placeholder="e.g., Full-Stack Developer"
+   464→                  className="h-9"
+   465→                />
+   466→              </div>
+   467→              <div className="space-y-2">
+   468→                <Label className="text-xs">Description</Label>
+   469→                <Textarea
+   470→                  value={description}
+   471→                  onChange={(e) => setDescription(e.target.value)}
+   472→                  placeholder="Describe this learning path..."
+   473→                  rows={3}
+   474→                  className="text-sm"
+   475→                />
+   476→              </div>
+   477→              <div className="space-y-2">
+   478→                <Label className="text-xs">Category</Label>
+   479→                <Select value={category} onValueChange={setCategory}>
+   480→                  <SelectTrigger className="h-9">
+   481→                    <SelectValue placeholder="Select category" />
+   482→                  </SelectTrigger>
+   483→                  <SelectContent>
+   484→                    <SelectItem value="Web Development">Web Development</SelectItem>
+   485→                    <SelectItem value="Data Science">Data Science</SelectItem>
+   486→                    <SelectItem value="Backend">Backend</SelectItem>
+   487→                    <SelectItem value="DevOps">DevOps</SelectItem>
+   488→                    <SelectItem value="Mobile">Mobile</SelectItem>
+   489→                    <SelectItem value="AI/ML">AI/ML</SelectItem>
+   490→                  </SelectContent>
+   491→                </Select>
+   492→              </div>
+   493→              <div className="space-y-2">
+   494→                <Label className="text-xs">Difficulty Level</Label>
+   495→                <Select value={difficulty} onValueChange={(v) => setDifficulty(v as 'beginner' | 'intermediate' | 'advanced')}>
+   496→                  <SelectTrigger className="h-9">
+   497→                    <SelectValue />
+   498→                  </SelectTrigger>
+   499→                  <SelectContent>
+   500→                    <SelectItem value="beginner">Beginner</SelectItem>
+   501→                    <SelectItem value="intermediate">Intermediate</SelectItem>
+   502→                    <SelectItem value="advanced">Advanced</SelectItem>
+   503→                  </SelectContent>
+   504→                </Select>
+   505→              </div>
+   506→              <div className="flex items-center gap-3 pt-2">
+   507→                <Label className="text-xs">Status</Label>
+   508→                <div className="flex items-center gap-2">
+   509→                  <Switch
+   510→                    checked={status === 'published'}
+   511→                    onCheckedChange={(checked) => setStatus(checked ? 'published' : 'draft')}
+   512→                  />
+   513→                  <span className="text-xs text-muted-foreground">
+   514→                    {status === 'published' ? 'Published' : 'Draft'}
+   515→                  </span>
+   516→                </div>
+   517→              </div>
+   518→            </CardContent>
+   519→          </Card>
+   520→
+   521→          <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   522→            <CardHeader className="pb-3">
+   523→              <CardTitle className="text-sm">Summary</CardTitle>
+   524→            </CardHeader>
+   525→            <CardContent className="space-y-3">
+   526→              <div className="flex items-center justify-between text-sm">
+   527→                <span className="text-muted-foreground">Total Courses</span>
+   528→                <span className="font-semibold">{courses.length}</span>
+   529→              </div>
+   530→              <div className="flex items-center justify-between text-sm">
+   531→                <span className="text-muted-foreground">Required</span>
+   532→                <span className="font-semibold">{courses.filter((c) => c.isRequired).length}</span>
+   533→              </div>
+   534→              <div className="flex items-center justify-between text-sm">
+   535→                <span className="text-muted-foreground">Optional</span>
+   536→                <span className="font-semibold">{courses.filter((c) => !c.isRequired).length}</span>
+   537→              </div>
+   538→              <Separator />
+   539→              <div className="flex items-center justify-between text-sm">
+   540→                <span className="text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> Est. Duration</span>
+   541→                <span className="font-semibold">{totalDuration}h</span>
+   542→              </div>
+   543→              <div className="flex items-center justify-between text-sm">
+   544→                <span className="text-muted-foreground flex items-center gap-1"><Flag className="h-3 w-3" /> Milestones</span>
+   545→                <span className="font-semibold">{courses.filter((c) => c.milestone).length}</span>
+   546→              </div>
+   547→            </CardContent>
+   548→          </Card>
+   549→        </div>
+   550→
+   551→        {/* Right: Course Builder */}
+   552→        <div className="lg:col-span-2 space-y-4">
+   553→          <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   554→            <CardHeader className="pb-3">
+   555→              <div className="flex items-center justify-between">
+   556→                <CardTitle className="text-sm">Course Sequence</CardTitle>
+   557→                <div className="relative">
+   558→                  <Button
+   559→                    variant="outline"
+   560→                    size="sm"
+   561→                    onClick={() => setShowCourseDropdown(!showCourseDropdown)}
+   562→                    className="gap-1"
+   563→                  >
+   564→                    <Plus className="h-3.5 w-3.5" /> Add Course
+   565→                  </Button>
+   566→                  {showCourseDropdown && (
+   567→                    <div className="absolute right-0 top-full mt-1 w-64 bg-card border border-border rounded-lg shadow-lg z-20 p-2">
+   568→                      <Input
+   569→                        value={courseSearch}
+   570→                        onChange={(e) => setCourseSearch(e.target.value)}
+   571→                        placeholder="Search courses..."
+   572→                        className="h-8 text-sm mb-2"
+   573→                        autoFocus
+   574→                      />
+   575→                      <div className="max-h-48 overflow-y-auto space-y-1">
+   576→                        {filteredAvailableCourses.length === 0 ? (
+   577→                          <p className="text-xs text-muted-foreground text-center py-2">No courses found</p>
+   578→                        ) : (
+   579→                          filteredAvailableCourses.map((course) => (
+   580→                            <button
+   581→                              key={course.id}
+   582→                              onClick={() => addCourse(course.id)}
+   583→                              className="w-full text-left px-2 py-1.5 rounded-md hover:bg-muted text-xs flex items-center justify-between"
+   584→                            >
+   585→                              <span>{course.title}</span>
+   586→                              <span className="text-muted-foreground">{course.duration}h</span>
+   587→                            </button>
+   588→                          ))
+   589→                        )}
+   590→                      </div>
+   591→                    </div>
+   592→                  )}
+   593→                </div>
+   594→              </div>
+   595→            </CardHeader>
+   596→            <CardContent>
+   597→              {courses.length === 0 ? (
+   598→                <div className="text-center py-12 text-muted-foreground">
+   599→                  <Map className="h-10 w-10 mx-auto mb-3 opacity-30" />
+   600→                  <p className="text-sm">No courses added yet</p>
+   601→                  <p className="text-xs mt-1">Click &quot;Add Course&quot; to start building your path</p>
+   602→                </div>
+   603→              ) : (
+   604→                <Reorder.Group
+   605→                  axis="y"
+   606→                  values={courses}
+   607→                  onReorder={setCourses}
+   608→                  className="space-y-2"
+   609→                >
+   610→                  {courses.map((course, idx) => (
+   611→                    <Reorder.Item
+   612→                      key={course.id}
+   613→                      value={course}
+   614→                      className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/30 cursor-grab active:cursor-grabbing group"
+   615→                    >
+   616→                      <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+   617→                      <div className="h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 text-xs font-bold shrink-0">
+   618→                        {idx + 1}
+   619→                      </div>
+   620→                      <div className="flex-1 min-w-0">
+   621→                        <div className="flex items-center gap-2">
+   622→                          <span className="text-sm font-medium truncate">{course.title}</span>
+   623→                          {course.milestone && (
+   624→                            <Badge className="text-[8px] px-1.5 py-0 h-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 shrink-0">
+   625→                              <Flag className="h-2.5 w-2.5 mr-0.5" />
+   626→                              {course.milestone}
+   627→                            </Badge>
+   628→                          )}
+   629→                        </div>
+   630→                        <div className="flex items-center gap-3 mt-1">
+   631→                          <span className="text-[10px] text-muted-foreground">{course.duration}h</span>
+   632→                          <span className="text-[10px] text-muted-foreground capitalize">{course.level}</span>
+   633→                          {course.prerequisiteIds.length > 0 && (
+   634→                            <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+   635→                              <Lock className="h-2.5 w-2.5" />
+   636→                              Requires: {course.prerequisiteIds.map((pid) => courses.find((c) => c.id === pid)?.title).filter(Boolean).join(', ')}
+   637→                            </span>
+   638→                          )}
+   639→                        </div>
+   640→                      </div>
+   641→                      <div className="flex items-center gap-1.5 shrink-0">
+   642→                        <Button
+   643→                          variant="ghost"
+   644→                          size="icon"
+   645→                          className="h-7 w-7"
+   646→                          onClick={() => toggleRequired(course.id)}
+   647→                          title={course.isRequired ? 'Mark optional' : 'Mark required'}
+   648→                        >
+   649→                          {course.isRequired ? (
+   650→                            <Lock className="h-3.5 w-3.5 text-emerald-600" />
+   651→                          ) : (
+   652→                            <Unlock className="h-3.5 w-3.5 text-amber-500" />
+   653→                          )}
+   654→                        </Button>
+   655→                        <Button
+   656→                          variant="ghost"
+   657→                          size="icon"
+   658→                          className="h-7 w-7"
+   659→                          onClick={() => {
+   660→                            const milestone = course.milestone || '';
+   661→                            const newMilestone = prompt('Enter milestone label (leave empty to remove):', milestone);
+   662→                            if (newMilestone !== null) setMilestone(course.id, newMilestone);
+   663→                          }}
+   664→                          title="Set milestone"
+   665→                        >
+   666→                          <Flag className={cn('h-3.5 w-3.5', course.milestone ? 'text-purple-500' : 'text-muted-foreground')} />
+   667→                        </Button>
+   668→                        <Button
+   669→                          variant="ghost"
+   670→                          size="icon"
+   671→                          className="h-7 w-7"
+   672→                          onClick={() => setSelectedCourseForPrereq(selectedCourseForPrereq === course.id ? null : course.id)}
+   673→                          title="Edit prerequisites"
+   674→                        >
+   675→                          <Target className={cn('h-3.5 w-3.5', selectedCourseForPrereq === course.id ? 'text-blue-500' : 'text-muted-foreground')} />
+   676→                        </Button>
+   677→                        <Button
+   678→                          variant="ghost"
+   679→                          size="icon"
+   680→                          className="h-7 w-7 text-red-500 hover:text-red-600"
+   681→                          onClick={() => removeCourse(course.id)}
+   682→                        >
+   683→                          <Trash2 className="h-3.5 w-3.5" />
+   684→                        </Button>
+   685→                      </div>
+   686→                    </Reorder.Item>
+   687→                  ))}
+   688→                </Reorder.Group>
+   689→              )}
+   690→
+   691→              {/* Prerequisites Editor */}
+   692→              <AnimatePresence>
+   693→                {selectedCourseForPrereq && (
+   694→                  <motion.div
+   695→                    initial={{ opacity: 0, height: 0 }}
+   696→                    animate={{ opacity: 1, height: 'auto' }}
+   697→                    exit={{ opacity: 0, height: 0 }}
+   698→                    className="mt-4 border border-border/50 rounded-xl p-4 bg-muted/20"
+   699→                  >
+   700→                    <h4 className="text-sm font-medium mb-3">
+   701→                      Prerequisites for: {courses.find((c) => c.id === selectedCourseForPrereq)?.title}
+   702→                    </h4>
+   703→                    <div className="flex flex-wrap gap-2">
+   704→                      {courses
+   705→                        .filter((c) => c.id !== selectedCourseForPrereq)
+   706→                        .map((c) => {
+   707→                          const isSelected = courses.find((cc) => cc.id === selectedCourseForPrereq)?.prerequisiteIds.includes(c.id);
+   708→                          return (
+   709→                            <button
+   710→                              key={c.id}
+   711→                              onClick={() => togglePrerequisite(selectedCourseForPrereq, c.id)}
+   712→                              className={cn(
+   713→                                'px-3 py-1.5 rounded-lg text-xs font-medium transition-all border',
+   714→                                isSelected
+   715→                                  ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/50 dark:text-blue-300 dark:border-blue-700'
+   716→                                  : 'bg-background text-muted-foreground border-border hover:border-blue-300'
+   717→                              )}
+   718→                            >
+   719→                              {isSelected && <Check className="h-3 w-3 inline mr-1" />}
+   720→                              {c.title}
+   721→                            </button>
+   722→                          );
+   723→                        })}
+   724→                    </div>
+   725→                  </motion.div>
+   726→                )}
+   727→              </AnimatePresence>
+   728→            </CardContent>
+   729→          </Card>
+   730→
+   731→          {/* Visual Preview */}
+   732→          <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   733→            <CardHeader className="pb-3">
+   734→              <CardTitle className="text-sm flex items-center gap-2">
+   735→                <Eye className="h-4 w-4" /> Visual Preview
+   736→              </CardTitle>
+   737→            </CardHeader>
+   738→            <CardContent>
+   739→              {courses.length === 0 ? (
+   740→                <p className="text-sm text-muted-foreground text-center py-6">Add courses to see the visual roadmap</p>
+   741→              ) : (
+   742→                <PathVisualPreview courses={courses} />
+   743→              )}
+   744→            </CardContent>
+   745→          </Card>
+   746→        </div>
+   747→      </div>
+   748→    </div>
+   749→  );
+   750→}
+   751→
+   752→function PathAnalyticsPanel() {
+   753→  return (
+   754→    <div className="space-y-6">
+   755→      <div>
+   756→        <h2 className="text-lg font-semibold">Path Analytics</h2>
+   757→        <p className="text-sm text-muted-foreground">Track enrollment, completion, and dropoff metrics</p>
+   758→      </div>
+   759→
+   760→      {/* KPI Cards */}
+   761→      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   762→        {[
+   763→          { label: 'Total Enrollments', value: '479', change: '+18%', icon: Users, color: 'text-emerald-600' },
+   764→          { label: 'Avg Completion', value: '58%', change: '+5%', icon: Target, color: 'text-amber-600' },
+   765→          { label: 'Avg Time to Complete', value: '42 days', change: '-3 days', icon: Clock, color: 'text-blue-600' },
+   766→          { label: 'Active Paths', value: '3', change: '+1', icon: Map, color: 'text-purple-600' },
+   767→        ].map((kpi) => (
+   768→          <Card key={kpi.label} className="border-border/50 bg-card/80 backdrop-blur-sm">
+   769→            <CardContent className="p-4">
+   770→              <div className="flex items-center gap-2 mb-2">
+   771→                <kpi.icon className={cn('h-4 w-4', kpi.color)} />
+   772→                <span className="text-xs text-muted-foreground">{kpi.label}</span>
+   773→              </div>
+   774→              <div className="flex items-end gap-2">
+   775→                <span className="text-xl font-bold">{kpi.value}</span>
+   776→                <span className="text-[10px] text-emerald-600 font-medium mb-0.5">{kpi.change}</span>
+   777→              </div>
+   778→            </CardContent>
+   779→          </Card>
+   780→        ))}
+   781→      </div>
+   782→
+   783→      {/* Charts */}
+   784→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   785→        {/* Enrollment Trend */}
+   786→        <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   787→          <CardHeader className="pb-2">
+   788→            <CardTitle className="text-sm flex items-center gap-2">
+   789→              <TrendingUp className="h-4 w-4 text-emerald-600" /> Enrollment Trend
+   790→            </CardTitle>
+   791→          </CardHeader>
+   792→          <CardContent>
+   793→            <div className="h-56">
+   794→              <ResponsiveContainer width="100%" height="100%">
+   795→                <LineChart data={enrollmentTrendData}>
+   796→                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+   797→                  <XAxis dataKey="month" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+   798→                  <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" />
+   799→                  <RechartsTooltip
+   800→                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+   801→                  />
+   802→                  <Line type="monotone" dataKey="enrollments" stroke="#10b981" strokeWidth={2} dot={{ r: 3, fill: '#10b981' }} />
+   803→                </LineChart>
+   804→              </ResponsiveContainer>
+   805→            </div>
+   806→          </CardContent>
+   807→        </Card>
+   808→
+   809→        {/* Completion Rate */}
+   810→        <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   811→          <CardHeader className="pb-2">
+   812→            <CardTitle className="text-sm flex items-center gap-2">
+   813→              <Award className="h-4 w-4 text-amber-600" /> Completion Rate (Full-Stack Path)
+   814→            </CardTitle>
+   815→          </CardHeader>
+   816→          <CardContent>
+   817→            <div className="h-56 flex items-center justify-center">
+   818→              <ResponsiveContainer width="100%" height="100%">
+   819→                <PieChart>
+   820→                  <Pie
+   821→                    data={completionPieData}
+   822→                    cx="50%"
+   823→                    cy="50%"
+   824→                    innerRadius={60}
+   825→                    outerRadius={80}
+   826→                    paddingAngle={4}
+   827→                    dataKey="value"
+   828→                  >
+   829→                    {completionPieData.map((entry, index) => (
+   830→                      <Cell key={`cell-${index}`} fill={entry.color} />
+   831→                    ))}
+   832→                  </Pie>
+   833→                  <RechartsTooltip
+   834→                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+   835→                  />
+   836→                </PieChart>
+   837→              </ResponsiveContainer>
+   838→            </div>
+   839→            <div className="flex items-center justify-center gap-4 mt-2">
+   840→              {completionPieData.map((entry) => (
+   841→                <div key={entry.name} className="flex items-center gap-1.5">
+   842→                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+   843→                  <span className="text-[10px] text-muted-foreground">{entry.name} ({entry.value}%)</span>
+   844→                </div>
+   845→              ))}
+   846→            </div>
+   847→          </CardContent>
+   848→        </Card>
+   849→
+   850→        {/* Dropoff Points */}
+   851→        <Card className="border-border/50 bg-card/80 backdrop-blur-sm lg:col-span-2">
+   852→          <CardHeader className="pb-2">
+   853→            <CardTitle className="text-sm flex items-center gap-2">
+   854→              <BarChart3 className="h-4 w-4 text-rose-600" /> Dropoff Points (Full-Stack Path)
+   855→            </CardTitle>
+   856→            <CardDescription className="text-xs">Courses where most learners stop progressing</CardDescription>
+   857→          </CardHeader>
+   858→          <CardContent>
+   859→            <div className="h-64">
+   860→              <ResponsiveContainer width="100%" height="100%">
+   861→                <BarChart data={dropoffData}>
+   862→                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+   863→                  <XAxis dataKey="course" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+   864→                  <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" />
+   865→                  <RechartsTooltip
+   866→                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+   867→                  />
+   868→                  <Bar dataKey="dropoff" fill="#ef4444" radius={[4, 4, 0, 0]} name="Dropoff %" />
+   869→                </BarChart>
+   870→              </ResponsiveContainer>
+   871→            </div>
+   872→          </CardContent>
+   873→        </Card>
+   874→      </div>
+   875→    </div>
+   876→  );
+   877→}
+   878→
+   879→// ---- Loading Skeletons ----
+   880→
+   881→function PathCardSkeleton() {
+   882→  return (
+   883→    <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   884→      <div className="h-1.5 w-full bg-gradient-to-r from-muted to-muted/50" />
+   885→      <CardHeader className="pb-3">
+   886→        <Skeleton className="h-5 w-3/4 mb-2" />
+   887→        <Skeleton className="h-3 w-full" />
+   888→        <div className="flex items-center gap-2 mt-2">
+   889→          <Skeleton className="h-5 w-16 rounded-full" />
+   890→          <Skeleton className="h-5 w-20 rounded-full" />
+   891→          <Skeleton className="h-3 w-16" />
+   892→        </div>
+   893→      </CardHeader>
+   894→      <CardContent className="pt-0">
+   895→        <div className="grid grid-cols-3 gap-3">
+   896→          {[1, 2, 3].map((i) => (
+   897→            <div key={i} className="text-center">
+   898→              <Skeleton className="h-4 w-8 mx-auto mb-1" />
+   899→              <Skeleton className="h-2.5 w-12 mx-auto" />
+   900→            </div>
+   901→          ))}
+   902→        </div>
+   903→        <Skeleton className="h-3 w-24 mt-3" />
+   904→      </CardContent>
+   905→    </Card>
+   906→  );
+   907→}
+   908→
+   909→function PathListSkeleton() {
+   910→  return (
+   911→    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+   912→      {[1, 2, 3].map((i) => (
+   913→        <PathCardSkeleton key={i} />
+   914→      ))}
+   915→    </div>
+   916→  );
+   917→}
+   918→
+   919→// ---- Main Component ----
+   920→export function AdminLearningPaths() {
+   921→  const tenant = useAppStore((s) => s.currentTenant);
+   922→  const tenantId = tenant?.id || '';
+   923→
+   924→  // API data hooks
+   925→  const { data: apiPaths, isLoading: pathsLoading, error: pathsError } = useLearningPaths(tenantId);
+   926→  const { data: apiCourses } = useCourses();
+   927→  const createPathMutation = useCreateLearningPath();
+   928→  const updatePathMutation = useUpdateLearningPath();
+   929→  const deletePathMutation = useDeleteLearningPath();
+   930→
+   931→  // Map API data to component interfaces
+   932→  const paths: LearningPath[] = useMemo(
+   933→    () => (apiPaths || []).map(mapApiPathToLearningPath),
+   934→    [apiPaths]
+   935→  );
+   936→
+   937→  const availableCourses = useMemo(
+   938→    () => (apiCourses || []).map(mapApiCourseToPathCourseSource),
+   939→    [apiCourses]
+   940→  );
+   941→
+   942→  const [searchQuery, setSearchQuery] = useState('');
+   943→  const [statusFilter, setStatusFilter] = useState<string>('all');
+   944→  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+   945→  const [activeTab, setActiveTab] = useState('paths');
+   946→  const [editingPath, setEditingPath] = useState<LearningPath | null>(null);
+   947→  const [isCreating, setIsCreating] = useState(false);
+   948→  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+   949→
+   950→  const filteredPaths = paths.filter((p) => {
+   951→    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+   952→      p.description.toLowerCase().includes(searchQuery.toLowerCase());
+   953→    const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
+   954→    const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
+   955→    return matchesSearch && matchesStatus && matchesCategory;
+   956→  });
+   957→
+   958→  const categories = [...new Set(paths.map((p) => p.category).filter(Boolean))];
+   959→
+   960→  const handleSave = useCallback(async (path: LearningPath) => {
+   961→    const isEdit = paths.some((p) => p.id === path.id);
+   962→    const payload = {
+   963→      tenantId,
+   964→      title: path.name,
+   965→      description: path.description || null,
+   966→      category: path.category || null,
+   967→      level: path.difficulty,
+   968→      isPublished: path.status === 'published',
+   969→      courses: path.courses.map((c, i) => ({
+   970→        courseId: c.id,
+   971→        orderIndex: i,
+   972→        isRequired: c.isRequired,
+   973→        milestone: c.milestone || null,
+   974→        prerequisiteIds: c.prerequisiteIds.length > 0 ? c.prerequisiteIds.join(',') : null,
+   975→      })),
+   976→    };
+   977→
+   978→    try {
+   979→      if (isEdit) {
+   980→        await updatePathMutation.mutateAsync({ id: path.id, ...payload });
+   981→      } else {
+   982→        await createPathMutation.mutateAsync(payload);
+   983→      }
+   984→      setEditingPath(null);
+   985→      setIsCreating(false);
+   986→    } catch {
+   987→      // Error is handled by mutation hooks with toast
+   988→    }
+   989→  }, [paths, tenantId, createPathMutation, updatePathMutation]);
+   990→
+   991→  const handleDuplicate = useCallback(async (path: LearningPath) => {
+   992→    const payload = {
+   993→      tenantId,
+   994→      title: `${path.name} (Copy)`,
+   995→      description: path.description || null,
+   996→      category: path.category || null,
+   997→      level: path.difficulty,
+   998→      isPublished: false, // Duplicates are always drafts
+   999→      courses: path.courses.map((c, i) => ({
+  1000→        courseId: c.id,
+  1001→        orderIndex: i,
+  1002→        isRequired: c.isRequired,
+  1003→        milestone: c.milestone || null,
+  1004→        prerequisiteIds: c.prerequisiteIds.length > 0 ? c.prerequisiteIds.join(',') : null,
+  1005→      })),
+  1006→    };
+  1007→
+  1008→    try {
+  1009→      await createPathMutation.mutateAsync(payload);
+  1010→    } catch {
+  1011→      // Error is handled by mutation hooks
+  1012→    }
+  1013→  }, [tenantId, createPathMutation]);
+  1014→
+  1015→  const handleDelete = useCallback(async (id: string) => {
+  1016→    try {
+  1017→      await deletePathMutation.mutateAsync(id);
+  1018→      setDeleteConfirmId(null);
+  1019→    } catch {
+  1020→      // Error is handled by mutation hooks
+  1021→    }
+  1022→  }, [deletePathMutation]);
+  1023→
+  1024→  if (isCreating || editingPath) {
+  1025→    return (
+  1026→      <div className="p-4 sm:p-6">
+  1027→        <PathBuilderPanel
+  1028→          editingPath={editingPath}
+  1029→          onSave={handleSave}
+  1030→          onCancel={() => { setEditingPath(null); setIsCreating(false); }}
+  1031→          availableCourses={availableCourses}
+  1032→        />
+  1033→      </div>
+  1034→    );
+  1035→  }
+  1036→
+  1037→  return (
+  1038→    <div className="p-4 sm:p-6 space-y-6">
+  1039→      {/* Header */}
+  1040→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+  1041→        <div>
+  1042→          <h1 className="text-2xl font-bold flex items-center gap-2">
+  1043→            <Map className="h-6 w-6 text-emerald-600" /> Learning Paths
+  1044→          </h1>
+  1045→          <p className="text-sm text-muted-foreground mt-1">Create and manage guided course sequences</p>
+  1046→        </div>
+  1047→        <Button onClick={() => setIsCreating(true)} className="bg-emerald-600 hover:bg-emerald-700 gap-1.5">
+  1048→          <Plus className="h-4 w-4" /> Create Path
+  1049→        </Button>
+  1050→      </div>
+  1051→
+  1052→      <Tabs value={activeTab} onValueChange={setActiveTab}>
+  1053→        <TabsList>
+  1054→          <TabsTrigger value="paths" className="gap-1.5">
+  1055→            <Map className="h-3.5 w-3.5" /> All Paths
+  1056→          </TabsTrigger>
+  1057→          <TabsTrigger value="analytics" className="gap-1.5">
+  1058→            <BarChart3 className="h-3.5 w-3.5" /> Analytics
+  1059→          </TabsTrigger>
+  1060→        </TabsList>
+  1061→
+  1062→        <TabsContent value="paths" className="mt-4 space-y-4">
+  1063→          {/* Filters */}
+  1064→          <div className="flex flex-col sm:flex-row gap-3">
+  1065→            <div className="relative flex-1">
+  1066→              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1067→              <Input
+  1068→                value={searchQuery}
+  1069→                onChange={(e) => setSearchQuery(e.target.value)}
+  1070→                placeholder="Search learning paths..."
+  1071→                className="h-9 pl-9"
+  1072→              />
+  1073→            </div>
+  1074→            <Select value={statusFilter} onValueChange={setStatusFilter}>
+  1075→              <SelectTrigger className="h-9 w-36">
+  1076→                <Filter className="h-3.5 w-3.5 mr-1.5" />
+  1077→                <SelectValue placeholder="Status" />
+  1078→              </SelectTrigger>
+  1079→              <SelectContent>
+  1080→                <SelectItem value="all">All Statuses</SelectItem>
+  1081→                <SelectItem value="published">Published</SelectItem>
+  1082→                <SelectItem value="draft">Draft</SelectItem>
+  1083→                <SelectItem value="archived">Archived</SelectItem>
+  1084→              </SelectContent>
+  1085→            </Select>
+  1086→            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+  1087→              <SelectTrigger className="h-9 w-40">
+  1088→                <SelectValue placeholder="Category" />
+  1089→              </SelectTrigger>
+  1090→              <SelectContent>
+  1091→                <SelectItem value="all">All Categories</SelectItem>
+  1092→                {categories.map((cat) => (
+  1093→                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+  1094→                ))}
+  1095→              </SelectContent>
+  1096→            </Select>
+  1097→          </div>
+  1098→
+  1099→          {/* Loading State */}
+  1100→          {pathsLoading && <PathListSkeleton />}
+  1101→
+  1102→          {/* Error State */}
+  1103→          {pathsError && (
+  1104→            <div className="text-center py-12">
+  1105→              <div className="h-12 w-12 mx-auto mb-4 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+  1106→                <Trash2 className="h-6 w-6 text-red-500" />
+  1107→              </div>
+  1108→              <p className="text-sm text-muted-foreground">Failed to load learning paths</p>
+  1109→              <p className="text-xs text-muted-foreground mt-1">Please try again later</p>
+  1110→            </div>
+  1111→          )}
+  1112→
+  1113→          {/* Path Grid */}
+  1114→          {!pathsLoading && !pathsError && (
+  1115→            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+  1116→              <AnimatePresence mode="popLayout">
+  1117→                {filteredPaths.map((path) => (
+  1118→                  <PathCard
+  1119→                    key={path.id}
+  1120→                    path={path}
+  1121→                    onEdit={() => setEditingPath(path)}
+  1122→                    onDuplicate={() => handleDuplicate(path)}
+  1123→                    onDelete={() => setDeleteConfirmId(path.id)}
+  1124→                    onView={() => setEditingPath(path)}
+  1125→                  />
+  1126→                ))}
+  1127→              </AnimatePresence>
+  1128→            </div>
+  1129→          )}
+  1130→
+  1131→          {/* Empty State */}
+  1132→          {!pathsLoading && !pathsError && filteredPaths.length === 0 && (
+  1133→            <div className="text-center py-12">
+  1134→              <Map className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
+  1135→              {paths.length === 0 ? (
+  1136→                <>
+  1137→                  <p className="text-sm text-muted-foreground">No learning paths yet</p>
+  1138→                  <p className="text-xs text-muted-foreground mt-1">Create your first learning path to guide your learners</p>
+  1139→                  <Button
+  1140→                    onClick={() => setIsCreating(true)}
+  1141→                    className="mt-4 bg-emerald-600 hover:bg-emerald-700 gap-1.5"
+  1142→                    size="sm"
+  1143→                  >
+  1144→                    <Plus className="h-4 w-4" /> Create Path
+  1145→                  </Button>
+  1146→                </>
+  1147→              ) : (
+  1148→                <>
+  1149→                  <p className="text-sm text-muted-foreground">No learning paths found</p>
+  1150→                  <p className="text-xs text-muted-foreground mt-1">Try adjusting your filters or create a new path</p>
+  1151→                </>
+  1152→              )}
+  1153→            </div>
+  1154→          )}
+  1155→        </TabsContent>
+  1156→
+  1157→        <TabsContent value="analytics" className="mt-4">
+  1158→          <PathAnalyticsPanel />
+  1159→        </TabsContent>
+  1160→      </Tabs>
+  1161→
+  1162→      {/* Delete Confirmation Dialog */}
+  1163→      <Dialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>
+  1164→        <DialogContent>
+  1165→          <DialogHeader>
+  1166→            <DialogTitle>Delete Learning Path</DialogTitle>
+  1167→            <DialogDescription>
+  1168→              Are you sure you want to delete this learning path? This action cannot be undone. All enrolled learners will lose access.
+  1169→            </DialogDescription>
+  1170→          </DialogHeader>
+  1171→          <DialogFooter>
+  1172→            <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
+  1173→            <Button
+  1174→              variant="destructive"
+  1175→              onClick={() => deleteConfirmId && handleDelete(deleteConfirmId)}
+  1176→              disabled={deletePathMutation.isPending}
+  1177→            >
+  1178→              {deletePathMutation.isPending ? 'Deleting...' : 'Delete'}
+  1179→            </Button>
+  1180→          </DialogFooter>
+  1181→        </DialogContent>
+  1182→      </Dialog>
+  1183→    </div>
+  1184→  );
+  1185→}
+  1186→

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Plus, Edit3, Trash2, Eye, Download, Ban,
@@ -10,7 +10,7 @@ import {
   Clock, BookOpen, Share2, Check,
   ZoomIn, ZoomOut, RotateCcw, TrendingUp, TrendingDown,
   BarChart3, Star, Droplets,
-  Send, FileDown, AlertTriangle, ExternalLink,
+  Send, FileDown, AlertTriangle, ExternalLink, Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
   DialogContent,
@@ -51,6 +52,15 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import type { Certificate, CertificateAward } from '@/types';
+import {
+  useCertificates,
+  useCreateCertificate,
+  useUpdateCertificate,
+  useDeleteCertificate,
+  useAwardCertificate,
+  useCertificateAwards,
+} from '@/hooks/use-data';
+import { useAppStore } from '@/store/app-store';
 
 // ---- Extended Types ----
 interface CertTemplate extends Certificate {
@@ -186,7 +196,7 @@ const TEMPLATE_LIBRARY = [
   },
 ];
 
-// ---- Mock Data ----
+// ---- Default Elements ----
 const defaultElements: CertElement[] = [
   { id: 'el-1', type: 'text', label: 'Header', x: 50, y: 10, fontSize: 28, fontWeight: 'bold', color: '#1e293b', value: 'Certificate of Completion', fontFamily: 'Georgia, serif', size: 'XL', align: 'center' },
   { id: 'el-2', type: 'text', label: 'Subheader', x: 50, y: 22, fontSize: 14, fontWeight: 'normal', color: '#64748b', value: 'This is to certify that', fontFamily: 'system-ui, sans-serif', size: 'M', align: 'center' },
@@ -200,133 +210,54 @@ const defaultElements: CertElement[] = [
   { id: 'el-10', type: 'image', label: 'Tenant Logo', x: 50, y: 5, fontSize: 12, fontWeight: 'normal', color: '#000', value: 'NextGen LMS', fontFamily: 'system-ui, sans-serif', size: 'S', align: 'center' },
 ];
 
-const demoTemplates: CertTemplate[] = [
-  {
-    id: 'cert-tpl-1',
-    tenantId: 'demo-tenant-1',
-    name: 'Classic Completion Certificate',
-    template: 'classic',
-    backgroundUrl: '',
-    isActive: true,
-    bg_color: '#fefefe',
-    font_family: 'Georgia, serif',
-    width: 800,
-    height: 600,
-    borderStyle: 'classic',
-    sealType: 'gold',
-    hasWatermark: false,
-    backgroundTemplate: 'classic',
-    elements: defaultElements,
-  },
-  {
-    id: 'cert-tpl-2',
-    tenantId: 'demo-tenant-1',
-    name: 'Modern Achievement Award',
-    template: 'modern',
-    backgroundUrl: '',
-    isActive: true,
-    bg_color: '#f8fafc',
-    font_family: 'system-ui, sans-serif',
-    width: 800,
-    height: 600,
-    borderStyle: 'modern',
-    sealType: 'silver',
-    hasWatermark: false,
-    backgroundTemplate: 'modern',
-    elements: defaultElements.map(el => ({
-      ...el,
-      color: el.type === 'text' && el.label === 'Header' ? '#7c3aed' : el.color,
-      value: el.label === 'Header' ? 'Achievement Award' : el.value,
-    })),
-  },
-  {
-    id: 'cert-tpl-3',
-    tenantId: 'demo-tenant-1',
-    name: 'Professional Certification',
-    template: 'professional',
-    backgroundUrl: '',
-    isActive: false,
-    bg_color: '#0f172a',
-    font_family: 'system-ui, sans-serif',
-    width: 800,
-    height: 600,
-    borderStyle: 'ornate',
-    sealType: 'gold',
-    hasWatermark: true,
-    backgroundTemplate: 'bold',
-    elements: defaultElements.map(el => ({
-      ...el,
-      color: el.label === 'Header' ? '#f8fafc' :
-             el.label === 'Recipient Name' ? '#10b981' :
-             el.label === 'Course Name' ? '#a78bfa' :
-             el.color?.startsWith('#64748b') ? '#94a3b8' :
-             el.color?.startsWith('#475569') ? '#94a3b8' :
-             el.color,
-      value: el.label === 'Header' ? 'Professional Certification' : el.value,
-    })),
-  },
-];
+// ---- Data Mapping Helpers ----
+function apiCertToTemplate(cert: Record<string, unknown>): CertTemplate {
+  let parsed: Record<string, unknown> = {};
+  try {
+    const templateField = cert.template;
+    parsed = typeof templateField === 'string' ? JSON.parse(templateField) : (templateField as Record<string, unknown>) || {};
+  } catch {
+    parsed = {};
+  }
+  return {
+    id: cert.id as string,
+    tenantId: cert.tenantId as string,
+    name: cert.name as string,
+    template: cert.template as string,
+    backgroundUrl: (cert.backgroundUrl as string) || '',
+    isActive: cert.isActive as boolean,
+    elements: (parsed.elements as CertElement[]) || defaultElements,
+    bg_color: (parsed.bg_color as string) || '#fefefe',
+    font_family: (parsed.font_family as string) || 'Georgia, serif',
+    width: (parsed.width as number) || 800,
+    height: (parsed.height as number) || 600,
+    borderStyle: parsed.borderStyle as string | undefined,
+    sealType: parsed.sealType as string | undefined,
+    hasWatermark: parsed.hasWatermark as boolean | undefined,
+    backgroundTemplate: parsed.backgroundTemplate as string | undefined,
+  };
+}
 
-const demoIssuedCerts: IssuedCert[] = [
-  {
-    id: 'award-1', userId: 'user-2', certificateId: 'cert-tpl-1', tenantId: 'demo-tenant-1', courseId: 'course-1',
-    verificationCode: 'NG-LMS-2024-A1B2C3', issuedAt: '2024-09-15T00:00:00Z',
-    recipientName: 'Emma Rodriguez', courseName: 'Advanced React & Next.js Masterclass', certName: 'Classic Completion Certificate',
-    status: 'verified',
-  },
-  {
-    id: 'award-2', userId: 'user-3', certificateId: 'cert-tpl-1', tenantId: 'demo-tenant-1', courseId: 'course-2',
-    verificationCode: 'NG-LMS-2024-D4E5F6', issuedAt: '2024-09-20T00:00:00Z',
-    recipientName: 'David Park', courseName: 'AI-Powered Full Stack Development', certName: 'Classic Completion Certificate',
-    status: 'verified',
-  },
-  {
-    id: 'award-3', userId: 'user-5', certificateId: 'cert-tpl-2', tenantId: 'demo-tenant-1', courseId: 'course-4',
-    verificationCode: 'NG-LMS-2024-G7H8I9', issuedAt: '2024-10-01T00:00:00Z',
-    recipientName: 'Lisa Wang', courseName: 'Data Visualization & Analytics', certName: 'Modern Achievement Award',
-    status: 'pending',
-  },
-  {
-    id: 'award-4', userId: 'user-6', certificateId: 'cert-tpl-1', tenantId: 'demo-tenant-1', courseId: 'course-1',
-    verificationCode: 'NG-LMS-2024-J0K1L2', issuedAt: '2024-10-05T00:00:00Z',
-    recipientName: 'Alex Johnson', courseName: 'Advanced React & Next.js Masterclass', certName: 'Classic Completion Certificate',
-    status: 'verified',
-  },
-  {
-    id: 'award-5', userId: 'user-7', certificateId: 'cert-tpl-2', tenantId: 'demo-tenant-1', courseId: 'course-3',
-    verificationCode: 'NG-LMS-2024-M3N4O5', issuedAt: '2024-10-10T00:00:00Z',
-    recipientName: 'Jordan Lee', courseName: 'System Design for Senior Engineers', certName: 'Modern Achievement Award',
-    status: 'revoked',
-  },
-  {
-    id: 'award-6', userId: 'user-8', certificateId: 'cert-tpl-1', tenantId: 'demo-tenant-1', courseId: 'course-5',
-    verificationCode: 'NG-LMS-2024-P6Q7R8', issuedAt: '2024-10-12T00:00:00Z',
-    recipientName: 'Priya Sharma', courseName: 'UX/UI Design Principles', certName: 'Classic Completion Certificate',
-    status: 'verified',
-  },
-  {
-    id: 'award-7', userId: 'user-9', certificateId: 'cert-tpl-3', tenantId: 'demo-tenant-1', courseId: 'course-2',
-    verificationCode: 'NG-LMS-2024-S9T0U1', issuedAt: '2024-11-01T00:00:00Z',
-    recipientName: 'Marcus Chen', courseName: 'AI-Powered Full Stack Development', certName: 'Professional Certification',
-    status: 'pending',
-  },
-  {
-    id: 'award-8', userId: 'user-10', certificateId: 'cert-tpl-2', tenantId: 'demo-tenant-1', courseId: 'course-4',
-    verificationCode: 'NG-LMS-2024-V2W3X4', issuedAt: '2024-11-15T00:00:00Z',
-    recipientName: 'Sofia Anderson', courseName: 'Data Visualization & Analytics', certName: 'Modern Achievement Award',
-    status: 'verified',
-  },
-];
-
-const MONTHLY_ISSUANCE = [
-  { month: 'Jun', count: 2 },
-  { month: 'Jul', count: 4 },
-  { month: 'Aug', count: 3 },
-  { month: 'Sep', count: 5 },
-  { month: 'Oct', count: 4 },
-  { month: 'Nov', count: 6 },
-  { month: 'Dec', count: 8 },
-];
+function templateToApiData(t: CertTemplate) {
+  const templateJson = JSON.stringify({
+    elements: t.elements,
+    bg_color: t.bg_color,
+    font_family: t.font_family,
+    width: t.width,
+    height: t.height,
+    borderStyle: t.borderStyle,
+    sealType: t.sealType,
+    hasWatermark: t.hasWatermark,
+    backgroundTemplate: t.backgroundTemplate,
+  });
+  return {
+    tenantId: t.tenantId,
+    name: t.name,
+    template: templateJson,
+    backgroundUrl: t.backgroundUrl || null,
+    isActive: t.isActive,
+  };
+}
 
 // ---- Helper: Element Icon ----
 function ElementIcon({ type }: { type: CertElement['type'] }) {
@@ -442,14 +373,114 @@ function SealRenderer({ type, isDark }: { type: string; isDark: boolean }) {
   );
 }
 
+// ---- Helper: Stats Skeleton ----
+function StatsSkeleton() {
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <Card key={i} className={i === 4 ? 'col-span-2 lg:col-span-4' : ''}>
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between mb-3">
+              <Skeleton className="h-10 w-10 rounded-xl" />
+              <Skeleton className="h-4 w-12" />
+            </div>
+            <Skeleton className="h-8 w-16 mb-1" />
+            <Skeleton className="h-3 w-24" />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+// ---- Helper: Template Card Skeleton ----
+function TemplateCardSkeleton() {
+  return (
+    <Card className="overflow-hidden h-full flex flex-col shadow-sm">
+      <Skeleton className="h-48" />
+      <CardContent className="p-4 flex-1 flex flex-col">
+        <Skeleton className="h-5 w-3/4 mb-2" />
+        <Skeleton className="h-3 w-1/2 mb-3" />
+        <div className="flex gap-2 mt-auto">
+          <Skeleton className="h-8 flex-1" />
+          <Skeleton className="h-8 w-20" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---- Helper: Table Row Skeleton ----
+function TableRowSkeleton() {
+  return (
+    <TableRow>
+      <TableCell><Skeleton className="h-4 w-4" /></TableCell>
+      <TableCell><div className="flex items-center gap-2"><Skeleton className="h-8 w-8 rounded-full" /><Skeleton className="h-4 w-24" /></div></TableCell>
+      <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+      <TableCell><Skeleton className="h-5 w-28" /></TableCell>
+      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+      <TableCell><Skeleton className="h-5 w-28" /></TableCell>
+      <TableCell><Skeleton className="h-8 w-20" /></TableCell>
+    </TableRow>
+  );
+}
+
 // ==========================
 // STATS DASHBOARD
 // ==========================
-function StatsDashboard() {
+function StatsDashboard({ awards, templates }: { awards: IssuedCert[]; templates: CertTemplate[] }) {
+  // Compute monthly issuance from real data
+  const monthlyIssuance = useMemo(() => {
+    const monthMap: Record<string, number> = {};
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const now = new Date();
+    // Show last 7 months
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      monthMap[key] = 0;
+    }
+    awards.forEach(a => {
+      const d = new Date(a.issuedAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (key in monthMap) {
+        monthMap[key]++;
+      }
+    });
+    return Object.entries(monthMap).map(([key, count]) => {
+      const [y, m] = key.split('-');
+      return { month: monthNames[parseInt(m) - 1], count };
+    });
+  }, [awards]);
+
+  const maxMonthlyCount = Math.max(...monthlyIssuance.map(m => m.count), 1);
+
+  // Compute stats from real data
+  const thisMonth = useMemo(() => {
+    const now = new Date();
+    return awards.filter(a => {
+      const d = new Date(a.issuedAt);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }).length;
+  }, [awards]);
+
+  const topCourse = useMemo(() => {
+    const courseCount: Record<string, number> = {};
+    awards.forEach(a => {
+      courseCount[a.courseName] = (courseCount[a.courseName] || 0) + 1;
+    });
+    const sorted = Object.entries(courseCount).sort(([, a], [, b]) => b - a);
+    return sorted[0]?.[0] || 'N/A';
+  }, [awards]);
+
+  const verifiedCount = awards.filter(a => a.status === 'verified').length;
+  const verificationRate = awards.length > 0 ? Math.round((verifiedCount / awards.length) * 100) : 0;
+
   const stats = [
     {
       label: 'Total Issued',
-      value: demoIssuedCerts.length,
+      value: awards.length,
       icon: Award,
       trend: 12,
       trendLabel: 'vs last month',
@@ -459,7 +490,7 @@ function StatsDashboard() {
     },
     {
       label: 'This Month',
-      value: 3,
+      value: thisMonth,
       icon: Calendar,
       trend: 8,
       trendLabel: 'vs last month',
@@ -469,7 +500,7 @@ function StatsDashboard() {
     },
     {
       label: 'Verification Rate',
-      value: 87,
+      value: verificationRate,
       icon: Shield,
       trend: 5,
       trendLabel: 'improvement',
@@ -487,7 +518,7 @@ function StatsDashboard() {
       gradient: 'from-rose-500/10 to-rose-600/5',
       iconBg: 'bg-rose-100 dark:bg-rose-900/30',
       iconColor: 'text-rose-600 dark:text-rose-400',
-      textValue: 'Advanced React',
+      textValue: topCourse.length > 20 ? topCourse.substring(0, 18) + '...' : topCourse,
     },
   ];
 
@@ -543,16 +574,16 @@ function StatsDashboard() {
                 <p className="text-xs text-muted-foreground">Certificates issued per month</p>
               </div>
               <div className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                <TrendingUp className="h-3.5 w-3.5" /> +33% growth
+                <TrendingUp className="h-3.5 w-3.5" /> {awards.length > 0 ? 'Live data' : 'No data yet'}
               </div>
             </div>
             <div className="flex items-end gap-2 h-20">
-              {MONTHLY_ISSUANCE.map((d, i) => (
+              {monthlyIssuance.map((d, i) => (
                 <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
                   <motion.div
                     className="w-full rounded-t-md bg-gradient-to-t from-amber-500 to-amber-300 dark:from-amber-600 dark:to-amber-400"
                     initial={{ height: 0 }}
-                    animate={{ height: `${(d.count / 8) * 100}%` }}
+                    animate={{ height: d.count > 0 ? `${(d.count / maxMonthlyCount) * 100}%` : '4px' }}
                     transition={{ delay: 0.6 + i * 0.08, duration: 0.5 }}
                     style={{ minHeight: '4px' }}
                   />
@@ -741,12 +772,17 @@ function TemplatesList({
   templates,
   onEdit,
   onCreateNew,
+  onDelete,
+  isLoading,
 }: {
   templates: CertTemplate[];
   onEdit: (arg: CertTemplate) => void;
   onCreateNew: () => void;
+  onDelete: (id: string) => void;
+  isLoading: boolean;
 }) {
   const [search, setSearch] = useState('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const filtered = templates.filter(t =>
     t.name.toLowerCase().includes(search.toLowerCase())
@@ -769,116 +805,158 @@ function TemplatesList({
         <Input placeholder="Search templates..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filtered.map((template, idx) => {
-          const isDark = template.bg_color === '#0f172a' || template.backgroundTemplate === 'bold';
-          return (
-            <motion.div
-              key={template.id}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.08 }}
-              whileHover={{ y: -4 }}
-            >
-              <Card className="overflow-hidden group hover:shadow-xl transition-all duration-300 h-full flex flex-col shadow-sm border-white/30 dark:border-white/10">
-                {/* Certificate preview thumbnail */}
-                <div
-                  className="h-48 relative overflow-hidden cursor-pointer"
-                  style={{
-                    background: BG_TEMPLATES.find(b => b.value === template.backgroundTemplate)?.bg ||
-                      (template.bg_color === '#0f172a'
-                        ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)'
-                        : template.bg_color === '#fefefe'
-                        ? 'linear-gradient(135deg, #fefefe 0%, #f1f5f9 100%)'
-                        : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)'),
-                  }}
-                >
-                  <CertificateBorder style={template.borderStyle || 'classic'} isDark={isDark} />
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <TemplateCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="p-12 text-center">
+            <Award className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-1">No Certificate Templates</h3>
+            <p className="text-sm text-muted-foreground mb-4">Get started by creating your first certificate template or pick one from the Library.</p>
+            <Button onClick={onCreateNew} className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white gap-2">
+              <Plus className="h-4 w-4" /> Create Template
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filtered.map((template, idx) => {
+            const isDark = template.bg_color === '#0f172a' || template.backgroundTemplate === 'bold';
+            return (
+              <motion.div
+                key={template.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.08 }}
+                whileHover={{ y: -4 }}
+              >
+                <Card className="overflow-hidden group hover:shadow-xl transition-all duration-300 h-full flex flex-col shadow-sm border-white/30 dark:border-white/10">
+                  {/* Certificate preview thumbnail */}
+                  <div
+                    className="h-48 relative overflow-hidden cursor-pointer"
+                    style={{
+                      background: BG_TEMPLATES.find(b => b.value === template.backgroundTemplate)?.bg ||
+                        (template.bg_color === '#0f172a'
+                          ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)'
+                          : template.bg_color === '#fefefe'
+                          ? 'linear-gradient(135deg, #fefefe 0%, #f1f5f9 100%)'
+                          : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)'),
+                    }}
+                  >
+                    <CertificateBorder style={template.borderStyle || 'classic'} isDark={isDark} />
 
-                  {/* Preview text overlay */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
-                    <div className="mb-1 opacity-70">
-                      <Award className={`h-6 w-6 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
-                    </div>
-                    <div className={`text-xs font-bold mb-0.5 ${isDark ? 'text-slate-100' : 'text-slate-800'}`}
-                      style={{ fontFamily: template.font_family }}>
-                      {template.elements.find(e => e.label === 'Header')?.value ?? 'Certificate'}
-                    </div>
-                    <div className={`text-[8px] ${isDark ? 'text-emerald-400' : 'text-emerald-600'} font-semibold`}>
-                      John Doe
-                    </div>
-                    <div className={`text-[7px] ${isDark ? 'text-violet-400' : 'text-violet-600'} font-medium mt-0.5`}>
-                      Course Name
-                    </div>
-                  </div>
-
-                  {/* Seal preview */}
-                  {template.sealType && (
-                    <div className="absolute bottom-2 right-2">
-                      <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: SEAL_TYPES.find(s => s.value === template.sealType)?.color }}>
-                        <Star className="h-2.5 w-2.5 text-white" />
+                    {/* Preview text overlay */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
+                      <div className="mb-1 opacity-70">
+                        <Award className={`h-6 w-6 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
+                      </div>
+                      <div className={`text-xs font-bold mb-0.5 ${isDark ? 'text-slate-100' : 'text-slate-800'}`}
+                        style={{ fontFamily: template.font_family }}>
+                        {template.elements.find(e => e.label === 'Header')?.value ?? 'Certificate'}
+                      </div>
+                      <div className={`text-[8px] ${isDark ? 'text-emerald-400' : 'text-emerald-600'} font-semibold`}>
+                        John Doe
+                      </div>
+                      <div className={`text-[7px] ${isDark ? 'text-violet-400' : 'text-violet-600'} font-medium mt-0.5`}>
+                        Course Name
                       </div>
                     </div>
-                  )}
 
-                  {/* Watermark indicator */}
-                  {template.hasWatermark && (
-                    <div className="absolute top-2 left-2">
-                      <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-[9px] gap-0.5">
-                        <Droplets className="h-2.5 w-2.5" /> WM
-                      </Badge>
-                    </div>
-                  )}
-
-                  {/* Status badge */}
-                  <div className="absolute top-3 right-3">
-                    {template.isActive ? (
-                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">Active</Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-[10px] text-muted-foreground">Inactive</Badge>
+                    {/* Seal preview */}
+                    {template.sealType && (
+                      <div className="absolute bottom-2 right-2">
+                        <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: SEAL_TYPES.find(s => s.value === template.sealType)?.color }}>
+                          <Star className="h-2.5 w-2.5 text-white" />
+                        </div>
+                      </div>
                     )}
-                  </div>
-                </div>
 
-                <CardContent className="p-4 flex-1 flex flex-col">
-                  <h3 className="font-semibold text-foreground mb-1">{template.name}</h3>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3 flex-wrap">
-                    <Badge variant="outline" className="text-[10px]">{template.template}</Badge>
-                    <span>{template.width}×{template.height}</span>
-                    <span>{template.elements.length} elements</span>
-                    {template.borderStyle && <span className="capitalize">{template.borderStyle}</span>}
+                    {/* Watermark indicator */}
+                    {template.hasWatermark && (
+                      <div className="absolute top-2 left-2">
+                        <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-[9px] gap-0.5">
+                          <Droplets className="h-2.5 w-2.5" /> WM
+                        </Badge>
+                      </div>
+                    )}
+
+                    {/* Status badge */}
+                    <div className="absolute top-3 right-3">
+                      {template.isActive ? (
+                        <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">Active</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground">Inactive</Badge>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 mt-auto">
-                    <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => onEdit(template)}>
-                      <Edit3 className="h-3.5 w-3.5" /> Edit
-                    </Button>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => { /* sample download */ }}>
-                            <Download className="h-3.5 w-3.5" /> Sample
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Download Sample</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button size="sm" variant="outline" className="h-8 w-8 p-0">
-                            <Eye className="h-3.5 w-3.5" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Preview</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          );
-        })}
-      </div>
+
+                  <CardContent className="p-4 flex-1 flex flex-col">
+                    <h3 className="font-semibold text-foreground mb-1">{template.name}</h3>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3 flex-wrap">
+                      <Badge variant="outline" className="text-[10px]">{template.template}</Badge>
+                      <span>{template.width}×{template.height}</span>
+                      <span>{template.elements.length} elements</span>
+                      {template.borderStyle && <span className="capitalize">{template.borderStyle}</span>}
+                    </div>
+                    <div className="flex items-center gap-2 mt-auto">
+                      <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => onEdit(template)}>
+                        <Edit3 className="h-3.5 w-3.5" /> Edit
+                      </Button>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => { /* sample download */ }}>
+                              <Download className="h-3.5 w-3.5" /> Sample
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Download Sample</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="sm" variant="outline" className="h-8 w-8 p-0 text-red-500 hover:text-red-600" onClick={() => setDeleteConfirmId(template.id)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Delete</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Delete Confirm Dialog */}
+      <Dialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" /> Delete Template
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this certificate template? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
+            <Button variant="destructive" className="gap-2" onClick={() => {
+              if (deleteConfirmId) onDelete(deleteConfirmId);
+              setDeleteConfirmId(null);
+            }}>
+              <Trash2 className="h-4 w-4" /> Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -890,10 +968,12 @@ function CertificateBuilder({
   template,
   onBack,
   onSave,
+  isSaving,
 }: {
   template: CertTemplate;
   onBack: () => void;
   onSave: (t: CertTemplate) => void;
+  isSaving: boolean;
 }) {
   const [form, setForm] = useState<CertTemplate>({ ...template, elements: template.elements.map(e => ({ ...e })) });
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
@@ -964,8 +1044,8 @@ function CertificateBuilder({
           <Button variant="outline" onClick={onBack} className="gap-2">
             <X className="h-4 w-4" /> Cancel
           </Button>
-          <Button className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white gap-2 shadow-md" onClick={() => onSave(form)}>
-            <Save className="h-4 w-4" /> Save Template
+          <Button className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white gap-2 shadow-md" onClick={() => onSave(form)} disabled={isSaving}>
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {isSaving ? 'Saving...' : 'Save Template'}
           </Button>
         </div>
       </div>
@@ -1360,13 +1440,34 @@ function CertificateBuilder({
 // ISSUED CERTIFICATES TABLE (Enhanced)
 // ==========================
 function IssuedCertificatesTable() {
+  const currentTenant = useAppStore((s) => s.currentTenant);
+  const { data: awardsData, isLoading: awardsLoading } = useCertificateAwards(currentTenant?.id);
   const [search, setSearch] = useState('');
-  const [certs, setCerts] = useState(demoIssuedCerts);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [verifyDialogId, setVerifyDialogId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState('');
+
+  // Map API awards data to IssuedCert format
+  const certs: IssuedCert[] = useMemo(() => {
+    if (!awardsData) return [];
+    return awardsData.map((a: Record<string, unknown>) => ({
+      id: a.id as string,
+      userId: a.userId as string,
+      certificateId: a.certificateId as string,
+      tenantId: a.tenantId as string,
+      courseId: a.courseId as string | undefined,
+      verificationCode: a.verificationCode as string,
+      issuedAt: a.issuedAt as string,
+      recipientName: (a.recipientName as string) || 'Unknown',
+      courseName: (a.courseName as string) || 'General',
+      certName: (a.certName as string) || 'Certificate',
+      // Default to 'verified' since the model doesn't have a status field;
+      // all awarded certificates are considered verified
+      status: 'verified' as VerificationStatus,
+    }));
+  }, [awardsData]);
 
   const filtered = certs.filter(c => {
     const matchSearch = c.recipientName.toLowerCase().includes(search.toLowerCase()) ||
@@ -1394,13 +1495,7 @@ function IssuedCertificatesTable() {
     }
   };
 
-  const handleBulkRevoke = () => {
-    setCerts(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, status: 'revoked' as VerificationStatus } : c));
-    setSelectedIds(new Set());
-  };
-
   const handleBulkResend = () => {
-    // Simulate resend
     setSelectedIds(new Set());
   };
 
@@ -1450,7 +1545,7 @@ function IssuedCertificatesTable() {
           <p className="text-muted-foreground text-sm mt-1">Track and manage all issued certificates</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" size="sm" className="gap-1.5 h-8" onClick={handleExportCSV}>
+          <Button variant="outline" size="sm" className="gap-1.5 h-8" onClick={handleExportCSV} disabled={certs.length === 0}>
             <FileDown className="h-3.5 w-3.5" /> Export CSV
           </Button>
         </div>
@@ -1484,9 +1579,6 @@ function IssuedCertificatesTable() {
           className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800"
         >
           <span className="text-sm font-medium text-amber-800 dark:text-amber-300">{selectedIds.size} selected</span>
-          <Button size="sm" variant="outline" className="gap-1.5 h-8 text-red-600 border-red-200 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950/30" onClick={handleBulkRevoke}>
-            <Ban className="h-3.5 w-3.5" /> Revoke Selected
-          </Button>
           <Button size="sm" variant="outline" className="gap-1.5 h-8 text-blue-600 border-blue-200 hover:bg-blue-50 dark:border-blue-800 dark:hover:bg-blue-950/30" onClick={handleBulkResend}>
             <Send className="h-3.5 w-3.5" /> Resend Selected
           </Button>
@@ -1515,10 +1607,19 @@ function IssuedCertificatesTable() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.length === 0 ? (
+                {awardsLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRowSkeleton key={i} />
+                  ))
+                ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                      No certificates found
+                    <TableCell colSpan={8} className="h-32 text-center">
+                      <div className="flex flex-col items-center gap-2">
+                        <Award className="h-10 w-10 text-muted-foreground/40" />
+                        <p className="text-muted-foreground">
+                          {certs.length === 0 ? 'No certificates have been issued yet' : 'No certificates match your filters'}
+                        </p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -1596,34 +1697,6 @@ function IssuedCertificatesTable() {
                               <TooltipContent>Download PDF</TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
-                          {cert.status !== 'revoked' && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600" onClick={() => {
-                                    setCerts(prev => prev.map(c => c.id === cert.id ? { ...c, status: 'revoked' as VerificationStatus } : c));
-                                  }}>
-                                    <Ban className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Revoke</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                          {cert.status === 'revoked' && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-500 hover:text-emerald-600" onClick={() => {
-                                    setCerts(prev => prev.map(c => c.id === cert.id ? { ...c, status: 'verified' as VerificationStatus } : c));
-                                  }}>
-                                    <RotateCcw className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Reactivate</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
                         </div>
                       </TableCell>
                     </motion.tr>
@@ -1700,9 +1773,46 @@ function IssuedCertificatesTable() {
 // MAIN COMPONENT
 // ==========================
 export function AdminCertificates() {
-  const [templates, setTemplates] = useState<CertTemplate[]>(demoTemplates);
+  const currentTenant = useAppStore((s) => s.currentTenant);
+  const tenantId = currentTenant?.id || '';
+
+  // Fetch certificate templates from API
+  const { data: certificatesData, isLoading: certsLoading } = useCertificates(tenantId);
+
+  // Fetch certificate awards from API
+  const { data: awardsData } = useCertificateAwards(tenantId);
+
+  // Mutations
+  const createMutation = useCreateCertificate();
+  const updateMutation = useUpdateCertificate();
+  const deleteMutation = useDeleteCertificate();
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [editingTemplate, setEditingTemplate] = useState<CertTemplate | null>(null);
+
+  // Map API data to CertTemplate[]
+  const templates: CertTemplate[] = useMemo(() => {
+    if (!certificatesData) return [];
+    return certificatesData.map(apiCertToTemplate);
+  }, [certificatesData]);
+
+  // Map API awards data to IssuedCert[]
+  const awards: IssuedCert[] = useMemo(() => {
+    if (!awardsData) return [];
+    return awardsData.map((a: Record<string, unknown>) => ({
+      id: a.id as string,
+      userId: a.userId as string,
+      certificateId: a.certificateId as string,
+      tenantId: a.tenantId as string,
+      courseId: a.courseId as string | undefined,
+      verificationCode: a.verificationCode as string,
+      issuedAt: a.issuedAt as string,
+      recipientName: (a.recipientName as string) || 'Unknown',
+      courseName: (a.courseName as string) || 'General',
+      certName: (a.certName as string) || 'Certificate',
+      status: 'verified' as VerificationStatus,
+    }));
+  }, [awardsData]);
 
   const handleEdit = (t: CertTemplate) => {
     setEditingTemplate({ ...t, elements: t.elements.map(e => ({ ...e })) });
@@ -1711,8 +1821,8 @@ export function AdminCertificates() {
 
   const handleCreateNew = () => {
     const newTemplate: CertTemplate = {
-      id: `cert-tpl-${Date.now()}`,
-      tenantId: 'demo-tenant-1',
+      id: '',
+      tenantId,
       name: '',
       template: 'custom',
       backgroundUrl: '',
@@ -1732,16 +1842,34 @@ export function AdminCertificates() {
   };
 
   const handleSave = (t: CertTemplate) => {
-    const idx = templates.findIndex(x => x.id === t.id);
-    if (idx >= 0) {
-      const updated = [...templates];
-      updated[idx] = t;
-      setTemplates(updated);
+    const apiData = templateToApiData(t);
+    if (t.id) {
+      // Update existing
+      updateMutation.mutate(
+        { id: t.id, ...apiData },
+        {
+          onSuccess: () => {
+            setEditingTemplate(null);
+            setActiveTab('templates');
+          },
+        }
+      );
     } else {
-      setTemplates(prev => [...prev, t]);
+      // Create new
+      createMutation.mutate(
+        apiData,
+        {
+          onSuccess: () => {
+            setEditingTemplate(null);
+            setActiveTab('templates');
+          },
+        }
+      );
     }
-    setEditingTemplate(null);
-    setActiveTab('templates');
+  };
+
+  const handleDelete = (id: string) => {
+    deleteMutation.mutate(id);
   };
 
   const handleBackFromBuilder = () => {
@@ -1751,8 +1879,8 @@ export function AdminCertificates() {
 
   const handleUseLibraryTemplate = (tpl: typeof TEMPLATE_LIBRARY[number]) => {
     const newTemplate: CertTemplate = {
-      id: `cert-tpl-${Date.now()}`,
-      tenantId: 'demo-tenant-1',
+      id: '',
+      tenantId,
       name: tpl.name,
       template: tpl.category.toLowerCase(),
       backgroundUrl: '',
@@ -1777,6 +1905,8 @@ export function AdminCertificates() {
     setActiveTab('builder');
   };
 
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+
   return (
     <div className="p-6">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -1800,15 +1930,17 @@ export function AdminCertificates() {
 
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
-            {activeTab === 'dashboard' && <StatsDashboard />}
+            {activeTab === 'dashboard' && (
+              certsLoading ? <StatsSkeleton /> : <StatsDashboard awards={awards} templates={templates} />
+            )}
             {activeTab === 'templates' && (
-              <TemplatesList templates={templates} onEdit={handleEdit} onCreateNew={handleCreateNew} />
+              <TemplatesList templates={templates} onEdit={handleEdit} onCreateNew={handleCreateNew} onDelete={handleDelete} isLoading={certsLoading} />
             )}
             {activeTab === 'library' && (
               <TemplateLibrary onUseTemplate={handleUseLibraryTemplate} />
             )}
             {activeTab === 'builder' && editingTemplate && (
-              <CertificateBuilder template={editingTemplate} onBack={handleBackFromBuilder} onSave={handleSave} />
+              <CertificateBuilder template={editingTemplate} onBack={handleBackFromBuilder} onSave={handleSave} isSaving={isSaving} />
             )}
             {activeTab === 'issued' && (
               <IssuedCertificatesTable />

@@ -66,6 +66,7 @@ import {
 import { useAppStore } from '@/store/app-store';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { slugify } from '@/lib/slugify';
+import { validateFields, required, minLength, positiveNumber } from '@/lib/validations';
 import type { Assessment, Question } from '@/types';
 
 // ---- Helper: Parse API assessment data ----
@@ -1140,8 +1141,46 @@ function AssessmentBuilder({
   const [bankDiffFilter, setBankDiffFilter] = useState<string>('all');
   const [bankCatFilter, setBankCatFilter] = useState<string>('all');
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const questions = form.questions ?? [];
+
+  const validate = (isPublish: boolean = false): boolean => {
+    const errs = validateFields({
+      title: [required(form.title, 'Title'), minLength(form.title, 3, 'Title')],
+      timeLimit: form.timeLimit ? [positiveNumber(String(form.timeLimit), 'Time limit')] : [],
+    });
+    // At least 1 question required to publish
+    if (isPublish && questions.length === 0) {
+      errs.questions = 'At least 1 question is required to publish';
+    }
+    // Check each question has points > 0
+    questions.forEach((q, i) => {
+      if (q.points <= 0) {
+        errs[`question_${i}_points`] = `Question ${i + 1} must have points > 0`;
+      }
+    });
+    setFormErrors(errs);
+    setTouched({ title: true, timeLimit: true });
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleBlur = (field: string) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+    const errs = validateFields({
+      title: [required(form.title, 'Title'), minLength(form.title, 3, 'Title')],
+      timeLimit: form.timeLimit ? [positiveNumber(String(form.timeLimit), 'Time limit')] : [],
+    });
+    setFormErrors(prev => {
+      const next = { ...prev };
+      if (touched[field] || errs[field]) {
+        next[field] = errs[field] || '';
+        if (!next[field]) delete next[field];
+      }
+      return next;
+    });
+  };
 
   const updateField = useCallback(<K extends keyof Assessment>(key: K, value: Assessment[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -1174,6 +1213,7 @@ function AssessmentBuilder({
 
   const saveQuestion = () => {
     if (!questionForm.question.trim()) return;
+    if (questionForm.points <= 0) return;
     const newQ: Question = {
       id: editingQuestionIdx !== null ? (questions[editingQuestionIdx]?.id ?? `q-${Date.now()}`) : `q-${Date.now()}`,
       assessmentId: form.id,
@@ -1286,10 +1326,10 @@ function AssessmentBuilder({
           <Button variant="outline" onClick={onBack} className="gap-2" disabled={isSaving}>
             <RotateCcw className="h-4 w-4" /> Cancel
           </Button>
-          <Button variant="outline" className="gap-2" onClick={() => onSave({ ...form, isPublished: false })} disabled={isSaving}>
+          <Button variant="outline" className="gap-2" onClick={() => { if (validate(false)) onSave({ ...form, isPublished: false }); }} disabled={isSaving}>
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Draft
           </Button>
-          <Button className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white gap-2 shadow-lg shadow-emerald-500/20" onClick={() => onSave({ ...form, isPublished: true })} disabled={isSaving}>
+          <Button className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white gap-2 shadow-lg shadow-emerald-500/20" onClick={() => { if (validate(true)) onSave({ ...form, isPublished: true }); }} disabled={isSaving}>
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Publish
           </Button>
         </div>
@@ -1359,7 +1399,8 @@ function AssessmentBuilder({
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="title">Title</Label>
-                <Input id="title" value={form.title} onChange={e => updateField('title', e.target.value)} placeholder="Assessment title" />
+                <Input id="title" value={form.title} onChange={e => updateField('title', e.target.value)} onBlur={() => handleBlur('title')} placeholder="Assessment title" className={formErrors.title ? 'border-destructive focus-visible:ring-destructive' : ''} />
+                {formErrors.title && <p className="text-sm text-destructive mt-1">{formErrors.title}</p>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
@@ -1414,7 +1455,8 @@ function AssessmentBuilder({
                 <Label htmlFor="timeLimit" className="flex items-center gap-1">
                   <Timer className="h-3 w-3" /> Time Limit (minutes)
                 </Label>
-                <Input id="timeLimit" type="number" min={0} placeholder="0 = no limit" value={form.timeLimit ?? ''} onChange={e => updateField('timeLimit', e.target.value ? Number(e.target.value) : undefined)} />
+                <Input id="timeLimit" type="number" min={0} placeholder="0 = no limit" value={form.timeLimit ?? ''} onChange={e => updateField('timeLimit', e.target.value ? Number(e.target.value) : undefined)} onBlur={() => handleBlur('timeLimit')} className={formErrors.timeLimit ? 'border-destructive focus-visible:ring-destructive' : ''} />
+                {formErrors.timeLimit && <p className="text-sm text-destructive mt-1">{formErrors.timeLimit}</p>}
               </div>
 
               <div className="flex items-center justify-between">
@@ -1493,6 +1535,11 @@ function AssessmentBuilder({
                   Questions ({questions.length})
                 </CardTitle>
                 <div className="flex items-center gap-2">
+                  {formErrors.questions && (
+                    <span className="text-xs text-destructive flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" /> {formErrors.questions}
+                    </span>
+                  )}
                   <Button size="sm" variant="outline" onClick={() => setShowQuestionBank(true)} className="gap-1.5">
                     <Database className="h-4 w-4" /> Import from Bank
                   </Button>
@@ -1869,7 +1916,9 @@ function QuestionRow({
   openEditQuestion: (i: number) => void;
   deleteQuestion: (i: number) => void;
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   return (
+    <>
     <motion.div
       layout
       initial={{ opacity: 0, x: -10 }}
@@ -1914,7 +1963,7 @@ function QuestionRow({
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" onClick={() => deleteQuestion(idx)}>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" onClick={() => setConfirmDelete(true)}>
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>
@@ -1923,6 +1972,19 @@ function QuestionRow({
         </TooltipProvider>
       </div>
     </motion.div>
+    <ConfirmDialog
+      open={confirmDelete}
+      onOpenChange={(open) => { if (!open) setConfirmDelete(false); }}
+      title="Delete Question"
+      description="Are you sure you want to delete this question? This action cannot be undone."
+      confirmLabel="Delete"
+      variant="destructive"
+      onConfirm={() => {
+        deleteQuestion(idx);
+        setConfirmDelete(false);
+      }}
+    />
+    </>
   );
 }
 

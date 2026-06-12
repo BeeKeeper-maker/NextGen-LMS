@@ -1,0 +1,2002 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useRef, useCallback } from 'react';
+     4→import { useRouter } from 'next/navigation';
+     5→import { useAppStore } from '@/store/app-store';
+     6→import { Button } from '@/components/ui/button';
+     7→import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+     8→import { Badge } from '@/components/ui/badge';
+     9→import { Input } from '@/components/ui/input';
+    10→
+    11→// Static marketing data - pricing plans are not user-generated, kept inline
+    12→const pricingPlans = [
+    13→  { id: 'starter', name: 'Starter', price: 49, currency: 'USD', period: '/month', description: 'Perfect for individual creators just getting started', features: ['Up to 3 courses', 'Up to 500 students', 'Basic community features', 'Email support', 'Standard certificates', '1 admin user'], highlighted: false, ctaText: 'Start Free Trial' },
+    14→  { id: 'professional', name: 'Professional', price: 97, currency: 'USD', period: '/month', description: 'For growing creators and small businesses', features: ['Unlimited courses', 'Up to 5,000 students', 'Advanced community & live cohorts', 'AI content generation', 'AI tutoring assistant', 'Custom certificates & branding', '0% transaction fees', 'Priority support', '5 admin/team users', 'Advanced analytics'], highlighted: true, ctaText: 'Start Free Trial' },
+    15→  { id: 'enterprise', name: 'Enterprise', price: 249, currency: 'USD', period: '/month', description: 'For organizations requiring full control and scale', features: ['Everything in Professional', 'Unlimited students', 'SSO / SAML authentication', 'Custom domain & full white-label', 'API access & webhooks', 'CRM integrations (Salesforce, HubSpot)', 'Dedicated account manager', 'SLA guarantee (99.99%)', 'Unlimited team users', 'Audit logs & compliance reports'], highlighted: false, ctaText: 'Contact Sales' },
+    16→];
+    17→
+    18→// Static marketing data - competitor comparison is not user-generated, kept inline
+    19→const competitorComparison = [
+    20→  { feature: 'Transaction Fees', nextgen: '0% on all plans', kajabi: '0%', teachable: 'Up to 10%', skool: '10% on Hobby', mightyNetworks: 'Up to 3%' },
+    21→  { feature: 'AI Content Generation', nextgen: true, kajabi: false, teachable: false, skool: false, mightyNetworks: false },
+    22→  { feature: 'AI Tutoring Assistant', nextgen: true, kajabi: false, teachable: false, skool: false, mightyNetworks: false },
+    23→  { feature: 'Native Community', nextgen: true, kajabi: true, teachable: false, skool: true, mightyNetworks: true },
+    24→  { feature: 'Assessment Engine', nextgen: true, kajabi: false, teachable: true, skool: false, mightyNetworks: false },
+    25→  { feature: 'Auto Certificates', nextgen: true, kajabi: false, teachable: true, skool: false, mightyNetworks: true },
+    26→  { feature: 'Multi-Currency', nextgen: true, kajabi: false, teachable: false, skool: false, mightyNetworks: false },
+    27→  { feature: 'White-Label Branding', nextgen: true, kajabi: 'Limited', teachable: false, skool: false, mightyNetworks: 'Partial' },
+    28→  { feature: 'Live Cohorts', nextgen: true, kajabi: true, teachable: false, skool: false, mightyNetworks: true },
+    29→  { feature: 'SSO / SAML', nextgen: true, kajabi: false, teachable: false, skool: false, mightyNetworks: false },
+    30→  { feature: 'Intrinsic Gamification', nextgen: true, kajabi: false, teachable: false, skool: 'Toxic mechanics', mightyNetworks: false },
+    31→  { feature: 'Entry Price', nextgen: '$49/mo', kajabi: '$149/mo', teachable: '$39/mo + fees', skool: '$99/mo', mightyNetworks: '$39/mo' },
+    32→];
+    33→
+    34→import {
+    35→  Sparkles,
+    36→  Bot,
+    37→  Users,
+    38→  ClipboardCheck,
+    39→  Award,
+    40→  Globe,
+    41→  Palette,
+    42→  BarChart3,
+    43→  Video,
+    44→  Shield,
+    45→  DollarSign,
+    46→  Languages,
+    47→  Check,
+    48→  X,
+    49→  Menu,
+    50→  ChevronRight,
+    51→  ChevronLeft,
+    52→  Star,
+    53→  ArrowRight,
+    54→  ArrowUp,
+    55→  Twitter,
+    56→  Linkedin,
+    57→  Github,
+    58→  Youtube,
+    59→  GraduationCap,
+    60→  Zap,
+    61→  Play,
+    62→  Mail,
+    63→  MessageCircle,
+    64→  Heart,
+    65→  Pin,
+    66→  Eye,
+    67→  Clock,
+    68→  MessageSquare,
+    69→  TrendingUp,
+    70→  UserPlus,
+    71→  Trophy,
+    72→  BookOpen,
+    73→  Lightbulb,
+    74→  Target,
+    75→  Rocket,
+    76→  Crown,
+    77→  Minus,
+    78→} from 'lucide-react';
+    79→import { motion, AnimatePresence, useInView, useScroll, useTransform } from 'framer-motion';
+    80→
+    81→// ============================================================
+    82→// Feature Definitions (with category and tooltip)
+    83→// ============================================================
+    84→const features = [
+    85→  { icon: Sparkles, title: 'AI Content Generation', description: 'Generate course outlines, quizzes, and lesson content with advanced AI. Save hours of creation time.', category: 'AI', featured: true, tooltip: 'Powered by GPT-4 with custom training on educational content' },
+    86→  { icon: Bot, title: 'AI Tutoring Assistant', description: '24/7 intelligent tutor that answers student questions, explains concepts, and adapts to learning styles.', category: 'AI', featured: false, tooltip: 'Context-aware AI that references your specific course material' },
+    87→  { icon: Users, title: 'Integrated Community', description: 'Built-in discussions, live cohorts, and peer learning. No need for separate community tools.', category: 'Community', featured: false, tooltip: 'Forums, threads, DMs, and live events all in one place' },
+    88→  { icon: ClipboardCheck, title: 'Assessment Engine', description: 'Quizzes, assignments, peer reviews, and coding challenges with auto-grading and analytics.', category: 'Analytics', featured: false, tooltip: '15+ question types with AI-powered auto-grading' },
+    89→  { icon: Award, title: 'Auto Certificates', description: 'Automatically issue branded certificates on course completion with verification codes.', category: 'Analytics', featured: false, tooltip: 'Customizable templates with QR code verification' },
+    90→  { icon: Globe, title: 'Multi-Currency Checkout', description: 'Sell in 50+ currencies with localized pricing. Support for Stripe, PayPal, and more.', category: 'Commerce', featured: false, tooltip: 'Dynamic currency conversion with PPP pricing support' },
+    91→  { icon: Palette, title: 'White-Label Branding', description: 'Full brand customization — colors, fonts, domain, and logos. Your platform, your identity.', category: 'Commerce', featured: false, tooltip: 'Custom CSS, domain mapping, and complete visual control' },
+    92→  { icon: BarChart3, title: 'Advanced Analytics', description: 'Deep insights into learner engagement, revenue trends, and completion funnels.', category: 'Analytics', featured: false, tooltip: 'Real-time dashboards with exportable reports' },
+    93→  { icon: Video, title: 'Live Cohorts', description: 'Schedule and run live sessions with built-in video, chat, and attendance tracking.', category: 'Community', featured: false, tooltip: 'HD video with breakout rooms and recording' },
+    94→  { icon: Shield, title: 'RBAC Governance', description: 'Role-based access control for admins, instructors, creators, and learners.', category: 'Analytics', featured: false, tooltip: 'Granular permissions with audit trails' },
+    95→  { icon: DollarSign, title: 'Zero Transaction Fees', description: 'Keep 100% of your revenue. No hidden fees, no transaction taxes on any plan.', category: 'Commerce', featured: false, tooltip: 'No processing fees, no hidden charges, ever' },
+    96→  { icon: Languages, title: 'Global i18n', description: 'Multi-language support for global audiences. Localize your entire platform with ease.', category: 'Community', featured: false, tooltip: '40+ languages with automatic detection' },
+    97→];
+    98→
+    99→// ============================================================
+   100→// Testimonials (with star ratings and role badges)
+   101→// ============================================================
+   102→const testimonials = [
+   103→  {
+   104→    name: 'Dr. Sarah Chen',
+   105→    role: 'CEO, TechAcademy',
+   106→    company: 'TechAcademy',
+   107→    quote: 'NextGen LMS transformed our online education business. The AI tutoring alone increased student engagement by 40%. Zero transaction fees saved us over $15K in the first year.',
+   108→    avatar: 'SC',
+   109→    rating: 5,
+   110→    badge: 'Enterprise',
+   111→  },
+   112→  {
+   113→    name: 'Marcus Johnson',
+   114→    role: 'Course Creator, 50K+ Students',
+   115→    company: 'Independent',
+   116→    quote: 'I switched from Kajabi and never looked back. The built-in community features and assessment engine are game-changers. My students love the interactive experience.',
+   117→    avatar: 'MJ',
+   118→    rating: 5,
+   119→    badge: 'Professional',
+   120→  },
+   121→  {
+   122→    name: 'Priya Sharma',
+   123→    role: 'Head of Learning, Fortune 500',
+   124→    company: 'Fortune 500',
+   125→    quote: 'The white-label branding and SSO integration made it seamless to deploy across our organization. The analytics give us insights we never had before.',
+   126→    avatar: 'PS',
+   127→    rating: 5,
+   128→    badge: 'Enterprise',
+   129→  },
+   130→  {
+   131→    name: 'Alex Rivera',
+   132→    role: 'Solo Creator, $200K+ Revenue',
+   133→    company: 'Independent',
+   134→    quote: 'As a solo creator, the AI content generation saves me 10+ hours per week. The zero transaction fees mean I keep more of what I earn. Absolute no-brainer.',
+   135→    avatar: 'AR',
+   136→    rating: 5,
+   137→    badge: 'Professional',
+   138→  },
+   139→  {
+   140→    name: 'Emma Thompson',
+   141→    role: 'Director, Online University',
+   142→    company: 'Online University',
+   143→    quote: 'We migrated 200+ courses to NextGen LMS. The multi-currency checkout and certificate automation made scaling globally effortless. The support team is phenomenal.',
+   144→    avatar: 'ET',
+   145→    rating: 5,
+   146→    badge: 'Enterprise',
+   147→  },
+   148→];
+   149→
+   150→// ============================================================
+   151→// Community Preview Posts
+   152→// ============================================================
+   153→const communityPreviewPosts = [
+   154→  {
+   155→    name: 'Jamie Rodriguez',
+   156→    initials: 'JR',
+   157→    color: 'bg-emerald-500',
+   158→    timestamp: '2 hours ago',
+   159→    content: 'Just completed the React Masterclass! The new hooks module is incredible. Anyone else working through the final project?',
+   160→    likes: 24,
+   161→    comments: 8,
+   162→    pinned: true,
+   163→  },
+   164→  {
+   165→    name: 'Aisha Patel',
+   166→    initials: 'AP',
+   167→    color: 'bg-violet-500',
+   168→    timestamp: '5 hours ago',
+   169→    content: 'Can someone explain the difference between server components and client components in Next.js? The docs are a bit confusing on this...',
+   170→    likes: 12,
+   171→    comments: 15,
+   172→    pinned: false,
+   173→  },
+   174→  {
+   175→    name: 'David Kim',
+   176→    initials: 'DK',
+   177→    color: 'bg-amber-500',
+   178→    timestamp: '8 hours ago',
+   179→    content: 'Pro tip: Use the AI tutor to generate practice quizzes before exams. It creates questions based on your weak areas. Game changer!',
+   180→    likes: 47,
+   181→    comments: 21,
+   182→    pinned: false,
+   183→  },
+   184→  {
+   185→    name: 'Sarah Mitchell',
+   186→    initials: 'SM',
+   187→    color: 'bg-sky-500',
+   188→    timestamp: '1 day ago',
+   189→    content: 'My cohort starts the live session tomorrow on Advanced TypeScript patterns. So excited! Who else is joining?',
+   190→    likes: 18,
+   191→    comments: 6,
+   192→    pinned: false,
+   193→  },
+   194→];
+   195→
+   196→// ============================================================
+   197→// Integrations Data
+   198→// ============================================================
+   199→const integrations = [
+   200→  { name: 'Stripe', icon: DollarSign, color: 'text-violet-600 bg-violet-50 dark:bg-violet-950/40 dark:text-violet-400' },
+   201→  { name: 'PayPal', icon: DollarSign, color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/40 dark:text-blue-400' },
+   202→  { name: 'Zoom', icon: Video, color: 'text-sky-600 bg-sky-50 dark:bg-sky-950/40 dark:text-sky-400' },
+   203→  { name: 'Google Analytics', icon: BarChart3, color: 'text-orange-600 bg-orange-50 dark:bg-orange-950/40 dark:text-orange-400' },
+   204→  { name: 'HubSpot', icon: Users, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-400' },
+   205→  { name: 'Salesforce', icon: Globe, color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/40 dark:text-blue-400' },
+   206→  { name: 'Slack', icon: MessageCircle, color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/40 dark:text-purple-400' },
+   207→  { name: 'Zapier', icon: Zap, color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-400' },
+   208→];
+   209→
+   210→// ============================================================
+   211→// Animation Variants
+   212→// ============================================================
+   213→const fadeInUp = {
+   214→  hidden: { opacity: 0, y: 30 },
+   215→  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } },
+   216→};
+   217→
+   218→const staggerContainer = {
+   219→  hidden: {},
+   220→  visible: { transition: { staggerChildren: 0.1 } },
+   221→};
+   222→
+   223→const staggerContainerSlow = {
+   224→  hidden: {},
+   225→  visible: { transition: { staggerChildren: 0.15 } },
+   226→};
+   227→
+   228→// Section reveal variant — each section fades + slides in
+   229→const sectionReveal = {
+   230→  hidden: { opacity: 0, y: 40 },
+   231→  visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: 'easeOut' } },
+   232→};
+   233→
+   234→// ============================================================
+   235→// Shimmer Text Component (for hero tagline)
+   236→// ============================================================
+   237→function ShimmerText({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+   238→  return (
+   239→    <span className={`relative inline-block ${className}`}>
+   240→      <span className="relative z-10">{children}</span>
+   241→      <span
+   242→        className="absolute inset-0 z-0 bg-gradient-to-r from-transparent via-white/30 to-transparent dark:via-white/10 animate-shimmer bg-[length:200%_100%]"
+   243→        aria-hidden="true"
+   244→      />
+   245→      <style jsx>{`
+   246→        @keyframes shimmer {
+   247→          0% { background-position: -200% 0; }
+   248→          100% { background-position: 200% 0; }
+   249→        }
+   250→        .animate-shimmer {
+   251→          animation: shimmer 3s ease-in-out infinite;
+   252→        }
+   253→      `}</style>
+   254→    </span>
+   255→  );
+   256→}
+   257→
+   258→// ============================================================
+   259→// Typing Animation Component
+   260→// ============================================================
+   261→function TypingText({ text, speed = 35, delay = 0 }: { text: string; speed?: number; delay?: number }) {
+   262→  const [displayed, setDisplayed] = useState('');
+   263→  const [started, setStarted] = useState(false);
+   264→
+   265→  useEffect(() => {
+   266→    const timer = setTimeout(() => setStarted(true), delay);
+   267→    return () => clearTimeout(timer);
+   268→  }, [delay]);
+   269→
+   270→  useEffect(() => {
+   271→    if (!started) return;
+   272→    if (displayed.length < text.length) {
+   273→      const timer = setTimeout(() => {
+   274→        setDisplayed(text.slice(0, displayed.length + 1));
+   275→      }, speed);
+   276→      return () => clearTimeout(timer);
+   277→    }
+   278→  }, [displayed, text, speed, started]);
+   279→
+   280→  return (
+   281→    <span>
+   282→      {displayed}
+   283→      {displayed.length < text.length && started && (
+   284→        <span className="inline-block w-0.5 h-5 bg-emerald-500 ml-0.5 animate-pulse align-middle" />
+   285→      )}
+   286→    </span>
+   287→  );
+   288→}
+   289→
+   290→// ============================================================
+   291→// Rotating Text Component (for hero subtitle cycling)
+   292→// ============================================================
+   293→function RotatingText({ phrases, interval = 3000 }: { phrases: string[]; interval?: number }) {
+   294→  const [index, setIndex] = useState(0);
+   295→  const [direction, setDirection] = useState(1);
+   296→
+   297→  useEffect(() => {
+   298→    const timer = setInterval(() => {
+   299→      setDirection(1);
+   300→      setIndex((prev) => (prev + 1) % phrases.length);
+   301→    }, interval);
+   302→    return () => clearInterval(timer);
+   303→  }, [phrases.length, interval]);
+   304→
+   305→  return (
+   306→    <AnimatePresence mode="wait" custom={direction}>
+   307→      <motion.span
+   308→        key={phrases[index]}
+   309→        custom={direction}
+   310→        initial={{ y: 20, opacity: 0 }}
+   311→        animate={{ y: 0, opacity: 1 }}
+   312→        exit={{ y: -20, opacity: 0 }}
+   313→        transition={{ duration: 0.4, ease: 'easeInOut' }}
+   314→        className="inline-block bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 bg-clip-text text-transparent font-semibold"
+   315→      >
+   316→        {phrases[index]}
+   317→      </motion.span>
+   318→    </AnimatePresence>
+   319→  );
+   320→}
+   321→
+   322→// ============================================================
+   323→// Animated Grid Background
+   324→// ============================================================
+   325→function GridBackground() {
+   326→  return (
+   327→    <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-[0.03]">
+   328→      <svg width="100%" height="100%">
+   329→        <defs>
+   330→          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+   331→            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="1" />
+   332→          </pattern>
+   333→        </defs>
+   334→        <rect width="100%" height="100%" fill="url(#grid)" className="text-foreground" />
+   335→      </svg>
+   336→    </div>
+   337→  );
+   338→}
+   339→
+   340→// ============================================================
+   341→// Noise / Grain Texture Overlay
+   342→// ============================================================
+   343→function GrainOverlay() {
+   344→  return (
+   345→    <div className="absolute inset-0 pointer-events-none z-10 opacity-[0.035]">
+   346→      <svg width="100%" height="100%">
+   347→        <filter id="grain">
+   348→          <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
+   349→        </filter>
+   350→        <rect width="100%" height="100%" filter="url(#grain)" />
+   351→      </svg>
+   352→    </div>
+   353→  );
+   354→}
+   355→
+   356→// ============================================================
+   357→// Constellation Particles — dots connected with lines
+   358→// ============================================================
+   359→const constellationData = Array.from({ length: 18 }, (_, i) => ({
+   360→  id: i,
+   361→  x: ((i * 17 + 5) % 95) + 2,
+   362→  y: ((i * 23 + 11) % 90) + 5,
+   363→  size: ((i * 3 + 2) % 3) + 2,
+   364→  duration: 8 + ((i * 7 + 3) % 8),
+   365→  delay: ((i * 5 + 1) % 6),
+   366→  driftX: ((i * 13 % 7) - 3) * 8,
+   367→  driftY: ((i * 11 % 5) - 2) * 6,
+   368→}));
+   369→
+   370→// Pre-compute constellation lines (deterministic, no state needed)
+   371→const constellationLines = constellationData.flatMap((p1, i) =>
+   372→  constellationData.slice(i + 1).flatMap((p2) => {
+   373→    const dx = p1.x - p2.x;
+   374→    const dy = p1.y - p2.y;
+   375→    const dist = Math.sqrt(dx * dx + dy * dy);
+   376→    if (dist < 25) {
+   377→      return [{ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, opacity: Math.max(0, 1 - dist / 25) * 0.15 }];
+   378→    }
+   379→    return [];
+   380→  })
+   381→);
+   382→
+   383→function ConstellationParticles() {
+   384→  return (
+   385→    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+   386→      {/* SVG lines layer */}
+   387→      <svg className="absolute inset-0 w-full h-full">
+   388→        {constellationLines.map((line, i) => (
+   389→          <line
+   390→            key={`line-${i}`}
+   391→            x1={`${line.x1}%`}
+   392→            y1={`${line.y1}%`}
+   393→            x2={`${line.x2}%`}
+   394→            y2={`${line.y2}%`}
+   395→            stroke="currentColor"
+   396→            strokeWidth="0.5"
+   397→            className="text-emerald-500"
+   398→            style={{ opacity: line.opacity }}
+   399→          />
+   400→        ))}
+   401→      </svg>
+   402→      {/* Dots layer */}
+   403→      {constellationData.map((p) => (
+   404→        <motion.div
+   405→          key={p.id}
+   406→          className="absolute rounded-full bg-emerald-400/30 shadow-[0_0_4px_rgba(52,211,153,0.3)]"
+   407→          style={{
+   408→            width: p.size,
+   409→            height: p.size,
+   410→            left: `${p.x}%`,
+   411→            top: `${p.y}%`,
+   412→          }}
+   413→          animate={{
+   414→            x: [0, p.driftX, 0],
+   415→            y: [0, p.driftY, 0],
+   416→            opacity: [0.3, 0.7, 0.3],
+   417→          }}
+   418→          transition={{
+   419→            duration: p.duration,
+   420→            repeat: Infinity,
+   421→            delay: p.delay,
+   422→            ease: 'easeInOut',
+   423→          }}
+   424→        />
+   425→      ))}
+   426→    </div>
+   427→  );
+   428→}
+   429→
+   430→// ============================================================
+   431→// Floating Particles — deterministic seeded positions to avoid hydration mismatch
+   432→// ============================================================
+   433→const particleData = Array.from({ length: 20 }, (_, i) => ({
+   434→  width: ((i * 7 + 3) % 5) + 2,
+   435→  height: ((i * 5 + 2) % 5) + 2,
+   436→  left: `${((i * 13 + 7) % 100)}%`,
+   437→  top: `${((i * 17 + 11) % 100)}%`,
+   438→  duration: 4 + ((i * 3 + 1) % 5),
+   439→  delay: ((i * 2 + 3) % 4),
+   440→}));
+   441→
+   442→function FloatingParticles() {
+   443→  return (
+   444→    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+   445→      {particleData.map((p, i) => (
+   446→        <motion.div
+   447→          key={i}
+   448→          className="absolute rounded-full bg-emerald-500/20"
+   449→          style={{
+   450→            width: p.width,
+   451→            height: p.height,
+   452→            left: p.left,
+   453→            top: p.top,
+   454→          }}
+   455→          animate={{
+   456→            y: [0, -30, 0],
+   457→            opacity: [0.2, 0.6, 0.2],
+   458→          }}
+   459→          transition={{
+   460→            duration: p.duration,
+   461→            repeat: Infinity,
+   462→            delay: p.delay,
+   463→            ease: 'easeInOut',
+   464→          }}
+   465→        />
+   466→      ))}
+   467→    </div>
+   468→  );
+   469→}
+   470→
+   471→// ============================================================
+   472→// Parallax Orbs (Hero background orbs with parallax scroll)
+   473→// ============================================================
+   474→function ParallaxOrbs() {
+   475→  const ref = useRef<HTMLDivElement>(null);
+   476→  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
+   477→  const y1 = useTransform(scrollYProgress, [0, 1], [0, 150]);
+   478→  const y2 = useTransform(scrollYProgress, [0, 1], [0, -100]);
+   479→  const y3 = useTransform(scrollYProgress, [0, 1], [0, 80]);
+   480→
+   481→  return (
+   482→    <div ref={ref} className="absolute inset-0 overflow-hidden pointer-events-none">
+   483→      <motion.div
+   484→        className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl"
+   485→        style={{ y: y1 }}
+   486→      />
+   487→      <motion.div
+   488→        className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-violet-500/10 blur-3xl"
+   489→        style={{ y: y2 }}
+   490→      />
+   491→      <motion.div
+   492→        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[600px] w-[600px] rounded-full bg-slate-500/5 blur-3xl"
+   493→        style={{ y: y3 }}
+   494→      />
+   495→    </div>
+   496→  );
+   497→}
+   498→
+   499→// ============================================================
+   500→// Floating Dashboard Mockup (Hero) — with 3D perspective tilt on mouse move
+   501→// ============================================================
+   502→function DashboardMockup() {
+   503→  const mockupRef = useRef<HTMLDivElement>(null);
+   504→  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
+   505→
+   506→  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+   507→    if (!mockupRef.current) return;
+   508→    const rect = mockupRef.current.getBoundingClientRect();
+   509→    const x = (e.clientX - rect.left) / rect.width - 0.5;
+   510→    const y = (e.clientY - rect.top) / rect.height - 0.5;
+   511→    setTilt({ rotateX: -y * 6, rotateY: x * 6 });
+   512→  }, []);
+   513→
+   514→  const handleMouseLeave = useCallback(() => {
+   515→    setTilt({ rotateX: 0, rotateY: 0 });
+   516→  }, []);
+   517→
+   518→  return (
+   519→    <motion.div
+   520→      className="relative mx-auto mt-12 max-w-4xl"
+   521→      initial={{ opacity: 0, y: 40 }}
+   522→      animate={{ opacity: 1, y: 0 }}
+   523→      transition={{ duration: 1, delay: 0.6, ease: 'easeOut' }}
+   524→    >
+   525→      <motion.div
+   526→        animate={{ y: [0, -8, 0] }}
+   527→        transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+   528→        className="relative"
+   529→      >
+   530→        <div
+   531→          ref={mockupRef}
+   532→          onMouseMove={handleMouseMove}
+   533→          onMouseLeave={handleMouseLeave}
+   534→          style={{
+   535→            perspective: 1200,
+   536→          }}
+   537→        >
+   538→          <motion.div
+   539→            animate={{
+   540→              rotateX: tilt.rotateX,
+   541→              rotateY: tilt.rotateY,
+   542→            }}
+   543→            transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+   544→            style={{ transformStyle: 'preserve-3d' }}
+   545→          >
+   546→            {/* Glow effect behind mockup */}
+   547→            <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/20 via-violet-500/20 to-emerald-500/20 rounded-2xl blur-2xl" />
+   548→
+   549→            {/* Mockup Card */}
+   550→            <div className="relative rounded-xl border border-border/60 bg-card/90 backdrop-blur-sm shadow-2xl overflow-hidden">
+   551→              {/* Window chrome */}
+   552→              <div className="flex items-center gap-2 px-4 py-3 border-b border-border/40 bg-muted/30">
+   553→                <div className="flex gap-1.5">
+   554→                  <div className="h-3 w-3 rounded-full bg-red-400" />
+   555→                  <div className="h-3 w-3 rounded-full bg-yellow-400" />
+   556→                  <div className="h-3 w-3 rounded-full bg-green-400" />
+   557→                </div>
+   558→                <div className="flex-1 flex justify-center">
+   559→                  <div className="h-6 w-64 rounded-md bg-muted/60 flex items-center justify-center">
+   560→                    <span className="text-[10px] text-muted-foreground">academy.nextgen-lms.com/dashboard</span>
+   561→                  </div>
+   562→                </div>
+   563→              </div>
+   564→
+   565→              {/* Dashboard content mockup */}
+   566→              <div className="p-4 space-y-3">
+   567→                {/* Sidebar + main */}
+   568→                <div className="flex gap-3">
+   569→                  {/* Mini sidebar */}
+   570→                  <div className="w-12 shrink-0 space-y-2">
+   571→                    <div className="h-8 w-8 rounded-lg bg-emerald-500/20 mx-auto" />
+   572→                    {[1, 2, 3, 4].map((n) => (
+   573→                      <div key={n} className="h-6 w-8 rounded bg-muted/60 mx-auto" />
+   574→                    ))}
+   575→                  </div>
+   576→                  {/* Main area */}
+   577→                  <div className="flex-1 space-y-3">
+   578→                    {/* KPI row */}
+   579→                    <div className="grid grid-cols-4 gap-2">
+   580→                      {[
+   581→                        { label: 'Revenue', value: '$47.8K', color: 'bg-emerald-500/10' },
+   582→                        { label: 'Learners', value: '3,847', color: 'bg-violet-500/10' },
+   583→                        { label: 'Completion', value: '72.4%', color: 'bg-amber-500/10' },
+   584→                        { label: 'Engagement', value: '89.3%', color: 'bg-sky-500/10' },
+   585→                      ].map((kpi) => (
+   586→                        <div key={kpi.label} className={`rounded-lg ${kpi.color} p-2.5`}>
+   587→                          <p className="text-[9px] text-muted-foreground">{kpi.label}</p>
+   588→                          <p className="text-sm font-bold text-foreground">{kpi.value}</p>
+   589→                        </div>
+   590→                      ))}
+   591→                    </div>
+   592→                    {/* Chart area */}
+   593→                    <div className="h-20 rounded-lg bg-muted/30 border border-border/30 flex items-end p-2 gap-0.5">
+   594→                      {[40, 65, 45, 80, 55, 90, 70, 85, 60, 95, 75, 88].map((h, i) => (
+   595→                        <motion.div
+   596→                          key={i}
+   597→                          className="flex-1 rounded-t bg-gradient-to-t from-emerald-500 to-emerald-400"
+   598→                          initial={{ height: 0 }}
+   599→                          animate={{ height: `${h}%` }}
+   600→                          transition={{ duration: 0.6, delay: 1 + i * 0.05, ease: 'easeOut' }}
+   601→                        />
+   602→                      ))}
+   603→                    </div>
+   604→                  </div>
+   605→                </div>
+   606→              </div>
+   607→            </div>
+   608→          </motion.div>
+   609→        </div>
+   610→      </motion.div>
+   611→    </motion.div>
+   612→  );
+   613→}
+   614→
+   615→// ============================================================
+   616→// AI Live Demo Preview
+   617→// ============================================================
+   618→function AILiveDemo() {
+   619→  const [currentLine, setCurrentLine] = useState(0);
+   620→  const [displayText, setDisplayText] = useState('');
+   621→  const lines = [
+   622→    'Module 1: React Fundamentals & JSX',
+   623→    'Module 2: State Management with Hooks',
+   624→    'Module 3: Server Components & RSC',
+   625→    'Module 4: API Routes & Data Fetching',
+   626→    'Module 5: Authentication & Authorization',
+   627→  ];
+   628→
+   629→  useEffect(() => {
+   630→    if (currentLine >= lines.length) {
+   631→      const resetTimer = setTimeout(() => {
+   632→        setCurrentLine(0);
+   633→        setDisplayText('');
+   634→      }, 3000);
+   635→      return () => clearTimeout(resetTimer);
+   636→    }
+   637→
+   638→    const line = lines[currentLine];
+   639→    let charIndex = 0;
+   640→    setDisplayText('');
+   641→
+   642→    const typeTimer = setInterval(() => {
+   643→      if (charIndex < line.length) {
+   644→        setDisplayText(line.slice(0, charIndex + 1));
+   645→        charIndex++;
+   646→      } else {
+   647→        clearInterval(typeTimer);
+   648→        setTimeout(() => setCurrentLine((prev) => prev + 1), 800);
+   649→      }
+   650→    }, 40);
+   651→
+   652→    return () => clearInterval(typeTimer);
+   653→  }, [currentLine]);
+   654→
+   655→  return (
+   656→    <Card className="border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50/50 to-emerald-50/50 dark:from-violet-950/30 dark:to-emerald-950/30">
+   657→      <CardHeader className="pb-3">
+   658→        <div className="flex items-center gap-2">
+   659→          <div className="h-8 w-8 rounded-lg bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center">
+   660→            <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+   661→          </div>
+   662→          <div>
+   663→            <CardTitle className="text-sm font-semibold">AI Course Generator</CardTitle>
+   664→            <CardDescription className="text-xs">Watch AI generate a course outline...</CardDescription>
+   665→          </div>
+   666→        </div>
+   667→      </CardHeader>
+   668→      <CardContent>
+   669→        <div className="rounded-lg bg-card/80 border border-border/40 p-3 font-mono text-xs space-y-1.5">
+   670→          {lines.slice(0, currentLine).map((line, i) => (
+   671→            <motion.div
+   672→              key={i}
+   673→              initial={{ opacity: 0, x: -10 }}
+   674→              animate={{ opacity: 1, x: 0 }}
+   675→              className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400"
+   676→            >
+   677→              <Check className="h-3 w-3 shrink-0" />
+   678→              <span>{line}</span>
+   679→            </motion.div>
+   680→          ))}
+   681→          {currentLine < lines.length && (
+   682→            <div className="flex items-center gap-2 text-foreground">
+   683→              <span className="text-violet-500 shrink-0">{'>'}</span>
+   684→              <span>
+   685→                {displayText}
+   686→                <span className="inline-block w-1.5 h-3.5 bg-violet-500 ml-0.5 animate-pulse align-middle" />
+   687→              </span>
+   688→            </div>
+   689→          )}
+   690→          {currentLine >= lines.length && (
+   691→            <motion.div
+   692→              initial={{ opacity: 0 }}
+   693→              animate={{ opacity: 1 }}
+   694→              className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400"
+   695→            >
+   696→              <Check className="h-3 w-3 shrink-0" />
+   697→              <span className="font-semibold">Course outline generated! 5 modules ready.</span>
+   698→            </motion.div>
+   699→          )}
+   700→        </div>
+   701→      </CardContent>
+   702→    </Card>
+   703→  );
+   704→}
+   705→
+   706→// ============================================================
+   707→// Animated Counter Hook
+   708→// ============================================================
+   709→function useAnimatedCounter(target: number, duration: number = 800) {
+   710→  const [count, setCount] = useState(0);
+   711→  const prevTarget = useRef(0);
+   712→
+   713→  useEffect(() => {
+   714→    if (target === prevTarget.current) return;
+   715→    prevTarget.current = target;
+   716→
+   717→    const start = count;
+   718→    const diff = target - start;
+   719→    const startTime = performance.now();
+   720→
+   721→    const animate = (now: number) => {
+   722→      const elapsed = now - startTime;
+   723→      const progress = Math.min(elapsed / duration, 1);
+   724→      // easeOutCubic
+   725→      const eased = 1 - Math.pow(1 - progress, 3);
+   726→      setCount(Math.round(start + diff * eased));
+   727→      if (progress < 1) {
+   728→        requestAnimationFrame(animate);
+   729→      }
+   730→    };
+   731→
+   732→    requestAnimationFrame(animate);
+   733→  }, [target, duration]);
+   734→
+   735→  return count;
+   736→}
+   737→
+   738→// ============================================================
+   739→// Savings Calculator (with animated counter)
+   740→// ============================================================
+   741→function SavingsCalculator() {
+   742→  const [revenue, setRevenue] = useState(5000);
+   743→  const teachableFee = revenue * 0.05 + 59;
+   744→  const nextgenFee = 0;
+   745→  const savings = Math.round(teachableFee - nextgenFee);
+   746→  const animatedSavings = useAnimatedCounter(savings, 600);
+   747→
+   748→  return (
+   749→    <Card className="border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50/50 to-slate-50/50 dark:from-emerald-950/30 dark:to-slate-950/30 h-full">
+   750→      <CardHeader className="pb-3">
+   751→        <CardTitle className="text-base flex items-center gap-2">
+   752→          <DollarSign className="h-5 w-5 text-emerald-600" />
+   753→          How much would you save?
+   754→        </CardTitle>
+   755→      </CardHeader>
+   756→      <CardContent className="space-y-4">
+   757→        <div>
+   758→          <div className="flex items-center justify-between mb-2">
+   759→            <span className="text-sm text-muted-foreground">Monthly Revenue</span>
+   760→            <span className="text-lg font-bold text-foreground">${revenue.toLocaleString()}</span>
+   761→          </div>
+   762→          <input
+   763→            type="range"
+   764→            min={500}
+   765→            max={50000}
+   766→            step={500}
+   767→            value={revenue}
+   768→            onChange={(e) => setRevenue(Number(e.target.value))}
+   769→            className="w-full h-2 rounded-full appearance-none cursor-pointer accent-emerald-600 relative"
+   770→            style={{
+   771→              background: `linear-gradient(to right, #10b981 0%, #8b5cf6 ${((revenue - 500) / (50000 - 500)) * 100}%, hsl(var(--muted)) ${((revenue - 500) / (50000 - 500)) * 100}%, hsl(var(--muted)) 100%)`,
+   772→            }}
+   773→          />
+   774→          <div className="flex justify-between text-xs text-muted-foreground mt-1">
+   775→            <span>$500</span>
+   776→            <span>$50,000</span>
+   777→          </div>
+   778→        </div>
+   779→
+   780→        <div className="space-y-2">
+   781→          <motion.div
+   782→            className="flex items-center justify-between p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200/50 dark:border-red-800/50"
+   783→            whileHover={{ scale: 1.02 }}
+   784→            transition={{ duration: 0.15 }}
+   785→          >
+   786→            <span className="text-sm text-red-700 dark:text-red-400">With Teachable</span>
+   787→            <span className="font-bold text-red-600 dark:text-red-400">${Math.round(teachableFee).toLocaleString()}/mo in fees</span>
+   788→          </motion.div>
+   789→          <motion.div
+   790→            className="flex items-center justify-between p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/50"
+   791→            whileHover={{ scale: 1.02 }}
+   792→            transition={{ duration: 0.15 }}
+   793→          >
+   794→            <span className="text-sm text-emerald-700 dark:text-emerald-400">With NextGen</span>
+   795→            <span className="font-bold text-emerald-600 dark:text-emerald-400">$0/mo in fees</span>
+   796→          </motion.div>
+   797→        </div>
+   798→
+   799→        <motion.div
+   800→          className="text-center p-3 rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 text-white"
+   801→          key={animatedSavings}
+   802→          animate={{ scale: [1, 1.03, 1] }}
+   803→          transition={{ duration: 0.3 }}
+   804→        >
+   805→          <p className="text-xs text-emerald-100">You save</p>
+   806→          <p className="text-2xl font-bold">${animatedSavings.toLocaleString()}/month</p>
+   807→        </motion.div>
+   808→      </CardContent>
+   809→    </Card>
+   810→  );
+   811→}
+   812→
+   813→// ============================================================
+   814→// Sparkle Particles (for "2 months free" badge)
+   815→// ============================================================
+   816→function SparkleParticles() {
+   817→  const sparkles = Array.from({ length: 6 }, (_, i) => ({
+   818→    x: ((i * 17 + 5) % 30) - 15,
+   819→    y: ((i * 13 + 3) % 20) - 10,
+   820→    size: 2 + (i % 3),
+   821→    delay: (i * 0.4) % 2,
+   822→    duration: 1.5 + (i % 3) * 0.5,
+   823→  }));
+   824→
+   825→  return (
+   826→    <span className="relative inline-flex">
+   827→      {sparkles.map((s, i) => (
+   828→        <motion.span
+   829→          key={i}
+   830→          className="absolute pointer-events-none"
+   831→          style={{
+   832→            left: `calc(50% + ${s.x}px)`,
+   833→            top: `calc(50% + ${s.y}px)`,
+   834→            width: s.size,
+   835→            height: s.size,
+   836→          }}
+   837→          animate={{
+   838→            opacity: [0, 1, 0],
+   839→            scale: [0.5, 1.2, 0.5],
+   840→          }}
+   841→          transition={{
+   842→            duration: s.duration,
+   843→            repeat: Infinity,
+   844→            delay: s.delay,
+   845→            ease: 'easeInOut',
+   846→          }}
+   847→        >
+   848→          <span className="block w-full h-full rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.6)]" />
+   849→        </motion.span>
+   850→      ))}
+   851→    </span>
+   852→  );
+   853→}
+   854→
+   855→// ============================================================
+   856→// Animated Border Glow Card (Pulsing for "Most Popular")
+   857→// ============================================================
+   858→function GlowBorderCard({ children, highlighted }: { children: React.ReactNode; highlighted: boolean }) {
+   859→  if (!highlighted) return <>{children}</>;
+   860→
+   861→  return (
+   862→    <div className="relative group">
+   863→      {/* Pulsing glow border */}
+   864→      <motion.div
+   865→        className="absolute -inset-[2px] rounded-xl bg-gradient-to-r from-emerald-500 via-violet-500 to-emerald-500 opacity-75 blur-[1px]"
+   866→        animate={{
+   867→          backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
+   868→          opacity: [0.5, 0.85, 0.5],
+   869→        }}
+   870→        transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+   871→        style={{ backgroundSize: '200% 200%' }}
+   872→      />
+   873→      {/* Outer glow pulse */}
+   874→      <motion.div
+   875→        className="absolute -inset-3 rounded-2xl bg-emerald-500/10"
+   876→        animate={{ opacity: [0.2, 0.5, 0.2], scale: [1, 1.02, 1] }}
+   877→        transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+   878→      />
+   879→      {/* Radial gradient glow behind popular card */}
+   880→      <div className="absolute -inset-8 rounded-3xl bg-gradient-radial from-emerald-500/15 via-emerald-500/5 to-transparent pointer-events-none" />
+   881→      {/* Gradient shine sweep */}
+   882→      <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+   883→        <motion.div
+   884→          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+   885→          animate={{ x: ['-100%', '200%'] }}
+   886→          transition={{ duration: 3, repeat: Infinity, ease: 'linear', repeatDelay: 4 }}
+   887→          style={{ width: '50%' }}
+   888→        />
+   889→      </div>
+   890→      <div className="relative rounded-xl">{children}</div>
+   891→    </div>
+   892→  );
+   893→}
+   894→
+   895→// ============================================================
+   896→// Gradient Border Feature Card
+   897→// ============================================================
+   898→function GradientBorderCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+   899→  return (
+   900→    <div className={`relative group ${className}`}>
+   901→      {/* Gradient border — appears on hover */}
+   902→      <div className="absolute -inset-[1px] rounded-xl bg-gradient-to-r from-emerald-500/0 via-violet-500/0 to-emerald-500/0 group-hover:from-emerald-500/60 group-hover:via-violet-500/60 group-hover:to-emerald-500/60 transition-all duration-500 opacity-0 group-hover:opacity-100" />
+   903→      {/* Glow shadow on hover */}
+   904→      <div className="absolute -inset-2 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-r from-emerald-500/5 via-violet-500/5 to-emerald-500/5 blur-lg" />
+   905→      <div className="relative">
+   906→        {children}
+   907→      </div>
+   908→    </div>
+   909→  );
+   910→}
+   911→
+   912→// ============================================================
+   913→// Animated Gradient Divider
+   914→// ============================================================
+   915→function AnimatedGradientDivider() {
+   916→  return (
+   917→    <div className="relative h-px w-full overflow-hidden">
+   918→      <motion.div
+   919→        className="absolute inset-0 h-full bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent"
+   920→        animate={{ x: ['-100%', '100%'] }}
+   921→        transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+   922→        style={{ width: '50%' }}
+   923→      />
+   924→      <div className="absolute inset-0 h-full bg-gradient-to-r from-transparent via-border/40 to-transparent" />
+   925→    </div>
+   926→  );
+   927→}
+   928→
+   929→// ============================================================
+   930→// "As Seen In" Media Logos Marquee (smooth infinite scroll) — Enhanced
+   931→// ============================================================
+   932→function MediaLogosMarquee() {
+   933→  const logos = ['TechCrunch', 'Forbes', 'Wired', 'EdTech', 'The Verge', 'VentureBeat'];
+   934→
+   935→  return (
+   936→    <section className="py-10 bg-muted/20 overflow-hidden">
+   937→      {/* Animated gradient divider - top */}
+   938→      <AnimatedGradientDivider />
+   939→
+   940→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+   941→        <motion.p
+   942→          initial={{ opacity: 0, y: 10 }}
+   943→          whileInView={{ opacity: 1, y: 0 }}
+   944→          viewport={{ once: true }}
+   945→          className="text-center text-xs text-muted-foreground uppercase tracking-[0.2em] font-medium mb-6"
+   946→        >
+   947→          As Seen In
+   948→        </motion.p>
+   949→      </div>
+   950→      <div className="relative">
+   951→        {/* Fade edges */}
+   952→        <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-muted/20 to-transparent z-10 pointer-events-none" />
+   953→        <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-muted/20 to-transparent z-10 pointer-events-none" />
+   954→
+   955→        <div className="flex animate-marquee-smooth">
+   956→          {[...logos, ...logos, ...logos, ...logos, ...logos, ...logos, ...logos, ...logos].map((logo, i) => (
+   957→            <div
+   958→              key={`${logo}-${i}`}
+   959→              className="flex items-center justify-center mx-8 sm:mx-12 shrink-0 group"
+   960→            >
+   961→              <motion.span
+   962→                className="text-xl sm:text-2xl font-bold text-muted-foreground/40 whitespace-nowrap tracking-tight select-none transition-all duration-500 group-hover:text-muted-foreground/70 group-hover:drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]"
+   963→                initial={{ opacity: 0.3 }}
+   964→                animate={{ opacity: [0.3, 0.55, 0.3] }}
+   965→                transition={{ duration: 4, repeat: Infinity, delay: (i * 0.5) % 4, ease: 'easeInOut' }}
+   966→              >
+   967→                {logo}
+   968→              </motion.span>
+   969→            </div>
+   970→          ))}
+   971→        </div>
+   972→      </div>
+   973→
+   974→      {/* Animated gradient divider - bottom */}
+   975→      <div className="mt-6">
+   976→        <AnimatedGradientDivider />
+   977→      </div>
+   978→
+   979→      <style jsx>{`
+   980→        @keyframes marquee-smooth {
+   981→          0% { transform: translateX(0); }
+   982→          100% { transform: translateX(-12.5%); }
+   983→        }
+   984→        .animate-marquee-smooth {
+   985→          animation: marquee-smooth 25s linear infinite;
+   986→        }
+   987→      `}</style>
+   988→    </section>
+   989→  );
+   990→}
+   991→
+   992→// ============================================================
+   993→// Animated Stats Section (between hero and features)
+   994→// ============================================================
+   995→function AnimatedStatsSection() {
+   996→  const ref = useRef<HTMLDivElement>(null);
+   997→  const isInView = useInView(ref, { once: true, margin: '-80px' });
+   998→
+   999→  const stats = [
+  1000→    { target: 10000, suffix: '+', label: 'Creators', prefix: '', gradient: 'from-emerald-600 to-emerald-400', iconBg: 'bg-emerald-500/10' },
+  1001→    { target: 500000, suffix: '+', label: 'Learners', prefix: '', gradient: 'from-violet-600 to-violet-400', iconBg: 'bg-violet-500/10' },
+  1002→    { target: 50, suffix: '+', label: 'Currencies', prefix: '', gradient: 'from-amber-600 to-amber-400', iconBg: 'bg-amber-500/10' },
+  1003→    { target: 99.9, suffix: '%', label: 'Uptime', prefix: '', gradient: 'from-sky-600 to-sky-400', iconBg: 'bg-sky-500/10', isDecimal: true },
+  1004→  ];
+  1005→
+  1006→  function StatCounter({ target, suffix, label, gradient, isDecimal = false }: {
+  1007→    target: number; suffix: string; label: string; gradient: string; isDecimal?: boolean;
+  1008→  }) {
+  1009→    const [count, setCount] = useState(0);
+  1010→    const prevTarget = useRef(0);
+  1011→
+  1012→    useEffect(() => {
+  1013→      if (!isInView) return;
+  1014→      if (target === prevTarget.current) return;
+  1015→      prevTarget.current = target;
+  1016→
+  1017→      const duration = 2000;
+  1018→      const startTime = performance.now();
+  1019→
+  1020→      const animate = (now: number) => {
+  1021→        const elapsed = now - startTime;
+  1022→        const progress = Math.min(elapsed / duration, 1);
+  1023→        // easeOutExpo
+  1024→        const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+  1025→        const current = target * eased;
+  1026→        setCount(isDecimal ? parseFloat(current.toFixed(1)) : Math.round(current));
+  1027→        if (progress < 1) {
+  1028→          requestAnimationFrame(animate);
+  1029→        }
+  1030→      };
+  1031→
+  1032→      requestAnimationFrame(animate);
+  1033→    }, [target, isInView, isDecimal]);
+  1034→
+  1035→    const displayValue = isDecimal
+  1036→      ? count.toFixed(1)
+  1037→      : count.toLocaleString('en-US');
+  1038→
+  1039→    return (
+  1040→      <motion.div
+  1041→        initial={{ opacity: 0, y: 30 }}
+  1042→        animate={isInView ? { opacity: 1, y: 0 } : {}}
+  1043→        transition={{ duration: 0.6, ease: 'easeOut' }}
+  1044→        className="relative group"
+  1045→      >
+  1046→        {/* Dot pattern behind each stat */}
+  1047→        <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none opacity-[0.06]">
+  1048→          <svg width="100%" height="100%">
+  1049→            <defs>
+  1050→              <pattern id={`stat-dots-${label}`} width="16" height="16" patternUnits="userSpaceOnUse">
+  1051→                <circle cx="8" cy="8" r="1.2" fill="currentColor" />
+  1052→              </pattern>
+  1053→            </defs>
+  1054→            <rect width="100%" height="100%" fill={`url(#stat-dots-${label})`} className="text-foreground" />
+  1055→          </svg>
+  1056→        </div>
+  1057→
+  1058→        <div className="relative rounded-2xl border border-border/30 bg-white/50 dark:bg-white/5 backdrop-blur-md p-6 sm:p-8 text-center transition-all duration-300 group-hover:border-border/60 group-hover:shadow-lg group-hover:scale-[1.02]">
+  1059→          <p className={`text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r ${gradient} bg-clip-text text-transparent`}>
+  1060→            {displayValue}{suffix}
+  1061→          </p>
+  1062→          <p className="mt-2 text-sm sm:text-base text-muted-foreground font-medium">{label}</p>
+  1063→        </div>
+  1064→      </motion.div>
+  1065→    );
+  1066→  }
+  1067→
+  1068→  return (
+  1069→    <section ref={ref} className="py-16 sm:py-20 relative overflow-hidden">
+  1070→      {/* Subtle background gradient */}
+  1071→      <div className="absolute inset-0 bg-gradient-to-b from-muted/10 via-background to-muted/10" />
+  1072→      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+  1073→        <div className="absolute -top-1/2 left-1/4 h-[600px] w-[600px] rounded-full bg-emerald-500/5 blur-3xl" />
+  1074→        <div className="absolute -bottom-1/2 right-1/4 h-[600px] w-[600px] rounded-full bg-violet-500/5 blur-3xl" />
+  1075→      </div>
+  1076→
+  1077→      <div className="relative mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+  1078→        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
+  1079→          {stats.map((stat) => (
+  1080→            <StatCounter key={stat.label} {...stat} />
+  1081→          ))}
+  1082→        </div>
+  1083→      </div>
+  1084→    </section>
+  1085→  );
+  1086→}
+  1087→
+  1088→// ============================================================
+  1089→// Live Dashboard Preview Section
+  1090→// ============================================================
+  1091→function LiveDashboardPreview() {
+  1092→  const [inView, setInView] = useState(false);
+  1093→  const sectionRef = useRef<HTMLDivElement>(null);
+  1094→  const [urlText, setUrlText] = useState('');
+  1095→  const fullUrl = 'academy.nextgen-lms.com/admin/dashboard';
+  1096→
+  1097→  // Animated typing in URL bar
+  1098→  useEffect(() => {
+  1099→    let charIndex = 0;
+  1100→    const typeTimer = setInterval(() => {
+  1101→      if (charIndex < fullUrl.length) {
+  1102→        setUrlText(fullUrl.slice(0, charIndex + 1));
+  1103→        charIndex++;
+  1104→      } else {
+  1105→        clearInterval(typeTimer);
+  1106→      }
+  1107→    }, 50);
+  1108→    return () => clearInterval(typeTimer);
+  1109→  }, []);
+  1110→
+  1111→  useEffect(() => {
+  1112→    const observer = new IntersectionObserver(
+  1113→      ([entry]) => {
+  1114→        if (entry.isIntersecting) {
+  1115→          setInView(true);
+  1116→        }
+  1117→      },
+  1118→      { threshold: 0.3 }
+  1119→    );
+  1120→    if (sectionRef.current) observer.observe(sectionRef.current);
+  1121→    return () => observer.disconnect();
+  1122→  }, []);
+  1123→
+  1124→  const kpiData = [
+  1125→    { label: 'Total Revenue', value: 47800, prefix: '$', suffix: '', format: true, color: 'from-emerald-500 to-emerald-600' },
+  1126→    { label: 'Active Learners', value: 3847, prefix: '', suffix: '', format: true, color: 'from-violet-500 to-violet-600' },
+  1127→    { label: 'Completion Rate', value: 72.4, prefix: '', suffix: '%', format: false, color: 'from-amber-500 to-amber-600' },
+  1128→    { label: 'Engagement', value: 89.3, prefix: '', suffix: '%', format: false, color: 'from-sky-500 to-sky-600' },
+  1129→  ];
+  1130→
+  1131→  const chartBars = [40, 65, 45, 80, 55, 90, 70, 85, 60, 95, 75, 88];
+  1132→
+  1133→  const tableData = [
+  1134→    { course: 'React Masterclass', learners: 847, revenue: '$12,450', status: 'Active' },
+  1135→    { course: 'AI & ML Fundamentals', learners: 623, revenue: '$9,870', status: 'Active' },
+  1136→    { course: 'Data Science Pro', learners: 534, revenue: '$8,120', status: 'Draft' },
+  1137→  ];
+  1138→
+  1139→  function formatNumber(n: number, shouldFormat: boolean): string {
+  1140→    if (shouldFormat) return n.toLocaleString('en-US');
+  1141→    return n.toFixed(1);
+  1142→  }
+  1143→
+  1144→  return (
+  1145→    <section ref={sectionRef} className="py-20 sm:py-28">
+  1146→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  1147→        <motion.div
+  1148→          initial="hidden"
+  1149→          whileInView="visible"
+  1150→          viewport={{ once: true, margin: '-100px' }}
+  1151→          variants={staggerContainer}
+  1152→          className="text-center mb-16"
+  1153→        >
+  1154→          <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+  1155→            See Your{' '}
+  1156→            <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Dashboard</span> in Action
+  1157→          </motion.h2>
+  1158→          <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+  1159→            Real-time insights, beautiful charts, and actionable data — all at your fingertips.
+  1160→          </motion.p>
+  1161→        </motion.div>
+  1162→
+  1163→        <motion.div
+  1164→          initial={{ opacity: 0, y: 30 }}
+  1165→          whileInView={{ opacity: 1, y: 0 }}
+  1166→          viewport={{ once: true }}
+  1167→          transition={{ duration: 0.8 }}
+  1168→          className="relative max-w-5xl mx-auto"
+  1169→        >
+  1170→          {/* Glow effect */}
+  1171→          <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/10 via-violet-500/10 to-emerald-500/10 rounded-3xl blur-2xl" />
+  1172→
+  1173→          {/* Floating animation wrapper */}
+  1174→          <motion.div
+  1175→            animate={{ y: [0, -6, 0] }}
+  1176→            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+  1177→          >
+  1178→            <div className="relative rounded-2xl border border-border/60 bg-card shadow-2xl overflow-hidden">
+  1179→              {/* Browser chrome */}
+  1180→              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border/40 bg-muted/30">
+  1181→                <div className="flex gap-1.5">
+  1182→                  <div className="h-3 w-3 rounded-full bg-red-400 shadow-sm shadow-red-400/50" />
+  1183→                  <div className="h-3 w-3 rounded-full bg-yellow-400 shadow-sm shadow-yellow-400/50" />
+  1184→                  <div className="h-3 w-3 rounded-full bg-green-400 shadow-sm shadow-green-400/50" />
+  1185→                </div>
+  1186→                <div className="flex-1 flex justify-center">
+  1187→                  <div className="h-7 w-72 rounded-md bg-muted/60 flex items-center justify-center px-3">
+  1188→                    <span className="text-[11px] text-muted-foreground truncate">
+  1189→                      {urlText}
+  1190→                      {urlText.length < fullUrl.length && (
+  1191→                        <span className="inline-block w-0.5 h-3 bg-emerald-500 ml-0.5 animate-pulse align-middle" />
+  1192→                      )}
+  1193→                    </span>
+  1194→                  </div>
+  1195→                </div>
+  1196→              </div>
+  1197→
+  1198→              {/* Dashboard mockup content */}
+  1199→              <div className="p-5 sm:p-6 space-y-5">
+  1200→                {/* KPI Cards Row */}
+  1201→                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+  1202→                  {kpiData.map((kpi) => (
+  1203→                    <div key={kpi.label} className="rounded-xl border border-border/40 bg-gradient-to-br from-muted/30 to-muted/10 p-4 hover:shadow-md transition-shadow">
+  1204→                      <p className="text-xs text-muted-foreground mb-1">{kpi.label}</p>
+  1205→                      <p className="text-xl sm:text-2xl font-bold text-foreground">
+  1206→                        {kpi.prefix}
+  1207→                        {inView ? formatNumber(kpi.value, kpi.format) : '0'}
+  1208→                        {kpi.suffix}
+  1209→                      </p>
+  1210→                      <div className="flex items-center gap-1 mt-1">
+  1211→                        <TrendingUp className="h-3 w-3 text-emerald-500" />
+  1212→                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">+12.5%</span>
+  1213→                      </div>
+  1214→                    </div>
+  1215→                  ))}
+  1216→                </div>
+  1217→
+  1218→                {/* Chart + Table row */}
+  1219→                <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+  1220→                  {/* Bar chart */}
+  1221→                  <div className="sm:col-span-3 rounded-xl border border-border/40 bg-muted/10 p-4">
+  1222→                    <div className="flex items-center justify-between mb-3">
+  1223→                      <span className="text-sm font-semibold text-foreground">Revenue Overview</span>
+  1224→                      <span className="text-[10px] text-muted-foreground">Last 12 months</span>
+  1225→                    </div>
+  1226→                    <div className="h-28 flex items-end gap-1">
+  1227→                      {chartBars.map((h, i) => (
+  1228→                        <motion.div
+  1229→                          key={i}
+  1230→                          className="flex-1 rounded-t bg-gradient-to-t from-emerald-600 to-emerald-400 min-w-0"
+  1231→                          initial={{ height: 0 }}
+  1232→                          animate={inView ? { height: `${h}%` } : { height: 0 }}
+  1233→                          transition={{ duration: 0.5, delay: 0.3 + i * 0.04, ease: 'easeOut' }}
+  1234→                        />
+  1235→                      ))}
+  1236→                    </div>
+  1237→                    <div className="flex justify-between mt-2">
+  1238→                      {['Jan', 'Mar', 'Jun', 'Sep', 'Dec'].map((m) => (
+  1239→                        <span key={m} className="text-[9px] text-muted-foreground">{m}</span>
+  1240→                      ))}
+  1241→                    </div>
+  1242→                  </div>
+  1243→
+  1244→                  {/* Mini table */}
+  1245→                  <div className="sm:col-span-2 rounded-xl border border-border/40 bg-muted/10 p-4">
+  1246→                    <span className="text-sm font-semibold text-foreground mb-3 block">Top Courses</span>
+  1247→                    <div className="space-y-2">
+  1248→                      {tableData.map((row) => (
+  1249→                        <div key={row.course} className="flex items-center justify-between py-1.5 border-b border-border/20 last:border-0">
+  1250→                          <div>
+  1251→                            <p className="text-xs font-medium text-foreground truncate max-w-[120px]">{row.course}</p>
+  1252→                            <p className="text-[10px] text-muted-foreground">{row.learners} learners</p>
+  1253→                          </div>
+  1254→                          <div className="text-right">
+  1255→                            <p className="text-xs font-semibold text-foreground">{row.revenue}</p>
+  1256→                            <Badge variant="secondary" className={`text-[9px] px-1.5 py-0 ${row.status === 'Active' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
+  1257→                              {row.status}
+  1258→                            </Badge>
+  1259→                          </div>
+  1260→                        </div>
+  1261→                      ))}
+  1262→                    </div>
+  1263→                  </div>
+  1264→                </div>
+  1265→              </div>
+  1266→            </div>
+  1267→          </motion.div>
+  1268→
+  1269→          {/* Reflection / glow below the preview */}
+  1270→          <div className="relative mt-4">
+  1271→            <div className="h-16 bg-gradient-to-b from-card/20 via-card/5 to-transparent rounded-b-2xl blur-sm" />
+  1272→            <div className="absolute inset-0 flex items-center justify-center">
+  1273→              <div className="h-1 w-3/4 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent rounded-full blur-sm" />
+  1274→            </div>
+  1275→          </div>
+  1276→
+  1277→          {/* Try it yourself button */}
+  1278→          <motion.div
+  1279→            initial={{ opacity: 0 }}
+  1280→            whileInView={{ opacity: 1 }}
+  1281→            viewport={{ once: true }}
+  1282→            transition={{ delay: 0.8 }}
+  1283→            className="text-center mt-8"
+  1284→          >
+  1285→            <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={() => goToLogin('admin')}>
+  1286→              Try it yourself
+  1287→              <ArrowRight className="h-4 w-4" />
+  1288→            </Button>
+  1289→          </motion.div>
+  1290→        </motion.div>
+  1291→      </div>
+  1292→    </section>
+  1293→  );
+  1294→}
+  1295→
+  1296→// ============================================================
+  1297→// Community Preview Section
+  1298→// ============================================================
+  1299→function CommunityPreview() {
+  1300→  return (
+  1301→    <section className="py-20 sm:py-28 bg-muted/30">
+  1302→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  1303→        <motion.div
+  1304→          initial="hidden"
+  1305→          whileInView="visible"
+  1306→          viewport={{ once: true, margin: '-100px' }}
+  1307→          variants={staggerContainer}
+  1308→          className="text-center mb-16"
+  1309→        >
+  1310→          <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+  1311→            A Thriving{' '}
+  1312→            <span className="bg-gradient-to-r from-violet-600 to-violet-400 bg-clip-text text-transparent">Learning Community</span>
+  1313→          </motion.h2>
+  1314→          <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+  1315→            Built-in discussions, peer support, and knowledge sharing — no need for Slack or Discord.
+  1316→          </motion.p>
+  1317→        </motion.div>
+  1318→
+  1319→        <div className="max-w-2xl mx-auto space-y-4">
+  1320→          {communityPreviewPosts.map((post, i) => (
+  1321→            <motion.div
+  1322→              key={post.name}
+  1323→              initial={{ opacity: 0, y: 20 }}
+  1324→              whileInView={{ opacity: 1, y: 0 }}
+  1325→              viewport={{ once: true }}
+  1326→              transition={{ duration: 0.5, delay: i * 0.15 }}
+  1327→            >
+  1328→              <Card className="hover:shadow-lg transition-all duration-300 border-border/60 group">
+  1329→                <CardContent className="p-5">
+  1330→                  <div className="flex items-start gap-3">
+  1331→                    <div className={`h-10 w-10 rounded-full ${post.color} flex items-center justify-center text-white text-sm font-bold shrink-0`}>
+  1332→                      {post.initials}
+  1333→                    </div>
+  1334→                    <div className="flex-1 min-w-0">
+  1335→                      <div className="flex items-center gap-2 flex-wrap">
+  1336→                        <span className="text-sm font-semibold text-foreground">{post.name}</span>
+  1337→                        {post.pinned && (
+  1338→                          <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 text-[10px] px-1.5 py-0 gap-1">
+  1339→                            <Pin className="h-2.5 w-2.5" /> Pinned
+  1340→                          </Badge>
+  1341→                        )}
+  1342→                        <span className="text-xs text-muted-foreground">{post.timestamp}</span>
+  1343→                      </div>
+  1344→                      <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">{post.content}</p>
+  1345→                      <div className="flex items-center gap-4 mt-3">
+  1346→                        <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-rose-500 transition-colors group/btn">
+  1347→                          <Heart className="h-3.5 w-3.5 group-hover/btn:scale-110 transition-transform" />
+  1348→                          {post.likes}
+  1349→                        </button>
+  1350→                        <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-emerald-500 transition-colors">
+  1351→                          <MessageSquare className="h-3.5 w-3.5" />
+  1352→                          {post.comments}
+  1353→                        </button>
+  1354→                      </div>
+  1355→                    </div>
+  1356→                  </div>
+  1357→                </CardContent>
+  1358→              </Card>
+  1359→            </motion.div>
+  1360→          ))}
+  1361→
+  1362→          {/* CTA */}
+  1363→          <motion.div
+  1364→            initial={{ opacity: 0 }}
+  1365→            whileInView={{ opacity: 1 }}
+  1366→            viewport={{ once: true }}
+  1367→            transition={{ delay: 0.8 }}
+  1368→            className="text-center pt-4"
+  1369→          >
+  1370→            <Button size="lg" className="bg-violet-600 hover:bg-violet-700 text-white gap-2" onClick={() => goToLogin('learner')}>
+  1371→              Join the Community
+  1372→              <ArrowRight className="h-4 w-4" />
+  1373→            </Button>
+  1374→          </motion.div>
+  1375→        </div>
+  1376→      </div>
+  1377→    </section>
+  1378→  );
+  1379→}
+  1380→
+  1381→// ============================================================
+  1382→// Animated Star Rating
+  1383→// ============================================================
+  1384→function AnimatedStars({ delay = 0, rating = 5 }: { delay?: number; rating?: number }) {
+  1385→  const ref = useRef<HTMLDivElement>(null);
+  1386→  const isInView = useInView(ref, { once: true });
+  1387→
+  1388→  return (
+  1389→    <div ref={ref} className="flex gap-0.5 mb-3">
+  1390→      {[0, 1, 2, 3, 4].map((j) => (
+  1391→        <motion.div
+  1392→          key={j}
+  1393→          initial={{ opacity: 0, scale: 0, rotate: -30 }}
+  1394→          animate={isInView ? { opacity: 1, scale: 1, rotate: 0 } : {}}
+  1395→          transition={{ duration: 0.3, delay: delay + j * 0.08, ease: 'backOut' }}
+  1396→        >
+  1397→          <Star className={`h-3.5 w-3.5 ${j < rating ? 'fill-amber-400 text-amber-400' : 'fill-none text-muted-foreground/30'}`} />
+  1398→        </motion.div>
+  1399→      ))}
+  1400→    </div>
+  1401→  );
+  1402→}
+  1403→
+  1404→// ============================================================
+  1405→// Dot Pattern Background
+  1406→// ============================================================
+  1407→function DotPatternBackground() {
+  1408→  return (
+  1409→    <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.04]">
+  1410→      <svg width="100%" height="100%">
+  1411→        <defs>
+  1412→          <pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse">
+  1413→            <circle cx="10" cy="10" r="1.5" fill="currentColor" />
+  1414→          </pattern>
+  1415→        </defs>
+  1416→        <rect width="100%" height="100%" fill="url(#dots)" className="text-foreground" />
+  1417→      </svg>
+  1418→    </div>
+  1419→  );
+  1420→}
+  1421→
+  1422→// ============================================================
+  1423→// Enhanced Testimonials Carousel (with dots, animated quotes, role badges)
+  1424→// ============================================================
+  1425→function TestimonialCarousel() {
+  1426→  const [current, setCurrent] = useState(0);
+  1427→  const [direction, setDirection] = useState(0);
+  1428→  const [isPaused, setIsPaused] = useState(false);
+  1429→
+  1430→  // Auto-rotate every 5 seconds (pause on hover)
+  1431→  useEffect(() => {
+  1432→    if (isPaused) return;
+  1433→    const timer = setInterval(() => {
+  1434→      setDirection(1);
+  1435→      setCurrent((prev) => (prev + 1) % testimonials.length);
+  1436→    }, 5000);
+  1437→    return () => clearInterval(timer);
+  1438→  }, [isPaused]);
+  1439→
+  1440→  const goTo = (index: number) => {
+  1441→    setDirection(index > current ? 1 : -1);
+  1442→    setCurrent(index);
+  1443→  };
+  1444→
+  1445→  const next = () => {
+  1446→    setDirection(1);
+  1447→    setCurrent((prev) => (prev + 1) % testimonials.length);
+  1448→  };
+  1449→
+  1450→  const prev = () => {
+  1451→    setDirection(-1);
+  1452→    setCurrent((prev) => (prev - 1 + testimonials.length) % testimonials.length);
+  1453→  };
+  1454→
+  1455→  const slideVariants = {
+  1456→    enter: (d: number) => ({
+  1457→      x: d > 0 ? 80 : -80,
+  1458→      opacity: 0,
+  1459→    }),
+  1460→    center: {
+  1461→      x: 0,
+  1462→      opacity: 1,
+  1463→    },
+  1464→    exit: (d: number) => ({
+  1465→      x: d > 0 ? -80 : 80,
+  1466→      opacity: 0,
+  1467→    }),
+  1468→  };
+  1469→
+  1470→  return (
+  1471→    <div
+  1472→      className="relative"
+  1473→      onMouseEnter={() => setIsPaused(true)}
+  1474→      onMouseLeave={() => setIsPaused(false)}
+  1475→    >
+  1476→      {/* Desktop: show all at a time */}
+  1477→      <div className="hidden lg:grid lg:grid-cols-3 gap-6">
+  1478→        {testimonials.map((testimonial, i) => (
+  1479→          <motion.div
+  1480→            key={testimonial.name}
+  1481→            initial={{ opacity: 0, y: 20 }}
+  1482→            animate={{ opacity: 1, y: 0 }}
+  1483→            transition={{ delay: i * 0.1 }}
+  1484→            whileHover={{ y: -4, transition: { duration: 0.2 } }}
+  1485→          >
+  1486→            <Card className="h-full border-border/60 hover:shadow-lg transition-shadow bg-gradient-to-br from-white/80 to-emerald-50/30 dark:from-card dark:to-emerald-950/10">
+  1487→              <CardHeader className="pb-3">
+  1488→                <div className="flex items-center gap-3">
+  1489→                  <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 text-sm font-bold">
+  1490→                    {testimonial.avatar}
+  1491→                  </div>
+  1492→                  <div className="flex-1">
+  1493→                    <p className="text-sm font-semibold text-foreground">{testimonial.name}</p>
+  1494→                    <p className="text-xs text-muted-foreground">{testimonial.role}</p>
+  1495→                  </div>
+  1496→                  <Badge className={`text-[9px] px-1.5 py-0 ${
+  1497→                    testimonial.badge === 'Enterprise'
+  1498→                      ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'
+  1499→                      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+  1500→                  }`}>
+  1501→                    {testimonial.badge}
+  1502→                  </Badge>
+  1503→                </div>
+  1504→              </CardHeader>
+  1505→              <CardContent>
+  1506→                <AnimatedStars delay={i * 0.15} rating={testimonial.rating} />
+  1507→                {/* Animated quote marks */}
+  1508→                <motion.span
+  1509→                  className="absolute top-3 right-4 text-4xl font-serif text-emerald-200 dark:text-emerald-800/40 select-none"
+  1510→                  initial={{ opacity: 0, scale: 0.5 }}
+  1511→                  animate={{ opacity: 1, scale: 1 }}
+  1512→                  transition={{ delay: i * 0.1 + 0.3, duration: 0.5, ease: 'backOut' }}
+  1513→                >
+  1514→                  &ldquo;
+  1515→                </motion.span>
+  1516→                <p className="text-sm text-muted-foreground leading-relaxed relative z-10">&ldquo;{testimonial.quote}&rdquo;</p>
+  1517→              </CardContent>
+  1518→            </Card>
+  1519→          </motion.div>
+  1520→        ))}
+  1521→      </div>
+  1522→
+  1523→      {/* Mobile: carousel with single testimonial */}
+  1524→      <div className="lg:hidden">
+  1525→        <div className="relative overflow-hidden min-h-[280px]">
+  1526→          <AnimatePresence initial={false} custom={direction} mode="wait">
+  1527→            <motion.div
+  1528→              key={current}
+  1529→              custom={direction}
+  1530→              variants={slideVariants}
+  1531→              initial="enter"
+  1532→              animate="center"
+  1533→              exit="exit"
+  1534→              transition={{ duration: 0.4, ease: 'easeInOut' }}
+  1535→            >
+  1536→              <Card className="border-border/60 bg-gradient-to-br from-white/80 to-emerald-50/30 dark:from-card dark:to-emerald-950/10">
+  1537→                <CardHeader className="pb-3">
+  1538→                  <div className="flex items-center gap-3">
+  1539→                    <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 text-sm font-bold">
+  1540→                      {testimonials[current].avatar}
+  1541→                    </div>
+  1542→                    <div className="flex-1">
+  1543→                      <p className="text-sm font-semibold text-foreground">{testimonials[current].name}</p>
+  1544→                      <p className="text-xs text-muted-foreground">{testimonials[current].role}</p>
+  1545→                    </div>
+  1546→                    <Badge className={`text-[9px] px-1.5 py-0 ${
+  1547→                      testimonials[current].badge === 'Enterprise'
+  1548→                        ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'
+  1549→                        : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+  1550→                    }`}>
+  1551→                      {testimonials[current].badge}
+  1552→                    </Badge>
+  1553→                  </div>
+  1554→                </CardHeader>
+  1555→                <CardContent className="relative">
+  1556→                  <AnimatedStars delay={0.1} rating={testimonials[current].rating} />
+  1557→                  <span className="absolute top-0 right-4 text-4xl font-serif text-emerald-200 dark:text-emerald-800/40 select-none">&ldquo;</span>
+  1558→                  <p className="text-sm text-muted-foreground leading-relaxed relative z-10">&ldquo;{testimonials[current].quote}&rdquo;</p>
+  1559→                </CardContent>
+  1560→              </Card>
+  1561→            </motion.div>
+  1562→          </AnimatePresence>
+  1563→        </div>
+  1564→
+  1565→        {/* Navigation with dots indicator */}
+  1566→        <div className="flex items-center justify-center gap-4 mt-6">
+  1567→          <button
+  1568→            onClick={prev}
+  1569→            className="h-8 w-8 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
+  1570→            aria-label="Previous testimonial"
+  1571→          >
+  1572→            <ChevronLeft className="h-4 w-4" />
+  1573→          </button>
+  1574→          <div className="flex gap-2">
+  1575→            {testimonials.map((_, i) => (
+  1576→              <button
+  1577→                key={i}
+  1578→                onClick={() => goTo(i)}
+  1579→                className={`h-2 rounded-full transition-all duration-300 ${
+  1580→                  i === current ? 'w-6 bg-emerald-500' : 'w-2 bg-muted-foreground/30'
+  1581→                }`}
+  1582→                aria-label={`Go to testimonial ${i + 1}`}
+  1583→              />
+  1584→            ))}
+  1585→          </div>
+  1586→          <button
+  1587→            onClick={next}
+  1588→            className="h-8 w-8 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
+  1589→            aria-label="Next testimonial"
+  1590→          >
+  1591→            <ChevronRight className="h-4 w-4" />
+  1592→          </button>
+  1593→        </div>
+  1594→      </div>
+  1595→    </div>
+  1596→  );
+  1597→}
+  1598→
+  1599→// ============================================================
+  1600→// Floating Stats Counter (fixed Math.random hydration issue)
+  1601→// ============================================================
+  1602→function FloatingStatsCounter() {
+  1603→  const [visible, setVisible] = useState(false);
+  1604→  const [dismissed, setDismissed] = useState(false);
+  1605→  const [onlineCount, setOnlineCount] = useState(2847);
+  1606→  const tickIndex = useRef(0);
+  1607→
+  1608→  // Deterministic tick values to avoid hydration mismatch
+  1609→  const tickValues = [1, -1, 2, 0, 1, -2, 1, 0, 2, -1, 0, 1, -1, 2, 1, 0, -1, 1, 0, 2];
+  1610→
+  1611→  useEffect(() => {
+  1612→    const handleScroll = () => {
+  1613→      const heroSection = document.getElementById('hero-section');
+  1614→      if (heroSection) {
+  1615→        const heroBottom = heroSection.getBoundingClientRect().bottom;
+  1616→        setVisible(heroBottom < 0);
+  1617→      }
+  1618→    };
+  1619→    window.addEventListener('scroll', handleScroll, { passive: true });
+  1620→    return () => window.removeEventListener('scroll', handleScroll);
+  1621→  }, []);
+  1622→
+  1623→  // Deterministically tick online count
+  1624→  useEffect(() => {
+  1625→    if (!visible || dismissed) return;
+  1626→    const timer = setInterval(() => {
+  1627→      const change = tickValues[tickIndex.current % tickValues.length];
+  1628→      tickIndex.current++;
+  1629→      setOnlineCount((prev) => Math.max(2800, Math.min(2900, prev + change)));
+  1630→    }, 3000);
+  1631→    return () => clearInterval(timer);
+  1632→  }, [visible, dismissed]);
+  1633→
+  1634→  if (dismissed || !visible) return null;
+  1635→
+  1636→  return (
+  1637→    <motion.div
+  1638→      initial={{ opacity: 0, y: 20, scale: 0.9 }}
+  1639→      animate={{ opacity: 1, y: 0, scale: 1 }}
+  1640→      exit={{ opacity: 0, y: 20, scale: 0.9 }}
+  1641→      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+  1642→      className="fixed bottom-4 left-4 z-50"
+  1643→    >
+  1644→      <motion.div
+  1645→        animate={{ y: [0, -3, 0] }}
+  1646→        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+  1647→        className="rounded-xl border border-border/40 bg-background/80 backdrop-blur-xl shadow-xl px-4 py-3 flex items-center gap-3"
+  1648→      >
+  1649→        <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+  1650→        <div>
+  1651→          <p className="text-sm font-semibold text-foreground">{onlineCount.toLocaleString()} learners online</p>
+  1652→          <p className="text-[10px] text-muted-foreground">across 50+ countries</p>
+  1653→        </div>
+  1654→        <button
+  1655→          onClick={() => setDismissed(true)}
+  1656→          className="ml-2 h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+  1657→          aria-label="Dismiss"
+  1658→        >
+  1659→          <X className="h-3 w-3" />
+  1660→        </button>
+  1661→      </motion.div>
+  1662→    </motion.div>
+  1663→  );
+  1664→}
+  1665→
+  1666→// ============================================================
+  1667→// Animated Mesh Gradient Background (for features section)
+  1668→// ============================================================
+  1669→function MeshGradientBackground() {
+  1670→  return (
+  1671→    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+  1672→      <motion.div
+  1673→        className="absolute -top-40 -left-40 h-80 w-80 rounded-full bg-emerald-500/8 blur-3xl"
+  1674→        animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
+  1675→        transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+  1676→      />
+  1677→      <motion.div
+  1678→        className="absolute top-1/2 -right-20 h-72 w-72 rounded-full bg-violet-500/8 blur-3xl"
+  1679→        animate={{ x: [0, -25, 0], y: [0, 30, 0] }}
+  1680→        transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
+  1681→      />
+  1682→      <motion.div
+  1683→        className="absolute -bottom-20 left-1/3 h-64 w-64 rounded-full bg-amber-500/6 blur-3xl"
+  1684→        animate={{ x: [0, 20, 0], y: [0, 15, 0] }}
+  1685→        transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+  1686→      />
+  1687→      <motion.div
+  1688→        className="absolute top-1/4 left-1/2 h-56 w-56 rounded-full bg-sky-500/5 blur-3xl"
+  1689→        animate={{ x: [0, -15, 0], y: [0, -25, 0] }}
+  1690→        transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
+  1691→      />
+  1692→    </div>
+  1693→  );
+  1694→}
+  1695→
+  1696→// ============================================================
+  1697→// Mouse-Following Glow Feature Card
+  1698→// ============================================================
+  1699→function GlowFeatureCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  1700→  const cardRef = useRef<HTMLDivElement>(null);
+  1701→  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  1702→  const [isHovered, setIsHovered] = useState(false);
+  1703→
+  1704→  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+  1705→    if (!cardRef.current) return;
+  1706→    const rect = cardRef.current.getBoundingClientRect();
+  1707→    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  1708→  }, []);
+  1709→
+  1710→  return (
+  1711→    <div
+  1712→      ref={cardRef}
+  1713→      className={`relative overflow-hidden ${className}`}
+  1714→      onMouseMove={handleMouseMove}
+  1715→      onMouseEnter={() => setIsHovered(true)}
+  1716→      onMouseLeave={() => setIsHovered(false)}
+  1717→    >
+  1718→      {/* Mouse-following glow */}
+  1719→      {isHovered && (
+  1720→        <motion.div
+  1721→          className="absolute pointer-events-none z-0"
+  1722→          animate={{
+  1723→            left: mousePos.x - 80,
+  1724→            top: mousePos.y - 80,
+  1725→            opacity: 1,
+  1726→          }}
+  1727→          initial={{ opacity: 0 }}
+  1728→          exit={{ opacity: 0 }}
+  1729→          transition={{ duration: 0.15, ease: 'easeOut' }}
+  1730→          style={{ width: 160, height: 160 }}
+  1731→        >
+  1732→          <div className="w-full h-full rounded-full bg-emerald-500/10 dark:bg-emerald-500/5 blur-xl" />
+  1733→        </motion.div>
+  1734→      )}
+  1735→      <div className="relative z-10">{children}</div>
+  1736→    </div>
+  1737→  );
+  1738→}
+  1739→
+  1740→// ============================================================
+  1741→// Pulsing Icon Container
+  1742→// ============================================================
+  1743→function PulsingIconContainer({ icon: Icon, index }: { icon: React.ElementType; index: number }) {
+  1744→  const gradients = [
+  1745→    'from-emerald-500 to-emerald-600',
+  1746→    'from-violet-500 to-violet-600',
+  1747→    'from-amber-500 to-amber-600',
+  1748→    'from-sky-500 to-sky-600',
+  1749→    'from-rose-500 to-rose-600',
+  1750→    'from-teal-500 to-teal-600',
+  1751→  ];
+  1752→  const gradient = gradients[index % gradients.length];
+  1753→
+  1754→  return (
+  1755→    <motion.div
+  1756→      className={`relative h-10 w-10 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow`}
+  1757→      animate={{ scale: [1, 1.05, 1] }}
+  1758→      transition={{ duration: 3, repeat: Infinity, delay: index * 0.3, ease: 'easeInOut' }}
+  1759→    >
+  1760→      <Icon className="h-5 w-5 text-white" />
+  1761→      <div className={`absolute inset-0 rounded-lg bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-40 blur-md transition-opacity duration-300`} />
+  1762→    </motion.div>
+  1763→  );
+  1764→}
+  1765→
+  1766→// ============================================================
+  1767→// Category Badge Colors
+  1768→// ============================================================
+  1769→const categoryColors: Record<string, string> = {
+  1770→  AI: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+  1771→  Commerce: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+  1772→  Community: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  1773→  Analytics: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+  1774→};
+  1775→
+  1776→// ============================================================
+  1777→// Feature Tooltip
+  1778→// ============================================================
+  1779→function FeatureTooltip({ text }: { text: string }) {
+  1780→  const [show, setShow] = useState(false);
+  1781→  return (
+  1782→    <div className="relative inline-block">
+  1783→      <button
+  1784→        onMouseEnter={() => setShow(true)}
+  1785→        onMouseLeave={() => setShow(false)}
+  1786→        className="h-4 w-4 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-[8px] ml-1 hover:bg-muted-foreground/20 transition-colors"
+  1787→        aria-label="More info"
+  1788→      >
+  1789→        ?
+  1790→      </button>
+  1791→      <AnimatePresence>
+  1792→        {show && (
+  1793→          <motion.div
+  1794→            initial={{ opacity: 0, y: 5, scale: 0.95 }}
+  1795→            animate={{ opacity: 1, y: 0, scale: 1 }}
+  1796→            exit={{ opacity: 0, y: 5, scale: 0.95 }}
+  1797→            transition={{ duration: 0.15 }}
+  1798→            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-56 px-3 py-2 rounded-lg bg-popover border border-border shadow-lg text-xs text-popover-foreground"
+  1799→          >
+  1800→            {text}
+  1801→            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-border" />
+  1802→          </motion.div>
+  1803→        )}
+  1804→      </AnimatePresence>
+  1805→    </div>
+  1806→  );
+  1807→}
+  1808→
+  1809→// ============================================================
+  1810→// Connecting Lines Between Features (Desktop)
+  1811→// ============================================================
+  1812→function ConnectingLines() {
+  1813→  return (
+  1814→    <div className="hidden lg:block absolute inset-0 pointer-events-none overflow-hidden">
+  1815→      <svg className="w-full h-full" style={{ opacity: 0.06 }}>
+  1816→        {/* Diagonal lines connecting feature grid cells */}
+  1817→        <line x1="33%" y1="25%" x2="66%" y2="50%" stroke="currentColor" strokeWidth="1" className="text-emerald-500" />
+  1818→        <line x1="66%" y1="25%" x2="33%" y2="50%" stroke="currentColor" strokeWidth="1" className="text-emerald-500" />
+  1819→        <line x1="33%" y1="50%" x2="66%" y2="75%" stroke="currentColor" strokeWidth="1" className="text-emerald-500" />
+  1820→        <line x1="66%" y1="50%" x2="33%" y2="75%" stroke="currentColor" strokeWidth="1" className="text-emerald-500" />
+  1821→      </svg>
+  1822→    </div>
+  1823→  );
+  1824→}
+  1825→
+  1826→// ============================================================
+  1827→// Animated Price Counter
+  1828→// ============================================================
+  1829→function AnimatedPrice({ target, isInView }: { target: number; isInView: boolean }) {
+  1830→  const [count, setCount] = useState(0);
+  1831→  const hasAnimated = useRef(false);
+  1832→
+  1833→  useEffect(() => {
+  1834→    if (!isInView || hasAnimated.current) return;
+  1835→    hasAnimated.current = true;
+  1836→
+  1837→    const duration = 1200;
+  1838→    const startTime = performance.now();
+  1839→
+  1840→    const animate = (now: number) => {
+  1841→      const elapsed = now - startTime;
+  1842→      const progress = Math.min(elapsed / duration, 1);
+  1843→      const eased = 1 - Math.pow(1 - progress, 3);
+  1844→      setCount(Math.round(target * eased));
+  1845→      if (progress < 1) {
+  1846→        requestAnimationFrame(animate);
+  1847→      }
+  1848→    };
+  1849→
+  1850→    requestAnimationFrame(animate);
+  1851→  }, [target, isInView]);
+  1852→
+  1853→  return <span>{count}</span>;
+  1854→}
+  1855→
+  1856→// ============================================================
+  1857→// Animated Checkmark (for comparison table)
+  1858→// ============================================================
+  1859→function AnimatedCheckmark({ delay = 0, isInView }: { delay?: number; isInView: boolean }) {
+  1860→  const [drawn, setDrawn] = useState(false);
+  1861→
+  1862→  useEffect(() => {
+  1863→    if (!isInView) return;
+  1864→    const timer = setTimeout(() => setDrawn(true), delay);
+  1865→    return () => clearTimeout(timer);
+  1866→  }, [delay, isInView]);
+  1867→
+  1868→  return (
+  1869→    <motion.svg
+  1870→      width="16"
+  1871→      height="16"
+  1872→      viewBox="0 0 16 16"
+  1873→      className="mx-auto"
+  1874→      initial={{ scale: 0 }}
+  1875→      animate={drawn ? { scale: 1 } : { scale: 0 }}
+  1876→      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+  1877→    >
+  1878→      <motion.path
+  1879→        d="M3 8.5L6.5 12L13 4"
+  1880→        fill="none"
+  1881→        stroke="currentColor"
+  1882→        strokeWidth="2"
+  1883→        strokeLinecap="round"
+  1884→        strokeLinejoin="round"
+  1885→        initial={{ pathLength: 0 }}
+  1886→        animate={drawn ? { pathLength: 1 } : { pathLength: 0 }}
+  1887→        transition={{ duration: 0.5, delay: delay / 1000, ease: 'easeOut' }}
+  1888→        className="text-emerald-500"
+  1889→      />
+  1890→    </motion.svg>
+  1891→  );
+  1892→}
+  1893→
+  1894→// ============================================================
+  1895→// Comparison Cell Helper (color-coded)
+  1896→// ============================================================
+  1897→function ComparisonCell({ value, isNextgen = false, isInView = false, rowIndex = 0 }: { value: string | boolean; isNextgen?: boolean; isInView?: boolean; rowIndex?: number }) {
+  1898→  if (typeof value === 'boolean') {
+  1899→    if (value) {
+  1900→      return <AnimatedCheckmark delay={rowIndex * 80} isInView={isInView} />;
+  1901→    }
+  1902→    return (
+  1903→      <motion.div
+  1904→        initial={{ scale: 0 }}
+  1905→        animate={isInView ? { scale: 1 } : { scale: 0 }}
+  1906→        transition={{ type: 'spring', stiffness: 300, damping: 20, delay: rowIndex * 0.05 }}
+  1907→      >
+  1908→        <X className="h-4 w-4 mx-auto text-red-400" />
+  1909→      </motion.div>
+  1910→    );
+  1911→  }
+  1912→  // String value — check for "Limited" or "Partial"
+  1913→  const isAmber = typeof value === 'string' && (value === 'Limited' || value === 'Partial' || value === 'Toxic mechanics');
+  1914→  return (
+  1915→    <motion.span
+  1916→      initial={{ opacity: 0 }}
+  1917→      animate={isInView ? { opacity: 1 } : { opacity: 0 }}
+  1918→      transition={{ delay: rowIndex * 0.05, duration: 0.3 }}
+  1919→      className={`text-xs font-medium ${
+  1920→        isNextgen ? 'text-emerald-700 dark:text-emerald-300' :
+  1921→        isAmber ? 'text-amber-600 dark:text-amber-400' :
+  1922→        'text-muted-foreground'
+  1923→      }`}
+  1924→    >
+  1925→      {value}
+  1926→    </motion.span>
+  1927→  );
+  1928→}
+  1929→
+  1930→// ============================================================
+  1931→// Feature Tooltip for Comparison Table
+  1932→// ============================================================
+  1933→function ComparisonFeatureTooltip({ text }: { text: string }) {
+  1934→  const [show, setShow] = useState(false);
+  1935→  return (
+  1936→    <div className="relative inline-block ml-1">
+  1937→      <button
+  1938→        onMouseEnter={() => setShow(true)}
+  1939→        onMouseLeave={() => setShow(false)}
+  1940→        className="h-3.5 w-3.5 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-[7px] hover:bg-muted-foreground/20 transition-colors"
+  1941→        aria-label={`Info about ${text}`}
+  1942→      >
+  1943→        i
+  1944→      </button>
+  1945→      <AnimatePresence>
+  1946→        {show && (
+  1947→          <motion.div
+  1948→            initial={{ opacity: 0, y: 5, scale: 0.95 }}
+  1949→            animate={{ opacity: 1, y: 0, scale: 1 }}
+  1950→            exit={{ opacity: 0, y: 5, scale: 0.95 }}
+  1951→            transition={{ duration: 0.15 }}
+  1952→            className="absolute bottom-full left-0 mb-2 z-50 w-52 px-3 py-2 rounded-lg bg-popover border border-border shadow-lg text-xs text-popover-foreground"
+  1953→          >
+  1954→            {text}
+  1955→          </motion.div>
+  1956→        )}
+  1957→      </AnimatePresence>
+  1958→    </div>
+  1959→  );
+  1960→}
+  1961→
+  1962→// ============================================================
+  1963→// Countdown Timer (for CTA section)
+  1964→// ============================================================
+  1965→function CountdownTimer() {
+  1966→  const [timeLeft, setTimeLeft] = useState({ hours: 23, minutes: 45, seconds: 30 });
+  1967→
+  1968→  useEffect(() => {
+  1969→    const timer = setInterval(() => {
+  1970→      setTimeLeft((prev) => {
+  1971→        let { hours, minutes, seconds } = prev;
+  1972→        seconds--;
+  1973→        if (seconds < 0) {
+  1974→          seconds = 59;
+  1975→          minutes--;
+  1976→        }
+  1977→        if (minutes < 0) {
+  1978→          minutes = 59;
+  1979→          hours--;
+  1980→        }
+  1981→        if (hours < 0) {
+  1982→          hours = 23;
+  1983→          minutes = 59;
+  1984→          seconds = 59;
+  1985→        }
+  1986→        return { hours, minutes, seconds };
+  1987→      });
+  1988→    }, 1000);
+  1989→    return () => clearInterval(timer);
+  1990→  }, []);
+  1991→
+  1992→  const pad = (n: number) => n.toString().padStart(2, '0');
+  1993→
+  1994→  return (
+  1995→    <div className="flex items-center justify-center gap-2 mt-6">
+  1996→      <span className="text-sm text-slate-400">Special offer ends in:</span>
+  1997→      <div className="flex gap-1">
+  1998→        {[
+  1999→          { value: pad(timeLeft.hours), label: 'h' },
+  2000→          { value: pad(timeLeft.minutes), label: 'm' },
+
+[showing lines 1-2000 of 3105; use offset=2001 with limit to continue reading]

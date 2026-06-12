@@ -26,7 +26,6 @@ import { AIContentGeneration } from '@/components/ai/ai-content-generation';
 import { ThemeSync } from '@/lib/theme-sync';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
@@ -50,6 +49,7 @@ import {
   CheckCheck,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
+import { SearchDialog } from '@/components/shared/search-dialog';
 import { signOut } from 'next-auth/react';
 
 // View name map for breadcrumbs
@@ -119,7 +119,7 @@ function MainContent() {
 
 // Top bar for admin/learner mode
 function TopBar() {
-  const { appMode, currentView, currentUser, notifications, markAllNotificationsRead, markNotificationRead, logout } = useAppStore();
+  const { appMode, currentView, currentUser, notifications, markAllNotificationsRead, markNotificationRead, logout, setView, setActiveModal } = useAppStore();
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const breadcrumb = viewLabels[currentView] || 'Dashboard';
@@ -142,13 +142,16 @@ function TopBar() {
       {/* Right: Search, Notifications, User */}
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Search */}
-        <div className="hidden sm:flex items-center relative">
-          <Search className="absolute left-2.5 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            placeholder="Search..."
-            className="h-8 w-48 lg:w-64 pl-8 text-sm bg-muted/50 border-0 focus-visible:ring-1"
-          />
-        </div>
+        <button
+          onClick={() => setActiveModal('search')}
+          className="hidden sm:flex items-center relative h-8 w-48 lg:w-64 rounded-md bg-muted/50 px-3 text-sm text-muted-foreground hover:bg-muted/70 transition-colors"
+        >
+          <Search className="h-3.5 w-3.5 mr-2 shrink-0" />
+          <span className="flex-1 text-left">Search...</span>
+          <kbd className="pointer-events-none hidden lg:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+            ⌘K
+          </kbd>
+        </button>
 
         {/* Theme Toggle */}
         <ThemeToggle />
@@ -221,11 +224,11 @@ function TopBar() {
               <p className="text-xs text-muted-foreground">{currentUser?.email}</p>
             </div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setView(isAdmin ? 'admin-settings' : 'learner-profile')}>
               <User className="mr-2 h-4 w-4" />
               Profile
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setView(isAdmin ? 'admin-settings' : 'learner-profile')}>
               <Settings className="mr-2 h-4 w-4" />
               Settings
             </DropdownMenuItem>
@@ -308,6 +311,8 @@ export function AppLayout() {
         </main>
         {/* Floating AI Chat Widget - always available in learner mode */}
         <AITutorFloatingWidget />
+        {/* Global Search Dialog */}
+        <SearchDialog />
       </div>
     </TenantLoader>
   );

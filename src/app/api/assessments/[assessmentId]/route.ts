@@ -49,6 +49,13 @@ export async function PUT(
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
     }
 
+    // Verify tenantId if provided (from body or query param)
+    const { searchParams } = new URL(request.url);
+    const tenantId = body.tenantId || searchParams.get('tenantId');
+    if (tenantId && existing.tenantId !== tenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const updateData: Record<string, unknown> = {};
     const allowedFields = [
       'title', 'description', 'type', 'passingScore', 'maxAttempts',
@@ -129,6 +136,13 @@ export async function DELETE(
     const existing = await db.assessment.findUnique({ where: { id: assessmentId } });
     if (!existing) {
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
+    }
+
+    // Verify tenantId if provided
+    const { searchParams } = new URL(request.url);
+    const tenantId = searchParams.get('tenantId');
+    if (tenantId && existing.tenantId !== tenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     await db.assessment.delete({ where: { id: assessmentId } });

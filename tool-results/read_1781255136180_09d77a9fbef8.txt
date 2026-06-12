@@ -1,0 +1,2002 @@
+     1→'use client';
+     2→
+     3→import { useState, useRef, useCallback, useMemo } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { useAppStore } from '@/store/app-store';
+     6→import {
+     7→  useCourse,
+     8→  useEnrollments,
+     9→  useLessonProgress,
+    10→  useUpdateProgress,
+    11→  useEnroll,
+    12→  useCourses,
+    13→} from '@/hooks/use-data';
+    14→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    15→import { Button } from '@/components/ui/button';
+    16→import { Badge } from '@/components/ui/badge';
+    17→import { Progress } from '@/components/ui/progress';
+    18→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    19→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    20→import { Separator } from '@/components/ui/separator';
+    21→import { Input } from '@/components/ui/input';
+    22→import { Textarea } from '@/components/ui/textarea';
+    23→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+    24→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    25→import { VideoPlayer } from '@/components/shared/video-player';
+    26→import type { Chapter } from '@/components/shared/video-player';
+    27→import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+    28→import {
+    29→  Play,
+    30→  FileText,
+    31→  Headphones,
+    32→  Video,
+    33→  Monitor,
+    34→  Clock,
+    35→  Star,
+    36→  Users,
+    37→  ChevronDown,
+    38→  ChevronRight,
+    39→  CheckCircle2,
+    40→  Circle,
+    41→  Eye,
+    42→  MessageSquare,
+    43→  Download,
+    44→  ExternalLink,
+    45→  GitBranch,
+    46→  ThumbsUp,
+    47→  ThumbsDown,
+    48→  Send,
+    49→  BookOpen,
+    50→  Award,
+    51→  Search,
+    52→  Filter,
+    53→  Pin,
+    54→  Tag,
+    55→  Flame,
+    56→  TrendingUp,
+    57→  TrendingDown,
+    58→  Minus,
+    59→  BarChart3,
+    60→  Calendar,
+    61→  Zap,
+    62→  Target,
+    63→  Trophy,
+    64→  ArrowRight,
+    65→  Copy,
+    66→  Sparkles,
+    67→  StickyNote,
+    68→  Code2,
+    69→  HelpCircle,
+    70→  Bookmark,
+    71→  Edit3,
+    72→  Check,
+    73→  X,
+    74→  ChevronUp,
+    75→  MessageCircle,
+    76→  GraduationCap,
+    77→  Globe,
+    78→  Briefcase,
+    79→  Heart,
+    80→  Share2,
+    81→  MoreHorizontal,
+    82→  ArrowUpRight,
+    83→  Loader2,
+    84→  FileCode,
+    85→  Notebook,
+    86→  Timer,
+    87→  Activity,
+    88→  Milestone,
+    89→  MessageCircleQuestion,
+    90→  Plus,
+    91→  Bold,
+    92→  Italic,
+    93→  Link2,
+    94→  Trash2,
+    95→} from 'lucide-react';
+    96→import { cn } from '@/lib/utils';
+    97→import type { Lesson, Module } from '@/types';
+    98→
+    99→// ─── Content type icon mapping ─────────────────────────────
+   100→function ContentTypeIcon({ type, className }: { type: Lesson['contentType']; className?: string }) {
+   101→  switch (type) {
+   102→    case 'video':
+   103→      return <Video className={className} />;
+   104→    case 'text':
+   105→      return <FileText className={className} />;
+   106→    case 'audio':
+   107→      return <Headphones className={className} />;
+   108→    case 'document':
+   109→      return <FileText className={className} />;
+   110→    case 'live_session':
+   111→      return <Monitor className={className} />;
+   112→    default:
+   113→      return <FileText className={className} />;
+   114→  }
+   115→}
+   116→
+   117→// ─── Format duration ───────────────────────────────────────
+   118→function formatDuration(seconds?: number): string {
+   119→  if (!seconds) return '';
+   120→  const mins = Math.floor(seconds / 60);
+   121→  if (mins < 60) return `${mins} min`;
+   122→  const hours = Math.floor(mins / 60);
+   123→  const remainMins = mins % 60;
+   124→  return `${hours}h ${remainMins}m`;
+   125→}
+   126→
+   127→// ─── Level color mapping ───────────────────────────────────
+   128→function getLevelColor(level: string) {
+   129→  const colors: Record<string, string> = {
+   130→    beginner: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+   131→    intermediate: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+   132→    advanced: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+   133→    expert: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+   134→  };
+   135→  return colors[level] || 'bg-slate-100 text-slate-700';
+   136→}
+   137→
+   138→function getLevelAccent(level: string) {
+   139→  const accents: Record<string, string> = {
+   140→    beginner: 'from-emerald-600 to-emerald-800',
+   141→    intermediate: 'from-amber-600 to-amber-800',
+   142→    advanced: 'from-orange-600 to-orange-800',
+   143→    expert: 'from-red-600 to-red-800',
+   144→  };
+   145→  return accents[level] || 'from-slate-600 to-slate-800';
+   146→}
+   147→
+   148→// ─── Demo chapters for video player ────────────────────────────
+   149→const demoChapters: Chapter[] = [
+   150→  { time: 0, title: 'Introduction' },
+   151→  { time: 45, title: 'Core Concepts' },
+   152→  { time: 120, title: 'Setting Up the Environment' },
+   153→  { time: 180, title: 'Building Your First Component' },
+   154→  { time: 240, title: 'Summary & Key Takeaways' },
+   155→];
+   156→
+   157→// ─── Default resume positions (overridden by API progress data) ─
+   158→const defaultResumePositions: Record<string, number> = {};
+   159→
+   160→// ─── Enhanced Mock discussion threads with Q&A ────────────────
+   161→interface DiscussionReply {
+   162→  id: string;
+   163→  author: string;
+   164→  avatar: string;
+   165→  content: string;
+   166→  time: string;
+   167→  upvotes: number;
+   168→  downvotes: number;
+   169→  isInstructor: boolean;
+   170→  isAnswer: boolean;
+   171→}
+   172→
+   173→interface DiscussionQuestion {
+   174→  id: string;
+   175→  author: string;
+   176→  avatar: string;
+   177→  title: string;
+   178→  content: string;
+   179→  lessonRef: string;
+   180→  lessonId: string;
+   181→  upvotes: number;
+   182→  downvotes: number;
+   183→  time: string;
+   184→  isAnswered: boolean;
+   185→  replies: DiscussionReply[];
+   186→}
+   187→
+   188→const discussionQuestions: DiscussionQuestion[] = [
+   189→  {
+   190→    id: 'q-1',
+   191→    author: 'Mike Chen',
+   192→    avatar: 'MC',
+   193→    title: 'How do Server Components interact with client state?',
+   194→    content: 'I\'m confused about how Server Components can trigger client-side state updates. Can someone explain the data flow? I\'ve read the docs but still struggling with the mental model.',
+   195→    lessonRef: 'Server Components Architecture',
+   196→    lessonId: 'les-1-1-2',
+   197→    upvotes: 24,
+   198→    downvotes: 1,
+   199→    time: '2 hours ago',
+   200→    isAnswered: true,
+   201→    replies: [
+   202→      {
+   203→        id: 'r-1-1',
+   204→        author: 'Sarah Mitchell',
+   205→        avatar: 'SM',
+   206→        content: 'Great question! Server Components don\'t directly interact with client state. Instead, they pass data as props to Client Components. Think of it as a one-way data flow: Server → Client. You can use Server Actions to mutate data on the server, which then triggers a re-render.',
+   207→        time: '1 hour ago',
+   208→        upvotes: 18,
+   209→        downvotes: 0,
+   210→        isInstructor: true,
+   211→        isAnswer: true,
+   212→      },
+   213→      {
+   214→        id: 'r-1-2',
+   215→        author: 'Emma Rodriguez',
+   216→        avatar: 'ER',
+   217→        content: 'This clicked for me when I started thinking of Server Components as "data fetchers" and Client Components as "interaction handlers". The pattern is: Server Component fetches → passes as props → Client Component handles events → Server Action mutates → revalidation.',
+   218→        time: '45 min ago',
+   219→        upvotes: 12,
+   220→        downvotes: 0,
+   221→        isInstructor: false,
+   222→        isAnswer: false,
+   223→      },
+   224→    ],
+   225→  },
+   226→  {
+   227→    id: 'q-2',
+   228→    author: 'Emma Rodriguez',
+   229→    avatar: 'ER',
+   230→    title: 'Best pattern for loading states in App Router?',
+   231→    content: 'What\'s the recommended way to handle loading.tsx vs Suspense boundaries for complex pages? I have a dashboard with multiple data sources and want to show progressive loading.',
+   232→    lessonRef: 'App Router Architecture',
+   233→    lessonId: 'les-1-2-1',
+   234→    upvotes: 16,
+   235→    downvotes: 0,
+   236→    time: '5 hours ago',
+   237→    isAnswered: false,
+   238→    replies: [
+   239→      {
+   240→        id: 'r-2-1',
+   241→        author: 'David Park',
+   242→        avatar: 'DP',
+   243→        content: 'For dashboards, I recommend using multiple Suspense boundaries with individual loading skeletons. This way each section loads independently. Don\'t rely solely on loading.tsx as it\'s page-level.',
+   244→        time: '3 hours ago',
+   245→        upvotes: 8,
+   246→        downvotes: 0,
+   247→        isInstructor: false,
+   248→        isAnswer: false,
+   249→      },
+   250→    ],
+   251→  },
+   252→  {
+   253→    id: 'q-3',
+   254→    author: 'David Park',
+   255→    avatar: 'DP',
+   256→    title: 'TypeScript generic patterns for API routes',
+   257→    content: 'I\'ve been experimenting with typed API routes. Here\'s my approach to type-safe server actions - has anyone found a better pattern for inferring return types?',
+   258→    lessonRef: 'TypeScript Advanced Patterns',
+   259→    lessonId: 'les-1-1-3',
+   260→    upvotes: 31,
+   261→    downvotes: 2,
+   262→    time: '1 day ago',
+   263→    isAnswered: true,
+   264→    replies: [
+   265→      {
+   266→        id: 'r-3-1',
+   267→        author: 'Sarah Mitchell',
+   268→        avatar: 'SM',
+   269→        content: 'Excellent question! I cover this in detail in Module 3. The key is using Zod for runtime validation + TypeScript inference. This gives you end-to-end type safety. Here\'s the pattern: `const schema = z.object({...}); type Input = z.infer<typeof schema>;`',
+   270→        time: '20 hours ago',
+   271→        upvotes: 22,
+   272→        downvotes: 0,
+   273→        isInstructor: true,
+   274→        isAnswer: true,
+   275→      },
+   276→      {
+   277→        id: 'r-3-2',
+   278→        author: 'Alex Kim',
+   279→        avatar: 'AK',
+   280→        content: 'I\'ve been using tRPC-style patterns with server actions and it\'s been great. The type inference works beautifully.',
+   281→        time: '18 hours ago',
+   282→        upvotes: 5,
+   283→        downvotes: 1,
+   284→        isInstructor: false,
+   285→        isAnswer: false,
+   286→      },
+   287→    ],
+   288→  },
+   289→  {
+   290→    id: 'q-4',
+   291→    author: 'Lisa Wang',
+   292→    avatar: 'LW',
+   293→    title: 'When should I use "use client" vs keeping components as Server Components?',
+   294→    content: 'I\'m not sure about the boundary between server and client components. Is there a rule of thumb for when a component should be a client component?',
+   295→    lessonRef: 'React 19 New Features Deep Dive',
+   296→    lessonId: 'les-1-1-1',
+   297→    upvotes: 19,
+   298→    downvotes: 0,
+   299→    time: '2 days ago',
+   300→    isAnswered: false,
+   301→    replies: [],
+   302→  },
+   303→  {
+   304→    id: 'q-5',
+   305→    author: 'Tom Williams',
+   306→    avatar: 'TW',
+   307→    title: 'Server Actions error handling best practices?',
+   308→    content: 'How should I handle errors in Server Actions? Should I use try/catch or rely on error boundaries? What about validation errors vs server errors?',
+   309→    lessonRef: 'Server Actions & Data Mutation',
+   310→    lessonId: 'les-1-2-2',
+   311→    upvotes: 11,
+   312→    downvotes: 1,
+   313→    time: '3 days ago',
+   314→    isAnswered: false,
+   315→    replies: [
+   316→      {
+   317→        id: 'r-5-1',
+   318→        author: 'Sarah Mitchell',
+   319→        avatar: 'SM',
+   320→        content: 'For Server Actions, I recommend returning a result object: `{ success: boolean, data?: T, error?: string }`. This lets the client component handle both success and error states gracefully. Error boundaries are for unexpected errors, not validation.',
+   321→        time: '2 days ago',
+   322→        upvotes: 14,
+   323→        downvotes: 0,
+   324→        isInstructor: true,
+   325→        isAnswer: false,
+   326→      },
+   327→    ],
+   328→  },
+   329→];
+   330→
+   331→// ─── Mock Notes Data ───────────────────────────────────────
+   332→interface Note {
+   333→  id: string;
+   334→  lessonId: string;
+   335→  lessonTitle: string;
+   336→  content: string;
+   337→  category: 'personal' | 'study_guide' | 'code_snippet' | 'question';
+   338→  timestamp?: number;
+   339→  createdAt: string;
+   340→  updatedAt: string;
+   341→}
+   342→
+   343→const mockNotes: Note[] = [
+   344→  {
+   345→    id: 'note-1',
+   346→    lessonId: 'les-1-1-1',
+   347→    lessonTitle: 'React 19 New Features Deep Dive',
+   348→    content: '**Key Takeaways:**\n- React 19 introduces the `use()` hook for promises\n- Server Components are the default in Next.js\n- Actions replace traditional form handling\n\nThe `use()` hook is a game changer for data fetching patterns.',
+   349→    category: 'study_guide',
+   350→    timestamp: 45,
+   351→    createdAt: '2024-10-15T10:30:00Z',
+   352→    updatedAt: '2024-10-15T10:35:00Z',
+   353→  },
+   354→  {
+   355→    id: 'note-2',
+   356→    lessonId: 'les-1-1-1',
+   357→    lessonTitle: 'React 19 New Features Deep Dive',
+   358→    content: '```typescript\n// Server Component example\nasync function UserProfile({ id }: { id: string }) {\n  const user = await db.user.findUnique({ where: { id } });\n  return <div>{user.name}</div>;\n}\n```',
+   359→    category: 'code_snippet',
+   360→    timestamp: 120,
+   361→    createdAt: '2024-10-15T11:00:00Z',
+   362→    updatedAt: '2024-10-15T11:05:00Z',
+   363→  },
+   364→  {
+   365→    id: 'note-3',
+   366→    lessonId: 'les-1-1-2',
+   367→    lessonTitle: 'Server Components Architecture',
+   368→    content: 'Need to revisit: How does streaming work with Suspense boundaries? The instructor mentioned partial hydration - need to understand this better for the quiz.',
+   369→    category: 'question',
+   370→    createdAt: '2024-10-16T09:15:00Z',
+   371→    updatedAt: '2024-10-16T09:20:00Z',
+   372→  },
+   373→  {
+   374→    id: 'note-4',
+   375→    lessonId: 'les-1-1-2',
+   376→    lessonTitle: 'Server Components Architecture',
+   377→    content: 'Server Components render on the server and send HTML to the client. They CANNOT:\n- Use useState, useEffect\n- Handle event listeners\n- Use browser-only APIs\n\nThey CAN:\n- Fetch data directly\n- Access server resources\n- Pass data to Client Components',
+   378→    category: 'study_guide',
+   379→    timestamp: 180,
+   380→    createdAt: '2024-10-16T09:30:00Z',
+   381→    updatedAt: '2024-10-16T09:35:00Z',
+   382→  },
+   383→  {
+   384→    id: 'note-5',
+   385→    lessonId: 'les-1-1-3',
+   386→    lessonTitle: 'TypeScript Advanced Patterns',
+   387→    content: 'My personal approach to generics: Start simple, add constraints only when needed. The KISS principle applies especially to TypeScript generics.',
+   388→    category: 'personal',
+   389→    createdAt: '2024-10-17T14:00:00Z',
+   390→    updatedAt: '2024-10-17T14:05:00Z',
+   391→  },
+   392→];
+   393→
+   394→// ─── Mock Progress Timeline Data ───────────────────────────
+   395→interface TimelineEvent {
+   396→  id: string;
+   397→  lessonId: string;
+   398→  lessonTitle: string;
+   399→  moduleName: string;
+   400→  date: string;
+   401→  timeSpent: number;
+   402→  quizScore?: number;
+   403→  type: 'completed' | 'started' | 'quiz';
+   404→}
+   405→
+   406→const timelineEvents: TimelineEvent[] = [
+   407→  { id: 'te-1', lessonId: 'les-1-1-1', lessonTitle: 'React 19 New Features Deep Dive', moduleName: 'Foundations of Modern React', date: '2024-10-14', timeSpent: 47, quizScore: 92, type: 'completed' },
+   408→  { id: 'te-2', lessonId: 'les-1-1-1', lessonTitle: 'React 19 New Features Deep Dive', moduleName: 'Foundations of Modern React', date: '2024-10-14', timeSpent: 47, quizScore: 92, type: 'quiz' },
+   409→  { id: 'te-3', lessonId: 'les-1-1-2', lessonTitle: 'Server Components Architecture', moduleName: 'Foundations of Modern React', date: '2024-10-16', timeSpent: 52, quizScore: 88, type: 'completed' },
+   410→  { id: 'te-4', lessonId: 'les-1-1-2', lessonTitle: 'Server Components Architecture', moduleName: 'Foundations of Modern React', date: '2024-10-16', timeSpent: 52, quizScore: 88, type: 'quiz' },
+   411→  { id: 'te-5', lessonId: 'les-1-1-3', lessonTitle: 'TypeScript Advanced Patterns', moduleName: 'Foundations of Modern React', date: '2024-10-17', timeSpent: 35, type: 'started' },
+   412→];
+   413→
+   414→const weeklyActivity = [
+   415→  { day: 'Mon', hours: 1.5 },
+   416→  { day: 'Tue', hours: 2.0 },
+   417→  { day: 'Wed', hours: 0.5 },
+   418→  { day: 'Thu', hours: 1.8 },
+   419→  { day: 'Fri', hours: 2.2 },
+   420→  { day: 'Sat', hours: 0.8 },
+   421→  { day: 'Sun', hours: 0 },
+   422→];
+   423→
+   424→const milestones = [
+   425→  { id: 'ms-1', title: 'First Lesson Completed', description: 'Completed your first lesson', icon: '🎯', date: 'Oct 14', achieved: true },
+   426→  { id: 'ms-2', title: 'Quick Learner', description: 'Completed 2 lessons in one day', icon: '⚡', date: 'Oct 14', achieved: true },
+   427→  { id: 'ms-3', title: 'Module Master', description: 'Complete all lessons in a module', icon: '🏆', date: '', achieved: false },
+   428→  { id: 'ms-4', title: 'Quiz Ace', description: 'Score 95%+ on any quiz', icon: '🎓', date: '', achieved: false },
+   429→  { id: 'ms-5', title: 'Streak Champion', description: 'Maintain a 7-day learning streak', icon: '🔥', date: '', achieved: false },
+   430→  { id: 'ms-6', title: 'Course Graduate', description: 'Complete the entire course', icon: '🏅', date: '', achieved: false },
+   431→];
+   432→
+   433→// ─── Mock resources ────────────────────────────────────────
+   434→const courseResources = [
+   435→  { id: 'res-1', title: 'React 19 Cheat Sheet', type: 'pdf', size: '2.4 MB' },
+   436→  { id: 'res-2', title: 'Next.js App Router Diagram', type: 'pdf', size: '1.1 MB' },
+   437→  { id: 'res-3', title: 'Course Code Repository', type: 'repo', url: 'github.com/nextgen-lms/react-masterclass' },
+   438→  { id: 'res-4', title: 'TypeScript Best Practices Guide', type: 'pdf', size: '3.8 MB' },
+   439→  { id: 'res-5', title: 'Official React Documentation', type: 'link', url: 'react.dev' },
+   440→  { id: 'res-6', title: 'Next.js Documentation', type: 'link', url: 'nextjs.org/docs' },
+   441→];
+   442→
+   443→// ─── Mock reviews ──────────────────────────────────────────
+   444→const courseReviews = [
+   445→  { id: 'rev-1', author: 'Sarah K.', avatar: 'SK', rating: 5, date: '2 weeks ago', content: 'Absolutely incredible course! The section on Server Components completely changed how I think about React architecture. Highly recommended for anyone serious about modern web development.' },
+   446→  { id: 'rev-2', author: 'James L.', avatar: 'JL', rating: 5, date: '1 month ago', content: 'Best React course I\'ve ever taken. The instructor explains complex concepts in a way that\'s easy to follow. The hands-on projects really solidify the learning.' },
+   447→  { id: 'rev-3', author: 'Priya S.', avatar: 'PS', rating: 4, date: '1 month ago', content: 'Great content overall. The TypeScript patterns section was excellent. Would have liked more content on testing patterns, but still very much worth the investment.' },
+   448→  { id: 'rev-4', author: 'Alex M.', avatar: 'AM', rating: 5, date: '2 months ago', content: 'This course is a game-changer. I went from struggling with React concepts to building production apps confidently. The community support is amazing too.' },
+   449→  { id: 'rev-5', author: 'Tom W.', avatar: 'TW', rating: 4, date: '3 months ago', content: 'Very comprehensive course. The App Router deep-dive was particularly helpful. Some sections could be a bit more beginner-friendly, but the depth is appreciated.' },
+   450→];
+   451→
+   452→// ─── Rating distribution ───────────────────────────────────
+   453→const ratingDistribution = [
+   454→  { stars: 5, count: 186 },
+   455→  { stars: 4, count: 89 },
+   456→  { stars: 3, count: 24 },
+   457→  { stars: 2, count: 9 },
+   458→  { stars: 1, count: 4 },
+   459→];
+   460→const totalReviews = ratingDistribution.reduce((s, r) => s + r.count, 0);
+   461→
+   462→// ─── Q&A Discussion Data ──────────────────────────────────
+   463→interface QAAnswer {
+   464→  id: string;
+   465→  author: { name: string; avatar: string; role: 'instructor' | 'learner' };
+   466→  content: string;
+   467→  upvotes: number;
+   468→  downvotes: number;
+   469→  isAccepted: boolean;
+   470→  createdAt: string;
+   471→  replies: QAReply[];
+   472→}
+   473→
+   474→interface QAReply {
+   475→  id: string;
+   476→  author: { name: string; avatar: string; role: 'instructor' | 'learner' };
+   477→  content: string;
+   478→  upvotes: number;
+   479→  createdAt: string;
+   480→}
+   481→
+   482→interface QAQuestion {
+   483→  id: string;
+   484→  lessonId: string;
+   485→  title: string;
+   486→  content: string;
+   487→  author: { name: string; avatar: string; role: 'instructor' | 'learner' };
+   488→  tags: string[];
+   489→  upvotes: number;
+   490→  answerCount: number;
+   491→  resolved: boolean;
+   492→  createdAt: string;
+   493→  answers: QAAnswer[];
+   494→}
+   495→
+   496→const mockQAData: QAQuestion[] = [
+   497→  {
+   498→    id: 'q1',
+   499→    lessonId: 'les-1-1-1',
+   500→    title: 'How does useMemo differ from useCallback?',
+   501→    content: 'I understand both are for optimization, but when should I use one vs the other? The docs say useMemo memoizes a value and useCallback memoizes a function, but I need a practical example to really understand the difference.',
+   502→    author: { name: 'Alex Johnson', avatar: 'AJ', role: 'learner' },
+   503→    tags: ['concept', 'hooks'],
+   504→    upvotes: 12,
+   505→    answerCount: 3,
+   506→    resolved: true,
+   507→    createdAt: new Date(Date.now() - 86400000).toISOString(),
+   508→    answers: [
+   509→      {
+   510→        id: 'a1-1',
+   511→        author: { name: 'Sarah Mitchell', avatar: 'SM', role: 'instructor' },
+   512→        content: 'Great question! Think of it this way:\n\n- `useMemo` caches a **computed value** — use it when you want to avoid recalculating something expensive.\n- `useCallback` caches a **function reference** — use it when you want to avoid recreating a function on every render.\n\nExample:\n```tsx\nconst computedValue = useMemo(() => expensiveCalc(a, b), [a, b]);\nconst handleClick = useCallback(() => doSomething(id), [id]);\n```',
+   513→        upvotes: 18,
+   514→        downvotes: 0,
+   515→        isAccepted: true,
+   516→        createdAt: new Date(Date.now() - 80000000).toISOString(),
+   517→        replies: [
+   518→          { id: 'r1-1-1', author: { name: 'Alex Johnson', avatar: 'AJ', role: 'learner' }, content: 'This makes so much sense now! The value vs function distinction is the key. Thank you!', upvotes: 3, createdAt: new Date(Date.now() - 72000000).toISOString() },
+   519→        ],
+   520→      },
+   521→      {
+   522→        id: 'a1-2',
+   523→        author: { name: 'Emma Rodriguez', avatar: 'ER', role: 'learner' },
+   524→        content: 'A rule of thumb I follow: if you\'re passing a function as a prop to a child component, use `useCallback`. If you\'re computing a value, use `useMemo`. Both prevent unnecessary re-renders.',
+   525→        upvotes: 7,
+   526→        downvotes: 0,
+   527→        isAccepted: false,
+   528→        createdAt: new Date(Date.now() - 70000000).toISOString(),
+   529→        replies: [],
+   530→      },
+   531→    ],
+   532→  },
+   533→  {
+   534→    id: 'q2',
+   535→    lessonId: 'les-1-1-2',
+   536→    title: 'Can Server Components access browser APIs like localStorage?',
+   537→    content: 'I keep getting errors when trying to use localStorage in my Server Component. Are Server Components completely isolated from the browser? What\'s the workaround for client-specific logic?',
+   538→    author: { name: 'Mike Chen', avatar: 'MC', role: 'learner' },
+   539→    tags: ['bug', 'server-components'],
+   540→    upvotes: 8,
+   541→    answerCount: 2,
+   542→    resolved: false,
+   543→    createdAt: new Date(Date.now() - 172800000).toISOString(),
+   544→    answers: [
+   545→      {
+   546→        id: 'a2-1',
+   547→        author: { name: 'Sarah Mitchell', avatar: 'SM', role: 'instructor' },
+   548→        content: 'Server Components run on the server and have no access to browser APIs like `localStorage`, `window`, or `document`. The solution is to move any client-side logic into a Client Component (with `"use client"`) and import it into your Server Component.',
+   549→        upvotes: 10,
+   550→        downvotes: 0,
+   551→        isAccepted: false,
+   552→        createdAt: new Date(Date.now() - 160000000).toISOString(),
+   553→        replies: [],
+   554→      },
+   555→    ],
+   556→  },
+   557→  {
+   558→    id: 'q3',
+   559→    lessonId: 'les-1-1-3',
+   560→    title: 'TypeScript utility type for omitting nested keys?',
+   561→    content: 'Is there a clean way to create a utility type that omits nested keys in TypeScript? `Omit<T, K>` only works at the top level. I need something like `DeepOmit<User, "profile.age">`.',
+   562→    author: { name: 'Lisa Wang', avatar: 'LW', role: 'learner' },
+   563→    tags: ['concept', 'typescript'],
+   564→    upvotes: 15,
+   565→    answerCount: 1,
+   566→    resolved: false,
+   567→    createdAt: new Date(Date.now() - 259200000).toISOString(),
+   568→    answers: [
+   569→      {
+   570→        id: 'a3-1',
+   571→        author: { name: 'David Park', avatar: 'DP', role: 'learner' },
+   572→        content: 'You can create a recursive `DeepOmit` type like this:\n```typescript\ntype DeepOmit<T, Path extends string> =\n  Path extends `${infer Key}.${infer Rest}`\n    ? { [K in keyof T]: K extends Key ? DeepOmit<T[K], Rest> : T[K] }\n    : Omit<T, Path>;\n```\nThis uses template literal types to split the path string recursively.',
+   573→        upvotes: 6,
+   574→        downvotes: 1,
+   575→        isAccepted: false,
+   576→        createdAt: new Date(Date.now() - 240000000).toISOString(),
+   577→        replies: [],
+   578→      },
+   579→    ],
+   580→  },
+   581→  {
+   582→    id: 'q4',
+   583→    lessonId: 'les-1-1-1',
+   584→    title: 'Why does my useEffect run twice in development?',
+   585→    content: 'When I use useEffect in development mode, it fires twice. Is this a bug or expected behavior? It works fine in production. This is really confusing for beginners.',
+   586→    author: { name: 'Tom Williams', avatar: 'TW', role: 'learner' },
+   587→    tags: ['bug', 'video-timestamp'],
+   588→    upvotes: 21,
+   589→    answerCount: 2,
+   590→    resolved: true,
+   591→    createdAt: new Date(Date.now() - 345600000).toISOString(),
+   592→    answers: [
+   593→      {
+   594→        id: 'a4-1',
+   595→        author: { name: 'Sarah Mitchell', avatar: 'SM', role: 'instructor' },
+   596→        content: 'This is expected behavior in React 18+ with Strict Mode enabled. React intentionally double-invokes effects in development to help you find side effects that aren\'t properly cleaned up. Your cleanup function should undo whatever the effect did.\n\nDon\'t worry — this only happens in development, not production.',
+   597→        upvotes: 25,
+   598→        downvotes: 0,
+   599→        isAccepted: true,
+   600→        createdAt: new Date(Date.now() - 330000000).toISOString(),
+   601→        replies: [
+   602→          { id: 'r4-1-1', author: { name: 'Tom Williams', avatar: 'TW', role: 'learner' }, content: 'Ah, so it\'s a feature, not a bug! Thanks for the explanation. I\'ll make sure my cleanup functions are solid.', upvotes: 4, createdAt: new Date(Date.now() - 320000000).toISOString() },
+   603→        ],
+   604→      },
+   605→    ],
+   606→  },
+   607→  {
+   608→    id: 'q5',
+   609→    lessonId: 'les-1-2-1',
+   610→    title: 'How to implement progressive loading with Suspense?',
+   611→    content: 'I have a dashboard page with 4 independent data sections. How do I use Suspense boundaries so each section loads independently rather than the whole page waiting?',
+   612→    author: { name: 'Emma Rodriguez', avatar: 'ER', role: 'learner' },
+   613→    tags: ['concept', 'app-router'],
+   614→    upvotes: 9,
+   615→    answerCount: 1,
+   616→    resolved: false,
+   617→    createdAt: new Date(Date.now() - 432000000).toISOString(),
+   618→    answers: [
+   619→      {
+   620→        id: 'a5-1',
+   621→        author: { name: 'Mike Chen', avatar: 'MC', role: 'learner' },
+   622→        content: 'Wrap each section in its own `<Suspense>` boundary with a unique fallback. Next.js will stream each section as it resolves:\n```tsx\n<Suspense fallback={<ChartSkeleton />}>\n  <RevenueChart />\n</Suspense>\n<Suspense fallback={<TableSkeleton />}>\n  <RecentOrders />\n</Suspense>\n```',
+   623→        upvotes: 5,
+   624→        downvotes: 0,
+   625→        isAccepted: false,
+   626→        createdAt: new Date(Date.now() - 400000000).toISOString(),
+   627→        replies: [],
+   628→      },
+   629→    ],
+   630→  },
+   631→  {
+   632→    id: 'q6',
+   633→    lessonId: 'les-1-1-2',
+   634→    title: 'Server Actions vs API routes — when to use which?',
+   635→    content: 'The course mentions both Server Actions and API routes. Are Server Actions meant to replace API routes entirely, or do they serve different purposes? What about external API integrations?',
+   636→    author: { name: 'David Park', avatar: 'DP', role: 'learner' },
+   637→    tags: ['concept', 'server-actions'],
+   638→    upvotes: 18,
+   639→    answerCount: 2,
+   640→    resolved: true,
+   641→    createdAt: new Date(Date.now() - 518400000).toISOString(),
+   642→    answers: [
+   643→      {
+   644→        id: 'a6-1',
+   645→        author: { name: 'Sarah Mitchell', avatar: 'SM', role: 'instructor' },
+   646→        content: 'Server Actions are great for mutations from your own frontend (forms, buttons). API routes are better when you need:\n- External consumers (mobile apps, third parties)\n- Webhooks\n- File uploads with specific content types\n- CORS requirements\n\nYou can absolutely use both in the same project!',
+   647→        upvotes: 22,
+   648→        downvotes: 0,
+   649→        isAccepted: true,
+   650→        createdAt: new Date(Date.now() - 500000000).toISOString(),
+   651→        replies: [],
+   652→      },
+   653→      {
+   654→        id: 'a6-2',
+   655→        author: { name: 'Lisa Wang', avatar: 'LW', role: 'learner' },
+   656→        content: 'I found that Server Actions make the DX much smoother for internal mutations. But for anything that needs to be called from outside the Next.js app, stick with API routes.',
+   657→        upvotes: 8,
+   658→        downvotes: 0,
+   659→        isAccepted: false,
+   660→        createdAt: new Date(Date.now() - 480000000).toISOString(),
+   661→        replies: [],
+   662→      },
+   663→    ],
+   664→  },
+   665→  {
+   666→    id: 'q7',
+   667→    lessonId: 'les-1-2-2',
+   668→    title: 'Error boundary not catching Server Action errors?',
+   669→    content: 'My error.tsx boundary doesn\'t seem to catch errors thrown in Server Actions. The errors just show up in the console. Am I missing something about how error handling works with Server Actions?',
+   670→    author: { name: 'Alex Johnson', avatar: 'AJ', role: 'learner' },
+   671→    tags: ['bug', 'server-actions'],
+   672→    upvotes: 6,
+   673→    answerCount: 0,
+   674→    resolved: false,
+   675→    createdAt: new Date(Date.now() - 604800000).toISOString(),
+   676→    answers: [],
+   677→  },
+   678→  {
+   679→    id: 'q8',
+   680→    lessonId: 'les-1-1-3',
+   681→    title: 'What is the satisfies operator and when should I use it?',
+   682→    content: 'TypeScript 4.9 introduced the `satisfies` operator. How is it different from type annotations (`:`) and when should I prefer one over the other?',
+   683→    author: { name: 'Mike Chen', avatar: 'MC', role: 'learner' },
+   684→    tags: ['concept', 'typescript'],
+   685→    upvotes: 11,
+   686→    answerCount: 1,
+   687→    resolved: false,
+   688→    createdAt: new Date(Date.now() - 691200000).toISOString(),
+   689→    answers: [
+   690→      {
+   691→        id: 'a8-1',
+   692→        author: { name: 'Lisa Wang', avatar: 'LW', role: 'learner' },
+   693→        content: 'With `: Type`, the variable gets widened to the type. With `satisfies Type`, TypeScript checks the value matches the type but preserves the literal types. Example:\n```typescript\nconst config: Record<string, string> = { host: "localhost", port: "3000" };\n// config.host is string\n\nconst config2 = { host: "localhost", port: "3000" } satisfies Record<string, string>;\n// config2.host is "localhost" (literal preserved!)\n```',
+   694→        upvotes: 9,
+   695→        downvotes: 0,
+   696→        isAccepted: false,
+   697→        createdAt: new Date(Date.now() - 660000000).toISOString(),
+   698→        replies: [],
+   699→      },
+   700→    ],
+   701→  },
+   702→  {
+   703→    id: 'q9',
+   704→    lessonId: 'les-1-2-1',
+   705→    title: 'Best practices for organizing App Router file structure?',
+   706→    content: 'As my Next.js project grows, the app directory is getting messy with lots of route groups, layouts, and loading files. Any tips for keeping things organized?',
+   707→    author: { name: 'Emma Rodriguez', avatar: 'ER', role: 'learner' },
+   708→    tags: ['concept', 'app-router'],
+   709→    upvotes: 14,
+   710→    answerCount: 0,
+   711→    resolved: false,
+   712→    createdAt: new Date(Date.now() - 777600000).toISOString(),
+   713→    answers: [],
+   714→  },
+   715→];
+   716→
+   717→// ─── Time ago helper ──────────────────────────────────────
+   718→function timeAgo(dateStr: string): string {
+   719→  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+   720→  if (seconds < 60) return 'just now';
+   721→  const minutes = Math.floor(seconds / 60);
+   722→  if (minutes < 60) return `${minutes}m ago`;
+   723→  const hours = Math.floor(minutes / 60);
+   724→  if (hours < 24) return `${hours}h ago`;
+   725→  const days = Math.floor(hours / 24);
+   726→  if (days < 30) return `${days}d ago`;
+   727→  const months = Math.floor(days / 30);
+   728→  return `${months}mo ago`;
+   729→}
+   730→
+   731→// ─── What You'll Learn ─────────────────────────────────────
+   732→const whatYouLearn = [
+   733→  { id: 'wyl-1', text: 'Build production-ready React 19 applications', completed: true },
+   734→  { id: 'wyl-2', text: 'Master Server Components and streaming SSR', completed: true },
+   735→  { id: 'wyl-3', text: 'Implement advanced TypeScript patterns', completed: false },
+   736→  { id: 'wyl-4', text: 'Architect Next.js 16 App Router applications', completed: false },
+   737→  { id: 'wyl-5', text: 'Build type-safe API routes with Server Actions', completed: false },
+   738→  { id: 'wyl-6', text: 'Deploy and optimize for production', completed: false },
+   739→  { id: 'wyl-7', text: 'Implement authentication and authorization patterns', completed: false },
+   740→  { id: 'wyl-8', text: 'Master state management in modern React', completed: false },
+   741→];
+   742→
+   743→// ─── Prerequisites ─────────────────────────────────────────
+   744→const prerequisites = [
+   745→  'Basic knowledge of HTML, CSS, and JavaScript',
+   746→  'Familiarity with React fundamentals (components, props, state)',
+   747→  'Basic understanding of TypeScript',
+   748→  'Node.js installed on your machine',
+   749→];
+   750→
+   751→// ─── Students Also Taking ──────────────────────────────────
+   752→const studentsAlsoTaking = [
+   753→  { id: 'sat-1', title: 'AI-Powered Full Stack Development', level: 'intermediate', rating: 4.9, students: 623, price: 149 },
+   754→  { id: 'sat-2', title: 'UX/UI Design Principles', level: 'beginner', rating: 4.5, students: 567, price: 99 },
+   755→  { id: 'sat-3', title: 'DevOps & Cloud Architecture', level: 'advanced', rating: 4.8, students: 298, price: 179 },
+   756→];
+   757→
+   758→// ─── Instructor Profile ────────────────────────────────────
+   759→const instructorProfile = {
+   760→  name: 'Sarah Mitchell',
+   761→  avatar: 'SM',
+   762→  title: 'Senior Software Engineer & Educator',
+   763→  bio: 'Former tech lead at Meta with 12+ years of experience in React and web performance. Published author, conference speaker, and passionate about making complex topics accessible.',
+   764→  courses: 6,
+   765→  students: 12847,
+   766→  rating: 4.9,
+   767→  otherCourses: ['AI-Powered Full Stack Development', 'System Design for Senior Engineers'],
+   768→};
+   769→
+   770→// ─── Animation variants ────────────────────────────────────
+   771→const containerVariants = {
+   772→  hidden: { opacity: 0 },
+   773→  visible: { opacity: 1, transition: { staggerChildren: 0.05 } },
+   774→};
+   775→
+   776→const itemVariants = {
+   777→  hidden: { opacity: 0, y: 12 },
+   778→  visible: { opacity: 1, y: 0, transition: { duration: 0.35 } },
+   779→};
+   780→
+   781→const tabContentVariants = {
+   782→  hidden: { opacity: 0, x: 10 },
+   783→  visible: { opacity: 1, x: 0, transition: { duration: 0.3 } },
+   784→  exit: { opacity: 0, x: -10, transition: { duration: 0.2 } },
+   785→};
+   786→
+   787→// ─── Glassmorphism card class ─────────────────────────────
+   788→const glassCard = 'backdrop-blur-xl bg-white/70 dark:bg-slate-900/70 border border-white/20 dark:border-slate-700/30';
+   789→
+   790→// ─── Note Category Config ──────────────────────────────────
+   791→const noteCategoryConfig: Record<Note['category'], { label: string; icon: React.ReactNode; color: string }> = {
+   792→  personal: { label: 'Personal', icon: <StickyNote className="h-3.5 w-3.5" />, color: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
+   793→  study_guide: { label: 'Study Guide', icon: <BookOpen className="h-3.5 w-3.5" />, color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+   794→  code_snippet: { label: 'Code Snippet', icon: <Code2 className="h-3.5 w-3.5" />, color: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
+   795→  question: { label: 'Question', icon: <HelpCircle className="h-3.5 w-3.5" />, color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+   796→};
+   797→
+   798→// ─── Difficulty Meter Component ────────────────────────────
+   799→function DifficultyMeter({ level }: { level: string }) {
+   800→  const levelValues: Record<string, number> = {
+   801→    beginner: 25,
+   802→    intermediate: 50,
+   803→    advanced: 75,
+   804→    expert: 100,
+   805→  };
+   806→  const value = levelValues[level] || 25;
+   807→  const gradientClass = level === 'beginner' ? 'from-emerald-400 to-emerald-600'
+   808→    : level === 'intermediate' ? 'from-amber-400 to-amber-600'
+   809→    : level === 'advanced' ? 'from-orange-400 to-orange-600'
+   810→    : 'from-red-400 to-red-600';
+   811→
+   812→  return (
+   813→    <div className="space-y-1.5">
+   814→      <div className="flex items-center justify-between text-xs">
+   815→        <span className="text-muted-foreground">Difficulty</span>
+   816→        <span className={cn('font-semibold capitalize', getLevelColor(level).replace('bg-', 'text-').split(' ')[0])}>{level}</span>
+   817→      </div>
+   818→      <div className="h-2 rounded-full bg-muted overflow-hidden">
+   819→        <motion.div
+   820→          className={cn('h-full rounded-full bg-gradient-to-r', gradientClass)}
+   821→          initial={{ width: 0 }}
+   822→          animate={{ width: `${value}%` }}
+   823→          transition={{ duration: 1, ease: 'easeOut' }}
+   824→        />
+   825→      </div>
+   826→      <div className="flex justify-between text-[10px] text-muted-foreground">
+   827→        <span>Easy</span>
+   828→        <span>Expert</span>
+   829→      </div>
+   830→    </div>
+   831→  );
+   832→}
+   833→
+   834→// ─── Module Section Component (Enhanced) ───────────────────
+   835→function ModuleSection({ module: mod, moduleIndex, onLessonClick, progressMap }: { module: Module; moduleIndex: number; onLessonClick: (lesson: Lesson) => void; progressMap: Record<string, 'completed' | 'in_progress' | 'not_started'> }) {
+   836→  const [isOpen, setIsOpen] = useState(moduleIndex === 0);
+   837→  const lessons = mod.lessons || [];
+   838→  const completedLessons = lessons.filter(
+   839→    (l) => progressMap[l.id] === 'completed'
+   840→  ).length;
+   841→  const totalDuration = lessons.reduce((sum, l) => sum + (l.videoDuration || 0), 0);
+   842→  const moduleProgress = lessons.length > 0 ? Math.round((completedLessons / lessons.length) * 100) : 0;
+   843→
+   844→  return (
+   845→    <motion.div
+   846→      className={cn('rounded-xl overflow-hidden', glassCard)}
+   847→      whileHover={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
+   848→      transition={{ duration: 0.2 }}
+   849→    >
+   850→      {/* Module Header */}
+   851→      <button
+   852→        onClick={() => setIsOpen(!isOpen)}
+   853→        className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors text-left"
+   854→      >
+   855→        <div className="flex items-center gap-3">
+   856→          <motion.div
+   857→            animate={{ rotate: isOpen ? 0 : 0 }}
+   858→            transition={{ duration: 0.2 }}
+   859→            className="text-muted-foreground"
+   860→          >
+   861→            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+   862→          </motion.div>
+   863→          <div>
+   864→            <div className="flex items-center gap-2">
+   865→              <span className="text-xs font-medium text-muted-foreground">Module {moduleIndex + 1}</span>
+   866→              {mod.isPublished ? (
+   867→                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Published</Badge>
+   868→              ) : (
+   869→                <Badge variant="outline" className="text-[10px] px-1.5 py-0">Draft</Badge>
+   870→              )}
+   871→            </div>
+   872→            <h4 className="font-semibold text-foreground text-sm mt-0.5">{mod.title}</h4>
+   873→          </div>
+   874→        </div>
+   875→        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+   876→          <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {lessons.length} lessons</span>
+   877→          {totalDuration > 0 && <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatDuration(totalDuration)}</span>}
+   878→          {/* Module progress percentage */}
+   879→          <div className="flex items-center gap-2">
+   880→            <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+   881→              <div
+   882→                className={cn(
+   883→                  'h-full rounded-full transition-all duration-500',
+   884→                  moduleProgress === 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-400 to-amber-600'
+   885→                )}
+   886→                style={{ width: `${moduleProgress}%` }}
+   887→              />
+   888→            </div>
+   889→            <span className="text-[10px] font-medium">{moduleProgress}%</span>
+   890→          </div>
+   891→          {completedLessons > 0 && (
+   892→            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
+   893→              {completedLessons}/{lessons.length} done
+   894→            </Badge>
+   895→          )}
+   896→        </div>
+   897→      </button>
+   898→
+   899→      {/* Module Lessons */}
+   900→      <AnimatePresence>
+   901→        {isOpen && (
+   902→          <motion.div
+   903→            initial={{ height: 0, opacity: 0 }}
+   904→            animate={{ height: 'auto', opacity: 1 }}
+   905→            exit={{ height: 0, opacity: 0 }}
+   906→            transition={{ duration: 0.2 }}
+   907→            className="overflow-hidden"
+   908→          >
+   909→            <div className="border-t border-white/10 dark:border-slate-700/20 bg-muted/10">
+   910→              {lessons.map((lesson, lessonIdx) => {
+   911→                const status = progressMap[lesson.id] || 'not_started';
+   912→                const isNextUp = status === 'in_progress';
+   913→                return (
+   914→                  <div
+   915→                    key={lesson.id}
+   916→                    className={cn(
+   917→                      'flex items-center justify-between p-3 pl-12 hover:bg-muted/30 transition-all duration-200',
+   918→                      lessonIdx < lessons.length - 1 && 'border-b border-border/30',
+   919→                      isNextUp && 'bg-amber-50/50 dark:bg-amber-900/10 border-l-2 border-l-amber-500'
+   920→                    )}
+   921→                  >
+   922→                    <div className="flex items-center gap-3">
+   923→                      {/* Status Icon with animated fill */}
+   924→                      {status === 'completed' ? (
+   925→                        <motion.div
+   926→                          initial={{ scale: 0 }}
+   927→                          animate={{ scale: 1 }}
+   928→                          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+   929→                        >
+   930→                          <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+   931→                        </motion.div>
+   932→                      ) : status === 'in_progress' ? (
+   933→                        <div className="h-5 w-5 rounded-full border-2 border-amber-500 border-t-transparent animate-spin shrink-0" />
+   934→                      ) : (
+   935→                        <Circle className="h-5 w-5 text-muted-foreground/40 shrink-0" />
+   936→                      )}
+   937→
+   938→                      {/* Content Type Icon */}
+   939→                      <ContentTypeIcon type={lesson.contentType} className="h-4 w-4 text-muted-foreground shrink-0" />
+   940→
+   941→                      {/* Lesson Info */}
+   942→                      <div>
+   943→                        <div className="flex items-center gap-2">
+   944→                          <p className={cn(
+   945→                            'text-sm font-medium',
+   946→                            status === 'completed' ? 'text-muted-foreground line-through' : 'text-foreground'
+   947→                          )}>
+   948→                            {lesson.title}
+   949→                          </p>
+   950→                          {isNextUp && (
+   951→                            <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[9px] px-1.5 py-0 gap-0.5">
+   952→                              <Play className="h-2.5 w-2.5" /> Next Up
+   953→                            </Badge>
+   954→                          )}
+   955→                        </div>
+   956→                        <div className="flex items-center gap-2 mt-0.5">
+   957→                          {lesson.videoDuration && (
+   958→                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+   959→                              <Clock className="h-3 w-3" /> {formatDuration(lesson.videoDuration)}
+   960→                            </span>
+   961→                          )}
+   962→                          {lesson.isPreview && (
+   963→                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-0.5">
+   964→                              <Eye className="h-2.5 w-2.5" /> Preview
+   965→                            </Badge>
+   966→                          )}
+   967→                          {/* Download icon for downloadable resources */}
+   968→                          <Download className="h-3 w-3 text-muted-foreground/50 hover:text-muted-foreground cursor-pointer transition-colors" />
+   969→                        </div>
+   970→                      </div>
+   971→                    </div>
+   972→
+   973→                    {/* Action Button */}
+   974→                    <div>
+   975→                      {status === 'completed' ? (
+   976→                        <div className="flex items-center gap-2">
+   977→                          <Badge variant="outline" className="text-emerald-600 border-emerald-500/30 dark:border-emerald-800 text-xs">
+   978→                            Completed
+   979→                          </Badge>
+   980→                          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-emerald-600 hover:text-emerald-700" onClick={() => onLessonClick(lesson)}>
+   981→                            <Play className="h-3 w-3" /> Rewatch
+   982→                          </Button>
+   983→                        </div>
+   984→                      ) : status === 'in_progress' ? (
+   985→                        <Button size="sm" className="h-8 text-xs gap-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-md shadow-amber-500/20" onClick={() => onLessonClick(lesson)}>
+   986→                          <Play className="h-3 w-3" fill="currentColor" /> Resume
+   987→                        </Button>
+   988→                      ) : lesson.isPreview ? (
+   989→                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onLessonClick(lesson)}>
+   990→                          <Play className="h-3 w-3" /> Preview
+   991→                        </Button>
+   992→                      ) : (
+   993→                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onLessonClick(lesson)}>
+   994→                          <Play className="h-3 w-3" /> Start
+   995→                        </Button>
+   996→                      )}
+   997→                    </div>
+   998→                  </div>
+   999→                );
+  1000→              })}
+  1001→            </div>
+  1002→          </motion.div>
+  1003→        )}
+  1004→      </AnimatePresence>
+  1005→    </motion.div>
+  1006→  );
+  1007→}
+  1008→
+  1009→// ─── Discussion Q&A Tab ────────────────────────────────────
+  1010→function DiscussionTab({ questions }: { questions: DiscussionQuestion[] }) {
+  1011→  const [sortBy, setSortBy] = useState<'recent' | 'upvoted' | 'unanswered'>('recent');
+  1012→  const [searchQuery, setSearchQuery] = useState('');
+  1013→  const [expandedQuestion, setExpandedQuestion] = useState<string | null>(null);
+  1014→  const [showAskForm, setShowAskForm] = useState(false);
+  1015→  const [askTitle, setAskTitle] = useState('');
+  1016→  const [askContent, setAskContent] = useState('');
+  1017→  const [replyContent, setReplyContent] = useState('');
+  1018→  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  1019→
+  1020→  const unansweredCount = questions.filter(q => !q.isAnswered).length;
+  1021→
+  1022→  const sortedQuestions = [...questions].sort((a, b) => {
+  1023→    if (sortBy === 'recent') return 0;
+  1024→    if (sortBy === 'upvoted') return b.upvotes - a.upvotes;
+  1025→    if (sortBy === 'unanswered') return a.isAnswered === b.isAnswered ? 0 : a.isAnswered ? 1 : -1;
+  1026→    return 0;
+  1027→  });
+  1028→
+  1029→  const filteredQuestions = sortedQuestions.filter(q =>
+  1030→    q.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+  1031→    q.content.toLowerCase().includes(searchQuery.toLowerCase())
+  1032→  );
+  1033→
+  1034→  return (
+  1035→    <div className="space-y-4">
+  1036→      {/* Header */}
+  1037→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+  1038→        <div>
+  1039→          <div className="flex items-center gap-2">
+  1040→            <h3 className="font-semibold text-foreground">Lesson Discussions</h3>
+  1041→            {unansweredCount > 0 && (
+  1042→              <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px]">
+  1043→                {unansweredCount} unanswered
+  1044→              </Badge>
+  1045→            )}
+  1046→          </div>
+  1047→          <p className="text-sm text-muted-foreground">Ask questions and share insights with fellow learners</p>
+  1048→        </div>
+  1049→        <Button size="sm" className="gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20" onClick={() => setShowAskForm(!showAskForm)}>
+  1050→          <Send className="h-3.5 w-3.5" />
+  1051→          Ask a Question
+  1052→        </Button>
+  1053→      </div>
+  1054→
+  1055→      {/* Search and Sort */}
+  1056→      <div className="flex flex-col sm:flex-row gap-3">
+  1057→        <div className="relative flex-1">
+  1058→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1059→          <Input
+  1060→            placeholder="Search discussions..."
+  1061→            value={searchQuery}
+  1062→            onChange={(e) => setSearchQuery(e.target.value)}
+  1063→            className="pl-9 h-9"
+  1064→          />
+  1065→        </div>
+  1066→        <div className="flex gap-1.5">
+  1067→          {[
+  1068→            { key: 'recent' as const, label: 'Most Recent' },
+  1069→            { key: 'upvoted' as const, label: 'Most Upvoted' },
+  1070→            { key: 'unanswered' as const, label: 'Unanswered' },
+  1071→          ].map((opt) => (
+  1072→            <Button
+  1073→              key={opt.key}
+  1074→              size="sm"
+  1075→              variant={sortBy === opt.key ? 'default' : 'outline'}
+  1076→              className={cn('text-xs h-9', sortBy === opt.key && 'bg-gradient-to-r from-slate-700 to-slate-800 dark:from-slate-600 dark:to-slate-700')}
+  1077→              onClick={() => setSortBy(opt.key)}
+  1078→            >
+  1079→              {opt.label}
+  1080→            </Button>
+  1081→          ))}
+  1082→        </div>
+  1083→      </div>
+  1084→
+  1085→      {/* Ask Question Form */}
+  1086→      <AnimatePresence>
+  1087→        {showAskForm && (
+  1088→          <motion.div
+  1089→            initial={{ height: 0, opacity: 0 }}
+  1090→            animate={{ height: 'auto', opacity: 1 }}
+  1091→            exit={{ height: 0, opacity: 0 }}
+  1092→            transition={{ duration: 0.2 }}
+  1093→            className="overflow-hidden"
+  1094→          >
+  1095→            <Card className={cn('border-emerald-200 dark:border-emerald-800/50', glassCard)}>
+  1096→              <CardContent className="p-4 space-y-3">
+  1097→                <Input
+  1098→                  placeholder="What's your question?"
+  1099→                  value={askTitle}
+  1100→                  onChange={(e) => setAskTitle(e.target.value)}
+  1101→                  className="font-medium"
+  1102→                />
+  1103→                <Textarea
+  1104→                  placeholder="Provide more details about your question... (Supports **bold**, *italic*, `code`)"
+  1105→                  value={askContent}
+  1106→                  onChange={(e) => setAskContent(e.target.value)}
+  1107→                  rows={4}
+  1108→                  className="resize-none"
+  1109→                />
+  1110→                <div className="flex items-center justify-between">
+  1111→                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1112→                    <Tag className="h-3 w-3" />
+  1113→                    <span>Supports Markdown formatting</span>
+  1114→                  </div>
+  1115→                  <div className="flex items-center gap-2">
+  1116→                    <Button size="sm" variant="outline" onClick={() => setShowAskForm(false)}>Cancel</Button>
+  1117→                    <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowAskForm(false)}>
+  1118→                      <Send className="h-3 w-3" /> Post Question
+  1119→                    </Button>
+  1120→                  </div>
+  1121→                </div>
+  1122→              </CardContent>
+  1123→            </Card>
+  1124→          </motion.div>
+  1125→        )}
+  1126→      </AnimatePresence>
+  1127→
+  1128→      {/* Questions List */}
+  1129→      <div className="space-y-3">
+  1130→        <AnimatePresence mode="popLayout">
+  1131→          {filteredQuestions.map((question) => (
+  1132→            <motion.div
+  1133→              key={question.id}
+  1134→              layout
+  1135→              initial={{ opacity: 0, y: 10 }}
+  1136→              animate={{ opacity: 1, y: 0 }}
+  1137→              exit={{ opacity: 0, y: -10 }}
+  1138→            >
+  1139→              <Card className={cn(
+  1140→                'hover:shadow-md transition-all duration-200 cursor-pointer',
+  1141→                glassCard,
+  1142→                question.isAnswered && 'border-emerald-200 dark:border-emerald-800/40'
+  1143→              )}>
+  1144→                <CardContent className="p-4">
+  1145→                  <div className="flex items-start gap-3">
+  1146→                    {/* Vote column */}
+  1147→                    <div className="flex flex-col items-center gap-1 pt-1">
+  1148→                      <button className="p-1 rounded hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+  1149→                        <ChevronUp className="h-4 w-4" />
+  1150→                      </button>
+  1151→                      <span className="text-sm font-semibold text-foreground">{question.upvotes}</span>
+  1152→                      <button className="p-1 rounded hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+  1153→                        <ChevronDown className="h-4 w-4" />
+  1154→                      </button>
+  1155→                    </div>
+  1156→
+  1157→                    {/* Content */}
+  1158→                    <div className="flex-1 min-w-0" onClick={() => setExpandedQuestion(expandedQuestion === question.id ? null : question.id)}>
+  1159→                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+  1160→                        {question.isAnswered && (
+  1161→                          <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] gap-0.5">
+  1162→                            <CheckCircle2 className="h-3 w-3" /> Answered
+  1163→                          </Badge>
+  1164→                        )}
+  1165→                        <Badge variant="outline" className="text-[10px] gap-0.5">
+  1166→                          <BookOpen className="h-2.5 w-2.5" /> {question.lessonRef}
+  1167→                        </Badge>
+  1168→                      </div>
+  1169→                      <h4 className="text-sm font-semibold text-foreground mb-1">{question.title}</h4>
+  1170→                      <p className="text-xs text-muted-foreground line-clamp-2">{question.content}</p>
+  1171→                      <div className="flex items-center gap-3 mt-2">
+  1172→                        <div className="flex items-center gap-1.5">
+  1173→                          <Avatar className="h-5 w-5">
+  1174→                            <AvatarFallback className="text-[8px] bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
+  1175→                              {question.avatar}
+  1176→                            </AvatarFallback>
+  1177→                          </Avatar>
+  1178→                          <span className="text-xs font-medium text-foreground">{question.author}</span>
+  1179→                        </div>
+  1180→                        <span className="text-xs text-muted-foreground">· {question.time}</span>
+  1181→                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+  1182→                          <MessageCircle className="h-3 w-3" /> {question.replies.length}
+  1183→                        </span>
+  1184→                      </div>
+  1185→                    </div>
+  1186→                  </div>
+  1187→
+  1188→                  {/* Expanded Replies */}
+  1189→                  <AnimatePresence>
+  1190→                    {expandedQuestion === question.id && (
+  1191→                      <motion.div
+  1192→                        initial={{ height: 0, opacity: 0 }}
+  1193→                        animate={{ height: 'auto', opacity: 1 }}
+  1194→                        exit={{ height: 0, opacity: 0 }}
+  1195→                        transition={{ duration: 0.2 }}
+  1196→                        className="overflow-hidden"
+  1197→                      >
+  1198→                        <div className="mt-4 pt-4 border-t border-border/50 space-y-3">
+  1199→                          {question.replies.map((reply) => (
+  1200→                            <div key={reply.id} className={cn(
+  1201→                              'ml-8 p-3 rounded-lg',
+  1202→                              reply.isAnswer ? 'bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/30' : 'bg-muted/30'
+  1203→                            )}>
+  1204→                              <div className="flex items-center gap-2 mb-1.5">
+  1205→                                <Avatar className="h-6 w-6">
+  1206→                                  <AvatarFallback className={cn(
+  1207→                                    'text-[9px]',
+  1208→                                    reply.isInstructor
+  1209→                                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+  1210→                                      : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+  1211→                                  )}>
+  1212→                                    {reply.avatar}
+  1213→                                  </AvatarFallback>
+  1214→                                </Avatar>
+  1215→                                <span className="text-xs font-medium text-foreground">{reply.author}</span>
+  1216→                                {reply.isInstructor && (
+  1217→                                  <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[9px] px-1.5 py-0 gap-0.5">
+  1218→                                    <GraduationCap className="h-2.5 w-2.5" /> Instructor
+  1219→                                  </Badge>
+  1220→                                )}
+  1221→                                {reply.isAnswer && (
+  1222→                                  <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[9px] px-1.5 py-0 gap-0.5">
+  1223→                                    <CheckCircle2 className="h-2.5 w-2.5" /> Best Answer
+  1224→                                  </Badge>
+  1225→                                )}
+  1226→                                <span className="text-[10px] text-muted-foreground">· {reply.time}</span>
+  1227→                              </div>
+  1228→                              <p className="text-xs text-muted-foreground leading-relaxed ml-8">{reply.content}</p>
+  1229→                              <div className="flex items-center gap-3 mt-2 ml-8">
+  1230→                                <button className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+  1231→                                  <ThumbsUp className="h-3 w-3" /> {reply.upvotes}
+  1232→                                </button>
+  1233→                                <button className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+  1234→                                  <ThumbsDown className="h-3 w-3" /> {reply.downvotes}
+  1235→                                </button>
+  1236→                              </div>
+  1237→                            </div>
+  1238→                          ))}
+  1239→
+  1240→                          {/* Reply input */}
+  1241→                          <div className="ml-8 flex gap-2">
+  1242→                            <Input
+  1243→                              placeholder="Write a reply..."
+  1244→                              value={replyingTo === question.id ? replyContent : ''}
+  1245→                              onChange={(e) => { setReplyingTo(question.id); setReplyContent(e.target.value); }}
+  1246→                              className="h-8 text-xs"
+  1247→                              onFocus={() => setReplyingTo(question.id)}
+  1248→                            />
+  1249→                            <Button
+  1250→                              size="sm"
+  1251→                              className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-700 shrink-0"
+  1252→                              onClick={() => { setReplyContent(''); setReplyingTo(null); }}
+  1253→                            >
+  1254→                              <Send className="h-3 w-3" />
+  1255→                            </Button>
+  1256→                          </div>
+  1257→                        </div>
+  1258→                      </motion.div>
+  1259→                    )}
+  1260→                  </AnimatePresence>
+  1261→                </CardContent>
+  1262→              </Card>
+  1263→            </motion.div>
+  1264→          ))}
+  1265→        </AnimatePresence>
+  1266→      </div>
+  1267→
+  1268→      <Button variant="outline" className="w-full">View All Discussions</Button>
+  1269→    </div>
+  1270→  );
+  1271→}
+  1272→
+  1273→// ─── Q&A Discussion Tab ────────────────────────────────────
+  1274→function QADiscussionTab({ questions, modules }: { questions: QAQuestion[]; modules: Module[] }) {
+  1275→  const [selectedLessonId, setSelectedLessonId] = useState<string>('all');
+  1276→  const [searchQuery, setSearchQuery] = useState('');
+  1277→  const [sortBy, setSortBy] = useState<'newest' | 'voted' | 'unresolved' | 'resolved'>('newest');
+  1278→  const [filterBy, setFilterBy] = useState<'all' | 'my' | 'unresolved' | 'resolved'>('all');
+  1279→  const [selectedQuestion, setSelectedQuestion] = useState<QAQuestion | null>(null);
+  1280→  const [upvotedQuestions, setUpvotedQuestions] = useState<Set<string>>(new Set());
+  1281→  const [upvotedAnswers, setUpvotedAnswers] = useState<Set<string>>(new Set());
+  1282→  const [downvotedAnswers, setDownvotedAnswers] = useState<Set<string>>(new Set());
+  1283→  const [showAskDialog, setShowAskDialog] = useState(false);
+  1284→  const [askTitle, setAskTitle] = useState('');
+  1285→  const [askContent, setAskContent] = useState('');
+  1286→  const [askTags, setAskTags] = useState('');
+  1287→  const [askLessonId, setAskLessonId] = useState<string>(selectedLessonId === 'all' ? '' : selectedLessonId);
+  1288→  const [answerContent, setAnswerContent] = useState('');
+  1289→  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  1290→  const [replyContent, setReplyContent] = useState('');
+  1291→  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set(modules.map(m => m.id)));
+  1292→  const [answerSortBy, setAnswerSortBy] = useState<'votes' | 'newest'>('votes');
+  1293→
+  1294→  // Build lesson map from modules
+  1295→  const lessonMap = new Map<string, { title: string; moduleId: string; moduleTitle: string }>();
+  1296→  modules.forEach(mod => {
+  1297→    (mod.lessons || []).forEach(lesson => {
+  1298→      lessonMap.set(lesson.id, { title: lesson.title, moduleId: mod.id, moduleTitle: mod.title });
+  1299→    });
+  1300→  });
+  1301→
+  1302→  // Filter questions
+  1303→  const filteredQuestions = questions.filter(q => {
+  1304→    if (selectedLessonId !== 'all' && q.lessonId !== selectedLessonId) return false;
+  1305→    if (filterBy === 'my' && q.author.name !== 'Alex Johnson') return false;
+  1306→    if (filterBy === 'unresolved' && q.resolved) return false;
+  1307→    if (filterBy === 'resolved' && !q.resolved) return false;
+  1308→    if (searchQuery) {
+  1309→      const lq = searchQuery.toLowerCase();
+  1310→      if (!q.title.toLowerCase().includes(lq) && !q.content.toLowerCase().includes(lq) && !q.tags.some(t => t.toLowerCase().includes(lq))) return false;
+  1311→    }
+  1312→    return true;
+  1313→  });
+  1314→
+  1315→  // Sort questions
+  1316→  const sortedQuestions = [...filteredQuestions].sort((a, b) => {
+  1317→    if (sortBy === 'newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  1318→    if (sortBy === 'voted') return b.upvotes - a.upvotes;
+  1319→    if (sortBy === 'unresolved') return a.resolved === b.resolved ? 0 : a.resolved ? 1 : -1;
+  1320→    if (sortBy === 'resolved') return a.resolved === b.resolved ? 0 : a.resolved ? -1 : 1;
+  1321→    return 0;
+  1322→  });
+  1323→
+  1324→  // Sort answers
+  1325→  const sortAnswers = (answers: QAAnswer[]) => {
+  1326→    return [...answers].sort((a, b) => {
+  1327→      if (answerSortBy === 'votes') return (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes);
+  1328→      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  1329→    });
+  1330→  };
+  1331→
+  1332→  const toggleModule = (moduleId: string) => {
+  1333→    setExpandedModules(prev => {
+  1334→      const next = new Set(prev);
+  1335→      if (next.has(moduleId)) next.delete(moduleId);
+  1336→      else next.add(moduleId);
+  1337→      return next;
+  1338→    });
+  1339→  };
+  1340→
+  1341→  const handleUpvoteQuestion = (qId: string) => {
+  1342→    setUpvotedQuestions(prev => {
+  1343→      const next = new Set(prev);
+  1344→      if (next.has(qId)) next.delete(qId);
+  1345→      else next.add(qId);
+  1346→      return next;
+  1347→    });
+  1348→  };
+  1349→
+  1350→  const handleUpvoteAnswer = (aId: string) => {
+  1351→    setUpvotedAnswers(prev => {
+  1352→      const next = new Set(prev);
+  1353→      if (next.has(aId)) next.delete(aId);
+  1354→      else next.add(aId);
+  1355→      return next;
+  1356→    });
+  1357→    setDownvotedAnswers(prev => { const n = new Set(prev); n.delete(aId); return n; });
+  1358→  };
+  1359→
+  1360→  const handleDownvoteAnswer = (aId: string) => {
+  1361→    setDownvotedAnswers(prev => {
+  1362→      const next = new Set(prev);
+  1363→      if (next.has(aId)) next.delete(aId);
+  1364→      else next.add(aId);
+  1365→      return next;
+  1366→    });
+  1367→    setUpvotedAnswers(prev => { const n = new Set(prev); n.delete(aId); return n; });
+  1368→  };
+  1369→
+  1370→  // Count questions per lesson
+  1371→  const questionCountsByLesson = new Map<string, number>();
+  1372→  const unresolvedCountsByLesson = new Map<string, number>();
+  1373→  questions.forEach(q => {
+  1374→    questionCountsByLesson.set(q.lessonId, (questionCountsByLesson.get(q.lessonId) || 0) + 1);
+  1375→    if (!q.resolved) unresolvedCountsByLesson.set(q.lessonId, (unresolvedCountsByLesson.get(q.lessonId) || 0) + 1);
+  1376→  });
+  1377→
+  1378→  const unresolvedTotal = questions.filter(q => !q.resolved).length;
+  1379→
+  1380→  // Render code blocks in content
+  1381→  const renderContent = (content: string) => {
+  1382→    const parts = content.split(/(```[\s\S]*?```)/g);
+  1383→    return parts.map((part, i) => {
+  1384→      if (part.startsWith('```') && part.endsWith('```')) {
+  1385→        const codeContent = part.slice(3, -3).replace(/^\w+\n/, '');
+  1386→        return (
+  1387→          <pre key={i} className="bg-slate-900 dark:bg-slate-950 text-green-400 p-3 rounded-lg text-xs font-mono overflow-x-auto my-2 leading-relaxed">
+  1388→            <code>{codeContent}</code>
+  1389→          </pre>
+  1390→        );
+  1391→      }
+  1392→      // Handle inline code
+  1393→      const inlineParts = part.split(/(`[^`]+`)/g);
+  1394→      return (
+  1395→        <span key={i}>
+  1396→          {inlineParts.map((ip, j) => {
+  1397→            if (ip.startsWith('`') && ip.endsWith('`')) {
+  1398→              return <code key={j} className="bg-slate-100 dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded text-xs font-mono">{ip.slice(1, -1)}</code>;
+  1399→            }
+  1400→            // Handle bold
+  1401→            const boldParts = ip.split(/(\*\*[^*]+\*\*)/g);
+  1402→            return boldParts.map((bp, k) => {
+  1403→              if (bp.startsWith('**') && bp.endsWith('**')) {
+  1404→                return <strong key={`${j}-${k}`} className="font-semibold text-foreground">{bp.slice(2, -2)}</strong>;
+  1405→              }
+  1406→              return <span key={`${j}-${k}`}>{bp}</span>;
+  1407→            });
+  1408→          })}
+  1409→        </span>
+  1410→      );
+  1411→    });
+  1412→  };
+  1413→
+  1414→  // ─── Thread Detail View ─────────────────────────────────
+  1415→  if (selectedQuestion) {
+  1416→    const q = selectedQuestion;
+  1417→    const isUpvoted = upvotedQuestions.has(q.id);
+  1418→    const sortedAnswers = sortAnswers(q.answers);
+  1419→    const acceptedAnswer = sortedAnswers.find(a => a.isAccepted);
+  1420→
+  1421→    return (
+  1422→      <div className="space-y-4">
+  1423→        {/* Back button */}
+  1424→        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => setSelectedQuestion(null)}>
+  1425→          <ChevronDown className="h-4 w-4 rotate-90" />
+  1426→          Back to Questions
+  1427→        </Button>
+  1428→
+  1429→        {/* Question Card */}
+  1430→        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+  1431→          <Card className={cn(glassCard, 'border-orange-200/50 dark:border-orange-800/30')}>
+  1432→            <CardContent className="p-6">
+  1433→              <div className="flex gap-4">
+  1434→                {/* Upvote column */}
+  1435→                <div className="flex flex-col items-center gap-1 pt-1">
+  1436→                  <button
+  1437→                    className={cn('p-1.5 rounded-lg transition-all duration-200', isUpvoted ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground')}
+  1438→                    onClick={() => handleUpvoteQuestion(q.id)}
+  1439→                  >
+  1440→                    <ChevronUp className="h-5 w-5" />
+  1441→                  </button>
+  1442→                  <span className={cn('text-sm font-bold', isUpvoted ? 'text-emerald-600' : 'text-foreground')}>{q.upvotes + (isUpvoted ? 1 : 0)}</span>
+  1443→                </div>
+  1444→
+  1445→                {/* Content */}
+  1446→                <div className="flex-1 min-w-0">
+  1447→                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+  1448→                    {q.resolved ? (
+  1449→                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] gap-0.5">
+  1450→                        <CheckCircle2 className="h-3 w-3" /> Resolved
+  1451→                      </Badge>
+  1452→                    ) : (
+  1453→                      <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px] gap-0.5">
+  1454→                        <Circle className="h-3 w-3" /> Unresolved
+  1455→                      </Badge>
+  1456→                    )}
+  1457→                    <Badge variant="outline" className="text-[10px] gap-0.5">
+  1458→                      <BookOpen className="h-2.5 w-2.5" /> {lessonMap.get(q.lessonId)?.title || 'Unknown Lesson'}
+  1459→                    </Badge>
+  1460→                  </div>
+  1461→                  <h3 className="text-lg font-bold text-foreground mb-2">{q.title}</h3>
+  1462→                  <div className="text-sm text-muted-foreground leading-relaxed mb-3">
+  1463→                    {renderContent(q.content)}
+  1464→                  </div>
+  1465→
+  1466→                  {/* Tags */}
+  1467→                  <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+  1468→                    {q.tags.map(tag => (
+  1469→                      <Badge key={tag} variant="secondary" className="text-[10px] gap-0.5">
+  1470→                        <Tag className="h-2.5 w-2.5" /> {tag}
+  1471→                      </Badge>
+  1472→                    ))}
+  1473→                  </div>
+  1474→
+  1475→                  {/* Meta */}
+  1476→                  <div className="flex items-center justify-between flex-wrap gap-2">
+  1477→                    <div className="flex items-center gap-2">
+  1478→                      <Avatar className="h-6 w-6">
+  1479→                        <AvatarFallback className={cn('text-[9px]', q.author.role === 'instructor' ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300')}>
+  1480→                          {q.author.avatar}
+  1481→                        </AvatarFallback>
+  1482→                      </Avatar>
+  1483→                      <span className="text-xs font-medium text-foreground">{q.author.name}</span>
+  1484→                      {q.author.role === 'instructor' && (
+  1485→                        <Badge className="bg-gradient-to-r from-amber-400 to-orange-500 text-white text-[9px] px-1.5 py-0 gap-0.5 border-0">
+  1486→                          <GraduationCap className="h-2.5 w-2.5" /> Instructor
+  1487→                        </Badge>
+  1488→                      )}
+  1489→                      <span className="text-xs text-muted-foreground">· {timeAgo(q.createdAt)}</span>
+  1490→                    </div>
+  1491→                    <div className="flex items-center gap-2">
+  1492→                      {q.author.name === 'Alex Johnson' && (
+  1493→                        <>
+  1494→                          {!q.resolved && (
+  1495→                            <Button size="sm" variant="outline" className="h-7 text-[10px] gap-1 text-emerald-600 border-emerald-200 dark:border-emerald-800">
+  1496→                              <Check className="h-3 w-3" /> Mark Resolved
+  1497→                            </Button>
+  1498→                          )}
+  1499→                          <Button size="sm" variant="ghost" className="h-7 text-[10px] gap-1">
+  1500→                            <Edit3 className="h-3 w-3" /> Edit
+  1501→                          </Button>
+  1502→                          <Button size="sm" variant="ghost" className="h-7 text-[10px] gap-1 text-red-500 hover:text-red-600">
+  1503→                            <Trash2 className="h-3 w-3" /> Delete
+  1504→                          </Button>
+  1505→                        </>
+  1506→                      )}
+  1507→                    </div>
+  1508→                  </div>
+  1509→                </div>
+  1510→              </div>
+  1511→            </CardContent>
+  1512→          </Card>
+  1513→        </motion.div>
+  1514→
+  1515→        {/* Answers Section */}
+  1516→        <div className="space-y-3">
+  1517→          <div className="flex items-center justify-between">
+  1518→            <h4 className="font-semibold text-foreground text-sm">
+  1519→              {q.answers.length} {q.answers.length === 1 ? 'Answer' : 'Answers'}
+  1520→            </h4>
+  1521→            <div className="flex gap-1">
+  1522→              {(['votes', 'newest'] as const).map(opt => (
+  1523→                <Button
+  1524→                  key={opt}
+  1525→                  size="sm"
+  1526→                  variant={answerSortBy === opt ? 'default' : 'outline'}
+  1527→                  className={cn('text-xs h-7', answerSortBy === opt && 'bg-gradient-to-r from-slate-700 to-slate-800 dark:from-slate-600 dark:to-slate-700')}
+  1528→                  onClick={() => setAnswerSortBy(opt)}
+  1529→                >
+  1530→                  {opt === 'votes' ? 'Most Voted' : 'Newest'}
+  1531→                </Button>
+  1532→              ))}
+  1533→            </div>
+  1534→          </div>
+  1535→
+  1536→          {/* Accepted Answer first */}
+  1537→          {acceptedAnswer && (
+  1538→            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+  1539→              <Card className={cn(glassCard, 'border-emerald-300 dark:border-emerald-700/50 shadow-emerald-500/5 shadow-lg')}>
+  1540→                <CardContent className="p-5">
+  1541→                  <div className="flex gap-3">
+  1542→                    <div className="flex flex-col items-center gap-1 pt-1">
+  1543→                      <button
+  1544→                        className={cn('p-1 rounded transition-all duration-200', upvotedAnswers.has(acceptedAnswer.id) ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' : 'hover:bg-muted/50 text-muted-foreground')}
+  1545→                        onClick={() => handleUpvoteAnswer(acceptedAnswer.id)}
+  1546→                      >
+  1547→                        <ChevronUp className="h-4 w-4" />
+  1548→                      </button>
+  1549→                      <span className={cn('text-xs font-bold', upvotedAnswers.has(acceptedAnswer.id) ? 'text-emerald-600' : 'text-foreground')}>{acceptedAnswer.upvotes + (upvotedAnswers.has(acceptedAnswer.id) ? 1 : 0) - (downvotedAnswers.has(acceptedAnswer.id) ? 1 : 0)}</span>
+  1550→                      <button
+  1551→                        className={cn('p-1 rounded transition-all duration-200', downvotedAnswers.has(acceptedAnswer.id) ? 'bg-red-100 dark:bg-red-900/30 text-red-600' : 'hover:bg-muted/50 text-muted-foreground')}
+  1552→                        onClick={() => handleDownvoteAnswer(acceptedAnswer.id)}
+  1553→                      >
+  1554→                        <ChevronDown className="h-4 w-4" />
+  1555→                      </button>
+  1556→                    </div>
+  1557→                    <div className="flex-1 min-w-0">
+  1558→                      <div className="flex items-center gap-2 mb-2">
+  1559→                        <Avatar className="h-6 w-6">
+  1560→                          <AvatarFallback className={cn('text-[9px]', acceptedAnswer.author.role === 'instructor' ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300')}>
+  1561→                            {acceptedAnswer.author.avatar}
+  1562→                          </AvatarFallback>
+  1563→                        </Avatar>
+  1564→                        <span className="text-xs font-medium text-foreground">{acceptedAnswer.author.name}</span>
+  1565→                        {acceptedAnswer.author.role === 'instructor' && (
+  1566→                          <Badge className="bg-gradient-to-r from-amber-400 to-orange-500 text-white text-[9px] px-1.5 py-0 gap-0.5 border-0">
+  1567→                            <GraduationCap className="h-2.5 w-2.5" /> Instructor
+  1568→                          </Badge>
+  1569→                        )}
+  1570→                        <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[9px] px-1.5 py-0 gap-0.5">
+  1571→                          <Check className="h-2.5 w-2.5" /> Accepted Answer
+  1572→                        </Badge>
+  1573→                        <span className="text-[10px] text-muted-foreground">· {timeAgo(acceptedAnswer.createdAt)}</span>
+  1574→                      </div>
+  1575→                      <div className="text-sm text-muted-foreground leading-relaxed">
+  1576→                        {renderContent(acceptedAnswer.content)}
+  1577→                      </div>
+  1578→
+  1579→                      {/* Replies */}
+  1580→                      {acceptedAnswer.replies.length > 0 && (
+  1581→                        <div className="mt-3 ml-4 space-y-2 border-l-2 border-emerald-200 dark:border-emerald-800/50 pl-3">
+  1582→                          {acceptedAnswer.replies.map(reply => (
+  1583→                            <div key={reply.id} className="py-2">
+  1584→                              <div className="flex items-center gap-1.5 mb-1">
+  1585→                                <Avatar className="h-4 w-4">
+  1586→                                  <AvatarFallback className="text-[7px] bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">{reply.author.avatar}</AvatarFallback>
+  1587→                                </Avatar>
+  1588→                                <span className="text-[10px] font-medium text-foreground">{reply.author.name}</span>
+  1589→                                <span className="text-[10px] text-muted-foreground">· {timeAgo(reply.createdAt)}</span>
+  1590→                              </div>
+  1591→                              <p className="text-xs text-muted-foreground leading-relaxed">{reply.content}</p>
+  1592→                            </div>
+  1593→                          ))}
+  1594→                        </div>
+  1595→                      )}
+  1596→
+  1597→                      {/* Reply button */}
+  1598→                      <div className="mt-2">
+  1599→                        {replyingTo === acceptedAnswer.id ? (
+  1600→                          <div className="flex gap-2 mt-2">
+  1601→                            <Input placeholder="Write a reply..." value={replyContent} onChange={e => setReplyContent(e.target.value)} className="h-7 text-xs" />
+  1602→                            <Button size="sm" className="h-7 gap-1 bg-emerald-600 hover:bg-emerald-700 shrink-0" onClick={() => { setReplyContent(''); setReplyingTo(null); }}>
+  1603→                              <Send className="h-3 w-3" />
+  1604→                            </Button>
+  1605→                            <Button size="sm" variant="ghost" className="h-7" onClick={() => setReplyingTo(null)}>
+  1606→                              <X className="h-3 w-3" />
+  1607→                            </Button>
+  1608→                          </div>
+  1609→                        ) : (
+  1610→                          <button className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors" onClick={() => setReplyingTo(acceptedAnswer.id)}>
+  1611→                            <MessageCircle className="h-3 w-3" /> Reply
+  1612→                          </button>
+  1613→                        )}
+  1614→                      </div>
+  1615→                    </div>
+  1616→                  </div>
+  1617→                </CardContent>
+  1618→              </Card>
+  1619→            </motion.div>
+  1620→          )}
+  1621→
+  1622→          {/* Other answers */}
+  1623→          {sortedAnswers.filter(a => !a.isAccepted).map((answer, idx) => (
+  1624→            <motion.div key={answer.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 * (idx + 1) }}>
+  1625→              <Card className={cn(glassCard, answer.author.role === 'instructor' && 'border-amber-200/50 dark:border-amber-800/30')}>
+  1626→                <CardContent className="p-5">
+  1627→                  <div className="flex gap-3">
+  1628→                    <div className="flex flex-col items-center gap-1 pt-1">
+  1629→                      <button
+  1630→                        className={cn('p-1 rounded transition-all duration-200', upvotedAnswers.has(answer.id) ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' : 'hover:bg-muted/50 text-muted-foreground')}
+  1631→                        onClick={() => handleUpvoteAnswer(answer.id)}
+  1632→                      >
+  1633→                        <ChevronUp className="h-4 w-4" />
+  1634→                      </button>
+  1635→                      <span className={cn('text-xs font-bold', upvotedAnswers.has(answer.id) ? 'text-emerald-600' : 'text-foreground')}>{answer.upvotes + (upvotedAnswers.has(answer.id) ? 1 : 0) - (downvotedAnswers.has(answer.id) ? 1 : 0)}</span>
+  1636→                      <button
+  1637→                        className={cn('p-1 rounded transition-all duration-200', downvotedAnswers.has(answer.id) ? 'bg-red-100 dark:bg-red-900/30 text-red-600' : 'hover:bg-muted/50 text-muted-foreground')}
+  1638→                        onClick={() => handleDownvoteAnswer(answer.id)}
+  1639→                      >
+  1640→                        <ChevronDown className="h-4 w-4" />
+  1641→                      </button>
+  1642→                    </div>
+  1643→                    <div className="flex-1 min-w-0">
+  1644→                      <div className="flex items-center gap-2 mb-2">
+  1645→                        <Avatar className="h-6 w-6">
+  1646→                          <AvatarFallback className={cn('text-[9px]', answer.author.role === 'instructor' ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300')}>
+  1647→                            {answer.author.avatar}
+  1648→                          </AvatarFallback>
+  1649→                        </Avatar>
+  1650→                        <span className="text-xs font-medium text-foreground">{answer.author.name}</span>
+  1651→                        {answer.author.role === 'instructor' && (
+  1652→                          <Badge className="bg-gradient-to-r from-amber-400 to-orange-500 text-white text-[9px] px-1.5 py-0 gap-0.5 border-0">
+  1653→                            <GraduationCap className="h-2.5 w-2.5" /> Instructor
+  1654→                          </Badge>
+  1655→                        )}
+  1656→                        <span className="text-[10px] text-muted-foreground">· {timeAgo(answer.createdAt)}</span>
+  1657→                      </div>
+  1658→                      <div className="text-sm text-muted-foreground leading-relaxed">
+  1659→                        {renderContent(answer.content)}
+  1660→                      </div>
+  1661→
+  1662→                      {/* Replies */}
+  1663→                      {answer.replies.length > 0 && (
+  1664→                        <div className="mt-3 ml-4 space-y-2 border-l-2 border-border/50 pl-3">
+  1665→                          {answer.replies.map(reply => (
+  1666→                            <div key={reply.id} className="py-2">
+  1667→                              <div className="flex items-center gap-1.5 mb-1">
+  1668→                                <Avatar className="h-4 w-4">
+  1669→                                  <AvatarFallback className="text-[7px] bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">{reply.author.avatar}</AvatarFallback>
+  1670→                                </Avatar>
+  1671→                                <span className="text-[10px] font-medium text-foreground">{reply.author.name}</span>
+  1672→                                <span className="text-[10px] text-muted-foreground">· {timeAgo(reply.createdAt)}</span>
+  1673→                              </div>
+  1674→                              <p className="text-xs text-muted-foreground leading-relaxed">{reply.content}</p>
+  1675→                            </div>
+  1676→                          ))}
+  1677→                        </div>
+  1678→                      )}
+  1679→
+  1680→                      <div className="flex items-center gap-3 mt-2">
+  1681→                        {replyingTo === answer.id ? (
+  1682→                          <div className="flex gap-2 flex-1">
+  1683→                            <Input placeholder="Write a reply..." value={replyContent} onChange={e => setReplyContent(e.target.value)} className="h-7 text-xs" />
+  1684→                            <Button size="sm" className="h-7 gap-1 bg-emerald-600 hover:bg-emerald-700 shrink-0" onClick={() => { setReplyContent(''); setReplyingTo(null); }}>
+  1685→                              <Send className="h-3 w-3" />
+  1686→                            </Button>
+  1687→                            <Button size="sm" variant="ghost" className="h-7" onClick={() => setReplyingTo(null)}>
+  1688→                              <X className="h-3 w-3" />
+  1689→                            </Button>
+  1690→                          </div>
+  1691→                        ) : (
+  1692→                          <button className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors" onClick={() => setReplyingTo(answer.id)}>
+  1693→                            <MessageCircle className="h-3 w-3" /> Reply
+  1694→                          </button>
+  1695→                        )}
+  1696→                        {q.author.name === 'Alex Johnson' && !q.resolved && (
+  1697→                          <button className="flex items-center gap-1 text-[10px] text-emerald-600 hover:text-emerald-700 transition-colors">
+  1698→                            <Check className="h-3 w-3" /> Mark as Accepted
+  1699→                          </button>
+  1700→                        )}
+  1701→                      </div>
+  1702→                    </div>
+  1703→                  </div>
+  1704→                </CardContent>
+  1705→              </Card>
+  1706→            </motion.div>
+  1707→          ))}
+  1708→
+  1709→          {/* No answers */}
+  1710→          {q.answers.length === 0 && (
+  1711→            <div className="text-center py-8">
+  1712→              <MessageCircleQuestion className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+  1713→              <p className="text-sm text-muted-foreground">No answers yet. Be the first to help!</p>
+  1714→            </div>
+  1715→          )}
+  1716→        </div>
+  1717→
+  1718→        {/* Add Answer Form */}
+  1719→        <Card className={cn(glassCard, 'border-dashed')}>
+  1720→          <CardContent className="p-4 space-y-3">
+  1721→            <div className="flex items-center gap-2">
+  1722→              <Edit3 className="h-4 w-4 text-muted-foreground" />
+  1723→              <span className="text-sm font-medium text-foreground">Your Answer</span>
+  1724→            </div>
+  1725→            <Textarea
+  1726→              placeholder="Write your answer... Supports **bold**, *italic*, and `code`"
+  1727→              value={answerContent}
+  1728→              onChange={e => setAnswerContent(e.target.value)}
+  1729→              rows={4}
+  1730→              className="resize-none"
+  1731→            />
+  1732→            <div className="flex items-center justify-between">
+  1733→              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1734→                <Tag className="h-3 w-3" />
+  1735→                <span>Supports Markdown formatting</span>
+  1736→              </div>
+  1737→              <Button size="sm" className="gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20" onClick={() => setAnswerContent('')}>
+  1738→                <Send className="h-3 w-3" /> Submit Answer
+  1739→              </Button>
+  1740→            </div>
+  1741→          </CardContent>
+  1742→        </Card>
+  1743→      </div>
+  1744→    );
+  1745→  }
+  1746→
+  1747→  // ─── Question List View ─────────────────────────────────
+  1748→  return (
+  1749→    <div className="space-y-4">
+  1750→      {/* Header */}
+  1751→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+  1752→        <div>
+  1753→          <div className="flex items-center gap-2">
+  1754→            <h3 className="font-semibold text-foreground">Q&amp;A Discussion</h3>
+  1755→            {unresolvedTotal > 0 && (
+  1756→              <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px]">
+  1757→                {unresolvedTotal} unresolved
+  1758→              </Badge>
+  1759→            )}
+  1760→          </div>
+  1761→          <p className="text-sm text-muted-foreground">Ask questions and get answers from peers and instructors</p>
+  1762→        </div>
+  1763→        <Dialog open={showAskDialog} onOpenChange={setShowAskDialog}>
+  1764→          <DialogTrigger asChild>
+  1765→            <Button size="sm" className="gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20">
+  1766→              <Plus className="h-3.5 w-3.5" />
+  1767→              Ask Question
+  1768→            </Button>
+  1769→          </DialogTrigger>
+  1770→          <DialogContent className="sm:max-w-lg">
+  1771→            <DialogHeader>
+  1772→              <DialogTitle className="flex items-center gap-2">
+  1773→                <MessageCircleQuestion className="h-5 w-5 text-emerald-600" />
+  1774→                Ask a Question
+  1775→              </DialogTitle>
+  1776→            </DialogHeader>
+  1777→            <div className="space-y-4">
+  1778→              <div>
+  1779→                <label className="text-sm font-medium text-foreground mb-1.5 block">Question Title</label>
+  1780→                <Input
+  1781→                  placeholder="What's your question?"
+  1782→                  value={askTitle}
+  1783→                  onChange={e => setAskTitle(e.target.value)}
+  1784→                />
+  1785→              </div>
+  1786→              <div>
+  1787→                <label className="text-sm font-medium text-foreground mb-1.5 block">Details</label>
+  1788→                {/* Formatting toolbar */}
+  1789→                <div className="flex items-center gap-1 mb-2 p-1 rounded-lg border bg-muted/30">
+  1790→                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Bold className="h-3.5 w-3.5" /></Button>
+  1791→                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Italic className="h-3.5 w-3.5" /></Button>
+  1792→                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Code2 className="h-3.5 w-3.5" /></Button>
+  1793→                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Link2 className="h-3.5 w-3.5" /></Button>
+  1794→                </div>
+  1795→                <Textarea
+  1796→                  placeholder="Provide more details about your question... Supports **bold**, *italic*, `code`"
+  1797→                  value={askContent}
+  1798→                  onChange={e => setAskContent(e.target.value)}
+  1799→                  rows={5}
+  1800→                  className="resize-none"
+  1801→                />
+  1802→              </div>
+  1803→              <div>
+  1804→                <label className="text-sm font-medium text-foreground mb-1.5 block">Related Lesson</label>
+  1805→                <Select value={askLessonId} onValueChange={setAskLessonId}>
+  1806→                  <SelectTrigger className="h-9">
+  1807→                    <SelectValue placeholder="Select a lesson" />
+  1808→                  </SelectTrigger>
+  1809→                  <SelectContent>
+  1810→                    {modules.map(mod => (
+  1811→                      (mod.lessons || []).map(lesson => (
+  1812→                        <SelectItem key={lesson.id} value={lesson.id}>
+  1813→                          {mod.title} → {lesson.title}
+  1814→                        </SelectItem>
+  1815→                      ))
+  1816→                    ))}
+  1817→                  </SelectContent>
+  1818→                </Select>
+  1819→              </div>
+  1820→              <div>
+  1821→                <label className="text-sm font-medium text-foreground mb-1.5 block">Tags (comma-separated)</label>
+  1822→                <Input
+  1823→                  placeholder="e.g., concept, hooks, bug"
+  1824→                  value={askTags}
+  1825→                  onChange={e => setAskTags(e.target.value)}
+  1826→                />
+  1827→              </div>
+  1828→            </div>
+  1829→            <DialogFooter className="gap-2">
+  1830→              <DialogClose asChild>
+  1831→                <Button variant="outline">Cancel</Button>
+  1832→              </DialogClose>
+  1833→              <Button className="gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20" onClick={() => setShowAskDialog(false)}>
+  1834→                <Send className="h-3.5 w-3.5" /> Submit Question
+  1835→              </Button>
+  1836→            </DialogFooter>
+  1837→          </DialogContent>
+  1838→        </Dialog>
+  1839→      </div>
+  1840→
+  1841→      <div className="flex flex-col lg:flex-row gap-4">
+  1842→        {/* Left Panel - Lesson Selector */}
+  1843→        <div className="lg:w-64 shrink-0">
+  1844→          <Card className={cn(glassCard, 'sticky top-4')}>
+  1845→            <CardContent className="p-3">
+  1846→              <h4 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Filter by Lesson</h4>
+  1847→              <div className="space-y-1 max-h-96 overflow-y-auto">
+  1848→                <button
+  1849→                  className={cn(
+  1850→                    'w-full text-left p-2 rounded-lg text-xs transition-all duration-200',
+  1851→                    selectedLessonId === 'all' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium' : 'hover:bg-muted/50 text-muted-foreground'
+  1852→                  )}
+  1853→                  onClick={() => setSelectedLessonId('all')}
+  1854→                >
+  1855→                  <div className="flex items-center justify-between">
+  1856→                    <span>All Questions</span>
+  1857→                    <Badge variant="secondary" className="text-[9px] h-4 px-1">{questions.length}</Badge>
+  1858→                  </div>
+  1859→                </button>
+  1860→                {modules.map(mod => {
+  1861→                  const isExpanded = expandedModules.has(mod.id);
+  1862→                  const lessons = mod.lessons || [];
+  1863→                  return (
+  1864→                    <div key={mod.id}>
+  1865→                      <button
+  1866→                        className="w-full flex items-center gap-1.5 p-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+  1867→                        onClick={() => toggleModule(mod.id)}
+  1868→                      >
+  1869→                        {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+  1870→                        <span className="line-clamp-1">{mod.title}</span>
+  1871→                      </button>
+  1872→                      {isExpanded && (
+  1873→                        <div className="ml-4 space-y-0.5">
+  1874→                          {lessons.map(lesson => {
+  1875→                            const qCount = questionCountsByLesson.get(lesson.id) || 0;
+  1876→                            const unresolved = unresolvedCountsByLesson.get(lesson.id) || 0;
+  1877→                            const isActive = selectedLessonId === lesson.id;
+  1878→                            return (
+  1879→                              <button
+  1880→                                key={lesson.id}
+  1881→                                className={cn(
+  1882→                                  'w-full text-left p-2 rounded-lg text-xs transition-all duration-200',
+  1883→                                  isActive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium' : 'hover:bg-muted/50 text-muted-foreground'
+  1884→                                )}
+  1885→                                onClick={() => setSelectedLessonId(lesson.id)}
+  1886→                              >
+  1887→                                <div className="flex items-center gap-1.5">
+  1888→                                  {unresolved > 0 && <span className="h-1.5 w-1.5 rounded-full bg-orange-500 shrink-0" />}
+  1889→                                  <span className="line-clamp-1 flex-1">{lesson.title}</span>
+  1890→                                  {qCount > 0 && (
+  1891→                                    <Badge variant="secondary" className="text-[9px] h-4 px-1 ml-auto shrink-0">{qCount}</Badge>
+  1892→                                  )}
+  1893→                                </div>
+  1894→                              </button>
+  1895→                            );
+  1896→                          })}
+  1897→                        </div>
+  1898→                      )}
+  1899→                    </div>
+  1900→                  );
+  1901→                })}
+  1902→              </div>
+  1903→            </CardContent>
+  1904→          </Card>
+  1905→        </div>
+  1906→
+  1907→        {/* Right Panel - Q&A Threads */}
+  1908→        <div className="flex-1 space-y-3">
+  1909→          {/* Search and Sort */}
+  1910→          <div className="flex flex-col sm:flex-row gap-3">
+  1911→            <div className="relative flex-1">
+  1912→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1913→              <Input
+  1914→                placeholder="Search questions..."
+  1915→                value={searchQuery}
+  1916→                onChange={e => setSearchQuery(e.target.value)}
+  1917→                className="pl-9 h-9"
+  1918→              />
+  1919→            </div>
+  1920→            <div className="flex gap-1.5 overflow-x-auto">
+  1921→              {([
+  1922→                { key: 'newest' as const, label: 'Newest' },
+  1923→                { key: 'voted' as const, label: 'Most Voted' },
+  1924→                { key: 'unresolved' as const, label: 'Unresolved' },
+  1925→                { key: 'resolved' as const, label: 'Resolved' },
+  1926→              ]).map(opt => (
+  1927→                <Button
+  1928→                  key={opt.key}
+  1929→                  size="sm"
+  1930→                  variant={sortBy === opt.key ? 'default' : 'outline'}
+  1931→                  className={cn('text-xs h-9 shrink-0', sortBy === opt.key && 'bg-gradient-to-r from-slate-700 to-slate-800 dark:from-slate-600 dark:to-slate-700')}
+  1932→                  onClick={() => setSortBy(opt.key)}
+  1933→                >
+  1934→                  {opt.label}
+  1935→                </Button>
+  1936→              ))}
+  1937→            </div>
+  1938→          </div>
+  1939→
+  1940→          {/* Filter Row */}
+  1941→          <div className="flex gap-1.5 overflow-x-auto">
+  1942→            {([
+  1943→              { key: 'all' as const, label: 'All' },
+  1944→              { key: 'my' as const, label: 'My Questions' },
+  1945→              { key: 'unresolved' as const, label: 'Unresolved' },
+  1946→              { key: 'resolved' as const, label: 'Resolved' },
+  1947→            ]).map(opt => (
+  1948→              <Button
+  1949→                key={opt.key}
+  1950→                size="sm"
+  1951→                variant={filterBy === opt.key ? 'secondary' : 'ghost'}
+  1952→                className={cn('text-xs h-7 shrink-0', filterBy === opt.key && 'font-medium')}
+  1953→                onClick={() => setFilterBy(opt.key)}
+  1954→              >
+  1955→                {opt.label}
+  1956→              </Button>
+  1957→            ))}
+  1958→          </div>
+  1959→
+  1960→          {/* Thread Cards */}
+  1961→          <AnimatePresence mode="popLayout">
+  1962→            {sortedQuestions.map((question, idx) => {
+  1963→              const isUpvoted = upvotedQuestions.has(question.id);
+  1964→              return (
+  1965→                <motion.div
+  1966→                  key={question.id}
+  1967→                  layout
+  1968→                  initial={{ opacity: 0, y: 10 }}
+  1969→                  animate={{ opacity: 1, y: 0 }}
+  1970→                  exit={{ opacity: 0, y: -10 }}
+  1971→                  transition={{ delay: idx * 0.05 }}
+  1972→                >
+  1973→                  <Card
+  1974→                    className={cn(
+  1975→                      'hover:shadow-md transition-all duration-200 cursor-pointer',
+  1976→                      glassCard,
+  1977→                      question.resolved ? 'border-emerald-200/50 dark:border-emerald-800/30' : 'border-orange-100/50 dark:border-orange-800/20'
+  1978→                    )}
+  1979→                    onClick={() => setSelectedQuestion(question)}
+  1980→                  >
+  1981→                    <CardContent className="p-4">
+  1982→                      <div className="flex items-start gap-3">
+  1983→                        {/* Vote column */}
+  1984→                        <div className="flex flex-col items-center gap-1 pt-1" onClick={e => e.stopPropagation()}>
+  1985→                          <button
+  1986→                            className={cn('p-1 rounded transition-all duration-200', isUpvoted ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground')}
+  1987→                            onClick={() => handleUpvoteQuestion(question.id)}
+  1988→                          >
+  1989→                            <ChevronUp className="h-4 w-4" />
+  1990→                          </button>
+  1991→                          <span className={cn('text-sm font-semibold', isUpvoted ? 'text-emerald-600' : 'text-foreground')}>{question.upvotes + (isUpvoted ? 1 : 0)}</span>
+  1992→                        </div>
+  1993→
+  1994→                        {/* Content */}
+  1995→                        <div className="flex-1 min-w-0">
+  1996→                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+  1997→                            {question.resolved ? (
+  1998→                              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] gap-0.5">
+  1999→                                <Check className="h-3 w-3" /> Resolved
+  2000→                              </Badge>
+
+[showing lines 1-2000 of 3495; use offset=2001 with limit to continue reading]

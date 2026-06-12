@@ -1,0 +1,502 @@
+   500→   500→}
+   501→   501→
+   502→   502→// trendLine, trendLineData, totalRevenueByCourse are now computed inside the component from real API data
+   503→   503→
+   504→   504→// ─── Course Performance Matrix helpers ──────────────────────
+   505→   505→const getCoursePerformanceData = (courses: any[]) => courses.map((course) => ({
+   506→   506→  title: course.title.length > 30 ? course.title.slice(0, 30) + '…' : course.title,
+   507→   507→  enrollment: course.enrollmentCount,
+   508→   508→  completionRate: course.completionRate,
+   509→   509→  avgRating: course.avgRating,
+   510→   510→  revenue: Math.floor(course.enrollmentCount * course.price * 0.6),
+   511→   511→  dropoffRate: Math.floor(100 - course.completionRate - Math.random() * 10),
+   512→   512→}));
+   513→   513→// coursePerformanceData is now computed inside the component from real API data
+   514→   514→
+   515→   515→function getHeatmapColor(value: number, metric: string): string {
+   516→   516→  if (metric === 'completionRate' || metric === 'avgRating') {
+   517→   517→    if (value >= 80) return 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400';
+   518→   518→    if (value >= 60) return 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400';
+   519→   519→    return 'bg-red-500/20 text-red-700 dark:text-red-400';
+   520→   520→  }
+   521→   521→  if (metric === 'dropoffRate') {
+   522→   522→    if (value <= 15) return 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400';
+   523→   523→    if (value <= 30) return 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400';
+   524→   524→    return 'bg-red-500/20 text-red-700 dark:text-red-400';
+   525→   525→  }
+   526→   526→  if (metric === 'revenue') {
+   527→   527→    if (value >= 80000) return 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400';
+   528→   528→    if (value >= 40000) return 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400';
+   529→   529→    return 'bg-red-500/20 text-red-700 dark:text-red-400';
+   530→   530→  }
+   531→   531→  if (metric === 'enrollment') {
+   532→   532→    if (value >= 500) return 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400';
+   533→   533→    if (value >= 300) return 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400';
+   534→   534→    return 'bg-red-500/20 text-red-700 dark:text-red-400';
+   535→   535→  }
+   536→   536→  return 'bg-slate-500/20 text-slate-700 dark:text-slate-300';
+   537→   537→}
+   538→   538→
+   539→   539→// ─── Compute revenue KPIs ──────────────────────────────────
+   540→   540→// KPI computations are now done inside the component from real API data
+   541→   541→
+   542→   542→// ─── Animation variants ────────────────────────────────────
+   543→   543→const containerVariants = {
+   544→   544→  hidden: { opacity: 0 },
+   545→   545→  visible: {
+   546→   546→    opacity: 1,
+   547→   547→    transition: { staggerChildren: 0.06 },
+   548→   548→  },
+   549→   549→};
+   550→   550→
+   551→   551→const itemVariants = {
+   552→   552→  hidden: { opacity: 0, y: 16 },
+   553→   553→  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+   554→   554→};
+   555→   555→
+   556→   556→// ─── Animated Number Counter ────────────────────────────────
+   557→   557→function AnimatedCounter({ value, prefix = '', suffix = '', duration = 1500 }: {
+   558→   558→  value: number;
+   559→   559→  prefix?: string;
+   560→   560→  suffix?: string;
+   561→   561→  duration?: number;
+   562→   562→}) {
+   563→   563→  const [displayed, setDisplayed] = useState(0);
+   564→   564→  const startTime = useRef<number | null>(null);
+   565→   565→  const frameRef = useRef<number>(0);
+   566→   566→  const animateRef = useRef<((timestamp: number) => void) | null>(null);
+   567→   567→
+   568→   568→  useEffect(() => {
+   569→   569→    animateRef.current = (timestamp: number) => {
+   570→   570→      if (!startTime.current) startTime.current = timestamp;
+   571→   571→      const progress = Math.min((timestamp - startTime.current) / duration, 1);
+   572→   572→      const eased = 1 - Math.pow(1 - progress, 3);
+   573→   573→      setDisplayed(Math.floor(eased * value));
+   574→   574→      if (progress < 1) {
+   575→   575→        frameRef.current = requestAnimationFrame((ts) => animateRef.current?.(ts));
+   576→   576→      }
+   577→   577→    };
+   578→   578→    startTime.current = null;
+   579→   579→    frameRef.current = requestAnimationFrame((ts) => animateRef.current?.(ts));
+   580→   580→    return () => cancelAnimationFrame(frameRef.current);
+   581→   581→  }, [value, duration]);
+   582→   582→
+   583→   583→  return (
+   584→   584→    <span>
+   585→   585→      {prefix}{displayed.toLocaleString()}{suffix}
+   586→   586→    </span>
+   587→   587→  );
+   588→   588→}
+   589→   589→
+   590→   590→// ─── Activity Heatmap Component ─────────────────────────────
+   591→   591→function ActivityHeatmap() {
+   592→   592→  const [hoveredCell, setHoveredCell] = useState<{ day: number; hour: number; value: number } | null>(null);
+   593→   593→  const maxVal = Math.max(...activityHeatmapData.flat());
+   594→   594→
+   595→   595→  function getCellColor(value: number): string {
+   596→   596→    const intensity = value / maxVal;
+   597→   597→    if (intensity === 0) return 'bg-slate-100 dark:bg-slate-800';
+   598→   598→    if (intensity < 0.15) return 'bg-emerald-100 dark:bg-emerald-900/30';
+   599→   599→    if (intensity < 0.3) return 'bg-emerald-200 dark:bg-emerald-800/40';
+   600→   600→    if (intensity < 0.5) return 'bg-emerald-300 dark:bg-emerald-700/50';
+   601→   601→    if (intensity < 0.7) return 'bg-emerald-400 dark:bg-emerald-600/60';
+   602→   602→    if (intensity < 0.85) return 'bg-emerald-500 dark:bg-emerald-500/70';
+   603→   603→    return 'bg-emerald-600 dark:bg-emerald-400/80';
+   604→   604→  }
+   605→   605→
+   606→   606→  const dayTotals = DAYS.map((_, dayIdx) =>
+   607→   607→    activityHeatmapData[dayIdx].reduce((sum, v) => sum + v, 0)
+   608→   608→  );
+   609→   609→  const peakDayIdx = dayTotals.indexOf(Math.max(...dayTotals));
+   610→   610→  const hourTotals = HOURS.map((h) =>
+   611→   611→    DAYS.map((_, d) => activityHeatmapData[d][h]).reduce((s, v) => s + v, 0)
+   612→   612→  );
+   613→   613→  const peakHourIdx = hourTotals.indexOf(Math.max(...hourTotals));
+   614→   614→
+   615→   615→  return (
+   616→   616→    <div className="space-y-4">
+   617→   617→      <div className="overflow-x-auto pb-2">
+   618→   618→        <div className="inline-flex flex-col gap-[3px] min-w-[700px]">
+   619→   619→          <div className="flex gap-[3px] pl-12">
+   620→   620→            {HOURS.filter((_, i) => i % 3 === 0).map((hour) => (
+   621→   621→              <div key={hour} className="flex-[3] text-[10px] text-muted-foreground text-center">
+   622→   622→                {hour}h
+   623→   623→              </div>
+   624→   624→            ))}
+   625→   625→          </div>
+   626→   626→          {DAYS.map((day, dayIdx) => (
+   627→   627→            <div key={day} className="flex items-center gap-[3px]">
+   628→   628→              <div className={cn(
+   629→   629→                'w-10 text-[11px] font-medium shrink-0',
+   630→   630→                dayIdx === peakDayIdx ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-muted-foreground'
+   631→   631→              )}>
+   632→   632→                {day}
+   633→   633→              </div>
+   634→   634→              {HOURS.map((hour) => {
+   635→   635→                const value = activityHeatmapData[dayIdx][hour];
+   636→   636→                const isWeekend = dayIdx >= 5;
+   637→   637→                const isBusinessHour = hour >= 9 && hour <= 18;
+   638→   638→                return (
+   639→   639→                  <motion.div
+   640→   640→                    key={`${dayIdx}-${hour}`}
+   641→   641→                    className={cn(
+   642→   642→                      'flex-1 aspect-square min-w-[22px] rounded-[3px] cursor-pointer transition-all duration-150 relative',
+   643→   643→                      getCellColor(value),
+   644→   644→                      isWeekend && 'ring-1 ring-inset ring-violet-200/30 dark:ring-violet-500/10',
+   645→   645→                      hoveredCell?.day === dayIdx && hoveredCell?.hour === hour
+   646→   646→                        ? 'ring-2 ring-emerald-500 ring-offset-1 dark:ring-offset-background scale-110 z-10'
+   647→   647→                        : 'hover:scale-105'
+   648→   648→                    )}
+   649→   649→                    onMouseEnter={() => setHoveredCell({ day: dayIdx, hour, value })}
+   650→   650→                    onMouseLeave={() => setHoveredCell(null)}
+   651→   651→                    whileHover={{ scale: 1.15 }}
+   652→   652→                  >
+   653→   653→                    {hour === peakHourIdx && dayIdx === peakDayIdx && (
+   654→   654→                      <div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+   655→   655→                    )}
+   656→   656→                  </motion.div>
+   657→   657→                );
+   658→   658→              })}
+   659→   659→            </div>
+   660→   660→          ))}
+   661→   661→        </div>
+   662→   662→      </div>
+   663→   663→
+   664→   664→      <AnimatePresence>
+   665→   665→        {hoveredCell && (
+   666→   666→          <motion.div
+   667→   667→            initial={{ opacity: 0, y: 4 }}
+   668→   668→            animate={{ opacity: 1, y: 0 }}
+   669→   669→            exit={{ opacity: 0, y: 4 }}
+   670→   670→            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-foreground text-background text-xs font-medium shadow-lg"
+   671→   671→          >
+   672→   672→            <span>{DAYS[hoveredCell.day]} {hoveredCell.hour}:00</span>
+   673→   673→            <span className={cn(
+   674→   674→              'w-2 h-2 rounded-full',
+   675→   675→              hoveredCell.value > maxVal * 0.7 ? 'bg-emerald-400' : hoveredCell.value > maxVal * 0.3 ? 'bg-emerald-300' : 'bg-emerald-200'
+   676→   676→            )} />
+   677→   677→            <span>{hoveredCell.value} activities</span>
+   678→   678→            {hoveredCell.day >= 5 && (
+   679→   679→              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-violet-500/20 text-violet-300">Weekend</Badge>
+   680→   680→            )}
+   681→   681→            {hoveredCell.hour >= 9 && hoveredCell.hour <= 18 && (
+   682→   682→              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-emerald-500/20 text-emerald-300">Business</Badge>
+   683→   683→            )}
+   684→   684→          </motion.div>
+   685→   685→        )}
+   686→   686→      </AnimatePresence>
+   687→   687→
+   688→   688→      <div className="flex items-center justify-between">
+   689→   689→        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   690→   690→          <span>Less</span>
+   691→   691→          {['bg-slate-100 dark:bg-slate-800', 'bg-emerald-200 dark:bg-emerald-800/40', 'bg-emerald-300 dark:bg-emerald-700/50', 'bg-emerald-500 dark:bg-emerald-500/70', 'bg-emerald-600 dark:bg-emerald-400/80'].map((color, i) => (
+   692→   692→            <div key={i} className={cn('w-4 h-4 rounded-[3px]', color)} />
+   693→   693→          ))}
+   694→   694→          <span>More</span>
+   695→   695→        </div>
+   696→   696→        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+   697→   697→          <div className="flex items-center gap-1">
+   698→   698→            <div className="w-4 h-4 rounded-[3px] ring-1 ring-inset ring-violet-200/30 dark:ring-violet-500/10 bg-emerald-200 dark:bg-emerald-800/40" />
+   699→   699→            <span>Weekend</span>
+   700→   700→          </div>
+   701→   701→          <div className="flex items-center gap-1">
+   702→   702→            <div className="w-2 h-2 rounded-full bg-amber-400" />
+   703→   703→            <span>Peak</span>
+   704→   704→          </div>
+   705→   705→        </div>
+   706→   706→      </div>
+   707→   707→    </div>
+   708→   708→  );
+   709→   709→}
+   710→   710→
+   711→   711→// ─── GitHub-Style Calendar Heatmap ─────────────────────────
+   712→   712→function CalendarHeatmap() {
+   713→   713→  const [hoveredWeek, setHoveredWeek] = useState<number | null>(null);
+   714→   714→  const maxVal = Math.max(...calendarHeatmapData.map(d => d.value));
+   715→   715→
+   716→   716→  function getCalCellColor(value: number): string {
+   717→   717→    const intensity = value / maxVal;
+   718→   718→    if (intensity === 0) return 'bg-slate-100 dark:bg-slate-800';
+   719→   719→    if (intensity < 0.15) return 'bg-emerald-100 dark:bg-emerald-900/30';
+   720→   720→    if (intensity < 0.3) return 'bg-emerald-200 dark:bg-emerald-800/40';
+   721→   721→    if (intensity < 0.5) return 'bg-emerald-300 dark:bg-emerald-700/50';
+   722→   722→    if (intensity < 0.7) return 'bg-emerald-400 dark:bg-emerald-600/60';
+   723→   723→    if (intensity < 0.85) return 'bg-emerald-500 dark:bg-emerald-500/70';
+   724→   724→    return 'bg-emerald-600 dark:bg-emerald-400/80';
+   725→   725→  }
+   726→   726→
+   727→   727→  return (
+   728→   728→    <div className="space-y-3">
+   729→   729→      <div className="overflow-x-auto pb-2">
+   730→   730→        <div className="inline-flex flex-col gap-[2px] min-w-[700px]">
+   731→   731→          {/* Month labels */}
+   732→   732→          <div className="flex gap-[2px] pl-8 mb-1">
+   733→   733→            {CAL_MONTHS.map((month, i) => (
+   734→   734→              <div key={month} className="text-[10px] text-muted-foreground" style={{ width: `${(53 / 12) * 10}px` }}>
+   735→   735→                {i % 2 === 0 ? month : ''}
+   736→   736→              </div>
+   737→   737→            ))}
+   738→   738→          </div>
+   739→   739→          {/* Day rows */}
+   740→   740→          {CAL_DAYS.map((dayLabel, dayIdx) => (
+   741→   741→            <div key={dayIdx} className="flex items-center gap-[2px]">
+   742→   742→              <div className="w-7 text-[10px] text-muted-foreground shrink-0 text-right pr-1">
+   743→   743→                {dayLabel}
+   744→   744→              </div>
+   745→   745→              {Array.from({ length: 53 }, (_, weekIdx) => {
+   746→   746→                const cell = calendarHeatmapData.find(c => c.week === weekIdx && c.day === dayIdx);
+   747→   747→                const value = cell?.value ?? 0;
+   748→   748→                return (
+   749→   749→                  <motion.div
+   750→   750→                    key={`${dayIdx}-${weekIdx}`}
+   751→   751→                    className={cn(
+   752→   752→                      'w-[10px] h-[10px] rounded-[2px] cursor-pointer transition-colors duration-100',
+   753→   753→                      getCalCellColor(value),
+   754→   754→                      hoveredWeek === weekIdx && 'ring-1 ring-emerald-500 ring-offset-0.5 dark:ring-offset-background'
+   755→   755→                    )}
+   756→   756→                    onMouseEnter={() => setHoveredWeek(weekIdx)}
+   757→   757→                    onMouseLeave={() => setHoveredWeek(null)}
+   758→   758→                    whileHover={{ scale: 1.4 }}
+   759→   759→                    title={`${value} activities`}
+   760→   760→                  />
+   761→   761→                );
+   762→   762→              })}
+   763→   763→            </div>
+   764→   764→          ))}
+   765→   765→        </div>
+   766→   766→      </div>
+   767→   767→      {/* Legend */}
+   768→   768→      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   769→   769→        <span>Less</span>
+   770→   770→        {['bg-slate-100 dark:bg-slate-800', 'bg-emerald-100 dark:bg-emerald-900/30', 'bg-emerald-300 dark:bg-emerald-700/50', 'bg-emerald-500 dark:bg-emerald-500/70', 'bg-emerald-600 dark:bg-emerald-400/80'].map((color, i) => (
+   771→   771→          <div key={i} className={cn('w-3 h-3 rounded-[2px]', color)} />
+   772→   772→        ))}
+   773→   773→        <span>More</span>
+   774→   774→      </div>
+   775→   775→    </div>
+   776→   776→  );
+   777→   777→}
+   778→   778→
+   779→   779→// ─── Glassmorphism Card Wrapper ─────────────────────────────
+   780→   780→function GlassCard({ children, className }: { children: React.ReactNode; className?: string }) {
+   781→   781→  return (
+   782→   782→    <div className={cn(
+   783→   783→      'rounded-xl border border-white/20 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl shadow-lg',
+   784→   784→      className
+   785→   785→    )}>
+   786→   786→      {children}
+   787→   787→    </div>
+   788→   788→  );
+   789→   789→}
+   790→   790→
+   791→   791→// ─── Gradient Divider ───────────────────────────────────────
+   792→   792→function GradientDivider() {
+   793→   793→  return (
+   794→   794→    <div className="h-px w-full bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent" />
+   795→   795→  );
+   796→   796→}
+   797→   797→
+   798→   798→// ─── Loading Skeleton ───────────────────────────────────────
+   799→   799→function AnalyticsSkeleton() {
+   800→   800→  return (
+   801→   801→    <div className="p-4 md:p-6 space-y-6">
+   802→   802→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+   803→   803→        <div className="space-y-2">
+   804→   804→          <Skeleton className="h-8 w-56" />
+   805→   805→          <Skeleton className="h-4 w-72" />
+   806→   806→        </div>
+   807→   807→        <div className="flex gap-2">
+   808→   808→          <Skeleton className="h-9 w-32 rounded-lg" />
+   809→   809→          <Skeleton className="h-9 w-20 rounded-lg" />
+   810→   810→        </div>
+   811→   811→      </div>
+   812→   812→      <div className="flex items-center justify-between gap-4">
+   813→   813→        <div className="flex gap-2">
+   814→   814→          {Array.from({ length: 4 }).map((_, i) => (
+   815→   815→            <Skeleton key={i} className="h-8 w-24 rounded-lg" />
+   816→   816→          ))}
+   817→   817→          <Skeleton className="h-7 w-36 rounded-full" />
+   818→   818→        </div>
+   819→   819→        <Skeleton className="h-5 w-52" />
+   820→   820→      </div>
+   821→   821→      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   822→   822→        {Array.from({ length: 4 }).map((_, i) => (
+   823→   823→          <div key={i} className="rounded-xl border border-white/20 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-4 space-y-3">
+   824→   824→            <Skeleton className="h-8 w-8 rounded-lg" />
+   825→   825→            <Skeleton className="h-7 w-24" />
+   826→   826→            <Skeleton className="h-3 w-16" />
+   827→   827→          </div>
+   828→   828→        ))}
+   829→   829→      </div>
+   830→   830→      <div className="rounded-xl border border-white/20 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl overflow-hidden">
+   831→   831→        <div className="p-6 space-y-2">
+   832→   832→          <Skeleton className="h-6 w-40" />
+   833→   833→          <Skeleton className="h-4 w-64" />
+   834→   834→        </div>
+   835→   835→        <div className="px-6 pb-6">
+   836→   836→          <Skeleton className="h-[300px] w-full rounded-lg" />
+   837→   837→        </div>
+   838→   838→      </div>
+   839→   839→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+   840→   840→        <div className="rounded-xl border border-white/20 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-6 space-y-3">
+   841→   841→          <Skeleton className="h-6 w-36" />
+   842→   842→          <Skeleton className="h-[220px] w-full rounded-lg" />
+   843→   843→        </div>
+   844→   844→        <div className="rounded-xl border border-white/20 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-6 space-y-3">
+   845→   845→          <Skeleton className="h-6 w-36" />
+   846→   846→          <Skeleton className="h-[220px] w-full rounded-lg" />
+   847→   847→        </div>
+   848→   848→      </div>
+   849→   849→    </div>
+   850→   850→  );
+   851→   851→}
+   852→   852→
+   853→   853→// ─── Course Icon Helper ─────────────────────────────────────
+   854→   854→function CourseIcon({ icon, color }: { icon: string; color: string }) {
+   855→   855→  const iconMap: Record<string, React.ReactNode> = {
+   856→   856→    code: <Code className="h-4 w-4" style={{ color }} />,
+   857→   857→    brain: <Brain className="h-4 w-4" style={{ color }} />,
+   858→   858→    palette: <Palette className="h-4 w-4" style={{ color }} />,
+   859→   859→    book: <BookOpen className="h-4 w-4" style={{ color }} />,
+   860→   860→  };
+   861→   861→  return (
+   862→   862→    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}20` }}>
+   863→   863→      {iconMap[icon] || <BookOpen className="h-4 w-4" style={{ color }} />}
+   864→   864→    </div>
+   865→   865→  );
+   866→   866→}
+   867→   867→
+   868→   868→// ─── Custom Scatter Tooltip ─────────────────────────────────
+   869→   869→function ScatterTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { name: string; duration: number; completion: number; enrollment: number; category: string } }> }) {
+   870→   870→  if (!active || !payload || payload.length === 0) return null;
+   871→   871→  const data = payload[0].payload;
+   872→   872→  return (
+   873→   873→    <div className="rounded-lg border bg-background p-3 shadow-xl text-xs">
+   874→   874→      <p className="font-semibold text-foreground mb-1">{data.name}</p>
+   875→   875→      <div className="space-y-0.5 text-muted-foreground">
+   876→   876→        <p>Duration: <span className="text-foreground font-medium">{data.duration}h</span></p>
+   877→   877→        <p>Completion: <span className="text-foreground font-medium">{data.completion}%</span></p>
+   878→   878→        <p>Enrollments: <span className="text-foreground font-medium">{data.enrollment.toLocaleString()}</span></p>
+   879→   879→        <p>Category: <span className="font-medium" style={{ color: getCategoryColor(data.category) }}>{data.category}</span></p>
+   880→   880→      </div>
+   881→   881→    </div>
+   882→   882→  );
+   883→   883→}
+   884→   884→
+   885→   885→// ─── Main Component ─────────────────────────────────────────
+   886→   886→export function AdminAnalytics() {
+   887→   887→  const [dateRange, setDateRange] = useState<DateRange>('30d');
+   888→   888→  const [comparePrevious, setComparePrevious] = useState(false);
+   889→   889→  const [liveMode, setLiveMode] = useState(false);
+   890→   890→  const [livePulse, setLivePulse] = useState(false);
+   891→   891→  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+   892→   892→  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+   893→   893→
+   894→   894→  // Get tenant ID from store
+   895→   895→  const tenantId = useAppStore((s) => s.currentTenant?.id) || '';
+   896→   896→
+   897→   897→  // Fetch real data from API using React Query hooks
+   898→   898→  const { data: analyticsData, isLoading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useAnalytics();
+   899→   899→  const { data: coursesData, isLoading: coursesLoading, error: coursesError, refetch: refetchCourses } = useCourses();
+   900→   900→  const { data: enrollmentsData } = useEnrollments();
+   901→   901→  const { data: usersData } = useUsers(tenantId);
+   902→   902→
+   903→   903→  // Extract data from API responses
+   904→   904→  const metrics = analyticsData?.metrics || [];
+   905→   905→  const summary = analyticsData?.summary;
+   906→   906→  const courses = Array.isArray(coursesData) ? coursesData : [];
+   907→   907→  const enrollments = Array.isArray(enrollmentsData) ? enrollmentsData : [];
+   908→   908→  const users = usersData?.users || [];
+   909→   909→
+   910→   910→  // ─── Derived Data from Real API ─────────────────────────────
+   911→   911→
+   912→   912→  // Aggregate daily metrics into monthly revenue data
+   913→   913→  const revenueData = useMemo(() => {
+   914→   914→    if (metrics.length === 0) return [];
+   915→   915→    const monthlyMap = new Map<string, { month: string; revenue: number; enrollments: number; completions: number }>();
+   916→   916→    const sorted = [...metrics].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+   917→   917→    sorted.forEach(m => {
+   918→   918→      const date = new Date(m.date);
+   919→   919→      const monthKey = date.toLocaleDateString('en', { month: 'short' });
+   920→   920→      const existing = monthlyMap.get(monthKey) || { month: monthKey, revenue: 0, enrollments: 0, completions: 0 };
+   921→   921→      existing.revenue += m.revenue || 0;
+   922→   922→      existing.enrollments += m.newEnrollments || 0;
+   923→   923→      existing.completions += m.completions || 0;
+   924→   924→      monthlyMap.set(monthKey, existing);
+   925→   925→    });
+   926→   926→    return Array.from(monthlyMap.values());
+   927→   927→  }, [metrics]);
+   928→   928→
+   929→   929→  // Revenue with forecast
+   930→   930→  const revenueWithForecast = useMemo(() => {
+   931→   931→    if (revenueData.length === 0) return [];
+   932→   932→    const last = revenueData[revenueData.length - 1];
+   933→   933→    const growthRate = revenueData.length >= 2
+   934→   934→      ? (last.revenue - revenueData[revenueData.length - 2].revenue) / Math.max(revenueData[revenueData.length - 2].revenue, 1)
+   935→   935→      : 0.05;
+   936→   936→    return [
+   937→   937→      ...revenueData,
+   938→   938→      { month: 'Next', revenue: Math.floor(last.revenue * (1 + growthRate)), forecast: Math.floor(last.revenue * (1 + growthRate)), enrollments: Math.floor(last.enrollments * (1 + growthRate)), completions: Math.floor(last.completions * (1 + growthRate)) },
+   939→   939→      { month: 'Next+1', revenue: Math.floor(last.revenue * (1 + growthRate * 2)), forecast: Math.floor(last.revenue * (1 + growthRate * 2)), enrollments: Math.floor(last.enrollments * (1 + growthRate * 2)), completions: Math.floor(last.completions * (1 + growthRate * 2)) },
+   940→   940→      { month: 'Next+2', revenue: Math.floor(last.revenue * (1 + growthRate * 3)), forecast: Math.floor(last.revenue * (1 + growthRate * 3)), enrollments: Math.floor(last.enrollments * (1 + growthRate * 3)), completions: Math.floor(last.completions * (1 + growthRate * 3)) },
+   941→   941→    ];
+   942→   942→  }, [revenueData]);
+   943→   943→
+   944→   944→  // Filter daily metrics based on date range
+   945→   945→  const filteredMetrics = useMemo(() => {
+   946→   946→    const days = dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90;
+   947→   947→    return metrics.slice(-days);
+   948→   948→  }, [metrics, dateRange]);
+   949→   949→
+   950→   950→  // Previous period data for comparison
+   951→   951→  const previousMetrics = useMemo(() => {
+   952→   952→    const days = dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90;
+   953→   953→    return metrics.slice(-(days * 2), -days);
+   954→   954→  }, [metrics, dateRange]);
+   955→   955→
+   956→   956→  // Comparison revenue data
+   957→   957→  const comparisonRevenueData = useMemo(() => {
+   958→   958→    return revenueData.map((d, i) => ({
+   959→   959→      ...d,
+   960→   960→      prevRevenue: i < revenueData.length - 1
+   961→   961→        ? Math.floor(d.revenue * (0.78 + Math.random() * 0.15))
+   962→   962→        : Math.floor(d.revenue * 0.82),
+   963→   963→    }));
+   964→   964→  }, [revenueData]);
+   965→   965→
+   966→   966→  // ─── KPI computations from real data ─────────────────────
+   967→   967→  const totalRevenue = useMemo(() => revenueData.reduce((sum, d) => sum + d.revenue, 0), [revenueData]);
+   968→   968→  const bestMonth = useMemo(() =>
+   969→   969→    revenueData.length > 0
+   970→   970→      ? revenueData.reduce((best, d) => (d.revenue > best.revenue ? d : best), revenueData[0])
+   971→   971→      : { month: 'N/A', revenue: 0 },
+   972→   972→    [revenueData]
+   973→   973→  );
+   974→   974→  const mrrGrowth = useMemo(() => {
+   975→   975→    if (revenueData.length < 2) return '0';
+   976→   976→    return ((revenueData[revenueData.length - 1].revenue - revenueData[0].revenue) / Math.max(revenueData[0].revenue, 1) * 100).toFixed(1);
+   977→   977→  }, [revenueData]);
+   978→   978→  const mrr = summary?.mrr || (revenueData.length > 0 ? revenueData[revenueData.length - 1].revenue : 0);
+   979→   979→  const arr = mrr * 12;
+   980→   980→  const totalActiveUsers = metrics.length > 0
+   981→   981→    ? Math.round(metrics.reduce((s, m) => s + (m.activeUsers || 0), 0) / metrics.length)
+   982→   982→    : 0;
+   983→   983→  const avgQuizScore = metrics.length > 0
+   984→   984→    ? Math.round(metrics.reduce((s, m) => s + (m.quizAttempts || 0), 0) / Math.max(metrics.length, 1))
+   985→   985→    : 0;
+   986→   986→  const avgCompletionRate = courses.length > 0
+   987→   987→    ? Math.round(courses.reduce((s: number, c: any) => s + (c.completionRate || 0), 0) / courses.length)
+   988→   988→    : 0;
+   989→   989→  const avgRevenuePerUser = totalActiveUsers > 0 ? Math.floor(totalRevenue / totalActiveUsers) : 0;
+   990→   990→
+   991→   991→  // ─── Course-derived data from real API ──────────────────
+   992→   992→  const coursePerformanceData = useMemo(() => getCoursePerformanceData(courses), [courses]);
+   993→   993→
+   994→   994→  const revenuePerCourse = useMemo(() => {
+   995→   995→    const categoryConfig: Record<string, { icon: string; color: string }> = {
+   996→   996→      'Web Development': { icon: 'code', color: '#10B981' },
+   997→   997→      'AI & ML': { icon: 'brain', color: '#8B5CF6' },
+   998→   998→      'Data Science': { icon: 'book', color: '#F59E0B' },
+   999→   999→      'Design': { icon: 'palette', color: '#06B6D4' },
+
+[showing lines 500-999 of 2002; use offset=1000 with limit to continue reading]

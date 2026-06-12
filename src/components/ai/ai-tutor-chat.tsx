@@ -27,6 +27,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import type { ChatMessage } from '@/types';
 import { useAppStore } from '@/store/app-store';
 import { useCourses } from '@/hooks/use-data';
@@ -459,6 +460,7 @@ export function AITutorFullPage() {
     },
   ]);
   const [activeConvId, setActiveConvId] = useState('conv-1');
+  const [confirmDeleteConv, setConfirmDeleteConv] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -676,7 +678,7 @@ export function AITutorFullPage() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      deleteConversation(conv.id);
+                      setConfirmDeleteConv(conv.id);
                     }}
                     className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                   >
@@ -877,6 +879,19 @@ export function AITutorFullPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!confirmDeleteConv}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteConv(null); }}
+        title="Delete Conversation"
+        description="Are you sure you want to delete this conversation? All messages will be permanently lost."
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (confirmDeleteConv) deleteConversation(confirmDeleteConv);
+          setConfirmDeleteConv(null);
+        }}
+      />
     </div>
   );
 }

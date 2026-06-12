@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload,
@@ -51,9 +51,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useCourses } from '@/hooks/use-data';
+import { useCourses, useUsers } from '@/hooks/use-data';
+import { useAppStore } from '@/store/app-store';
 
-// TODO: Replace with real API when available - bulk user data not yet in the API
+// Bulk user display type for enrollment UI
 interface BulkUser {
   id: string;
   name: string;
@@ -64,24 +65,36 @@ interface BulkUser {
   lastActive: string;
 }
 
-// TODO: Replace with real API when available - bulk user data not yet in the API
-const bulkUsers: BulkUser[] = [
-  { id: 'bu-1', name: 'Mike Chen', email: 'mike.chen@example.com', role: 'learner', status: 'active', coursesEnrolled: 3, lastActive: '2 hours ago' },
-  { id: 'bu-2', name: 'Emma Rodriguez', email: 'emma.r@example.com', role: 'learner', status: 'active', coursesEnrolled: 5, lastActive: '1 hour ago' },
-  { id: 'bu-3', name: 'David Park', email: 'david.park@example.com', role: 'instructor', status: 'active', coursesEnrolled: 2, lastActive: '30 min ago' },
-  { id: 'bu-4', name: 'Lisa Wang', email: 'lisa.wang@example.com', role: 'content_creator', status: 'active', coursesEnrolled: 4, lastActive: '3 hours ago' },
-  { id: 'bu-5', name: 'Jordan Lee', email: 'jordan.lee@example.com', role: 'learner', status: 'active', coursesEnrolled: 2, lastActive: '5 hours ago' },
-  { id: 'bu-6', name: 'Sophia Martinez', email: 'sophia.m@example.com', role: 'learner', status: 'active', coursesEnrolled: 6, lastActive: '15 min ago' },
-  { id: 'bu-7', name: 'Alex Kim', email: 'alex.kim@example.com', role: 'learner', status: 'inactive', coursesEnrolled: 1, lastActive: '2 weeks ago' },
-  { id: 'bu-8', name: 'Rachel Green', email: 'rachel.g@example.com', role: 'learner', status: 'active', coursesEnrolled: 3, lastActive: '4 hours ago' },
-  { id: 'bu-9', name: 'Tom Wilson', email: 'tom.w@example.com', role: 'learner', status: 'active', coursesEnrolled: 2, lastActive: '1 day ago' },
-  { id: 'bu-10', name: 'Priya Sharma', email: 'priya.s@example.com', role: 'instructor', status: 'active', coursesEnrolled: 1, lastActive: '6 hours ago' },
-  { id: 'bu-11', name: 'James Johnson', email: 'james.j@example.com', role: 'learner', status: 'active', coursesEnrolled: 4, lastActive: '45 min ago' },
-  { id: 'bu-12', name: 'Nina Patel', email: 'nina.p@example.com', role: 'learner', status: 'inactive', coursesEnrolled: 0, lastActive: '1 month ago' },
-  { id: 'bu-13', name: 'Carlos Ruiz', email: 'carlos.r@example.com', role: 'learner', status: 'active', coursesEnrolled: 3, lastActive: '2 days ago' },
-  { id: 'bu-14', name: 'Aisha Mohammed', email: 'aisha.m@example.com', role: 'learner', status: 'active', coursesEnrolled: 5, lastActive: '20 min ago' },
-  { id: 'bu-15', name: 'Ben Taylor', email: 'ben.t@example.com', role: 'content_creator', status: 'active', coursesEnrolled: 2, lastActive: '8 hours ago' },
-];
+/** Format a date as a relative time string */
+function formatRelativeTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'Never';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHrs = Math.floor(diffMin / 60);
+  if (diffHrs < 24) return `${diffHrs} hour${diffHrs > 1 ? 's' : ''} ago`;
+  const diffDays = Math.floor(diffHrs / 24);
+  if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  const diffWeeks = Math.floor(diffDays / 7);
+  if (diffWeeks < 4) return `${diffWeeks} week${diffWeeks > 1 ? 's' : ''} ago`;
+  return `${Math.floor(diffDays / 30)} month${Math.floor(diffDays / 30) > 1 ? 's' : ''} ago`;
+}
+
+/** Map API user data to BulkUser display type */
+function mapApiUserToBulkUser(apiUser: any): BulkUser {
+  return {
+    id: apiUser.id,
+    name: apiUser.name || apiUser.email?.split('@')[0] || 'Unknown',
+    email: apiUser.email || '',
+    role: apiUser.role || 'learner',
+    status: apiUser.isActive ? 'active' : 'inactive',
+    coursesEnrolled: apiUser._count?.enrollments ?? 0,
+    lastActive: formatRelativeTime(apiUser.lastLoginAt),
+  };
+}
 
 interface CSVRow {
   email: string;
@@ -97,6 +110,13 @@ export function BulkEnrollmentTab() {
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
   const { data: coursesData } = useCourses();
   const demoCourses = coursesData || [];
+  const tenantId = useAppStore((s) => s.currentTenant?.id) || '';
+  const { data: usersData, isLoading: usersLoading } = useUsers(tenantId || undefined);
+  // Map API users to display type
+  const bulkUsers: BulkUser[] = useMemo(() => {
+    if (!usersData?.users) return [];
+    return usersData.users.map(mapApiUserToBulkUser);
+  }, [usersData]);
   // User selection mode
   const [selectionMode, setSelectionMode] = useState<'manual' | 'csv'>('manual');
   // Manual selection
@@ -374,47 +394,66 @@ export function BulkEnrollmentTab() {
 
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">
-                    {selectedUserIds.size} of {bulkUsers.length} users selected
+                    {usersLoading ? 'Loading users...' : `${selectedUserIds.size} of ${bulkUsers.length} users selected`}
                   </span>
-                  <Button variant="ghost" size="sm" onClick={toggleAllUsers} className="text-xs h-7">
-                    {selectedUserIds.size === filteredUsers.length ? 'Deselect All' : 'Select All'}
-                  </Button>
+                  {!usersLoading && (
+                    <Button variant="ghost" size="sm" onClick={toggleAllUsers} className="text-xs h-7">
+                      {selectedUserIds.size === filteredUsers.length ? 'Deselect All' : 'Select All'}
+                    </Button>
+                  )}
                 </div>
 
                 <ScrollArea className="h-64 rounded-md border">
                   <div className="p-2 space-y-1">
-                    {filteredUsers.map((user) => (
-                      <div
-                        key={user.id}
-                        className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors cursor-pointer ${
-                          selectedUserIds.has(user.id)
-                            ? 'bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800'
-                            : 'hover:bg-muted/50'
-                        }`}
-                        onClick={() => toggleUser(user.id)}
-                      >
-                        <Checkbox checked={selectedUserIds.has(user.id)} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{user.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                    {usersLoading ? (
+                      Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-2">
+                          <div className="h-4 w-4 bg-muted animate-pulse rounded" />
+                          <div className="flex-1 space-y-1">
+                            <div className="h-3.5 bg-muted animate-pulse rounded w-1/3" />
+                            <div className="h-3 bg-muted animate-pulse rounded w-1/2" />
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant="secondary"
-                            className={`text-[10px] px-1.5 py-0 ${
-                              user.status === 'active'
-                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                                : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-                            }`}
-                          >
-                            {user.status}
-                          </Badge>
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                            {user.role}
-                          </Badge>
+                      ))
+                    ) : filteredUsers.length > 0 ? (
+                      filteredUsers.map((user) => (
+                        <div
+                          key={user.id}
+                          className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors cursor-pointer ${
+                            selectedUserIds.has(user.id)
+                              ? 'bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800'
+                              : 'hover:bg-muted/50'
+                          }`}
+                          onClick={() => toggleUser(user.id)}
+                        >
+                          <Checkbox checked={selectedUserIds.has(user.id)} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{user.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant="secondary"
+                              className={`text-[10px] px-1.5 py-0 ${
+                                user.status === 'active'
+                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                              }`}
+                            >
+                              {user.status}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                              {user.role}
+                            </Badge>
+                          </div>
                         </div>
+                      ))
+                    ) : (
+                      <div className="py-8 text-center">
+                        <Users className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+                        <p className="text-sm text-muted-foreground">No users found</p>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </ScrollArea>
               </motion.div>

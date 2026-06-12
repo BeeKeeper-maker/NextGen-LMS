@@ -1,0 +1,1320 @@
+     1→'use client';
+     2→
+     3→import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+     4→import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
+     5→import {
+     6→  CreditCard,
+     7→  Lock,
+     8→  Shield,
+     9→  CheckCircle2,
+    10→  ArrowLeft,
+    11→  Star,
+    12→  Check,
+    13→  Globe,
+    14→  RotateCcw,
+    15→  Eye,
+    16→  EyeOff,
+    17→  Wallet,
+    18→  Smartphone,
+    19→  Tag,
+    20→  X,
+    21→  Share2,
+    22→  Mail,
+    23→  Clock,
+    24→  ChevronDown,
+    25→  Sparkles,
+    26→  ShieldCheck,
+    27→  BadgeCheck,
+    28→  PartyPopper,
+    29→  ArrowRight,
+    30→} from 'lucide-react';
+    31→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    32→import { Button } from '@/components/ui/button';
+    33→import { Input } from '@/components/ui/input';
+    34→import { Badge } from '@/components/ui/badge';
+    35→import { Separator } from '@/components/ui/separator';
+    36→import { Label } from '@/components/ui/label';
+    37→import { Switch } from '@/components/ui/switch';
+    38→import { Skeleton } from '@/components/ui/skeleton';
+    39→import {
+    40→  Select,
+    41→  SelectContent,
+    42→  SelectItem,
+    43→  SelectTrigger,
+    44→  SelectValue,
+    45→} from '@/components/ui/select';
+    46→import { useAppStore } from '@/store/app-store';
+    47→import { useCourses } from '@/hooks/use-data';
+    48→import type { CurrencyOption } from '@/types';
+    49→
+    50→// TODO: Replace with real API when available - products/bundles are not yet in the API
+    51→const demoProducts = [
+    52→  { id: 'prod-1', tenantId: 'demo-tenant-1', name: 'React Masterclass Bundle', type: 'bundle', price: 297, compareAtPrice: 494, currency: 'USD', isActive: true, features: ['Advanced React & Next.js Masterclass', 'AI-Powered Full Stack Development', 'System Design for Senior Engineers', 'Lifetime access & updates', 'Community access included'] },
+    53→  { id: 'prod-2', tenantId: 'demo-tenant-1', name: 'Annual Membership', type: 'membership', price: 799, compareAtPrice: 1164, currency: 'USD', isActive: true, features: ['Access to ALL courses', 'Monthly live cohorts', 'Private community', 'Priority AI tutoring', 'Certificate for every course', 'Cancel anytime'] },
+    54→  { id: 'prod-3', tenantId: 'demo-tenant-1', name: '1-on-1 Coaching Session', type: 'coaching', price: 149, currency: 'USD', isActive: true, features: ['60-minute session', 'Code review & feedback', 'Career guidance', 'Custom learning path'] },
+    55→];
+    56→
+    57→// Static currency configuration (not user-generated data)
+    58→const supportedCurrencies: CurrencyOption[] = [
+    59→  { code: 'USD', symbol: '$', name: 'US Dollar', rate: 1, flag: '\uD83C\uDDFA\uD83C\uDDF8' },
+    60→  { code: 'EUR', symbol: '\u20AC', name: 'Euro', rate: 0.92, flag: '\uD83C\uDDEA\uD83C\uDDFA' },
+    61→  { code: 'GBP', symbol: '\u00A3', name: 'British Pound', rate: 0.79, flag: '\uD83C\uDDEC\uD83C\uDDE7' },
+    62→  { code: 'JPY', symbol: '\u00A5', name: 'Japanese Yen', rate: 149.5, flag: '\uD83C\uDDEF\uD83C\uDDF5' },
+    63→  { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar', rate: 1.36, flag: '\uD83C\uDDE8\uD83C\uDDE6' },
+    64→  { code: 'AUD', symbol: 'A$', name: 'Australian Dollar', rate: 1.53, flag: '\uD83C\uDDE6\uD83C\uDDFA' },
+    65→  { code: 'INR', symbol: '\u20B9', name: 'Indian Rupee', rate: 83.1, flag: '\uD83C\uDDEE\uD83C\uDDF3' },
+    66→  { code: 'BRL', symbol: 'R$', name: 'Brazilian Real', rate: 4.97, flag: '\uD83C\uDDE7\uD83C\uDDF7' },
+    67→  { code: 'MXN', symbol: 'MX$', name: 'Mexican Peso', rate: 17.15, flag: '\uD83C\uDDF2\uD83C\uDDFD' },
+    68→  { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar', rate: 1.34, flag: '\uD83C\uDDF8\uD83C\uDDEC' },
+    69→];
+    70→
+    71→// ── Helpers ──────────────────────────────────────────────────────────────
+    72→
+    73→function formatPrice(amount: number, currency: CurrencyOption): string {
+    74→  const converted = amount * currency.rate;
+    75→  if (currency.code === 'JPY') {
+    76→    return `${currency.symbol}${Math.round(converted).toLocaleString()}`;
+    77→  }
+    78→  return `${currency.symbol}${converted.toFixed(2)}`;
+    79→}
+    80→
+    81→function detectCardBrand(number: string): 'visa' | 'mastercard' | 'amex' | 'unknown' {
+    82→  const cleaned = number.replace(/\s/g, '');
+    83→  if (/^4/.test(cleaned)) return 'visa';
+    84→  if (/^5[1-5]/.test(cleaned) || /^2[2-7]/.test(cleaned)) return 'mastercard';
+    85→  if (/^3[47]/.test(cleaned)) return 'amex';
+    86→  return 'unknown';
+    87→}
+    88→
+    89→function formatCardNumber(value: string): string {
+    90→  const cleaned = value.replace(/\D/g, '').slice(0, 16);
+    91→  const groups = cleaned.match(/.{1,4}/g);
+    92→  return groups ? groups.join(' ') : cleaned;
+    93→}
+    94→
+    95→function formatExpiry(value: string): string {
+    96→  const cleaned = value.replace(/\D/g, '').slice(0, 4);
+    97→  if (cleaned.length > 2) {
+    98→    return `${cleaned.slice(0, 2)}/${cleaned.slice(2)}`;
+    99→  }
+   100→  return cleaned;
+   101→}
+   102→
+   103→const cardBrandConfig: Record<string, { label: string; color: string; gradient: string }> = {
+   104→  visa: { label: 'VISA', color: 'text-blue-700 dark:text-blue-300', gradient: 'from-blue-600 to-blue-800' },
+   105→  mastercard: { label: 'MC', color: 'text-orange-700 dark:text-orange-300', gradient: 'from-orange-500 to-red-600' },
+   106→  amex: { label: 'AMEX', color: 'text-teal-700 dark:text-teal-300', gradient: 'from-teal-500 to-emerald-700' },
+   107→  unknown: { label: '', color: '', gradient: 'from-slate-500 to-slate-700' },
+   108→};
+   109→
+   110→// ── Animated Number Counter ─────────────────────────────────────────────
+   111→
+   112→function AnimatedPrice({ value, currency }: { value: number; currency: CurrencyOption }) {
+   113→  const motionVal = useMotionValue(0);
+   114→  const display = useTransform(motionVal, (v) => {
+   115→    if (currency.code === 'JPY') {
+   116→      return `${currency.symbol}${Math.round(v).toLocaleString()}`;
+   117→    }
+   118→    return `${currency.symbol}${v.toFixed(2)}`;
+   119→  });
+   120→  const [displayStr, setDisplayStr] = useState(formatPrice(value, currency));
+   121→  const prevValue = useRef(value);
+   122→
+   123→  useEffect(() => {
+   124→    const controls = animate(motionVal, value, {
+   125→      duration: 0.6,
+   126→      ease: 'easeOut',
+   127→      onUpdate: (v) => {
+   128→        if (currency.code === 'JPY') {
+   129→          setDisplayStr(`${currency.symbol}${Math.round(v).toLocaleString()}`);
+   130→        } else {
+   131→          setDisplayStr(`${currency.symbol}${v.toFixed(2)}`);
+   132→        }
+   133→      },
+   134→    });
+   135→    prevValue.current = value;
+   136→    return () => controls.stop();
+   137→  }, [value, currency.code, currency.symbol, motionVal]);
+   138→
+   139→  return <span>{displayStr}</span>;
+   140→}
+   141→
+   142→// ── Confetti Particle ────────────────────────────────────────────────────
+   143→
+   144→function ConfettiParticle({ delay }: { delay: number }) {
+   145→  const colors = ['#10B981', '#6366F1', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
+   146→  const color = colors[Math.floor(Math.random() * colors.length)];
+   147→  const x = Math.random() * 100;
+   148→  const rotation = Math.random() * 360;
+   149→  const size = 6 + Math.random() * 8;
+   150→
+   151→  return (
+   152→    <motion.div
+   153→      initial={{ opacity: 1, y: -20, x: `${x}vw`, rotate: 0 }}
+   154→      animate={{
+   155→        opacity: [1, 1, 0],
+   156→        y: ['0vh', '100vh'],
+   157→        x: [`${x}vw`, `${x + (Math.random() - 0.5) * 20}vw`],
+   158→        rotate: [0, rotation + 720],
+   159→      }}
+   160→      transition={{ duration: 2.5 + Math.random(), delay, ease: 'easeIn' }}
+   161→      className="fixed top-0 pointer-events-none z-50"
+   162→      style={{ width: size, height: size, backgroundColor: color, borderRadius: Math.random() > 0.5 ? '50%' : '2px' }}
+   163→    />
+   164→  );
+   165→}
+   166→
+   167→// ── Confetti Effect ──────────────────────────────────────────────────────
+   168→
+   169→function ConfettiEffect() {
+   170→  const particles = Array.from({ length: 60 }, (_, i) => i);
+   171→  return (
+   172→    <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+   173→      {particles.map((i) => (
+   174→        <ConfettiParticle key={i} delay={i * 0.03} />
+   175→      ))}
+   176→    </div>
+   177→  );
+   178→}
+   179→
+   180→// ── Card Preview ─────────────────────────────────────────────────────────
+   181→
+   182→function CardPreview({
+   183→  cardNumber,
+   184→  cardholderName,
+   185→  expiry,
+   186→  cvv,
+   187→  cardBrand,
+   188→}: {
+   189→  cardNumber: string;
+   190→  cardholderName: string;
+   191→  expiry: string;
+   192→  cvv: string;
+   193→  cardBrand: string;
+   194→}) {
+   195→  const brand = cardBrandConfig[cardBrand] || cardBrandConfig.unknown;
+   196→  const displayNum = cardNumber || '•••• •••• •••• ••••';
+   197→  const displayName = cardholderName || 'YOUR NAME';
+   198→  const displayExpiry = expiry || 'MM/YY';
+   199→
+   200→  return (
+   201→    <motion.div
+   202→      initial={{ opacity: 0, rotateY: -10 }}
+   203→      animate={{ opacity: 1, rotateY: 0 }}
+   204→      transition={{ duration: 0.5 }}
+   205→      className={`relative w-full max-w-sm aspect-[1.586/1] rounded-xl bg-gradient-to-br ${brand.gradient} p-5 sm:p-6 text-white shadow-2xl overflow-hidden`}
+   206→    >
+   207→      {/* Decorative circles */}
+   208→      <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/10" />
+   209→      <div className="absolute -bottom-6 -left-6 w-24 h-24 rounded-full bg-white/5" />
+   210→
+   211→      <div className="relative z-10 flex flex-col justify-between h-full">
+   212→        <div className="flex justify-between items-start">
+   213→          <div className="space-y-1">
+   214→            <div className="w-10 h-8 rounded bg-gradient-to-br from-yellow-300 to-yellow-500 opacity-80" />
+   215→          </div>
+   216→          {brand.label && (
+   217→            <span className="text-sm font-bold tracking-wider opacity-90">{brand.label}</span>
+   218→          )}
+   219→        </div>
+   220→
+   221→        <div className="space-y-3">
+   222→          <p className="text-lg sm:text-xl font-mono tracking-[0.2em] opacity-90">{displayNum}</p>
+   223→          <div className="flex justify-between items-end">
+   224→            <div>
+   225→              <p className="text-[10px] uppercase tracking-wider opacity-60 mb-0.5">Card Holder</p>
+   226→              <p className="text-xs sm:text-sm font-medium tracking-wider uppercase">{displayName}</p>
+   227→            </div>
+   228→            <div>
+   229→              <p className="text-[10px] uppercase tracking-wider opacity-60 mb-0.5">Expires</p>
+   230→              <p className="text-xs sm:text-sm font-medium">{displayExpiry}</p>
+   231→            </div>
+   232→          </div>
+   233→        </div>
+   234→      </div>
+   235→    </motion.div>
+   236→  );
+   237→}
+   238→
+   239→// ── Step Indicator ───────────────────────────────────────────────────────
+   240→
+   241→function StepIndicator({ currentStep }: { currentStep: number }) {
+   242→  const steps = [
+   243→    { num: 1, label: 'Select Plan' },
+   244→    { num: 2, label: 'Payment' },
+   245→    { num: 3, label: 'Confirmation' },
+   246→  ];
+   247→
+   248→  return (
+   249→    <div className="flex items-center justify-center gap-2 sm:gap-4">
+   250→      {steps.map((step, i) => (
+   251→        <div key={step.num} className="flex items-center gap-2 sm:gap-4">
+   252→          <div className="flex items-center gap-1.5 sm:gap-2">
+   253→            <motion.div
+   254→              animate={{
+   255→                backgroundColor: currentStep >= step.num ? '#10B981' : 'rgba(0,0,0,0)',
+   256→                borderColor: currentStep >= step.num ? '#10B981' : '#94a3b8',
+   257→                scale: currentStep === step.num ? 1.1 : 1,
+   258→              }}
+   259→              className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-colors"
+   260→              style={{
+   261→                color: currentStep >= step.num ? 'white' : '#94a3b8',
+   262→              }}
+   263→            >
+   264→              {currentStep > step.num ? (
+   265→                <Check className="h-4 w-4" />
+   266→              ) : (
+   267→                step.num
+   268→              )}
+   269→            </motion.div>
+   270→            <span
+   271→              className={`text-xs sm:text-sm font-medium ${
+   272→                currentStep >= step.num ? 'text-foreground' : 'text-muted-foreground'
+   273→              }`}
+   274→            >
+   275→              {step.label}
+   276→            </span>
+   277→          </div>
+   278→          {i < steps.length - 1 && (
+   279→            <div
+   280→              className={`w-8 sm:w-16 h-0.5 rounded-full transition-colors ${
+   281→                currentStep > step.num ? 'bg-emerald-500' : 'bg-border'
+   282→              }`}
+   283→            />
+   284→          )}
+   285→        </div>
+   286→      ))}
+   287→    </div>
+   288→  );
+   289→}
+   290→
+   291→// ── Coupon Validation ────────────────────────────────────────────────────
+   292→
+   293→const VALID_COUPONS: Record<string, { discount: number; label: string }> = {
+   294→  SAVE20: { discount: 0.2, label: '20% OFF' },
+   295→  WELCOME10: { discount: 0.1, label: '10% OFF' },
+   296→  LAUNCH50: { discount: 0.5, label: '50% OFF' },
+   297→};
+   298→
+   299→// ── Main Component ───────────────────────────────────────────────────────
+   300→
+   301→type CheckoutStep = 1 | 2 | 3;
+   302→type PaymentMethod = 'card' | 'paypal' | 'applepay';
+   303→
+   304→export function CheckoutPage() {
+   305→  const { setView } = useAppStore();
+   306→  const { data: coursesData } = useCourses();
+   307→  const courses = coursesData || [];
+   308→  const product = demoProducts[0];
+   309→  const course = courses[0];
+   310→
+   311→  // ── State ───────────────────────────────────────────────────────────────
+   312→  const [currentStep, setCurrentStep] = useState<CheckoutStep>(1);
+   313→  const [selectedCurrency, setSelectedCurrency] = useState<CurrencyOption>(supportedCurrencies[0]);
+   314→  const [isAnnual, setIsAnnual] = useState(false);
+   315→  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
+   316→  const [paymentSuccess, setPaymentSuccess] = useState(false);
+   317→  const [isProcessing, setIsProcessing] = useState(false);
+   318→  const [isConverting, setIsConverting] = useState(false);
+   319→  const [showCvv, setShowCvv] = useState(false);
+   320→
+   321→  // Form state
+   322→  const [cardholderName, setCardholderName] = useState('');
+   323→  const [cardNumber, setCardNumber] = useState('');
+   324→  const [expiry, setExpiry] = useState('');
+   325→  const [cvv, setCvv] = useState('');
+   326→  const [email, setEmail] = useState('');
+   327→  const [paypalEmail, setPaypalEmail] = useState('');
+   328→
+   329→  // Coupon state
+   330→  const [couponCode, setCouponCode] = useState('');
+   331→  const [couponApplied, setCouponApplied] = useState<string | null>(null);
+   332→  const [couponError, setCouponError] = useState('');
+   333→  const [couponLoading, setCouponLoading] = useState(false);
+   334→
+   335→  // Exchange rate timestamp
+   336→  const [rateTimestamp] = useState(new Date());
+   337→
+   338→  const cardBrand = useMemo(() => detectCardBrand(cardNumber), [cardNumber]);
+   339→
+   340→  // ── Auto-detect currency based on locale ────────────────────────────────
+   341→  useEffect(() => {
+   342→    try {
+   343→      const locale = navigator.language;
+   344→      const detected = supportedCurrencies.find((c) => {
+   345→        if (locale.startsWith('en-US')) return c.code === 'USD';
+   346→        if (locale.startsWith('de') || locale.startsWith('fr') || locale.startsWith('es') || locale.startsWith('it')) return c.code === 'EUR';
+   347→        if (locale.startsWith('en-GB')) return c.code === 'GBP';
+   348→        if (locale.startsWith('ja')) return c.code === 'JPY';
+   349→        if (locale.startsWith('en-CA')) return c.code === 'CAD';
+   350→        if (locale.startsWith('en-AU')) return c.code === 'AUD';
+   351→        if (locale.startsWith('hi') || locale.startsWith('en-IN')) return c.code === 'INR';
+   352→        if (locale.startsWith('pt-BR')) return c.code === 'BRL';
+   353→        if (locale.startsWith('es-MX')) return c.code === 'MXN';
+   354→        if (locale.startsWith('zh-SG') || locale.startsWith('en-SG')) return c.code === 'SGD';
+   355→        return false;
+   356→      });
+   357→      if (detected && detected.code !== 'USD') {
+   358→        setSelectedCurrency(detected);
+   359→      }
+   360→    } catch {
+   361→      // fallback to USD
+   362→    }
+   363→  }, []);
+   364→
+   365→  // ── Pricing Calculations ────────────────────────────────────────────────
+   366→  const monthlyPrice = product.price;
+   367→  const annualPrice = product.compareAtPrice || product.price * 10;
+   368→  const activePrice = isAnnual ? annualPrice : monthlyPrice;
+   369→
+   370→  const basePrice = useMemo(() => activePrice * selectedCurrency.rate, [activePrice, selectedCurrency.rate]);
+   371→  const discountPercent = couponApplied ? (VALID_COUPONS[couponApplied]?.discount || 0) : 0;
+   372→  const discountAmount = useMemo(() => basePrice * discountPercent, [basePrice, discountPercent]);
+   373→  const taxRate = 0;
+   374→  const taxAmount = useMemo(() => (basePrice - discountAmount) * taxRate, [basePrice, discountAmount, taxRate]);
+   375→  const totalAmount = useMemo(() => basePrice - discountAmount + taxAmount, [basePrice, discountAmount, taxAmount]);
+   376→
+   377→  const savingsFromOriginal = product.compareAtPrice
+   378→    ? Math.round(((product.compareAtPrice - product.price) / product.compareAtPrice) * 100)
+   379→    : 0;
+   380→
+   381→  const annualSavingsPercent = product.compareAtPrice
+   382→    ? Math.round((1 - annualPrice / (monthlyPrice * 12)) * 100)
+   383→    : 0;
+   384→
+   385→  // ── Currency change handler with animation ──────────────────────────────
+   386→  const handleCurrencyChange = useCallback((code: string) => {
+   387→    const c = supportedCurrencies.find((cur) => cur.code === code);
+   388→    if (c) {
+   389→      setIsConverting(true);
+   390→      setTimeout(() => {
+   391→        setSelectedCurrency(c);
+   392→        setIsConverting(false);
+   393→      }, 300);
+   394→    }
+   395→  }, []);
+   396→
+   397→  // ── Coupon handler ──────────────────────────────────────────────────────
+   398→  const handleApplyCoupon = useCallback(() => {
+   399→    setCouponError('');
+   400→    setCouponLoading(true);
+   401→    setTimeout(() => {
+   402→      const code = couponCode.toUpperCase().trim();
+   403→      if (VALID_COUPONS[code]) {
+   404→        setCouponApplied(code);
+   405→        setCouponError('');
+   406→      } else {
+   407→        setCouponError('Invalid coupon code. Try SAVE20, WELCOME10, or LAUNCH50.');
+   408→        setCouponApplied(null);
+   409→      }
+   410→      setCouponLoading(false);
+   411→    }, 800);
+   412→  }, [couponCode]);
+   413→
+   414→  const handleRemoveCoupon = useCallback(() => {
+   415→    setCouponApplied(null);
+   416→    setCouponCode('');
+   417→    setCouponError('');
+   418→  }, []);
+   419→
+   420→  // ── Payment handler ─────────────────────────────────────────────────────
+   421→  const handlePayNow = useCallback(() => {
+   422→    setIsProcessing(true);
+   423→    setTimeout(() => {
+   424→      setIsProcessing(false);
+   425→      setPaymentSuccess(true);
+   426→      setCurrentStep(3);
+   427→    }, 2500);
+   428→  }, []);
+   429→
+   430→  const isFormValid = useMemo(() => {
+   431→    if (paymentMethod === 'card') {
+   432→      return (
+   433→        cardholderName.length > 0 &&
+   434→        cardNumber.replace(/\s/g, '').length >= 15 &&
+   435→        expiry.length === 5 &&
+   436→        cvv.length >= 3 &&
+   437→        email.length > 0
+   438→      );
+   439→    }
+   440→    if (paymentMethod === 'paypal') {
+   441→      return paypalEmail.length > 0 && paypalEmail.includes('@');
+   442→    }
+   443→    // applepay - always valid (demo)
+   444→    return true;
+   445→  }, [paymentMethod, cardholderName, cardNumber, expiry, cvv, email, paypalEmail]);
+   446→
+   447→  // ── Step 3: Confirmation Screen ─────────────────────────────────────────
+   448→  if (paymentSuccess) {
+   449→    return (
+   450→      <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+   451→        {/* Gradient mesh background */}
+   452→        <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 via-white to-teal-50 dark:from-slate-950 dark:via-slate-900 dark:to-emerald-950/30" />
+   453→        <div className="absolute top-0 left-1/4 w-96 h-96 bg-emerald-200/30 dark:bg-emerald-800/10 rounded-full blur-3xl" />
+   454→        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-teal-200/30 dark:bg-teal-800/10 rounded-full blur-3xl" />
+   455→
+   456→        <ConfettiEffect />
+   457→
+   458→        <motion.div
+   459→          initial={{ scale: 0.8, opacity: 0 }}
+   460→          animate={{ scale: 1, opacity: 1 }}
+   461→          transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+   462→          className="relative z-10 max-w-lg w-full"
+   463→        >
+   464→          {/* Glassmorphism card */}
+   465→          <div className="rounded-2xl border border-white/20 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl shadow-2xl">
+   466→            <div className="p-6 sm:p-8 text-center space-y-6">
+   467→              {/* Success icon */}
+   468→              <motion.div
+   469→                initial={{ scale: 0 }}
+   470→                animate={{ scale: 1 }}
+   471→                transition={{ delay: 0.3, type: 'spring', stiffness: 200, damping: 15 }}
+   472→                className="mx-auto w-20 h-20 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-lg"
+   473→              >
+   474→                <motion.div
+   475→                  initial={{ scale: 0 }}
+   476→                  animate={{ scale: 1 }}
+   477→                  transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
+   478→                >
+   479→                  <PartyPopper className="h-10 w-10 text-white" />
+   480→                </motion.div>
+   481→              </motion.div>
+   482→
+   483→              <motion.div
+   484→                initial={{ opacity: 0, y: 10 }}
+   485→                animate={{ opacity: 1, y: 0 }}
+   486→                transition={{ delay: 0.6 }}
+   487→                className="space-y-2"
+   488→              >
+   489→                <h2 className="text-2xl sm:text-3xl font-bold text-foreground">Payment Successful!</h2>
+   490→                <p className="text-muted-foreground">Your course access is now active</p>
+   491→              </motion.div>
+   492→
+   493→              <motion.div
+   494→                initial={{ opacity: 0, y: 10 }}
+   495→                animate={{ opacity: 1, y: 0 }}
+   496→                transition={{ delay: 0.8 }}
+   497→                className="bg-emerald-50 dark:bg-emerald-950/30 rounded-xl p-5 text-left space-y-3"
+   498→              >
+   499→                <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">Order Details</p>
+   500→                <div className="space-y-2">
+   501→                  <div className="flex justify-between items-center">
+   502→                    <p className="text-sm text-emerald-700 dark:text-emerald-300">{product.name}</p>
+   503→                    <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300">
+   504→                      {isAnnual ? 'Annual' : 'Monthly'}
+   505→                    </Badge>
+   506→                  </div>
+   507→                  <Separator className="bg-emerald-200 dark:bg-emerald-800" />
+   508→                  <div className="flex justify-between items-center">
+   509→                    <span className="text-sm text-emerald-700 dark:text-emerald-300">Total Charged</span>
+   510→                    <p className="text-xl font-bold text-emerald-900 dark:text-emerald-100">
+   511→                      <AnimatedPrice value={totalAmount} currency={selectedCurrency} /> {selectedCurrency.code}
+   512→                    </p>
+   513→                  </div>
+   514→                  <p className="text-xs text-emerald-600 dark:text-emerald-400">Order #NG-{Date.now().toString().slice(-8)}</p>
+   515→                </div>
+   516→              </motion.div>
+   517→
+   518→              <motion.div
+   519→                initial={{ opacity: 0, y: 10 }}
+   520→                animate={{ opacity: 1, y: 0 }}
+   521→                transition={{ delay: 1 }}
+   522→                className="flex items-center justify-center gap-2 text-sm text-muted-foreground"
+   523→              >
+   524→                <Mail className="h-4 w-4" />
+   525→                <span>Confirmation sent to <strong>{email || 'your email'}</strong></span>
+   526→              </motion.div>
+   527→
+   528→              <motion.div
+   529→                initial={{ opacity: 0, y: 10 }}
+   530→                animate={{ opacity: 1, y: 0 }}
+   531→                transition={{ delay: 1.1 }}
+   532→                className="flex flex-col sm:flex-row gap-3"
+   533→              >
+   534→                <Button
+   535→                  onClick={() => setView('learner-dashboard')}
+   536→                  className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white h-11"
+   537→                >
+   538→                  <Sparkles className="h-4 w-4 mr-2" />
+   539→                  Start Learning Now
+   540→                </Button>
+   541→                <Button variant="outline" className="flex-1 h-11">
+   542→                  View Receipt
+   543→                </Button>
+   544→              </motion.div>
+   545→
+   546→              {/* Social share */}
+   547→              <motion.div
+   548→                initial={{ opacity: 0, y: 10 }}
+   549→                animate={{ opacity: 1, y: 0 }}
+   550→                transition={{ delay: 1.3 }}
+   551→                className="pt-2"
+   552→              >
+   553→                <p className="text-xs text-muted-foreground mb-3">Share your purchase</p>
+   554→                <div className="flex justify-center gap-2">
+   555→                  <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+   556→                    <Share2 className="h-3 w-3" />
+   557→                    Twitter
+   558→                  </Button>
+   559→                  <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+   560→                    <Share2 className="h-3 w-3" />
+   561→                    LinkedIn
+   562→                  </Button>
+   563→                  <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+   564→                    <Share2 className="h-3 w-3" />
+   565→                    Facebook
+   566→                  </Button>
+   567→                </div>
+   568→              </motion.div>
+   569→            </div>
+   570→          </div>
+   571→        </motion.div>
+   572→      </div>
+   573→    );
+   574→  }
+   575→
+   576→  // ── Steps 1 & 2 ─────────────────────────────────────────────────────────
+   577→  return (
+   578→    <div className="relative min-h-screen overflow-hidden">
+   579→      {/* Gradient mesh background */}
+   580→      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-violet-50/20 to-emerald-50/20 dark:from-slate-950 dark:via-violet-950/10 dark:to-emerald-950/5" />
+   581→      <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-violet-200/20 dark:bg-violet-800/5 rounded-full blur-3xl" />
+   582→      <div className="absolute bottom-0 left-1/4 w-[400px] h-[400px] bg-emerald-200/20 dark:bg-emerald-800/5 rounded-full blur-3xl" />
+   583→
+   584→      <div className="relative z-10">
+   585→        {/* Header */}
+   586→        <div className="border-b bg-background/80 backdrop-blur-sm px-4 sm:px-6 py-4 flex items-center gap-4">
+   587→          <Button
+   588→            variant="ghost"
+   589→            size="sm"
+   590→            onClick={() => {
+   591→              if (currentStep === 1) {
+   592→                setView('learner-dashboard');
+   593→              } else {
+   594→                setCurrentStep((prev) => Math.max(1, prev - 1) as CheckoutStep);
+   595→              }
+   596→            }}
+   597→            className="text-muted-foreground"
+   598→          >
+   599→            <ArrowLeft className="h-4 w-4 mr-1" />
+   600→            {currentStep === 1 ? 'Back' : 'Previous'}
+   601→          </Button>
+   602→          <div className="flex-1">
+   603→            <StepIndicator currentStep={currentStep} />
+   604→          </div>
+   605→          <div className="flex items-center gap-1.5 text-xs text-emerald-600">
+   606→            <Lock className="h-3.5 w-3.5" />
+   607→            <span className="hidden sm:inline">SSL Encrypted</span>
+   608→          </div>
+   609→        </div>
+   610→
+   611→        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 lg:py-8">
+   612→          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8">
+   613→            {/* Left Column */}
+   614→            <div className="lg:col-span-3 space-y-6">
+   615→              <AnimatePresence mode="wait">
+   616→                {/* ── Step 1: Select Plan ─────────────────────────────── */}
+   617→                {currentStep === 1 && (
+   618→                  <motion.div
+   619→                    key="step1"
+   620→                    initial={{ opacity: 0, x: -20 }}
+   621→                    animate={{ opacity: 1, x: 0 }}
+   622→                    exit={{ opacity: 0, x: 20 }}
+   623→                    transition={{ duration: 0.3 }}
+   624→                    className="space-y-6"
+   625→                  >
+   626→                    {/* Currency Selector Card */}
+   627→                    <motion.div
+   628→                      initial={{ opacity: 0, y: 20 }}
+   629→                      animate={{ opacity: 1, y: 0 }}
+   630→                      transition={{ duration: 0.4 }}
+   631→                    >
+   632→                      <div className="rounded-2xl border border-white/20 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl shadow-lg overflow-hidden">
+   633→                        <div className="bg-gradient-to-r from-violet-500/10 to-emerald-500/10 dark:from-violet-500/5 dark:to-emerald-500/5 px-6 py-4 flex items-center gap-3">
+   634→                          <Globe className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+   635→                          <div>
+   636→                            <h3 className="text-sm font-semibold text-foreground">Select Your Currency</h3>
+   637→                            <p className="text-xs text-muted-foreground">Prices will be converted in real-time</p>
+   638→                          </div>
+   639→                        </div>
+   640→                        <div className="p-6 space-y-4">
+   641→                          {/* Currency Grid */}
+   642→                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+   643→                            {supportedCurrencies.map((c) => (
+   644→                              <motion.button
+   645→                                key={c.code}
+   646→                                whileHover={{ scale: 1.03 }}
+   647→                                whileTap={{ scale: 0.97 }}
+   648→                                onClick={() => handleCurrencyChange(c.code)}
+   649→                                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+   650→                                  selectedCurrency.code === c.code
+   651→                                    ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 shadow-sm'
+   652→                                    : 'border-border bg-background/50 hover:bg-muted/50 text-foreground'
+   653→                                }`}
+   654→                              >
+   655→                                <span className="text-base">{c.flag}</span>
+   656→                                <span>{c.code}</span>
+   657→                                <span className="text-muted-foreground text-xs">{c.symbol}</span>
+   658→                              </motion.button>
+   659→                            ))}
+   660→                          </div>
+   661→
+   662→                          {/* Exchange rate info */}
+   663→                          <div className="flex items-center justify-between text-xs text-muted-foreground pt-2">
+   664→                            <span className="flex items-center gap-1.5">
+   665→                              <RotateCcw className="h-3 w-3" />
+   666→                              {selectedCurrency.code !== 'USD'
+   667→                                ? `1 USD = ${selectedCurrency.rate} ${selectedCurrency.code}`
+   668→                                : 'Base currency'}
+   669→                            </span>
+   670→                            <span className="flex items-center gap-1">
+   671→                              <Clock className="h-3 w-3" />
+   672→                              Updated {rateTimestamp.toLocaleTimeString()}
+   673→                            </span>
+   674→                          </div>
+   675→
+   676→                          {selectedCurrency.code !== 'USD' && (
+   677→                            <motion.p
+   678→                              initial={{ opacity: 0, height: 0 }}
+   679→                              animate={{ opacity: 1, height: 'auto' }}
+   680→                              className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/20 rounded-lg px-3 py-2"
+   681→                            >
+   682→                              <RotateCcw className="h-3 w-3 shrink-0" />
+   683→                              Approximate conversion. You&apos;ll be charged in USD.
+   684→                            </motion.p>
+   685→                          )}
+   686→                        </div>
+   687→                      </div>
+   688→                    </motion.div>
+   689→
+   690→                    {/* Product Card with Pricing Toggle */}
+   691→                    <motion.div
+   692→                      initial={{ opacity: 0, y: 20 }}
+   693→                      animate={{ opacity: 1, y: 0 }}
+   694→                      transition={{ duration: 0.4, delay: 0.1 }}
+   695→                    >
+   696→                      <div className="rounded-2xl border border-white/20 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl shadow-lg overflow-hidden">
+   697→                        {/* Gradient top bar */}
+   698→                        <div className="h-1 bg-gradient-to-r from-violet-500 via-emerald-500 to-teal-500" />
+   699→                        <div className="p-6">
+   700→                          {/* Pricing Toggle */}
+   701→                          <div className="flex items-center justify-center gap-3 mb-6">
+   702→                            <span className={`text-sm font-medium ${!isAnnual ? 'text-foreground' : 'text-muted-foreground'}`}>
+   703→                              Monthly
+   704→                            </span>
+   705→                            <div className="relative flex items-center">
+   706→                              <Switch
+   707→                                checked={isAnnual}
+   708→                                onCheckedChange={setIsAnnual}
+   709→                                className="data-[state=checked]:bg-emerald-500"
+   710→                              />
+   711→                              {isAnnual && (
+   712→                                <motion.div
+   713→                                  initial={{ scale: 0, opacity: 0 }}
+   714→                                  animate={{ scale: 1, opacity: 1 }}
+   715→                                  className="absolute -right-16 -top-1"
+   716→                                >
+   717→                                  <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-[10px] px-1.5 py-0 whitespace-nowrap">
+   718→                                    Save {annualSavingsPercent}%
+   719→                                  </Badge>
+   720→                                </motion.div>
+   721→                              )}
+   722→                            </div>
+   723→                            <span className={`text-sm font-medium ${isAnnual ? 'text-foreground' : 'text-muted-foreground'}`}>
+   724→                              Annual
+   725→                            </span>
+   726→                          </div>
+   727→
+   728→                          {/* Course Thumbnail + Info */}
+   729→                          <div className="flex flex-col sm:flex-row gap-5">
+   730→                            <div className="shrink-0 w-full sm:w-52 h-36 rounded-xl bg-gradient-to-br from-violet-100 to-emerald-100 dark:from-violet-950 dark:to-emerald-950 flex items-center justify-center relative overflow-hidden">
+   731→                              <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-emerald-500/10" />
+   732→                              <div className="relative text-center">
+   733→                                <Star className="h-10 w-10 text-violet-600 dark:text-violet-400 mx-auto mb-1" />
+   734→                                <p className="text-xs font-semibold text-violet-700 dark:text-violet-300">Best Seller</p>
+   735→                              </div>
+   736→                            </div>
+   737→                            <div className="flex-1 space-y-3">
+   738→                              <div>
+   739→                                <div className="flex items-center gap-2 mb-1.5">
+   740→                                  <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 dark:bg-violet-900 dark:text-violet-300 text-xs">
+   741→                                    {product.type}
+   742→                                  </Badge>
+   743→                                  <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300">
+   744→                                    3 Courses
+   745→                                  </Badge>
+   746→                                  {savingsFromOriginal > 0 && (
+   747→                                    <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900 dark:text-amber-300 text-xs">
+   748→                                      You save {savingsFromOriginal}%
+   749→                                    </Badge>
+   750→                                  )}
+   751→                                </div>
+   752→                                <h3 className="text-lg font-bold text-foreground">{product.name}</h3>
+   753→                                <p className="text-xs text-muted-foreground mt-1">Instructor: Sarah Mitchell</p>
+   754→                              </div>
+   755→
+   756→                              {/* Animated price */}
+   757→                              <div className="flex items-baseline gap-2">
+   758→                                <motion.span
+   759→                                  key={`${isAnnual}-${selectedCurrency.code}`}
+   760→                                  initial={{ opacity: 0, y: 5 }}
+   761→                                  animate={{ opacity: 1, y: 0 }}
+   762→                                  className="text-2xl font-bold text-foreground"
+   763→                                >
+   764→                                  <AnimatedPrice value={activePrice * selectedCurrency.rate} currency={selectedCurrency} />
+   765→                                </motion.span>
+   766→                                {product.compareAtPrice && !isAnnual && (
+   767→                                  <span className="text-base text-muted-foreground line-through">
+   768→                                    {formatPrice(product.compareAtPrice, selectedCurrency)}
+   769→                                  </span>
+   770→                                )}
+   771→                                {isAnnual && (
+   772→                                  <span className="text-sm text-muted-foreground">/year</span>
+   773→                                )}
+   774→                                {!isAnnual && (
+   775→                                  <span className="text-sm text-muted-foreground">/month</span>
+   776→                                )}
+   777→                              </div>
+   778→
+   779→                              {/* Features */}
+   780→                              <div className="pt-1">
+   781→                                <p className="text-sm font-medium text-foreground mb-2">What&apos;s included:</p>
+   782→                                <ul className="space-y-1.5">
+   783→                                  {product.features?.map((feature, i) => (
+   784→                                    <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+   785→                                      <Check className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+   786→                                      <span>{feature}</span>
+   787→                                    </li>
+   788→                                  ))}
+   789→                                </ul>
+   790→                              </div>
+   791→                            </div>
+   792→                          </div>
+   793→                        </div>
+   794→                      </div>
+   795→                    </motion.div>
+   796→
+   797→                    {/* Continue to Payment */}
+   798→                    <motion.div
+   799→                      initial={{ opacity: 0, y: 20 }}
+   800→                      animate={{ opacity: 1, y: 0 }}
+   801→                      transition={{ duration: 0.4, delay: 0.2 }}
+   802→                    >
+   803→                      <Button
+   804→                        onClick={() => setCurrentStep(2)}
+   805→                        className="w-full h-12 text-base font-semibold bg-gradient-to-r from-violet-600 to-emerald-600 hover:from-violet-700 hover:to-emerald-700 text-white"
+   806→                      >
+   807→                        Continue to Payment
+   808→                        <ArrowRight className="h-4 w-4 ml-2" />
+   809→                      </Button>
+   810→                    </motion.div>
+   811→                  </motion.div>
+   812→                )}
+   813→
+   814→                {/* ── Step 2: Payment ──────────────────────────────────────── */}
+   815→                {currentStep === 2 && (
+   816→                  <motion.div
+   817→                    key="step2"
+   818→                    initial={{ opacity: 0, x: -20 }}
+   819→                    animate={{ opacity: 1, x: 0 }}
+   820→                    exit={{ opacity: 0, x: 20 }}
+   821→                    transition={{ duration: 0.3 }}
+   822→                    className="space-y-6"
+   823→                  >
+   824→                    {/* Payment Method Selector */}
+   825→                    <motion.div
+   826→                      initial={{ opacity: 0, y: 20 }}
+   827→                      animate={{ opacity: 1, y: 0 }}
+   828→                      transition={{ duration: 0.4 }}
+   829→                    >
+   830→                      <div className="rounded-2xl border border-white/20 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl shadow-lg overflow-hidden">
+   831→                        <div className="px-6 py-4 border-b border-border/50">
+   832→                          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+   833→                            <Wallet className="h-4 w-4 text-violet-600" />
+   834→                            Payment Method
+   835→                          </h3>
+   836→                        </div>
+   837→                        <div className="p-6">
+   838→                          <div className="grid grid-cols-3 gap-3 mb-6">
+   839→                            {([
+   840→                              { id: 'card' as PaymentMethod, icon: CreditCard, label: 'Credit/Debit Card', badges: ['VISA', 'MC', 'AMEX'] },
+   841→                              { id: 'paypal' as PaymentMethod, icon: Wallet, label: 'PayPal', badges: ['PayPal'] },
+   842→                              { id: 'applepay' as PaymentMethod, icon: Smartphone, label: 'Apple / Google Pay', badges: ['Apple Pay', 'GPay'] },
+   843→                            ]).map((method) => (
+   844→                              <motion.button
+   845→                                key={method.id}
+   846→                                whileHover={{ scale: 1.02 }}
+   847→                                whileTap={{ scale: 0.98 }}
+   848→                                onClick={() => setPaymentMethod(method.id)}
+   849→                                className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+   850→                                  paymentMethod === method.id
+   851→                                    ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
+   852→                                    : 'border-border hover:border-muted-foreground/30'
+   853→                                }`}
+   854→                              >
+   855→                                <method.icon className={`h-6 w-6 ${
+   856→                                  paymentMethod === method.id ? 'text-emerald-600' : 'text-muted-foreground'
+   857→                                }`} />
+   858→                                <span className={`text-xs font-medium text-center ${
+   859→                                  paymentMethod === method.id ? 'text-foreground' : 'text-muted-foreground'
+   860→                                }`}>
+   861→                                  {method.label}
+   862→                                </span>
+   863→                                <div className="flex gap-1 flex-wrap justify-center">
+   864→                                  {method.badges.map((badge) => (
+   865→                                    <span
+   866→                                      key={badge}
+   867→                                      className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-medium text-foreground"
+   868→                                    >
+   869→                                      {badge}
+   870→                                    </span>
+   871→                                  ))}
+   872→                                </div>
+   873→                              </motion.button>
+   874→                            ))}
+   875→                          </div>
+   876→
+   877→                          <AnimatePresence mode="wait">
+   878→                            {/* Card Payment Form */}
+   879→                            {paymentMethod === 'card' && (
+   880→                              <motion.div
+   881→                                key="card-form"
+   882→                                initial={{ opacity: 0, height: 0 }}
+   883→                                animate={{ opacity: 1, height: 'auto' }}
+   884→                                exit={{ opacity: 0, height: 0 }}
+   885→                                transition={{ duration: 0.3 }}
+   886→                                className="space-y-5"
+   887→                              >
+   888→                                {/* Animated Card Preview */}
+   889→                                <div className="flex justify-center pb-2">
+   890→                                  <CardPreview
+   891→                                    cardNumber={cardNumber}
+   892→                                    cardholderName={cardholderName}
+   893→                                    expiry={expiry}
+   894→                                    cvv={cvv}
+   895→                                    cardBrand={cardBrand}
+   896→                                  />
+   897→                                </div>
+   898→
+   899→                                {/* Email */}
+   900→                                <div className="space-y-1.5">
+   901→                                  <Label htmlFor="email" className="text-sm">Email for receipt</Label>
+   902→                                  <Input
+   903→                                    id="email"
+   904→                                    type="email"
+   905→                                    placeholder="you@example.com"
+   906→                                    value={email}
+   907→                                    onChange={(e) => setEmail(e.target.value)}
+   908→                                    className="h-10 bg-white/50 dark:bg-slate-800/50"
+   909→                                  />
+   910→                                </div>
+   911→
+   912→                                {/* Cardholder Name */}
+   913→                                <div className="space-y-1.5">
+   914→                                  <Label htmlFor="cardholder" className="text-sm">Cardholder name</Label>
+   915→                                  <Input
+   916→                                    id="cardholder"
+   917→                                    placeholder="Full name on card"
+   918→                                    value={cardholderName}
+   919→                                    onChange={(e) => setCardholderName(e.target.value)}
+   920→                                    className="h-10 bg-white/50 dark:bg-slate-800/50"
+   921→                                  />
+   922→                                </div>
+   923→
+   924→                                {/* Card Number */}
+   925→                                <div className="space-y-1.5">
+   926→                                  <Label htmlFor="cardnumber" className="text-sm">Card number</Label>
+   927→                                  <div className="relative">
+   928→                                    <Input
+   929→                                      id="cardnumber"
+   930→                                      placeholder="1234 5678 9012 3456"
+   931→                                      value={cardNumber}
+   932→                                      onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+   933→                                      className="h-10 pr-20 bg-white/50 dark:bg-slate-800/50"
+   934→                                      maxLength={19}
+   935→                                    />
+   936→                                    {cardBrand !== 'unknown' && cardNumber.length > 0 && (
+   937→                                      <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold ${cardBrandConfig[cardBrand].color}`}>
+   938→                                        {cardBrandConfig[cardBrand].label}
+   939→                                      </span>
+   940→                                    )}
+   941→                                  </div>
+   942→                                </div>
+   943→
+   944→                                {/* Expiry & CVV */}
+   945→                                <div className="grid grid-cols-2 gap-4">
+   946→                                  <div className="space-y-1.5">
+   947→                                    <Label htmlFor="expiry" className="text-sm">Expiry date</Label>
+   948→                                    <Input
+   949→                                      id="expiry"
+   950→                                      placeholder="MM/YY"
+   951→                                      value={expiry}
+   952→                                      onChange={(e) => setExpiry(formatExpiry(e.target.value))}
+   953→                                      className="h-10 bg-white/50 dark:bg-slate-800/50"
+   954→                                      maxLength={5}
+   955→                                    />
+   956→                                  </div>
+   957→                                  <div className="space-y-1.5">
+   958→                                    <Label htmlFor="cvv" className="text-sm">CVV</Label>
+   959→                                    <div className="relative">
+   960→                                      <Input
+   961→                                        id="cvv"
+   962→                                        placeholder="123"
+   963→                                        value={cvv}
+   964→                                        onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
+   965→                                        className="h-10 pr-10 bg-white/50 dark:bg-slate-800/50"
+   966→                                        maxLength={4}
+   967→                                        type={showCvv ? 'text' : 'password'}
+   968→                                      />
+   969→                                      <button
+   970→                                        type="button"
+   971→                                        onClick={() => setShowCvv(!showCvv)}
+   972→                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+   973→                                      >
+   974→                                        {showCvv ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+   975→                                      </button>
+   976→                                    </div>
+   977→                                  </div>
+   978→                                </div>
+   979→                              </motion.div>
+   980→                            )}
+   981→
+   982→                            {/* PayPal Form */}
+   983→                            {paymentMethod === 'paypal' && (
+   984→                              <motion.div
+   985→                                key="paypal-form"
+   986→                                initial={{ opacity: 0, height: 0 }}
+   987→                                animate={{ opacity: 1, height: 'auto' }}
+   988→                                exit={{ opacity: 0, height: 0 }}
+   989→                                transition={{ duration: 0.3 }}
+   990→                                className="space-y-4"
+   991→                              >
+   992→                                <div className="rounded-xl bg-blue-50 dark:bg-blue-950/20 p-5 text-center space-y-3">
+   993→                                  <Wallet className="h-10 w-10 text-blue-600 mx-auto" />
+   994→                                  <p className="text-sm text-muted-foreground">
+   995→                                    You&apos;ll be redirected to PayPal to complete your purchase securely.
+   996→                                  </p>
+   997→                                </div>
+   998→                                <div className="space-y-1.5">
+   999→                                  <Label htmlFor="paypal-email" className="text-sm">PayPal email</Label>
+  1000→                                  <Input
+  1001→                                    id="paypal-email"
+  1002→                                    type="email"
+  1003→                                    placeholder="your-paypal@email.com"
+  1004→                                    value={paypalEmail}
+  1005→                                    onChange={(e) => setPaypalEmail(e.target.value)}
+  1006→                                    className="h-10 bg-white/50 dark:bg-slate-800/50"
+  1007→                                  />
+  1008→                                </div>
+  1009→                              </motion.div>
+  1010→                            )}
+  1011→
+  1012→                            {/* Apple/Google Pay */}
+  1013→                            {paymentMethod === 'applepay' && (
+  1014→                              <motion.div
+  1015→                                key="applepay-form"
+  1016→                                initial={{ opacity: 0, height: 0 }}
+  1017→                                animate={{ opacity: 1, height: 'auto' }}
+  1018→                                exit={{ opacity: 0, height: 0 }}
+  1019→                                transition={{ duration: 0.3 }}
+  1020→                                className="space-y-4"
+  1021→                              >
+  1022→                                <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 p-5 text-center space-y-3">
+  1023→                                  <Smartphone className="h-10 w-10 text-foreground mx-auto" />
+  1024→                                  <p className="text-sm text-muted-foreground">
+  1025→                                    Use your device&apos;s secure payment method. No card details needed.
+  1026→                                  </p>
+  1027→                                  <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
+  1028→                                    <ShieldCheck className="h-3 w-3 mr-1" />
+  1029→                                    Biometric Authentication
+  1030→                                  </Badge>
+  1031→                                </div>
+  1032→                              </motion.div>
+  1033→                            )}
+  1034→                          </AnimatePresence>
+  1035→
+  1036→                          {/* Trust Badges */}
+  1037→                          <div className="mt-6 space-y-3">
+  1038→                            <div className="flex flex-wrap items-center gap-3">
+  1039→                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+  1040→                                <Lock className="h-3.5 w-3.5 text-emerald-600" />
+  1041→                                Secure Checkout
+  1042→                              </div>
+  1043→                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+  1044→                                <Shield className="h-3.5 w-3.5 text-emerald-600" />
+  1045→                                256-bit SSL Encryption
+  1046→                              </div>
+  1047→                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+  1048→                                <RotateCcw className="h-3.5 w-3.5 text-emerald-600" />
+  1049→                                30-day Money Back
+  1050→                              </div>
+  1051→                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+  1052→                                <BadgeCheck className="h-3.5 w-3.5 text-emerald-600" />
+  1053→                                Money-back Guarantee
+  1054→                              </div>
+  1055→                            </div>
+  1056→                            <div className="flex items-center gap-2 pt-1">
+  1057→                              <span className="text-xs text-muted-foreground">We accept:</span>
+  1058→                              <div className="flex gap-1.5">
+  1059→                                <div className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/30 rounded text-xs font-bold text-blue-700 dark:text-blue-300">VISA</div>
+  1060→                                <div className="px-2 py-0.5 bg-orange-50 dark:bg-orange-900/30 rounded text-xs font-bold text-orange-700 dark:text-orange-300">MC</div>
+  1061→                                <div className="px-2 py-0.5 bg-teal-50 dark:bg-teal-900/30 rounded text-xs font-bold text-teal-700 dark:text-teal-300">AMEX</div>
+  1062→                                <div className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/30 rounded text-xs font-bold text-blue-700 dark:text-blue-300">PayPal</div>
+  1063→                              </div>
+  1064→                            </div>
+  1065→                          </div>
+  1066→                        </div>
+  1067→                      </div>
+  1068→                    </motion.div>
+  1069→                  </motion.div>
+  1070→                )}
+  1071→              </AnimatePresence>
+  1072→            </div>
+  1073→
+  1074→            {/* Right Column - Order Summary */}
+  1075→            <div className="lg:col-span-2">
+  1076→              <motion.div
+  1077→                initial={{ opacity: 0, y: 20 }}
+  1078→                animate={{ opacity: 1, y: 0 }}
+  1079→                transition={{ duration: 0.4, delay: 0.2 }}
+  1080→                className="lg:sticky lg:top-20"
+  1081→              >
+  1082→                {/* Glassmorphism Order Summary Card */}
+  1083→                <div className="rounded-2xl border border-white/20 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl shadow-lg overflow-hidden">
+  1084→                  {/* Gradient top accent */}
+  1085→                  <div className="h-1 bg-gradient-to-r from-violet-500 via-emerald-500 to-teal-500" />
+  1086→                  <div className="p-6 space-y-5">
+  1087→                    <h3 className="text-base font-semibold text-foreground">Order Summary</h3>
+  1088→
+  1089→                    {/* Item */}
+  1090→                    <div className="flex gap-3">
+  1091→                      <div className="shrink-0 w-16 h-16 rounded-lg bg-gradient-to-br from-violet-100 to-emerald-100 dark:from-violet-950 dark:to-emerald-950 flex items-center justify-center">
+  1092→                        <Star className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+  1093→                      </div>
+  1094→                      <div className="flex-1 min-w-0">
+  1095→                        <p className="text-sm font-medium text-foreground truncate">{product.name}</p>
+  1096→                        <p className="text-xs text-muted-foreground">{product.type} • 3 courses • Sarah Mitchell</p>
+  1097→                        <p className="text-xs text-muted-foreground mt-0.5">{isAnnual ? 'Annual plan' : 'Monthly plan'}</p>
+  1098→                      </div>
+  1099→                    </div>
+  1100→
+  1101→                    <Separator />
+  1102→
+  1103→                    {/* Pricing Breakdown */}
+  1104→                    <div className="space-y-2.5">
+  1105→                      <div className="flex justify-between text-sm">
+  1106→                        <span className="text-muted-foreground">Base Price</span>
+  1107→                        <span className="text-foreground">
+  1108→                          <AnimatePresence mode="wait">
+  1109→                            <motion.span
+  1110→                              key={`${activePrice}-${selectedCurrency.code}`}
+  1111→                              initial={{ opacity: 0 }}
+  1112→                              animate={{ opacity: 1 }}
+  1113→                              exit={{ opacity: 0 }}
+  1114→                            >
+  1115→                              {isConverting ? (
+  1116→                                <Skeleton className="h-4 w-16 inline-block" />
+  1117→                              ) : (
+  1118→                                <AnimatedPrice value={activePrice * selectedCurrency.rate} currency={selectedCurrency} />
+  1119→                              )}
+  1120→                            </motion.span>
+  1121→                          </AnimatePresence>
+  1122→                        </span>
+  1123→                      </div>
+  1124→
+  1125→                      <div className="flex justify-between text-sm">
+  1126→                        <span className="text-muted-foreground">Platform Fee</span>
+  1127→                        <div className="flex items-center gap-1.5">
+  1128→                          <span className="text-foreground">{selectedCurrency.symbol}0.00</span>
+  1129→                          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[10px] px-1.5 py-0 dark:bg-emerald-900 dark:text-emerald-300">
+  1130→                            0% Fee
+  1131→                          </Badge>
+  1132→                        </div>
+  1133→                      </div>
+  1134→
+  1135→                      <div className="flex justify-between text-sm">
+  1136→                        <span className="text-muted-foreground">Tax</span>
+  1137→                        <span className="text-foreground">{selectedCurrency.symbol}0.00</span>
+  1138→                      </div>
+  1139→
+  1140→                      {couponApplied && VALID_COUPONS[couponApplied] && (
+  1141→                        <motion.div
+  1142→                          initial={{ opacity: 0, height: 0 }}
+  1143→                          animate={{ opacity: 1, height: 'auto' }}
+  1144→                          className="flex justify-between text-sm"
+  1145→                        >
+  1146→                          <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+  1147→                            <Tag className="h-3 w-3" />
+  1148→                            Discount ({VALID_COUPONS[couponApplied].label})
+  1149→                          </span>
+  1150→                          <span className="text-emerald-600 dark:text-emerald-400">
+  1151→                            -{formatPrice(discountAmount, selectedCurrency)}
+  1152→                          </span>
+  1153→                        </motion.div>
+  1154→                      )}
+  1155→                    </div>
+  1156→
+  1157→                    <Separator />
+  1158→
+  1159→                    {/* Coupon Code */}
+  1160→                    <div className="space-y-2">
+  1161→                      <Label className="text-xs text-muted-foreground">Have a coupon?</Label>
+  1162→                      <div className="flex gap-2">
+  1163→                        <div className="relative flex-1">
+  1164→                          <Input
+  1165→                            placeholder="Enter coupon code"
+  1166→                            value={couponCode}
+  1167→                            onChange={(e) => {
+  1168→                              setCouponCode(e.target.value);
+  1169→                              setCouponError('');
+  1170→                            }}
+  1171→                            className="h-9 text-sm bg-white/50 dark:bg-slate-800/50 pr-8"
+  1172→                            disabled={!!couponApplied}
+  1173→                          />
+  1174→                          {couponApplied && (
+  1175→                            <button
+  1176→                              onClick={handleRemoveCoupon}
+  1177→                              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+  1178→                            >
+  1179→                              <X className="h-3.5 w-3.5" />
+  1180→                            </button>
+  1181→                          )}
+  1182→                        </div>
+  1183→                        <Button
+  1184→                          variant="outline"
+  1185→                          size="sm"
+  1186→                          className="h-9 px-4"
+  1187→                          onClick={handleApplyCoupon}
+  1188→                          disabled={!couponCode.trim() || !!couponApplied || couponLoading}
+  1189→                        >
+  1190→                          {couponLoading ? (
+  1191→                            <motion.div
+  1192→                              animate={{ rotate: 360 }}
+  1193→                              transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+  1194→                              className="h-3.5 w-3.5 border-2 border-current border-t-transparent rounded-full"
+  1195→                            />
+  1196→                          ) : couponApplied ? (
+  1197→                            <Check className="h-3.5 w-3.5 text-emerald-600" />
+  1198→                          ) : (
+  1199→                            'Apply'
+  1200→                          )}
+  1201→                        </Button>
+  1202→                      </div>
+  1203→                      {couponError && (
+  1204→                        <motion.p
+  1205→                          initial={{ opacity: 0, y: -5 }}
+  1206→                          animate={{ opacity: 1, y: 0 }}
+  1207→                          className="text-xs text-red-500"
+  1208→                        >
+  1209→                          {couponError}
+  1210→                        </motion.p>
+  1211→                      )}
+  1212→                      {couponApplied && VALID_COUPONS[couponApplied] && (
+  1213→                        <motion.div
+  1214→                          initial={{ opacity: 0, scale: 0.95 }}
+  1215→                          animate={{ opacity: 1, scale: 1 }}
+  1216→                          className="flex items-center gap-1.5"
+  1217→                        >
+  1218→                          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-xs dark:bg-emerald-900 dark:text-emerald-300">
+  1219→                            <Check className="h-3 w-3 mr-0.5" />
+  1220→                            {VALID_COUPONS[couponApplied].label} applied
+  1221→                          </Badge>
+  1222→                          <span className="text-xs text-emerald-600 dark:text-emerald-400">
+  1223→                            You save {Math.round(discountPercent * 100)}%
+  1224→                          </span>
+  1225→                        </motion.div>
+  1226→                      )}
+  1227→                    </div>
+  1228→
+  1229→                    <Separator />
+  1230→
+  1231→                    {/* Total */}
+  1232→                    <div className="flex justify-between items-baseline">
+  1233→                      <span className="text-base font-semibold text-foreground">Total</span>
+  1234→                      <div className="text-right">
+  1235→                        <p className="text-2xl font-bold text-foreground">
+  1236→                          <AnimatePresence mode="wait">
+  1237→                            <motion.span
+  1238→                              key={`${totalAmount}-${selectedCurrency.code}`}
+  1239→                              initial={{ opacity: 0 }}
+  1240→                              animate={{ opacity: 1 }}
+  1241→                              exit={{ opacity: 0 }}
+  1242→                            >
+  1243→                              {isConverting ? (
+  1244→                                <Skeleton className="h-7 w-24 inline-block" />
+  1245→                              ) : (
+  1246→                                <AnimatedPrice value={totalAmount} currency={selectedCurrency} />
+  1247→                              )}
+  1248→                            </motion.span>
+  1249→                          </AnimatePresence>
+  1250→                        </p>
+  1251→                        {selectedCurrency.code !== 'USD' && (
+  1252→                          <p className="text-xs text-muted-foreground">
+  1253→                            ≈ ${activePrice.toFixed(2)} USD
+  1254→                          </p>
+  1255→                        )}
+  1256→                      </div>
+  1257→                    </div>
+  1258→
+  1259→                    {/* Pay Button */}
+  1260→                    <Button
+  1261→                      className="w-full h-12 text-base font-semibold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white transition-all"
+  1262→                      onClick={handlePayNow}
+  1263→                      disabled={!isFormValid || isProcessing}
+  1264→                    >
+  1265→                      {isProcessing ? (
+  1266→                        <div className="flex items-center gap-2">
+  1267→                          <motion.div
+  1268→                            animate={{ rotate: 360 }}
+  1269→                            transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+  1270→                            className="h-5 w-5 border-2 border-white border-t-transparent rounded-full"
+  1271→                          />
+  1272→                          Processing...
+  1273→                        </div>
+  1274→                      ) : (
+  1275→                        <>
+  1276→                          <Lock className="h-4 w-4 mr-2" />
+  1277→                          Pay <AnimatedPrice value={totalAmount} currency={selectedCurrency} />
+  1278→                        </>
+  1279→                      )}
+  1280→                    </Button>
+  1281→
+  1282→                    {/* Security Badges */}
+  1283→                    <div className="space-y-2 pt-1">
+  1284→                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1285→                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+  1286→                        Instant access after payment
+  1287→                      </div>
+  1288→                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1289→                        <RotateCcw className="h-3.5 w-3.5 text-emerald-500" />
+  1290→                        30-day money-back guarantee
+  1291→                      </div>
+  1292→                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1293→                        <Shield className="h-3.5 w-3.5 text-emerald-500" />
+  1294→                        Secure payment processing
+  1295→                      </div>
+  1296→                    </div>
+  1297→
+  1298→                    {/* Course Included Preview */}
+  1299→                    <div className="bg-muted/50 rounded-xl p-4 mt-2">
+  1300→                      <p className="text-xs font-medium text-foreground mb-2">Courses included:</p>
+  1301→                      <div className="space-y-1.5">
+  1302→                        {courses.slice(0, 3).map((c: any) => (
+  1303→                          <div key={c.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+  1304→                            <Check className="h-3 w-3 text-emerald-500" />
+  1305→                            <span>{c.title}</span>
+  1306→                          </div>
+  1307→                        ))}
+  1308→                      </div>
+  1309→                    </div>
+  1310→                  </div>
+  1311→                </div>
+  1312→              </motion.div>
+  1313→            </div>
+  1314→          </div>
+  1315→        </div>
+  1316→      </div>
+  1317→    </div>
+  1318→  );
+  1319→}
+  1320→

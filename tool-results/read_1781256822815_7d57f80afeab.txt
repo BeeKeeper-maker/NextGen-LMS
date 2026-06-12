@@ -1,0 +1,1012 @@
+     1→'use client';
+     2→
+     3→import { useState, useMemo, useCallback, useEffect } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Star,
+     7→  ThumbsUp,
+     8→  CheckCircle2,
+     9→  Flag,
+    10→  MessageSquare,
+    11→  ChevronDown,
+    12→  Pencil,
+    13→  Trash2,
+    14→  X,
+    15→  Send,
+    16→  ShieldCheck,
+    17→  TrendingUp,
+    18→} from 'lucide-react';
+    19→import { Card, CardContent } from '@/components/ui/card';
+    20→import { Button } from '@/components/ui/button';
+    21→import { Badge } from '@/components/ui/badge';
+    22→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    23→import { Progress } from '@/components/ui/progress';
+    24→import {
+    25→  Dialog,
+    26→  DialogContent,
+    27→  DialogHeader,
+    28→  DialogTitle,
+    29→  DialogFooter,
+    30→  DialogDescription,
+    31→} from '@/components/ui/dialog';
+    32→import { Textarea } from '@/components/ui/textarea';
+    33→import { Input } from '@/components/ui/input';
+    34→import {
+    35→  Select,
+    36→  SelectContent,
+    37→  SelectItem,
+    38→  SelectTrigger,
+    39→  SelectValue,
+    40→} from '@/components/ui/select';
+    41→import { useCourses, useCommunityReviews } from '@/hooks/use-data';
+    42→import { useAppStore } from '@/store/app-store';
+    43→import { toast } from 'sonner';
+    44→import { cn } from '@/lib/utils';
+    45→
+    46→// CourseReview interface for component display
+    47→interface CourseReview {
+    48→  id: string;
+    49→  courseId: string;
+    50→  userId: string;
+    51→  userName: string;
+    52→  userAvatar: string;
+    53→  rating: number;
+    54→  title: string;
+    55→  content: string;
+    56→  date: string;
+    57→  helpfulCount: number;
+    58→  isHelpful: boolean;
+    59→  courseProgress: number;
+    60→  isVerifiedPurchase: boolean;
+    61→  tags: string[];
+    62→  status: 'published' | 'flagged' | 'hidden';
+    63→  instructorReply?: {
+    64→    instructorName: string;
+    65→    content: string;
+    66→    date: string;
+    67→  };
+    68→  isOwnReview?: boolean;
+    69→}
+    70→
+    71→// Helper to map API review data to CourseReview
+    72→function mapApiReviewToCourseReview(apiReview: any, currentUserId?: string): CourseReview {
+    73→  const author = apiReview.author || {};
+    74→  const instructorReply = apiReview.adminResponse ? {
+    75→    instructorName: 'Instructor',
+    76→    content: apiReview.adminResponse,
+    77→    date: apiReview.updatedAt || apiReview.createdAt,
+    78→  } : undefined;
+    79→  return {
+    80→    id: apiReview.id,
+    81→    courseId: apiReview.courseId,
+    82→    userId: apiReview.authorId,
+    83→    userName: author.name || 'Anonymous',
+    84→    userAvatar: (author.name || 'AN').split(' ').map((n: string) => n[0]).join(''),
+    85→    rating: apiReview.rating,
+    86→    title: apiReview.content ? apiReview.content.split(/[.!?]/)[0].slice(0, 80) : 'Review',
+    87→    content: apiReview.content || '',
+    88→    date: apiReview.createdAt,
+    89→    helpfulCount: 0,
+    90→    isHelpful: false,
+    91→    courseProgress: Math.round((author._count?.enrollments || 0) * 20),
+    92→    isVerifiedPurchase: (author._count?.enrollments || 0) > 0,
+    93→    tags: [],
+    94→    status: apiReview.status === 'approved' ? 'published' : apiReview.status === 'flagged' ? 'flagged' : apiReview.status as CourseReview['status'],
+    95→    instructorReply,
+    96→    isOwnReview: currentUserId ? apiReview.authorId === currentUserId : false,
+    97→  };
+    98→}
+    99→
+   100→// Default empty reviews array (replaced by API data)
+   101→const defaultReviews: CourseReview[] = [];
+   102→
+   103→// Compute rating distribution from reviews
+   104→function computeRatingDistribution(reviews: CourseReview[]): { stars: number; count: number; percentage: number }[] {
+   105→  const total = reviews.length;
+   106→  return [5, 4, 3, 2, 1].map(stars => {
+   107→    const count = reviews.filter(r => r.rating === stars).length;
+   108→    return { stars, count, percentage: total > 0 ? Math.round((count / total) * 1000) / 10 : 0 };
+   109→  });
+   110→}
+   111→
+   112→// Available review tags for selection
+   113→const reviewTags = ['Great Content', 'Well Structured', 'Practical', 'Beginner Friendly', 'Advanced', 'Life Changing'] as const;
+   114→
+   115→// ─── Animation variants ────────────────────────────────────
+   116→const containerVariants = {
+   117→  hidden: { opacity: 0 },
+   118→  visible: { opacity: 1, transition: { staggerChildren: 0.06 } },
+   119→};
+   120→
+   121→const itemVariants = {
+   122→  hidden: { opacity: 0, y: 12 },
+   123→  visible: { opacity: 1, y: 0, transition: { duration: 0.35 } },
+   124→};
+   125→
+   126→// ─── Animated Counter ──────────────────────────────────────
+   127→function AnimatedCounter({ value, decimals = 1 }: { value: number; decimals?: number }) {
+   128→  const [displayValue, setDisplayValue] = useState(0);
+   129→  const duration = 800;
+   130→
+   131→  useState(() => {
+   132→    const startTime = Date.now();
+   133→    const animate = () => {
+   134→      const elapsed = Date.now() - startTime;
+   135→      const progress = Math.min(elapsed / duration, 1);
+   136→      // easeOutCubic
+   137→      const eased = 1 - Math.pow(1 - progress, 3);
+   138→      setDisplayValue(value * eased);
+   139→      if (progress < 1) requestAnimationFrame(animate);
+   140→    };
+   141→    requestAnimationFrame(animate);
+   142→  });
+   143→
+   144→  return <span>{displayValue.toFixed(decimals)}</span>;
+   145→}
+   146→
+   147→// ─── Star Rating Display ───────────────────────────────────
+   148→function StarRating({ rating, size = 'md' }: { rating: number; size?: 'sm' | 'md' | 'lg' }) {
+   149→  const sizeClass = size === 'lg' ? 'h-6 w-6' : size === 'md' ? 'h-4 w-4' : 'h-3.5 w-3.5';
+   150→  return (
+   151→    <div className="flex items-center gap-0.5">
+   152→      {[1, 2, 3, 4, 5].map((star) => (
+   153→        <Star
+   154→          key={star}
+   155→          className={cn(
+   156→            sizeClass,
+   157→            star <= Math.floor(rating)
+   158→              ? 'fill-amber-400 text-amber-400'
+   159→              : star - 0.5 <= rating
+   160→                ? 'fill-amber-400/50 text-amber-400'
+   161→                : 'text-muted-foreground/30'
+   162→          )}
+   163→        />
+   164→      ))}
+   165→    </div>
+   166→  );
+   167→}
+   168→
+   169→// ─── Interactive Star Selector ──────────────────────────────
+   170→function StarSelector({
+   171→  value,
+   172→  onChange,
+   173→}: {
+   174→  value: number;
+   175→  onChange: (rating: number) => void;
+   176→}) {
+   177→  const [hovered, setHovered] = useState(0);
+   178→
+   179→  return (
+   180→    <div className="flex items-center gap-1">
+   181→      {[1, 2, 3, 4, 5].map((star) => (
+   182→        <motion.button
+   183→          key={star}
+   184→          type="button"
+   185→          whileHover={{ scale: 1.2 }}
+   186→          whileTap={{ scale: 0.9 }}
+   187→          onMouseEnter={() => setHovered(star)}
+   188→          onMouseLeave={() => setHovered(0)}
+   189→          onClick={() => onChange(star)}
+   190→          className="focus:outline-none"
+   191→        >
+   192→          <Star
+   193→            className={cn(
+   194→              'h-8 w-8 transition-colors duration-150',
+   195→              star <= (hovered || value)
+   196→                ? 'fill-amber-400 text-amber-400'
+   197→                : 'text-muted-foreground/30'
+   198→            )}
+   199→          />
+   200→        </motion.button>
+   201→      ))}
+   202→      {value > 0 && (
+   203→        <span className="ml-2 text-sm font-medium text-amber-600 dark:text-amber-400">
+   204→          {value === 1 ? 'Poor' : value === 2 ? 'Fair' : value === 3 ? 'Good' : value === 4 ? 'Very Good' : 'Excellent'}
+   205→        </span>
+   206→      )}
+   207→    </div>
+   208→  );
+   209→}
+   210→
+   211→// ─── Rating Summary Card ────────────────────────────────────
+   212→function RatingSummaryCard({
+   213→  courseId,
+   214→  avgRating,
+   215→  totalRatings,
+   216→  allCourseReviews,
+   217→}: {
+   218→  courseId: string;
+   219→  avgRating: number;
+   220→  totalRatings: number;
+   221→  allCourseReviews: CourseReview[];
+   222→}) {
+   223→  // Compute distribution from all reviews passed to this component
+   224→  const distribution = useMemo(() => computeRatingDistribution(allCourseReviews), [allCourseReviews]);
+   225→
+   226→  // Compute "would recommend" = (4+5 star) / total * 100
+   227→  const wouldRecommend = useMemo(() => {
+   228→    const positive = distribution.filter(d => d.stars >= 4).reduce((s, d) => s + d.count, 0);
+   229→    const total = distribution.reduce((s, d) => s + d.count, 0);
+   230→    return total > 0 ? Math.round((positive / total) * 100) : 0;
+   231→  }, [distribution]);
+   232→
+   233→  // Compute top tags from reviews for this course
+   234→  const topTags = useMemo(() => {
+   235→    const courseReviews = allCourseReviews.filter(r => r.courseId === courseId);
+   236→    const tagCount: Record<string, number> = {};
+   237→    courseReviews.forEach(r => r.tags.forEach(t => { tagCount[t] = (tagCount[t] || 0) + 1; }));
+   238→    return Object.entries(tagCount)
+   239→      .sort(([, a], [, b]) => b - a)
+   240→      .slice(0, 6)
+   241→      .map(([tag, count]) => ({ tag, count }));
+   242→  }, [allCourseReviews, courseId]);
+   243→
+   244→  return (
+   245→    <motion.div variants={itemVariants}>
+   246→      <Card className="overflow-hidden backdrop-blur-sm bg-card/80 border-border/50">
+   247→        <CardContent className="p-6">
+   248→          <div className="flex flex-col lg:flex-row gap-6">
+   249→            {/* Left: Big Rating */}
+   250→            <div className="text-center lg:text-left lg:w-48 shrink-0">
+   251→              <div className="flex items-center justify-center lg:justify-start gap-3">
+   252→                <p className="text-5xl font-bold text-foreground">
+   253→                  <AnimatedCounter value={avgRating} />
+   254→                </p>
+   255→                <div>
+   256→                  <StarRating rating={avgRating} size="md" />
+   257→                  <p className="text-sm text-muted-foreground mt-1">
+   258→                    {totalRatings.toLocaleString()} ratings
+   259→                  </p>
+   260→                </div>
+   261→              </div>
+   262→              <div className="mt-4 flex items-center justify-center lg:justify-start gap-2">
+   263→                <TrendingUp className="h-4 w-4 text-emerald-500" />
+   264→                <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+   265→                  {wouldRecommend}% would recommend
+   266→                </span>
+   267→              </div>
+   268→            </div>
+   269→
+   270→            {/* Middle: Distribution Bars */}
+   271→            <div className="flex-1 space-y-2">
+   272→              <h4 className="text-sm font-semibold text-foreground mb-3">Rating Distribution</h4>
+   273→              {distribution.map((dist) => (
+   274→                <div key={dist.stars} className="flex items-center gap-2">
+   275→                  <span className="text-xs text-muted-foreground w-8 text-right font-medium">
+   276→                    {dist.stars}★
+   277→                  </span>
+   278→                  <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
+   279→                    <motion.div
+   280→                      initial={{ width: 0 }}
+   281→                      animate={{ width: `${dist.percentage}%` }}
+   282→                      transition={{ duration: 0.8, delay: (5 - dist.stars) * 0.1, ease: 'easeOut' }}
+   283→                      className={cn(
+   284→                        'h-full rounded-full',
+   285→                        dist.stars >= 4
+   286→                          ? 'bg-gradient-to-r from-amber-400 to-amber-500'
+   287→                          : dist.stars === 3
+   288→                            ? 'bg-gradient-to-r from-amber-300 to-amber-400'
+   289→                            : 'bg-gradient-to-r from-orange-300 to-orange-400'
+   290→                      )}
+   291→                    />
+   292→                  </div>
+   293→                  <span className="text-xs text-muted-foreground w-12 text-right">
+   294→                    {dist.count} ({dist.percentage}%)
+   295→                  </span>
+   296→                </div>
+   297→              ))}
+   298→            </div>
+   299→
+   300→            {/* Right: Top Tags */}
+   301→            <div className="lg:w-48 shrink-0">
+   302→              <h4 className="text-sm font-semibold text-foreground mb-3">Top Tags</h4>
+   303→              <div className="flex flex-wrap gap-2">
+   304→                {topTags.map(({ tag, count }) => (
+   305→                  <Badge
+   306→                    key={tag}
+   307→                    variant="secondary"
+   308→                    className="text-xs bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+   309→                  >
+   310→                    {tag} ({count})
+   311→                  </Badge>
+   312→                ))}
+   313→              </div>
+   314→            </div>
+   315→          </div>
+   316→        </CardContent>
+   317→      </Card>
+   318→    </motion.div>
+   319→  );
+   320→}
+   321→
+   322→// ─── Single Review Card ─────────────────────────────────────
+   323→function ReviewCard({
+   324→  review,
+   325→  onHelpful,
+   326→  onEdit,
+   327→  onDelete,
+   328→}: {
+   329→  review: CourseReview;
+   330→  onHelpful: (id: string) => void;
+   331→  onEdit: (review: CourseReview) => void;
+   332→  onDelete: (id: string) => void;
+   333→}) {
+   334→  const formatDate = (dateStr: string) => {
+   335→    const date = new Date(dateStr);
+   336→    const now = new Date();
+   337→    const diffMs = now.getTime() - date.getTime();
+   338→    const diffDays = Math.floor(diffMs / 86400000);
+   339→    if (diffDays < 1) return 'Today';
+   340→    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+   341→    if (diffDays < 30) return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) > 1 ? 's' : ''} ago`;
+   342→    if (diffDays < 365) return `${Math.floor(diffDays / 30)} month${Math.floor(diffDays / 30) > 1 ? 's' : ''} ago`;
+   343→    return date.toLocaleDateString();
+   344→  };
+   345→
+   346→  return (
+   347→    <motion.div variants={itemVariants} layout>
+   348→      <Card className="overflow-hidden backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-shadow">
+   349→        <CardContent className="p-5">
+   350→          <div className="flex items-start gap-3">
+   351→            <Avatar className="h-10 w-10 shrink-0">
+   352→              <AvatarFallback className="text-xs bg-gradient-to-br from-amber-100 to-amber-200 text-amber-700 dark:from-amber-900/40 dark:to-amber-800/40 dark:text-amber-300">
+   353→                {review.userAvatar}
+   354→              </AvatarFallback>
+   355→            </Avatar>
+   356→            <div className="flex-1 min-w-0">
+   357→              {/* Header Row */}
+   358→              <div className="flex items-center flex-wrap gap-2 mb-1">
+   359→                <span className="text-sm font-semibold text-foreground">{review.userName}</span>
+   360→                {review.isVerifiedPurchase && (
+   361→                  <Badge
+   362→                    variant="secondary"
+   363→                    className="text-[10px] px-1.5 py-0 gap-0.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
+   364→                  >
+   365→                    <ShieldCheck className="h-3 w-3" />
+   366→                    Verified
+   367→                  </Badge>
+   368→                )}
+   369→                {review.isOwnReview && (
+   370→                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+   371→                    Your Review
+   372→                  </Badge>
+   373→                )}
+   374→                <span className="text-xs text-muted-foreground">· {formatDate(review.date)}</span>
+   375→              </div>
+   376→
+   377→              {/* Star Rating + Progress */}
+   378→              <div className="flex items-center gap-3 mb-2">
+   379→                <StarRating rating={review.rating} size="sm" />
+   380→                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+   381→                  <Progress value={review.courseProgress} className="h-1.5 w-16" />
+   382→                  <span>{review.courseProgress}% complete</span>
+   383→                </div>
+   384→              </div>
+   385→
+   386→              {/* Title */}
+   387→              <h4 className="text-sm font-semibold text-foreground mb-1">{review.title}</h4>
+   388→
+   389→              {/* Content */}
+   390→              <p className="text-sm text-muted-foreground leading-relaxed mb-3">{review.content}</p>
+   391→
+   392→              {/* Tags */}
+   393→              {review.tags.length > 0 && (
+   394→                <div className="flex flex-wrap gap-1.5 mb-3">
+   395→                  {review.tags.map((tag) => (
+   396→                    <Badge
+   397→                      key={tag}
+   398→                      variant="secondary"
+   399→                      className="text-[10px] px-2 py-0.5 bg-amber-50/80 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
+   400→                    >
+   401→                      {tag}
+   402→                    </Badge>
+   403→                  ))}
+   404→                </div>
+   405→              )}
+   406→
+   407→              {/* Instructor Reply */}
+   408→              {review.instructorReply && (
+   409→                <div className="ml-2 pl-4 border-l-2 border-amber-300 dark:border-amber-700 mb-3">
+   410→                  <div className="flex items-center gap-2 mb-1">
+   411→                    <Badge className="text-[10px] px-1.5 py-0 gap-0.5 bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 border-violet-200 dark:border-violet-800">
+   412→                      <ShieldCheck className="h-3 w-3" />
+   413→                      Instructor
+   414→                    </Badge>
+   415→                    <span className="text-xs font-medium text-foreground">
+   416→                      {review.instructorReply.instructorName}
+   417→                    </span>
+   418→                    <span className="text-xs text-muted-foreground">· {formatDate(review.instructorReply.date)}</span>
+   419→                  </div>
+   420→                  <p className="text-sm text-muted-foreground leading-relaxed">
+   421→                    {review.instructorReply.content}
+   422→                  </p>
+   423→                </div>
+   424→              )}
+   425→
+   426→              {/* Actions */}
+   427→              <div className="flex items-center gap-2">
+   428→                <Button
+   429→                  variant="ghost"
+   430→                  size="sm"
+   431→                  className={cn(
+   432→                    'h-7 text-xs gap-1.5',
+   433→                    review.isHelpful
+   434→                      ? 'text-amber-600 hover:text-amber-700'
+   435→                      : 'text-muted-foreground hover:text-foreground'
+   436→                  )}
+   437→                  onClick={() => onHelpful(review.id)}
+   438→                >
+   439→                  <ThumbsUp className={cn('h-3.5 w-3.5', review.isHelpful && 'fill-amber-400')} />
+   440→                  Helpful ({review.helpfulCount})
+   441→                </Button>
+   442→
+   443→                {review.isOwnReview && (
+   444→                  <>
+   445→                    <Button
+   446→                      variant="ghost"
+   447→                      size="sm"
+   448→                      className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+   449→                      onClick={() => onEdit(review)}
+   450→                    >
+   451→                      <Pencil className="h-3.5 w-3.5" />
+   452→                      Edit
+   453→                    </Button>
+   454→                    <Button
+   455→                      variant="ghost"
+   456→                      size="sm"
+   457→                      className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-red-600"
+   458→                      onClick={() => onDelete(review.id)}
+   459→                    >
+   460→                      <Trash2 className="h-3.5 w-3.5" />
+   461→                      Delete
+   462→                    </Button>
+   463→                  </>
+   464→                )}
+   465→              </div>
+   466→            </div>
+   467→          </div>
+   468→        </CardContent>
+   469→      </Card>
+   470→    </motion.div>
+   471→  );
+   472→}
+   473→
+   474→// ─── Write Review Dialog ────────────────────────────────────
+   475→function WriteReviewDialog({
+   476→  open,
+   477→  onClose,
+   478→  onSubmit,
+   479→  editingReview,
+   480→}: {
+   481→  open: boolean;
+   482→  onClose: () => void;
+   483→  onSubmit: (review: Partial<CourseReview>) => void;
+   484→  editingReview: CourseReview | null;
+   485→}) {
+   486→  const [rating, setRating] = useState(editingReview?.rating || 0);
+   487→  const [title, setTitle] = useState(editingReview?.title || '');
+   488→  const [content, setContent] = useState(editingReview?.content || '');
+   489→  const [selectedTags, setSelectedTags] = useState<string[]>(editingReview?.tags || []);
+   490→  const [submitted, setSubmitted] = useState(false);
+   491→
+   492→  const charCount = content.length;
+   493→  const maxChars = 2000;
+   494→  const minChars = 20;
+   495→  const canSubmit = rating > 0 && title.trim().length > 0 && charCount >= minChars;
+   496→
+   497→  const handleSubmit = () => {
+   498→    if (!canSubmit) return;
+   499→    onSubmit({
+   500→      rating,
+   501→      title: title.trim(),
+   502→      content: content.trim(),
+   503→      tags: selectedTags,
+   504→    });
+   505→    setSubmitted(true);
+   506→    setTimeout(() => {
+   507→      setSubmitted(false);
+   508→      setRating(0);
+   509→      setTitle('');
+   510→      setContent('');
+   511→      setSelectedTags([]);
+   512→      onClose();
+   513→    }, 1500);
+   514→  };
+   515→
+   516→  const toggleTag = (tag: string) => {
+   517→    setSelectedTags((prev) =>
+   518→      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+   519→    );
+   520→  };
+   521→
+   522→  return (
+   523→    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+   524→      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+   525→        <AnimatePresence mode="wait">
+   526→          {submitted ? (
+   527→            <motion.div
+   528→              key="success"
+   529→              initial={{ scale: 0.8, opacity: 0 }}
+   530→              animate={{ scale: 1, opacity: 1 }}
+   531→              exit={{ scale: 0.8, opacity: 0 }}
+   532→              className="py-12 flex flex-col items-center justify-center"
+   533→            >
+   534→              <motion.div
+   535→                initial={{ scale: 0 }}
+   536→                animate={{ scale: 1 }}
+   537→                transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.2 }}
+   538→              >
+   539→                <CheckCircle2 className="h-16 w-16 text-emerald-500 mb-4" />
+   540→              </motion.div>
+   541→              <h3 className="text-lg font-semibold text-foreground">Review Submitted!</h3>
+   542→              <p className="text-sm text-muted-foreground mt-1">Thank you for your feedback</p>
+   543→            </motion.div>
+   544→          ) : (
+   545→            <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+   546→              <DialogHeader>
+   547→                <DialogTitle className="flex items-center gap-2">
+   548→                  <Star className="h-5 w-5 text-amber-400" />
+   549→                  {editingReview ? 'Edit Your Review' : 'Write a Review'}
+   550→                </DialogTitle>
+   551→                <DialogDescription>
+   552→                  Share your experience with this course. Your feedback helps other learners make informed decisions.
+   553→                </DialogDescription>
+   554→              </DialogHeader>
+   555→
+   556→              <div className="space-y-5 mt-4">
+   557→                {/* Star Rating */}
+   558→                <div>
+   559→                  <label className="text-sm font-medium text-foreground mb-2 block">
+   560→                    Your Rating <span className="text-red-500">*</span>
+   561→                  </label>
+   562→                  <StarSelector value={rating} onChange={setRating} />
+   563→                </div>
+   564→
+   565→                {/* Review Title */}
+   566→                <div>
+   567→                  <label className="text-sm font-medium text-foreground mb-2 block">
+   568→                    Review Title <span className="text-red-500">*</span>
+   569→                  </label>
+   570→                  <Input
+   571→                    placeholder="Summarize your experience"
+   572→                    value={title}
+   573→                    onChange={(e) => setTitle(e.target.value)}
+   574→                    maxLength={100}
+   575→                  />
+   576→                </div>
+   577→
+   578→                {/* Review Body */}
+   579→                <div>
+   580→                  <label className="text-sm font-medium text-foreground mb-2 block">
+   581→                    Your Review <span className="text-red-500">*</span>
+   582→                  </label>
+   583→                  <Textarea
+   584→                    placeholder={`Share your detailed experience (minimum ${minChars} characters)...`}
+   585→                    value={content}
+   586→                    onChange={(e) => setContent(e.target.value.slice(0, maxChars))}
+   587→                    rows={5}
+   588→                  />
+   589→                  <div className="flex items-center justify-between mt-1">
+   590→                    <span
+   591→                      className={cn(
+   592→                        'text-xs',
+   593→                        charCount < minChars
+   594→                          ? 'text-red-500'
+   595→                          : charCount > maxChars * 0.9
+   596→                            ? 'text-amber-600'
+   597→                            : 'text-muted-foreground'
+   598→                      )}
+   599→                    >
+   600→                      {charCount < minChars
+   601→                        ? `${minChars - charCount} more characters needed`
+   602→                        : `${charCount}/${maxChars} characters`}
+   603→                    </span>
+   604→                    {charCount >= minChars && (
+   605→                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+   606→                    )}
+   607→                  </div>
+   608→                </div>
+   609→
+   610→                {/* Tags */}
+   611→                <div>
+   612→                  <label className="text-sm font-medium text-foreground mb-2 block">
+   613→                    Tags (select all that apply)
+   614→                  </label>
+   615→                  <div className="flex flex-wrap gap-2">
+   616→                    {reviewTags.map((tag) => (
+   617→                      <motion.button
+   618→                        key={tag}
+   619→                        type="button"
+   620→                        whileHover={{ scale: 1.05 }}
+   621→                        whileTap={{ scale: 0.95 }}
+   622→                        onClick={() => toggleTag(tag)}
+   623→                        className={cn(
+   624→                          'px-3 py-1.5 rounded-full text-xs font-medium transition-colors border',
+   625→                          selectedTags.includes(tag)
+   626→                            ? 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700'
+   627→                            : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+   628→                        )}
+   629→                      >
+   630→                        {tag}
+   631→                      </motion.button>
+   632→                    ))}
+   633→                  </div>
+   634→                </div>
+   635→              </div>
+   636→
+   637→              <DialogFooter className="mt-6 gap-2">
+   638→                <Button variant="outline" onClick={onClose}>
+   639→                  Cancel
+   640→                </Button>
+   641→                <Button
+   642→                  onClick={handleSubmit}
+   643→                  disabled={!canSubmit}
+   644→                  className="gap-2 bg-amber-600 hover:bg-amber-700 text-white"
+   645→                >
+   646→                  <Send className="h-4 w-4" />
+   647→                  {editingReview ? 'Update Review' : 'Submit Review'}
+   648→                </Button>
+   649→              </DialogFooter>
+   650→            </motion.div>
+   651→          )}
+   652→        </AnimatePresence>
+   653→      </DialogContent>
+   654→    </Dialog>
+   655→  );
+   656→}
+   657→
+   658→// ─── Delete Confirmation Dialog ─────────────────────────────
+   659→function DeleteReviewDialog({
+   660→  open,
+   661→  onClose,
+   662→  onConfirm,
+   663→}: {
+   664→  open: boolean;
+   665→  onClose: () => void;
+   666→  onConfirm: () => void;
+   667→}) {
+   668→  return (
+   669→    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+   670→      <DialogContent className="sm:max-w-md">
+   671→        <DialogHeader>
+   672→          <DialogTitle>Delete Review</DialogTitle>
+   673→          <DialogDescription>
+   674→            Are you sure you want to delete your review? This action cannot be undone.
+   675→          </DialogDescription>
+   676→        </DialogHeader>
+   677→        <DialogFooter className="gap-2">
+   678→          <Button variant="outline" onClick={onClose}>
+   679→            Cancel
+   680→          </Button>
+   681→          <Button variant="destructive" onClick={onConfirm}>
+   682→            Delete
+   683→          </Button>
+   684→        </DialogFooter>
+   685→      </DialogContent>
+   686→    </Dialog>
+   687→  );
+   688→}
+   689→
+   690→// ─── Main CourseReviews Component ───────────────────────────
+   691→export function CourseReviews({
+   692→  courseId,
+   693→  avgRating,
+   694→  totalRatings,
+   695→}: {
+   696→  courseId: string;
+   697→  avgRating: number;
+   698→  totalRatings: number;
+   699→}) {
+   700→  const { currentUser, currentTenant } = useAppStore();
+   701→  const userId = currentUser?.id || '';
+   702→  const tenantId = currentTenant?.id || '';
+   703→
+   704→  // Fetch reviews from API
+   705→  const { data: reviewsData, isLoading: isReviewsLoading } = useCommunityReviews({
+   706→    courseId,
+   707→    tenantId,
+   708→    status: 'approved',
+   709→  });
+   710→
+   711→  // Map API reviews to component format
+   712→  const apiReviews = useMemo(() => {
+   713→    if (!reviewsData?.reviews) return defaultReviews;
+   714→    return reviewsData.reviews.map((r: any) => mapApiReviewToCourseReview(r, userId));
+   715→  }, [reviewsData, userId]);
+   716→
+   717→  const [reviews, setReviews] = useState<CourseReview[]>(defaultReviews);
+   718→  useEffect(() => { if (apiReviews.length > 0) setReviews(apiReviews); }, [apiReviews]);
+   719→  const [sortBy, setSortBy] = useState('most_recent');
+   720→  const [filterStars, setFilterStars] = useState<number | null>(null);
+   721→  const [showWriteDialog, setShowWriteDialog] = useState(false);
+   722→  const [editingReview, setEditingReview] = useState<CourseReview | null>(null);
+   723→  const [deleteReviewId, setDeleteReviewId] = useState<string | null>(null);
+   724→  const [visibleCount, setVisibleCount] = useState(5);
+   725→
+   726→  // Filter and sort reviews for current course
+   727→  const filteredReviews = useMemo(() => {
+   728→    let result = reviews.filter((r) => r.courseId === courseId);
+   729→
+   730→    // Filter by star rating
+   731→    if (filterStars !== null) {
+   732→      result = result.filter((r) => r.rating === filterStars);
+   733→    }
+   734→
+   735→    // Sort
+   736→    switch (sortBy) {
+   737→      case 'most_recent':
+   738→        result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+   739→        break;
+   740→      case 'most_helpful':
+   741→        result.sort((a, b) => b.helpfulCount - a.helpfulCount);
+   742→        break;
+   743→      case 'highest_rated':
+   744→        result.sort((a, b) => b.rating - a.rating);
+   745→        break;
+   746→      case 'lowest_rated':
+   747→        result.sort((a, b) => a.rating - b.rating);
+   748→        break;
+   749→    }
+   750→
+   751→    return result;
+   752→  }, [reviews, courseId, filterStars, sortBy]);
+   753→
+   754→  // Visible reviews for pagination
+   755→  const visibleReviews = filteredReviews.slice(0, visibleCount);
+   756→  const hasMore = visibleCount < filteredReviews.length;
+   757→
+   758→  // Handle helpful click
+   759→  const handleHelpful = useCallback((id: string) => {
+   760→    setReviews((prev) =>
+   761→      prev.map((r) =>
+   762→        r.id === id
+   763→          ? {
+   764→              ...r,
+   765→              isHelpful: !r.isHelpful,
+   766→              helpfulCount: r.isHelpful ? r.helpfulCount - 1 : r.helpfulCount + 1,
+   767→            }
+   768→          : r
+   769→      )
+   770→    );
+   771→  }, []);
+   772→
+   773→  // Handle write/edit review submit
+   774→  const handleSubmitReview = useCallback(
+   775→    async (data: Partial<CourseReview>) => {
+   776→      if (editingReview) {
+   777→        // Update existing review via API
+   778→        try {
+   779→          const res = await fetch(`/api/community/reviews/${editingReview.id}`, {
+   780→            method: 'PUT',
+   781→            headers: { 'Content-Type': 'application/json' },
+   782→            body: JSON.stringify({
+   783→              rating: data.rating,
+   784→              content: `${data.title ? data.title + '. ' : ''}${data.content}`,
+   785→            }),
+   786→          });
+   787→          if (!res.ok) throw new Error('Failed to update review');
+   788→          setReviews((prev) =>
+   789→            prev.map((r) =>
+   790→              r.id === editingReview.id
+   791→                ? { ...r, ...data, date: new Date().toISOString() }
+   792→                : r
+   793→            )
+   794→          );
+   795→        } catch {
+   796→          toast.error('Failed to update review');
+   797→        }
+   798→        setEditingReview(null);
+   799→      } else {
+   800→        // Create new review via API
+   801→        try {
+   802→          const res = await fetch('/api/community/reviews', {
+   803→            method: 'POST',
+   804→            headers: { 'Content-Type': 'application/json' },
+   805→            body: JSON.stringify({
+   806→              tenantId,
+   807→              courseId,
+   808→              authorId: userId,
+   809→              rating: data.rating,
+   810→              content: `${data.title ? data.title + '. ' : ''}${data.content}`,
+   811→            }),
+   812→          });
+   813→          if (!res.ok) throw new Error('Failed to create review');
+   814→          const newApiReview = await res.json();
+   815→          const newReview = mapApiReviewToCourseReview(newApiReview, userId);
+   816→          newReview.title = data.title || '';
+   817→          newReview.tags = data.tags || [];
+   818→          newReview.isOwnReview = true;
+   819→          setReviews((prev) => [newReview, ...prev]);
+   820→        } catch {
+   821→          toast.error('Failed to submit review');
+   822→        }
+   823→      }
+   824→    },
+   825→    [editingReview, courseId, tenantId, userId]
+   826→  );
+   827→
+   828→  // Handle edit review
+   829→  const handleEdit = useCallback((review: CourseReview) => {
+   830→    setEditingReview(review);
+   831→    setShowWriteDialog(true);
+   832→  }, []);
+   833→
+   834→  // Handle delete review
+   835→  const handleDelete = useCallback(async () => {
+   836→    if (deleteReviewId) {
+   837→      try {
+   838→        const res = await fetch(`/api/community/reviews/${deleteReviewId}`, { method: 'DELETE' });
+   839→        if (!res.ok) throw new Error('Failed to delete review');
+   840→        setReviews((prev) => prev.filter((r) => r.id !== deleteReviewId));
+   841→      } catch {
+   842→        toast.error('Failed to delete review');
+   843→      }
+   844→      setDeleteReviewId(null);
+   845→    }
+   846→  }, [deleteReviewId]);
+   847→
+   848→  // Distribution click to filter
+   849→  const handleDistributionClick = useCallback((stars: number) => {
+   850→    setFilterStars((prev) => (prev === stars ? null : stars));
+   851→    setVisibleCount(5);
+   852→  }, []);
+   853→
+   854→  const { data: coursesData } = useCourses();
+   855→  const demoCourses = coursesData || [];
+   856→  const courseName = demoCourses.find((c: any) => c.id === courseId)?.title || 'Course';
+   857→
+   858→  return (
+   859→    <motion.div
+   860→      className="space-y-6"
+   861→      variants={containerVariants}
+   862→      initial="hidden"
+   863→      animate="visible"
+   864→    >
+   865→      {/* Header */}
+   866→      <motion.div variants={itemVariants} className="flex items-center justify-between">
+   867→        <div>
+   868→          <h3 className="font-semibold text-foreground text-lg">Course Reviews</h3>
+   869→          <p className="text-sm text-muted-foreground">
+   870→            What learners are saying about {courseName}
+   871→          </p>
+   872→        </div>
+   873→        <Button
+   874→          onClick={() => {
+   875→            setEditingReview(null);
+   876→            setShowWriteDialog(true);
+   877→          }}
+   878→          className="gap-2 bg-amber-600 hover:bg-amber-700 text-white"
+   879→        >
+   880→          <Star className="h-4 w-4" />
+   881→          Write a Review
+   882→        </Button>
+   883→      </motion.div>
+   884→
+   885→      {/* Rating Summary Card */}
+   886→      <RatingSummaryCard courseId={courseId} avgRating={avgRating} totalRatings={totalRatings} allCourseReviews={reviews} />
+   887→
+   888→      {/* Filter / Sort Bar */}
+   889→      <motion.div variants={itemVariants}>
+   890→        <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+   891→          <CardContent className="p-4">
+   892→            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+   893→              {/* Star Filter Indicator */}
+   894→              {filterStars !== null && (
+   895→                <Badge
+   896→                  variant="secondary"
+   897→                  className="gap-1.5 bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 cursor-pointer"
+   898→                  onClick={() => setFilterStars(null)}
+   899→                >
+   900→                  {filterStars} Star{filterStars > 1 ? 's' : ''} Only
+   901→                  <X className="h-3 w-3" />
+   902→                </Badge>
+   903→              )}
+   904→
+   905→              {/* Filter by Distribution (clickable) */}
+   906→              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+   907→                <span>Filter:</span>
+   908→                {[5, 4, 3, 2, 1].map((star) => (
+   909→                  <button
+   910→                    key={star}
+   911→                    onClick={() => handleDistributionClick(star)}
+   912→                    className={cn(
+   913→                      'px-2 py-1 rounded-md transition-colors',
+   914→                      filterStars === star
+   915→                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+   916→                        : 'hover:bg-muted'
+   917→                    )}
+   918→                  >
+   919→                    {star}★
+   920→                  </button>
+   921→                ))}
+   922→              </div>
+   923→
+   924→              <div className="sm:ml-auto">
+   925→                <Select value={sortBy} onValueChange={setSortBy}>
+   926→                  <SelectTrigger className="w-[180px] h-8 text-xs">
+   927→                    <SelectValue />
+   928→                  </SelectTrigger>
+   929→                  <SelectContent>
+   930→                    <SelectItem value="most_recent">Most Recent</SelectItem>
+   931→                    <SelectItem value="most_helpful">Most Helpful</SelectItem>
+   932→                    <SelectItem value="highest_rated">Highest Rated</SelectItem>
+   933→                    <SelectItem value="lowest_rated">Lowest Rated</SelectItem>
+   934→                  </SelectContent>
+   935→                </Select>
+   936→              </div>
+   937→            </div>
+   938→          </CardContent>
+   939→        </Card>
+   940→      </motion.div>
+   941→
+   942→      {/* Reviews List */}
+   943→      <AnimatePresence mode="wait">
+   944→        {filteredReviews.length > 0 ? (
+   945→          <motion.div
+   946→            key={`${filterStars}-${sortBy}`}
+   947→            className="space-y-3"
+   948→            variants={containerVariants}
+   949→            initial="hidden"
+   950→            animate="visible"
+   951→          >
+   952→            {visibleReviews.map((review) => (
+   953→              <ReviewCard
+   954→                key={review.id}
+   955→                review={review}
+   956→                onHelpful={handleHelpful}
+   957→                onEdit={handleEdit}
+   958→                onDelete={setDeleteReviewId}
+   959→              />
+   960→            ))}
+   961→          </motion.div>
+   962→        ) : (
+   963→          <motion.div
+   964→            initial={{ opacity: 0, y: 20 }}
+   965→            animate={{ opacity: 1, y: 0 }}
+   966→            className="text-center py-12"
+   967→          >
+   968→            <MessageSquare className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+   969→            <p className="text-muted-foreground">
+   970→              {filterStars
+   971→                ? `No ${filterStars}-star reviews found. Try a different filter.`
+   972→                : 'No reviews yet. Be the first to review!'}
+   973→            </p>
+   974→          </motion.div>
+   975→        )}
+   976→      </AnimatePresence>
+   977→
+   978→      {/* Load More */}
+   979→      {hasMore && (
+   980→        <motion.div variants={itemVariants} className="flex justify-center">
+   981→          <Button
+   982→            variant="outline"
+   983→            onClick={() => setVisibleCount((prev) => prev + 5)}
+   984→            className="gap-2"
+   985→          >
+   986→            <ChevronDown className="h-4 w-4" />
+   987→            Load More Reviews ({filteredReviews.length - visibleCount} remaining)
+   988→          </Button>
+   989→        </motion.div>
+   990→      )}
+   991→
+   992→      {/* Write/Edit Review Dialog */}
+   993→      <WriteReviewDialog
+   994→        open={showWriteDialog}
+   995→        onClose={() => {
+   996→          setShowWriteDialog(false);
+   997→          setEditingReview(null);
+   998→        }}
+   999→        onSubmit={handleSubmitReview}
+  1000→        editingReview={editingReview}
+  1001→      />
+  1002→
+  1003→      {/* Delete Confirmation Dialog */}
+  1004→      <DeleteReviewDialog
+  1005→        open={!!deleteReviewId}
+  1006→        onClose={() => setDeleteReviewId(null)}
+  1007→        onConfirm={handleDelete}
+  1008→      />
+  1009→    </motion.div>
+  1010→  );
+  1011→}
+  1012→

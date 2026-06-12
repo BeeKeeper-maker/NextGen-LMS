@@ -1,0 +1,1822 @@
+     1→'use client';
+     2→
+     3→import { useState, useCallback, useEffect, useRef } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Search, Plus, Edit3, Trash2, Eye, Download, Ban,
+     7→  Award, FileText, Image as ImageIcon, Calendar, QrCode, PenTool,
+     8→  Type, Settings2, Save, X, CheckCircle2,
+     9→  ChevronLeft, GripVertical, Sparkles, Shield, Layout,
+    10→  Clock, BookOpen, Share2, Check,
+    11→  ZoomIn, ZoomOut, RotateCcw, TrendingUp, TrendingDown,
+    12→  BarChart3, Star, Droplets,
+    13→  Send, FileDown, AlertTriangle, ExternalLink,
+    14→} from 'lucide-react';
+    15→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    16→import { Button } from '@/components/ui/button';
+    17→import { Input } from '@/components/ui/input';
+    18→import { Badge } from '@/components/ui/badge';
+    19→import { Switch } from '@/components/ui/switch';
+    20→import { Label } from '@/components/ui/label';
+    21→import { Separator } from '@/components/ui/separator';
+    22→import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    23→import { Checkbox } from '@/components/ui/checkbox';
+    24→import {
+    25→  Dialog,
+    26→  DialogContent,
+    27→  DialogDescription,
+    28→  DialogHeader,
+    29→  DialogTitle,
+    30→  DialogFooter,
+    31→} from '@/components/ui/dialog';
+    32→import {
+    33→  Select,
+    34→  SelectContent,
+    35→  SelectItem,
+    36→  SelectTrigger,
+    37→  SelectValue,
+    38→} from '@/components/ui/select';
+    39→import {
+    40→  Table,
+    41→  TableBody,
+    42→  TableCell,
+    43→  TableHead,
+    44→  TableHeader,
+    45→  TableRow,
+    46→} from '@/components/ui/table';
+    47→import {
+    48→  Tooltip,
+    49→  TooltipContent,
+    50→  TooltipProvider,
+    51→  TooltipTrigger,
+    52→} from '@/components/ui/tooltip';
+    53→import type { Certificate, CertificateAward } from '@/types';
+    54→
+    55→// ---- Extended Types ----
+    56→interface CertTemplate extends Certificate {
+    57→  elements: CertElement[];
+    58→  bg_color: string;
+    59→  font_family: string;
+    60→  width: number;
+    61→  height: number;
+    62→  borderStyle?: string;
+    63→  sealType?: string;
+    64→  hasWatermark?: boolean;
+    65→  backgroundTemplate?: string;
+    66→}
+    67→
+    68→interface CertElement {
+    69→  id: string;
+    70→  type: 'text' | 'image' | 'date' | 'qr_code' | 'signature_line';
+    71→  label: string;
+    72→  x: number;
+    73→  y: number;
+    74→  fontSize?: number;
+    75→  fontWeight?: string;
+    76→  color?: string;
+    77→  value: string;
+    78→  fontFamily?: string;
+    79→  size?: 'S' | 'M' | 'L' | 'XL';
+    80→  align?: 'left' | 'center' | 'right';
+    81→}
+    82→
+    83→type VerificationStatus = 'verified' | 'pending' | 'revoked';
+    84→
+    85→interface IssuedCert extends CertificateAward {
+    86→  recipientName: string;
+    87→  courseName: string;
+    88→  certName: string;
+    89→  status: VerificationStatus;
+    90→}
+    91→
+    92→// ---- Constants ----
+    93→const FONT_FAMILIES = [
+    94→  { value: 'Georgia, serif', label: 'Serif (Georgia)' },
+    95→  { value: 'system-ui, sans-serif', label: 'Sans-serif (System)' },
+    96→  { value: "'Brush Script MT', 'Segoe Script', cursive", label: 'Script (Brush)' },
+    97→  { value: "'Courier New', monospace", label: 'Monospace (Courier)' },
+    98→];
+    99→
+   100→const ELEMENT_SIZES: Record<string, number> = { S: 0.5, M: 0.65, L: 0.85, XL: 1.1 };
+   101→const ALIGN_OPTIONS = ['left', 'center', 'right'] as const;
+   102→
+   103→const BORDER_STYLES = [
+   104→  { value: 'classic', label: 'Classic Double' },
+   105→  { value: 'elegant', label: 'Elegant Filigree' },
+   106→  { value: 'modern', label: 'Modern Minimal' },
+   107→  { value: 'ornate', label: 'Ornate Baroque' },
+   108→  { value: 'simple', label: 'Simple Line' },
+   109→];
+   110→
+   111→const SEAL_TYPES = [
+   112→  { value: 'gold', label: 'Gold Seal', color: '#d4a017' },
+   113→  { value: 'silver', label: 'Silver Seal', color: '#a8a9ad' },
+   114→  { value: 'bronze', label: 'Bronze Seal', color: '#cd7f32' },
+   115→  { value: 'custom', label: 'Custom Seal', color: '#7c3aed' },
+   116→];
+   117→
+   118→const BG_TEMPLATES = [
+   119→  { value: 'classic', label: 'Classic', bg: 'linear-gradient(135deg, #fefefe 0%, #fafbfc 50%, #f1f5f9 100%)' },
+   120→  { value: 'modern', label: 'Modern', bg: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%)' },
+   121→  { value: 'elegant', label: 'Elegant', bg: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 50%, #fde68a 100%)' },
+   122→  { value: 'minimal', label: 'Minimal', bg: 'linear-gradient(135deg, #ffffff 0%, #fafafa 50%, #f5f5f5 100%)' },
+   123→  { value: 'bold', label: 'Bold', bg: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' },
+   124→];
+   125→
+   126→const TEMPLATE_LIBRARY = [
+   127→  {
+   128→    id: 'tpl-academic',
+   129→    name: 'Academic Excellence',
+   130→    category: 'Academic',
+   131→    description: 'Traditional academic certificate with formal styling and classic borders',
+   132→    bgTemplate: 'classic',
+   133→    borderStyle: 'classic',
+   134→    sealType: 'gold',
+   135→    fontFamily: 'Georgia, serif',
+   136→  },
+   137→  {
+   138→    id: 'tpl-professional',
+   139→    name: 'Professional Certification',
+   140→    category: 'Professional',
+   141→    description: 'Sleek professional design for industry certifications and credentials',
+   142→    bgTemplate: 'modern',
+   143→    borderStyle: 'modern',
+   144→    sealType: 'silver',
+   145→    fontFamily: 'system-ui, sans-serif',
+   146→  },
+   147→  {
+   148→    id: 'tpl-completion',
+   149→    name: 'Course Completion',
+   150→    category: 'Completion',
+   151→    description: 'Warm and inviting design for course completion acknowledgments',
+   152→    bgTemplate: 'elegant',
+   153→    borderStyle: 'elegant',
+   154→    sealType: 'bronze',
+   155→    fontFamily: 'Georgia, serif',
+   156→  },
+   157→  {
+   158→    id: 'tpl-achievement',
+   159→    name: 'Outstanding Achievement',
+   160→    category: 'Achievement',
+   161→    description: 'Bold design celebrating exceptional accomplishments',
+   162→    bgTemplate: 'bold',
+   163→    borderStyle: 'ornate',
+   164→    sealType: 'gold',
+   165→    fontFamily: "'Brush Script MT', 'Segoe Script', cursive",
+   166→  },
+   167→  {
+   168→    id: 'tpl-participation',
+   169→    name: 'Participation Award',
+   170→    category: 'Participation',
+   171→    description: 'Clean and modern design for participation and attendance',
+   172→    bgTemplate: 'minimal',
+   173→    borderStyle: 'simple',
+   174→    sealType: 'silver',
+   175→    fontFamily: 'system-ui, sans-serif',
+   176→  },
+   177→  {
+   178→    id: 'tpl-excellence',
+   179→    name: 'Excellence Award',
+   180→    category: 'Excellence',
+   181→    description: 'Premium design for top-tier excellence recognition',
+   182→    bgTemplate: 'elegant',
+   183→    borderStyle: 'ornate',
+   184→    sealType: 'gold',
+   185→    fontFamily: 'Georgia, serif',
+   186→  },
+   187→];
+   188→
+   189→// ---- Mock Data ----
+   190→const defaultElements: CertElement[] = [
+   191→  { id: 'el-1', type: 'text', label: 'Header', x: 50, y: 10, fontSize: 28, fontWeight: 'bold', color: '#1e293b', value: 'Certificate of Completion', fontFamily: 'Georgia, serif', size: 'XL', align: 'center' },
+   192→  { id: 'el-2', type: 'text', label: 'Subheader', x: 50, y: 22, fontSize: 14, fontWeight: 'normal', color: '#64748b', value: 'This is to certify that', fontFamily: 'system-ui, sans-serif', size: 'M', align: 'center' },
+   193→  { id: 'el-3', type: 'text', label: 'Recipient Name', x: 50, y: 35, fontSize: 24, fontWeight: 'bold', color: '#059669', value: '{{recipient_name}}', fontFamily: 'Georgia, serif', size: 'L', align: 'center' },
+   194→  { id: 'el-4', type: 'text', label: 'Course Label', x: 50, y: 48, fontSize: 12, fontWeight: 'normal', color: '#64748b', value: 'has successfully completed the course', fontFamily: 'system-ui, sans-serif', size: 'S', align: 'center' },
+   195→  { id: 'el-5', type: 'text', label: 'Course Name', x: 50, y: 58, fontSize: 20, fontWeight: 'bold', color: '#7c3aed', value: '{{course_name}}', fontFamily: 'system-ui, sans-serif', size: 'L', align: 'center' },
+   196→  { id: 'el-6', type: 'date', label: 'Issue Date', x: 30, y: 75, fontSize: 12, fontWeight: 'normal', color: '#475569', value: '{{issue_date}}', fontFamily: 'system-ui, sans-serif', size: 'S', align: 'left' },
+   197→  { id: 'el-7', type: 'text', label: 'Verification', x: 70, y: 75, fontSize: 10, fontWeight: 'normal', color: '#94a3b8', value: 'Verification: {{verification_code}}', fontFamily: "'Courier New', monospace", size: 'S', align: 'right' },
+   198→  { id: 'el-8', type: 'signature_line', label: 'Signature Line', x: 70, y: 85, fontSize: 12, fontWeight: 'normal', color: '#475569', value: 'Instructor Signature', fontFamily: 'system-ui, sans-serif', size: 'S', align: 'center' },
+   199→  { id: 'el-9', type: 'qr_code', label: 'QR Code', x: 88, y: 72, fontSize: 12, fontWeight: 'normal', color: '#000', value: 'QR Verification', fontFamily: 'system-ui, sans-serif', size: 'S', align: 'center' },
+   200→  { id: 'el-10', type: 'image', label: 'Tenant Logo', x: 50, y: 5, fontSize: 12, fontWeight: 'normal', color: '#000', value: 'NextGen LMS', fontFamily: 'system-ui, sans-serif', size: 'S', align: 'center' },
+   201→];
+   202→
+   203→const demoTemplates: CertTemplate[] = [
+   204→  {
+   205→    id: 'cert-tpl-1',
+   206→    tenantId: 'demo-tenant-1',
+   207→    name: 'Classic Completion Certificate',
+   208→    template: 'classic',
+   209→    backgroundUrl: '',
+   210→    isActive: true,
+   211→    bg_color: '#fefefe',
+   212→    font_family: 'Georgia, serif',
+   213→    width: 800,
+   214→    height: 600,
+   215→    borderStyle: 'classic',
+   216→    sealType: 'gold',
+   217→    hasWatermark: false,
+   218→    backgroundTemplate: 'classic',
+   219→    elements: defaultElements,
+   220→  },
+   221→  {
+   222→    id: 'cert-tpl-2',
+   223→    tenantId: 'demo-tenant-1',
+   224→    name: 'Modern Achievement Award',
+   225→    template: 'modern',
+   226→    backgroundUrl: '',
+   227→    isActive: true,
+   228→    bg_color: '#f8fafc',
+   229→    font_family: 'system-ui, sans-serif',
+   230→    width: 800,
+   231→    height: 600,
+   232→    borderStyle: 'modern',
+   233→    sealType: 'silver',
+   234→    hasWatermark: false,
+   235→    backgroundTemplate: 'modern',
+   236→    elements: defaultElements.map(el => ({
+   237→      ...el,
+   238→      color: el.type === 'text' && el.label === 'Header' ? '#7c3aed' : el.color,
+   239→      value: el.label === 'Header' ? 'Achievement Award' : el.value,
+   240→    })),
+   241→  },
+   242→  {
+   243→    id: 'cert-tpl-3',
+   244→    tenantId: 'demo-tenant-1',
+   245→    name: 'Professional Certification',
+   246→    template: 'professional',
+   247→    backgroundUrl: '',
+   248→    isActive: false,
+   249→    bg_color: '#0f172a',
+   250→    font_family: 'system-ui, sans-serif',
+   251→    width: 800,
+   252→    height: 600,
+   253→    borderStyle: 'ornate',
+   254→    sealType: 'gold',
+   255→    hasWatermark: true,
+   256→    backgroundTemplate: 'bold',
+   257→    elements: defaultElements.map(el => ({
+   258→      ...el,
+   259→      color: el.label === 'Header' ? '#f8fafc' :
+   260→             el.label === 'Recipient Name' ? '#10b981' :
+   261→             el.label === 'Course Name' ? '#a78bfa' :
+   262→             el.color?.startsWith('#64748b') ? '#94a3b8' :
+   263→             el.color?.startsWith('#475569') ? '#94a3b8' :
+   264→             el.color,
+   265→      value: el.label === 'Header' ? 'Professional Certification' : el.value,
+   266→    })),
+   267→  },
+   268→];
+   269→
+   270→const demoIssuedCerts: IssuedCert[] = [
+   271→  {
+   272→    id: 'award-1', userId: 'user-2', certificateId: 'cert-tpl-1', tenantId: 'demo-tenant-1', courseId: 'course-1',
+   273→    verificationCode: 'NG-LMS-2024-A1B2C3', issuedAt: '2024-09-15T00:00:00Z',
+   274→    recipientName: 'Emma Rodriguez', courseName: 'Advanced React & Next.js Masterclass', certName: 'Classic Completion Certificate',
+   275→    status: 'verified',
+   276→  },
+   277→  {
+   278→    id: 'award-2', userId: 'user-3', certificateId: 'cert-tpl-1', tenantId: 'demo-tenant-1', courseId: 'course-2',
+   279→    verificationCode: 'NG-LMS-2024-D4E5F6', issuedAt: '2024-09-20T00:00:00Z',
+   280→    recipientName: 'David Park', courseName: 'AI-Powered Full Stack Development', certName: 'Classic Completion Certificate',
+   281→    status: 'verified',
+   282→  },
+   283→  {
+   284→    id: 'award-3', userId: 'user-5', certificateId: 'cert-tpl-2', tenantId: 'demo-tenant-1', courseId: 'course-4',
+   285→    verificationCode: 'NG-LMS-2024-G7H8I9', issuedAt: '2024-10-01T00:00:00Z',
+   286→    recipientName: 'Lisa Wang', courseName: 'Data Visualization & Analytics', certName: 'Modern Achievement Award',
+   287→    status: 'pending',
+   288→  },
+   289→  {
+   290→    id: 'award-4', userId: 'user-6', certificateId: 'cert-tpl-1', tenantId: 'demo-tenant-1', courseId: 'course-1',
+   291→    verificationCode: 'NG-LMS-2024-J0K1L2', issuedAt: '2024-10-05T00:00:00Z',
+   292→    recipientName: 'Alex Johnson', courseName: 'Advanced React & Next.js Masterclass', certName: 'Classic Completion Certificate',
+   293→    status: 'verified',
+   294→  },
+   295→  {
+   296→    id: 'award-5', userId: 'user-7', certificateId: 'cert-tpl-2', tenantId: 'demo-tenant-1', courseId: 'course-3',
+   297→    verificationCode: 'NG-LMS-2024-M3N4O5', issuedAt: '2024-10-10T00:00:00Z',
+   298→    recipientName: 'Jordan Lee', courseName: 'System Design for Senior Engineers', certName: 'Modern Achievement Award',
+   299→    status: 'revoked',
+   300→  },
+   301→  {
+   302→    id: 'award-6', userId: 'user-8', certificateId: 'cert-tpl-1', tenantId: 'demo-tenant-1', courseId: 'course-5',
+   303→    verificationCode: 'NG-LMS-2024-P6Q7R8', issuedAt: '2024-10-12T00:00:00Z',
+   304→    recipientName: 'Priya Sharma', courseName: 'UX/UI Design Principles', certName: 'Classic Completion Certificate',
+   305→    status: 'verified',
+   306→  },
+   307→  {
+   308→    id: 'award-7', userId: 'user-9', certificateId: 'cert-tpl-3', tenantId: 'demo-tenant-1', courseId: 'course-2',
+   309→    verificationCode: 'NG-LMS-2024-S9T0U1', issuedAt: '2024-11-01T00:00:00Z',
+   310→    recipientName: 'Marcus Chen', courseName: 'AI-Powered Full Stack Development', certName: 'Professional Certification',
+   311→    status: 'pending',
+   312→  },
+   313→  {
+   314→    id: 'award-8', userId: 'user-10', certificateId: 'cert-tpl-2', tenantId: 'demo-tenant-1', courseId: 'course-4',
+   315→    verificationCode: 'NG-LMS-2024-V2W3X4', issuedAt: '2024-11-15T00:00:00Z',
+   316→    recipientName: 'Sofia Anderson', courseName: 'Data Visualization & Analytics', certName: 'Modern Achievement Award',
+   317→    status: 'verified',
+   318→  },
+   319→];
+   320→
+   321→const MONTHLY_ISSUANCE = [
+   322→  { month: 'Jun', count: 2 },
+   323→  { month: 'Jul', count: 4 },
+   324→  { month: 'Aug', count: 3 },
+   325→  { month: 'Sep', count: 5 },
+   326→  { month: 'Oct', count: 4 },
+   327→  { month: 'Nov', count: 6 },
+   328→  { month: 'Dec', count: 8 },
+   329→];
+   330→
+   331→// ---- Helper: Element Icon ----
+   332→function ElementIcon({ type }: { type: CertElement['type'] }) {
+   333→  switch (type) {
+   334→    case 'text': return <Type className="h-4 w-4" />;
+   335→    case 'image': return <ImageIcon className="h-4 w-4" />;
+   336→    case 'date': return <Calendar className="h-4 w-4" />;
+   337→    case 'qr_code': return <QrCode className="h-4 w-4" />;
+   338→    case 'signature_line': return <PenTool className="h-4 w-4" />;
+   339→    default: return <FileText className="h-4 w-4" />;
+   340→  }
+   341→}
+   342→
+   343→// ---- Helper: Animated Counter ----
+   344→function AnimatedCounter({ target, duration = 1500 }: { target: number; duration?: number }) {
+   345→  const [count, setCount] = useState(0);
+   346→  const prevTarget = useRef(0);
+   347→
+   348→  useEffect(() => {
+   349→    if (target === prevTarget.current) return;
+   350→    prevTarget.current = target;
+   351→    let start = 0;
+   352→    const step = target / (duration / 16);
+   353→    const timer = setInterval(() => {
+   354→      start += step;
+   355→      if (start >= target) {
+   356→        setCount(target);
+   357→        clearInterval(timer);
+   358→      } else {
+   359→        setCount(Math.floor(start));
+   360→      }
+   361→    }, 16);
+   362→    return () => clearInterval(timer);
+   363→  }, [target, duration]);
+   364→
+   365→  return <span>{count}</span>;
+   366→}
+   367→
+   368→// ---- Helper: Certificate Border Renderer ----
+   369→function CertificateBorder({ style, isDark }: { style: string; isDark: boolean }) {
+   370→  const c = isDark ? '#475569' : '#c7d2da';
+   371→  const c2 = isDark ? '#334155' : '#d4dce4';
+   372→  const c3 = isDark ? '#64748b' : '#94a3b8';
+   373→
+   374→  switch (style) {
+   375→    case 'classic':
+   376→      return (
+   377→        <>
+   378→          <div className="absolute inset-3 border-2 rounded-sm" style={{ borderColor: c }}>
+   379→            <div className="absolute inset-1.5 border rounded-sm" style={{ borderColor: c2 }} />
+   380→          </div>
+   381→        </>
+   382→      );
+   383→    case 'elegant':
+   384→      return (
+   385→        <div className="absolute inset-3 border-2 rounded-lg" style={{ borderColor: c, borderStyle: 'double' }}>
+   386→          <div className="absolute inset-2 border rounded-md" style={{ borderColor: c3, borderStyle: 'dotted' }} />
+   387→        </div>
+   388→      );
+   389→    case 'modern':
+   390→      return (
+   391→        <>
+   392→          <div className="absolute top-3 left-3 right-3 h-0.5" style={{ background: `linear-gradient(to right, transparent, ${c}, transparent)` }} />
+   393→          <div className="absolute bottom-3 left-3 right-3 h-0.5" style={{ background: `linear-gradient(to right, transparent, ${c}, transparent)` }} />
+   394→          <div className="absolute left-3 top-3 bottom-3 w-0.5" style={{ background: `linear-gradient(to bottom, transparent, ${c}, transparent)` }} />
+   395→          <div className="absolute right-3 top-3 bottom-3 w-0.5" style={{ background: `linear-gradient(to bottom, transparent, ${c}, transparent)` }} />
+   396→        </>
+   397→      );
+   398→    case 'ornate':
+   399→      return (
+   400→        <>
+   401→          <div className="absolute inset-2 border-4 rounded-sm" style={{ borderColor: c }}>
+   402→            <div className="absolute inset-1.5 border-2 rounded-sm" style={{ borderColor: c2 }}>
+   403→              <div className="absolute inset-1 border rounded-sm" style={{ borderColor: c3 }} />
+   404→            </div>
+   405→          </div>
+   406→          {/* Corner ornaments */}
+   407→          {['top-4 left-4', 'top-4 right-4', 'bottom-4 left-4', 'bottom-4 right-4'].map((pos, i) => (
+   408→            <div key={i} className={`absolute ${pos} w-5 h-5`}>
+   409→              <div className={`w-full h-full ${isDark ? 'text-amber-400/50' : 'text-amber-600/40'}`}>
+   410→                <Sparkles className="h-4 w-4" />
+   411→              </div>
+   412→            </div>
+   413→          ))}
+   414→        </>
+   415→      );
+   416→    case 'simple':
+   417→    default:
+   418→      return (
+   419→        <div className="absolute inset-4 border rounded-sm" style={{ borderColor: c2 }} />
+   420→      );
+   421→  }
+   422→}
+   423→
+   424→// ---- Helper: Seal Renderer ----
+   425→function SealRenderer({ type, isDark }: { type: string; isDark: boolean }) {
+   426→  const seal = SEAL_TYPES.find(s => s.value === type) || SEAL_TYPES[0];
+   427→  return (
+   428→    <div className="flex flex-col items-center gap-0.5">
+   429→      <div
+   430→        className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
+   431→        style={{
+   432→          background: `conic-gradient(from 0deg, ${seal.color}, ${seal.color}dd, ${seal.color}, ${seal.color}dd, ${seal.color})`,
+   433→          border: `2px solid ${seal.color}`,
+   434→        }}
+   435→      >
+   436→        <div className={`w-9 h-9 rounded-full flex items-center justify-center ${isDark ? 'bg-slate-900' : 'bg-white/90'}`}>
+   437→          <Star className="h-5 w-5" style={{ color: seal.color }} />
+   438→        </div>
+   439→      </div>
+   440→      <span className="text-[6px] font-bold uppercase tracking-wider" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>Certified</span>
+   441→    </div>
+   442→  );
+   443→}
+   444→
+   445→// ==========================
+   446→// STATS DASHBOARD
+   447→// ==========================
+   448→function StatsDashboard() {
+   449→  const stats = [
+   450→    {
+   451→      label: 'Total Issued',
+   452→      value: demoIssuedCerts.length,
+   453→      icon: Award,
+   454→      trend: 12,
+   455→      trendLabel: 'vs last month',
+   456→      gradient: 'from-amber-500/10 to-amber-600/5',
+   457→      iconBg: 'bg-amber-100 dark:bg-amber-900/30',
+   458→      iconColor: 'text-amber-600 dark:text-amber-400',
+   459→    },
+   460→    {
+   461→      label: 'This Month',
+   462→      value: 3,
+   463→      icon: Calendar,
+   464→      trend: 8,
+   465→      trendLabel: 'vs last month',
+   466→      gradient: 'from-emerald-500/10 to-emerald-600/5',
+   467→      iconBg: 'bg-emerald-100 dark:bg-emerald-900/30',
+   468→      iconColor: 'text-emerald-600 dark:text-emerald-400',
+   469→    },
+   470→    {
+   471→      label: 'Verification Rate',
+   472→      value: 87,
+   473→      icon: Shield,
+   474→      trend: 5,
+   475→      trendLabel: 'improvement',
+   476→      gradient: 'from-violet-500/10 to-violet-600/5',
+   477→      iconBg: 'bg-violet-100 dark:bg-violet-900/30',
+   478→      iconColor: 'text-violet-600 dark:text-violet-400',
+   479→      suffix: '%',
+   480→    },
+   481→    {
+   482→      label: 'Top Course',
+   483→      value: 0,
+   484→      icon: BookOpen,
+   485→      trend: 0,
+   486→      trendLabel: '',
+   487→      gradient: 'from-rose-500/10 to-rose-600/5',
+   488→      iconBg: 'bg-rose-100 dark:bg-rose-900/30',
+   489→      iconColor: 'text-rose-600 dark:text-rose-400',
+   490→      textValue: 'Advanced React',
+   491→    },
+   492→  ];
+   493→
+   494→  return (
+   495→    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   496→      {stats.map((stat, i) => (
+   497→        <motion.div
+   498→          key={stat.label}
+   499→          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+   500→          animate={{ opacity: 1, y: 0, scale: 1 }}
+   501→          transition={{ delay: i * 0.1, duration: 0.4 }}
+   502→        >
+   503→          <Card className={`relative overflow-hidden bg-gradient-to-br ${stat.gradient} backdrop-blur-sm border-white/20 dark:border-white/10`}>
+   504→            <CardContent className="p-4">
+   505→              <div className="flex items-start justify-between mb-3">
+   506→                <div className={`p-2.5 rounded-xl ${stat.iconBg}`}>
+   507→                  <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
+   508→                </div>
+   509→                {stat.trend !== 0 && (
+   510→                  <div className={`flex items-center gap-0.5 text-xs font-medium ${stat.trend > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+   511→                    {stat.trend > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+   512→                    {stat.trend > 0 ? '+' : ''}{stat.trend}%
+   513→                  </div>
+   514→                )}
+   515→              </div>
+   516→              <div className="text-2xl font-bold text-foreground">
+   517→                {stat.textValue || <AnimatedCounter target={stat.value} />}
+   518→                {stat.suffix && <span className="text-lg">{stat.suffix}</span>}
+   519→              </div>
+   520→              <div className="text-xs text-muted-foreground mt-0.5">{stat.label}</div>
+   521→              {stat.trendLabel && (
+   522→                <div className="text-[10px] text-muted-foreground/60 mt-0.5">{stat.trendLabel}</div>
+   523→              )}
+   524→            </CardContent>
+   525→            {/* Glassmorphism shine effect */}
+   526→            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-white/10 to-transparent rounded-bl-full" />
+   527→          </Card>
+   528→        </motion.div>
+   529→      ))}
+   530→
+   531→      {/* Monthly trend chart card */}
+   532→      <motion.div
+   533→        className="col-span-2 lg:col-span-4"
+   534→        initial={{ opacity: 0, y: 20 }}
+   535→        animate={{ opacity: 1, y: 0 }}
+   536→        transition={{ delay: 0.5, duration: 0.4 }}
+   537→      >
+   538→        <Card className="bg-gradient-to-br from-amber-500/5 to-amber-600/5 backdrop-blur-sm border-white/20 dark:border-white/10">
+   539→          <CardContent className="p-4">
+   540→            <div className="flex items-center justify-between mb-3">
+   541→              <div>
+   542→                <h3 className="text-sm font-semibold text-foreground">Monthly Issuance Trend</h3>
+   543→                <p className="text-xs text-muted-foreground">Certificates issued per month</p>
+   544→              </div>
+   545→              <div className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+   546→                <TrendingUp className="h-3.5 w-3.5" /> +33% growth
+   547→              </div>
+   548→            </div>
+   549→            <div className="flex items-end gap-2 h-20">
+   550→              {MONTHLY_ISSUANCE.map((d, i) => (
+   551→                <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
+   552→                  <motion.div
+   553→                    className="w-full rounded-t-md bg-gradient-to-t from-amber-500 to-amber-300 dark:from-amber-600 dark:to-amber-400"
+   554→                    initial={{ height: 0 }}
+   555→                    animate={{ height: `${(d.count / 8) * 100}%` }}
+   556→                    transition={{ delay: 0.6 + i * 0.08, duration: 0.5 }}
+   557→                    style={{ minHeight: '4px' }}
+   558→                  />
+   559→                  <span className="text-[9px] text-muted-foreground">{d.month}</span>
+   560→                </div>
+   561→              ))}
+   562→            </div>
+   563→          </CardContent>
+   564→        </Card>
+   565→      </motion.div>
+   566→    </div>
+   567→  );
+   568→}
+   569→
+   570→// ==========================
+   571→// TEMPLATE LIBRARY
+   572→// ==========================
+   573→function TemplateLibrary({ onUseTemplate }: { onUseTemplate: (arg: typeof TEMPLATE_LIBRARY[number]) => void }) {
+   574→  const [previewId, setPreviewId] = useState<string | null>(null);
+   575→  const [confirmId, setConfirmId] = useState<string | null>(null);
+   576→
+   577→  const categoryColors: Record<string, string> = {
+   578→    Academic: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+   579→    Professional: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
+   580→    Completion: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+   581→    Achievement: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+   582→    Participation: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
+   583→    Excellence: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+   584→  };
+   585→
+   586→  const previewTemplate = TEMPLATE_LIBRARY.find(t => t.id === previewId);
+   587→
+   588→  return (
+   589→    <div className="space-y-6">
+   590→      <div>
+   591→        <h2 className="text-2xl font-bold text-foreground">Template Library</h2>
+   592→        <p className="text-muted-foreground text-sm mt-1">Browse and use professionally designed certificate templates</p>
+   593→      </div>
+   594→
+   595→      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+   596→        {TEMPLATE_LIBRARY.map((tpl, idx) => (
+   597→          <motion.div
+   598→            key={tpl.id}
+   599→            initial={{ opacity: 0, y: 20 }}
+   600→            animate={{ opacity: 1, y: 0 }}
+   601→            transition={{ delay: idx * 0.1 }}
+   602→            whileHover={{ y: -4 }}
+   603→          >
+   604→            <Card className="overflow-hidden group h-full flex flex-col shadow-sm hover:shadow-xl transition-all duration-300 border-white/30 dark:border-white/10">
+   605→              {/* Thumbnail preview */}
+   606→              <div
+   607→                className="h-40 relative overflow-hidden cursor-pointer"
+   608→                style={{ background: BG_TEMPLATES.find(b => b.value === tpl.bgTemplate)?.bg }}
+   609→                onClick={() => setPreviewId(tpl.id)}
+   610→              >
+   611→                <CertificateBorder style={tpl.borderStyle} isDark={tpl.bgTemplate === 'bold'} />
+   612→                {/* Mini certificate content */}
+   613→                <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center pointer-events-none">
+   614→                  <Award className={`h-5 w-5 mb-1 ${tpl.bgTemplate === 'bold' ? 'text-amber-400' : 'text-amber-600'}`} />
+   615→                  <div className={`text-[10px] font-bold mb-0.5 ${tpl.bgTemplate === 'bold' ? 'text-slate-100' : 'text-slate-800'}`} style={{ fontFamily: tpl.fontFamily }}>
+   616→                    {tpl.name}
+   617→                  </div>
+   618→                  <div className={`text-[8px] font-semibold ${tpl.bgTemplate === 'bold' ? 'text-emerald-400' : 'text-emerald-600'}`}>
+   619→                    Jane Doe
+   620→                  </div>
+   621→                  <div className={`text-[7px] mt-0.5 ${tpl.bgTemplate === 'bold' ? 'text-violet-400' : 'text-violet-600'}`}>
+   622→                    Course Name
+   623→                  </div>
+   624→                </div>
+   625→                {/* Seal */}
+   626→                <div className="absolute bottom-2 right-2 pointer-events-none">
+   627→                  <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: SEAL_TYPES.find(s => s.value === tpl.sealType)?.color }}>
+   628→                    <Star className="h-3 w-3 text-white" />
+   629→                  </div>
+   630→                </div>
+   631→                {/* Hover overlay */}
+   632→                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all duration-300 flex items-center justify-center">
+   633→                  <motion.div
+   634→                    initial={{ opacity: 0, scale: 0.8 }}
+   635→                    whileHover={{ opacity: 1, scale: 1 }}
+   636→                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+   637→                  >
+   638→                    <Eye className="h-8 w-8 text-white drop-shadow-lg" />
+   639→                  </motion.div>
+   640→                </div>
+   641→              </div>
+   642→
+   643→              <CardContent className="p-4 flex-1 flex flex-col">
+   644→                <div className="flex items-center gap-2 mb-2">
+   645→                  <Badge className={`text-[10px] ${categoryColors[tpl.category] || ''}`}>{tpl.category}</Badge>
+   646→                </div>
+   647→                <h3 className="font-semibold text-foreground mb-1">{tpl.name}</h3>
+   648→                <p className="text-xs text-muted-foreground mb-3 flex-1">{tpl.description}</p>
+   649→                <div className="flex items-center gap-2 mt-auto">
+   650→                  <Button
+   651→                    size="sm"
+   652→                    variant="outline"
+   653→                    className="flex-1 gap-1"
+   654→                    onClick={() => setPreviewId(tpl.id)}
+   655→                  >
+   656→                    <Eye className="h-3.5 w-3.5" /> Preview
+   657→                  </Button>
+   658→                  <Button
+   659→                    size="sm"
+   660→                    className="flex-1 gap-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white"
+   661→                    onClick={() => setConfirmId(tpl.id)}
+   662→                  >
+   663→                    <Sparkles className="h-3.5 w-3.5" /> Use
+   664→                  </Button>
+   665→                </div>
+   666→              </CardContent>
+   667→            </Card>
+   668→          </motion.div>
+   669→        ))}
+   670→      </div>
+   671→
+   672→      {/* Preview Dialog */}
+   673→      <Dialog open={!!previewId} onOpenChange={() => setPreviewId(null)}>
+   674→        <DialogContent className="max-w-2xl">
+   675→          <DialogHeader>
+   676→            <DialogTitle className="flex items-center gap-2">
+   677→              <Award className="h-5 w-5 text-amber-500" /> {previewTemplate?.name}
+   678→            </DialogTitle>
+   679→            <DialogDescription>{previewTemplate?.description}</DialogDescription>
+   680→          </DialogHeader>
+   681→          <div
+   682→            className="relative rounded-lg overflow-hidden shadow-2xl"
+   683→            style={{
+   684→              aspectRatio: '800/600',
+   685→              background: BG_TEMPLATES.find(b => b.value === previewTemplate?.bgTemplate)?.bg,
+   686→            }}
+   687→          >
+   688→            <CertificateBorder style={previewTemplate?.borderStyle || 'classic'} isDark={previewTemplate?.bgTemplate === 'bold'} />
+   689→            <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
+   690→              <Award className={`h-8 w-8 mb-2 ${previewTemplate?.bgTemplate === 'bold' ? 'text-amber-400' : 'text-amber-600'}`} />
+   691→              <div className={`text-lg font-bold mb-1 ${previewTemplate?.bgTemplate === 'bold' ? 'text-slate-100' : 'text-slate-800'}`} style={{ fontFamily: previewTemplate?.fontFamily }}>
+   692→                {previewTemplate?.name}
+   693→              </div>
+   694→              <div className={`text-sm mb-0.5 ${previewTemplate?.bgTemplate === 'bold' ? 'text-slate-300' : 'text-slate-500'}`}>This is to certify that</div>
+   695→              <div className={`text-xl font-bold ${previewTemplate?.bgTemplate === 'bold' ? 'text-emerald-400' : 'text-emerald-600'}`}>Jane Doe</div>
+   696→              <div className={`text-sm mt-1 ${previewTemplate?.bgTemplate === 'bold' ? 'text-slate-300' : 'text-slate-500'}`}>has successfully completed</div>
+   697→              <div className={`text-base font-semibold mt-0.5 ${previewTemplate?.bgTemplate === 'bold' ? 'text-violet-400' : 'text-violet-600'}`}>Advanced Course Title</div>
+   698→            </div>
+   699→          </div>
+   700→          <DialogFooter>
+   701→            <Button variant="outline" onClick={() => setPreviewId(null)}>Close</Button>
+   702→            <Button className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white gap-2" onClick={() => {
+   703→              if (previewTemplate) onUseTemplate(previewTemplate);
+   704→              setPreviewId(null);
+   705→            }}>
+   706→              <Sparkles className="h-4 w-4" /> Use This Template
+   707→            </Button>
+   708→          </DialogFooter>
+   709→        </DialogContent>
+   710→      </Dialog>
+   711→
+   712→      {/* Confirm Use Dialog */}
+   713→      <Dialog open={!!confirmId} onOpenChange={() => setConfirmId(null)}>
+   714→        <DialogContent className="max-w-sm">
+   715→          <DialogHeader>
+   716→            <DialogTitle>Use Template</DialogTitle>
+   717→            <DialogDescription>
+   718→              This will create a new certificate template based on &ldquo;{TEMPLATE_LIBRARY.find(t => t.id === confirmId)?.name}&rdquo;. Continue?
+   719→            </DialogDescription>
+   720→          </DialogHeader>
+   721→          <DialogFooter>
+   722→            <Button variant="outline" onClick={() => setConfirmId(null)}>Cancel</Button>
+   723→            <Button className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white gap-2" onClick={() => {
+   724→              const tpl = TEMPLATE_LIBRARY.find(t => t.id === confirmId);
+   725→              if (tpl) onUseTemplate(tpl);
+   726→              setConfirmId(null);
+   727→            }}>
+   728→              <CheckCircle2 className="h-4 w-4" /> Confirm
+   729→            </Button>
+   730→          </DialogFooter>
+   731→        </DialogContent>
+   732→      </Dialog>
+   733→    </div>
+   734→  );
+   735→}
+   736→
+   737→// ==========================
+   738→// CERTIFICATE TEMPLATES LIST
+   739→// ==========================
+   740→function TemplatesList({
+   741→  templates,
+   742→  onEdit,
+   743→  onCreateNew,
+   744→}: {
+   745→  templates: CertTemplate[];
+   746→  onEdit: (arg: CertTemplate) => void;
+   747→  onCreateNew: () => void;
+   748→}) {
+   749→  const [search, setSearch] = useState('');
+   750→
+   751→  const filtered = templates.filter(t =>
+   752→    t.name.toLowerCase().includes(search.toLowerCase())
+   753→  );
+   754→
+   755→  return (
+   756→    <div className="space-y-6">
+   757→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+   758→        <div>
+   759→          <h2 className="text-2xl font-bold text-foreground">Certificate Templates</h2>
+   760→          <p className="text-muted-foreground text-sm mt-1">Design and manage certificate templates for your courses</p>
+   761→        </div>
+   762→        <Button onClick={onCreateNew} className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white gap-2 shadow-md">
+   763→          <Plus className="h-4 w-4" /> Create Template
+   764→        </Button>
+   765→      </div>
+   766→
+   767→      <div className="relative max-w-md">
+   768→        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   769→        <Input placeholder="Search templates..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+   770→      </div>
+   771→
+   772→      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+   773→        {filtered.map((template, idx) => {
+   774→          const isDark = template.bg_color === '#0f172a' || template.backgroundTemplate === 'bold';
+   775→          return (
+   776→            <motion.div
+   777→              key={template.id}
+   778→              initial={{ opacity: 0, y: 16 }}
+   779→              animate={{ opacity: 1, y: 0 }}
+   780→              transition={{ delay: idx * 0.08 }}
+   781→              whileHover={{ y: -4 }}
+   782→            >
+   783→              <Card className="overflow-hidden group hover:shadow-xl transition-all duration-300 h-full flex flex-col shadow-sm border-white/30 dark:border-white/10">
+   784→                {/* Certificate preview thumbnail */}
+   785→                <div
+   786→                  className="h-48 relative overflow-hidden cursor-pointer"
+   787→                  style={{
+   788→                    background: BG_TEMPLATES.find(b => b.value === template.backgroundTemplate)?.bg ||
+   789→                      (template.bg_color === '#0f172a'
+   790→                        ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)'
+   791→                        : template.bg_color === '#fefefe'
+   792→                        ? 'linear-gradient(135deg, #fefefe 0%, #f1f5f9 100%)'
+   793→                        : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)'),
+   794→                  }}
+   795→                >
+   796→                  <CertificateBorder style={template.borderStyle || 'classic'} isDark={isDark} />
+   797→
+   798→                  {/* Preview text overlay */}
+   799→                  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
+   800→                    <div className="mb-1 opacity-70">
+   801→                      <Award className={`h-6 w-6 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
+   802→                    </div>
+   803→                    <div className={`text-xs font-bold mb-0.5 ${isDark ? 'text-slate-100' : 'text-slate-800'}`}
+   804→                      style={{ fontFamily: template.font_family }}>
+   805→                      {template.elements.find(e => e.label === 'Header')?.value ?? 'Certificate'}
+   806→                    </div>
+   807→                    <div className={`text-[8px] ${isDark ? 'text-emerald-400' : 'text-emerald-600'} font-semibold`}>
+   808→                      John Doe
+   809→                    </div>
+   810→                    <div className={`text-[7px] ${isDark ? 'text-violet-400' : 'text-violet-600'} font-medium mt-0.5`}>
+   811→                      Course Name
+   812→                    </div>
+   813→                  </div>
+   814→
+   815→                  {/* Seal preview */}
+   816→                  {template.sealType && (
+   817→                    <div className="absolute bottom-2 right-2">
+   818→                      <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: SEAL_TYPES.find(s => s.value === template.sealType)?.color }}>
+   819→                        <Star className="h-2.5 w-2.5 text-white" />
+   820→                      </div>
+   821→                    </div>
+   822→                  )}
+   823→
+   824→                  {/* Watermark indicator */}
+   825→                  {template.hasWatermark && (
+   826→                    <div className="absolute top-2 left-2">
+   827→                      <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-[9px] gap-0.5">
+   828→                        <Droplets className="h-2.5 w-2.5" /> WM
+   829→                      </Badge>
+   830→                    </div>
+   831→                  )}
+   832→
+   833→                  {/* Status badge */}
+   834→                  <div className="absolute top-3 right-3">
+   835→                    {template.isActive ? (
+   836→                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">Active</Badge>
+   837→                    ) : (
+   838→                      <Badge variant="outline" className="text-[10px] text-muted-foreground">Inactive</Badge>
+   839→                    )}
+   840→                  </div>
+   841→                </div>
+   842→
+   843→                <CardContent className="p-4 flex-1 flex flex-col">
+   844→                  <h3 className="font-semibold text-foreground mb-1">{template.name}</h3>
+   845→                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3 flex-wrap">
+   846→                    <Badge variant="outline" className="text-[10px]">{template.template}</Badge>
+   847→                    <span>{template.width}×{template.height}</span>
+   848→                    <span>{template.elements.length} elements</span>
+   849→                    {template.borderStyle && <span className="capitalize">{template.borderStyle}</span>}
+   850→                  </div>
+   851→                  <div className="flex items-center gap-2 mt-auto">
+   852→                    <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => onEdit(template)}>
+   853→                      <Edit3 className="h-3.5 w-3.5" /> Edit
+   854→                    </Button>
+   855→                    <TooltipProvider>
+   856→                      <Tooltip>
+   857→                        <TooltipTrigger asChild>
+   858→                          <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => { /* sample download */ }}>
+   859→                            <Download className="h-3.5 w-3.5" /> Sample
+   860→                          </Button>
+   861→                        </TooltipTrigger>
+   862→                        <TooltipContent>Download Sample</TooltipContent>
+   863→                      </Tooltip>
+   864→                    </TooltipProvider>
+   865→                    <TooltipProvider>
+   866→                      <Tooltip>
+   867→                        <TooltipTrigger asChild>
+   868→                          <Button size="sm" variant="outline" className="h-8 w-8 p-0">
+   869→                            <Eye className="h-3.5 w-3.5" />
+   870→                          </Button>
+   871→                        </TooltipTrigger>
+   872→                        <TooltipContent>Preview</TooltipContent>
+   873→                      </Tooltip>
+   874→                    </TooltipProvider>
+   875→                  </div>
+   876→                </CardContent>
+   877→              </Card>
+   878→            </motion.div>
+   879→          );
+   880→        })}
+   881→      </div>
+   882→    </div>
+   883→  );
+   884→}
+   885→
+   886→// ==========================
+   887→// CERTIFICATE BUILDER (Visual Template Designer)
+   888→// ==========================
+   889→function CertificateBuilder({
+   890→  template,
+   891→  onBack,
+   892→  onSave,
+   893→}: {
+   894→  template: CertTemplate;
+   895→  onBack: () => void;
+   896→  onSave: (t: CertTemplate) => void;
+   897→}) {
+   898→  const [form, setForm] = useState<CertTemplate>({ ...template, elements: template.elements.map(e => ({ ...e })) });
+   899→  const [selectedElement, setSelectedElement] = useState<string | null>(null);
+   900→  const [zoom, setZoom] = useState(75);
+   901→
+   902→  const updateField = useCallback(<K extends keyof CertTemplate>(key: K, value: CertTemplate[K]) => {
+   903→    setForm(prev => ({ ...prev, [key]: value }));
+   904→  }, []);
+   905→
+   906→  const updateElement = (id: string, updates: Partial<CertElement>) => {
+   907→    setForm(prev => ({
+   908→      ...prev,
+   909→      elements: prev.elements.map(el => el.id === id ? { ...el, ...updates } : el),
+   910→    }));
+   911→  };
+   912→
+   913→  const addElement = (type: CertElement['type']) => {
+   914→    const labels: Record<string, string> = { text: 'Text Block', image: 'Image', date: 'Date', qr_code: 'QR Code', signature_line: 'Signature Line' };
+   915→    const newEl: CertElement = {
+   916→      id: `el-${Date.now()}`,
+   917→      type,
+   918→      label: labels[type] ?? type,
+   919→      x: 50,
+   920→      y: 50,
+   921→      fontSize: 14,
+   922→      fontWeight: 'normal',
+   923→      color: '#1e293b',
+   924→      value: type === 'text' ? 'New Text' : type === 'date' ? '{{issue_date}}' : type === 'qr_code' ? 'QR Code' : type === 'signature_line' ? 'Signature' : 'Image',
+   925→      fontFamily: 'system-ui, sans-serif',
+   926→      size: 'M',
+   927→      align: 'center',
+   928→    };
+   929→    setForm(prev => ({ ...prev, elements: [...prev.elements, newEl] }));
+   930→    setSelectedElement(newEl.id);
+   931→  };
+   932→
+   933→  const removeElement = (id: string) => {
+   934→    setForm(prev => ({ ...prev, elements: prev.elements.filter(el => el.id !== id) }));
+   935→    if (selectedElement === id) setSelectedElement(null);
+   936→  };
+   937→
+   938→  const paletteItems: { type: CertElement['type']; icon: React.ReactNode; label: string }[] = [
+   939→    { type: 'text', icon: <Type className="h-4 w-4" />, label: 'Text' },
+   940→    { type: 'image', icon: <ImageIcon className="h-4 w-4" />, label: 'Image' },
+   941→    { type: 'date', icon: <Calendar className="h-4 w-4" />, label: 'Date' },
+   942→    { type: 'qr_code', icon: <QrCode className="h-4 w-4" />, label: 'QR Code' },
+   943→    { type: 'signature_line', icon: <PenTool className="h-4 w-4" />, label: 'Signature' },
+   944→  ];
+   945→
+   946→  const selectedEl = form.elements.find(el => el.id === selectedElement);
+   947→  const isDark = form.bg_color === '#0f172a' || form.backgroundTemplate === 'bold';
+   948→  const zoomLevels = [50, 75, 100, 150];
+   949→
+   950→  return (
+   951→    <div className="space-y-4">
+   952→      {/* Header */}
+   953→      <div className="flex items-center justify-between flex-wrap gap-2">
+   954→        <div className="flex items-center gap-3">
+   955→          <Button variant="ghost" size="icon" onClick={onBack}>
+   956→            <ChevronLeft className="h-5 w-5" />
+   957→          </Button>
+   958→          <div>
+   959→            <h2 className="text-2xl font-bold text-foreground">Visual Template Designer</h2>
+   960→            <p className="text-sm text-muted-foreground">{form.name || 'New Template'}</p>
+   961→          </div>
+   962→        </div>
+   963→        <div className="flex items-center gap-2">
+   964→          <Button variant="outline" onClick={onBack} className="gap-2">
+   965→            <X className="h-4 w-4" /> Cancel
+   966→          </Button>
+   967→          <Button className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white gap-2 shadow-md" onClick={() => onSave(form)}>
+   968→            <Save className="h-4 w-4" /> Save Template
+   969→          </Button>
+   970→        </div>
+   971→      </div>
+   972→
+   973→      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4" style={{ minHeight: '600px' }}>
+   974→        {/* Left panel: Settings + Element palette + Element list + Properties */}
+   975→        <div className="lg:col-span-3 space-y-3">
+   976→          {/* Template Settings */}
+   977→          <Card className="shadow-sm border-white/30 dark:border-white/10">
+   978→            <CardHeader className="pb-3">
+   979→              <CardTitle className="text-sm flex items-center gap-2">
+   980→                <Settings2 className="h-4 w-4 text-violet-600" /> Template Settings
+   981→              </CardTitle>
+   982→            </CardHeader>
+   983→            <CardContent className="space-y-3">
+   984→              <div className="space-y-1">
+   985→                <Label className="text-xs">Template Name</Label>
+   986→                <Input value={form.name} onChange={e => updateField('name', e.target.value)} className="h-8 text-sm" />
+   987→              </div>
+   988→              <div className="space-y-1">
+   989→                <Label className="text-xs">Background Template</Label>
+   990→                <Select value={form.backgroundTemplate || 'classic'} onValueChange={v => {
+   991→                  const bg = BG_TEMPLATES.find(b => b.value === v);
+   992→                  updateField('backgroundTemplate', v);
+   993→                  if (v === 'bold') updateField('bg_color', '#0f172a');
+   994→                  else if (v === 'elegant') updateField('bg_color', '#fef9e7');
+   995→                  else if (v === 'minimal') updateField('bg_color', '#ffffff');
+   996→                  else if (v === 'modern') updateField('bg_color', '#f8fafc');
+   997→                  else updateField('bg_color', '#fefefe');
+   998→                }}>
+   999→                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+  1000→                  <SelectContent>
+  1001→                    {BG_TEMPLATES.map(bg => (
+  1002→                      <SelectItem key={bg.value} value={bg.value}>{bg.label}</SelectItem>
+  1003→                    ))}
+  1004→                  </SelectContent>
+  1005→                </Select>
+  1006→              </div>
+  1007→              <div className="space-y-1">
+  1008→                <Label className="text-xs">Base Font</Label>
+  1009→                <Select value={form.font_family} onValueChange={v => updateField('font_family', v)}>
+  1010→                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+  1011→                  <SelectContent>
+  1012→                    {FONT_FAMILIES.map(f => (
+  1013→                      <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+  1014→                    ))}
+  1015→                  </SelectContent>
+  1016→                </Select>
+  1017→              </div>
+  1018→              <div className="space-y-1">
+  1019→                <Label className="text-xs">Border Style</Label>
+  1020→                <Select value={form.borderStyle || 'classic'} onValueChange={v => updateField('borderStyle', v)}>
+  1021→                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+  1022→                  <SelectContent>
+  1023→                    {BORDER_STYLES.map(b => (
+  1024→                      <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
+  1025→                    ))}
+  1026→                  </SelectContent>
+  1027→                </Select>
+  1028→              </div>
+  1029→              <div className="space-y-1">
+  1030→                <Label className="text-xs">Seal / Badge</Label>
+  1031→                <Select value={form.sealType || 'gold'} onValueChange={v => updateField('sealType', v)}>
+  1032→                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+  1033→                  <SelectContent>
+  1034→                    {SEAL_TYPES.map(s => (
+  1035→                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+  1036→                    ))}
+  1037→                  </SelectContent>
+  1038→                </Select>
+  1039→              </div>
+  1040→              <div className="flex items-center justify-between">
+  1041→                <Label className="text-xs flex items-center gap-1">
+  1042→                  <Droplets className="h-3 w-3" /> Watermark
+  1043→                </Label>
+  1044→                <Switch checked={form.hasWatermark || false} onCheckedChange={v => updateField('hasWatermark', v)} />
+  1045→              </div>
+  1046→              <div className="flex items-center justify-between">
+  1047→                <Label className="text-xs">Active</Label>
+  1048→                <Switch checked={form.isActive} onCheckedChange={v => updateField('isActive', v)} />
+  1049→              </div>
+  1050→            </CardContent>
+  1051→          </Card>
+  1052→
+  1053→          {/* Element palette */}
+  1054→          <Card className="shadow-sm border-white/30 dark:border-white/10">
+  1055→            <CardHeader className="pb-3">
+  1056→              <CardTitle className="text-sm flex items-center gap-2">
+  1057→                <Layout className="h-4 w-4 text-emerald-600" /> Add Elements
+  1058→              </CardTitle>
+  1059→            </CardHeader>
+  1060→            <CardContent>
+  1061→              <div className="grid grid-cols-2 gap-2">
+  1062→                {paletteItems.map(item => (
+  1063→                  <Button
+  1064→                    key={item.type}
+  1065→                    variant="outline"
+  1066→                    size="sm"
+  1067→                    className="flex items-center gap-1.5 h-9 text-xs"
+  1068→                    onClick={() => addElement(item.type)}
+  1069→                  >
+  1070→                    {item.icon} {item.label}
+  1071→                  </Button>
+  1072→                ))}
+  1073→              </div>
+  1074→            </CardContent>
+  1075→          </Card>
+  1076→
+  1077→          {/* Element list */}
+  1078→          <Card className="shadow-sm border-white/30 dark:border-white/10">
+  1079→            <CardHeader className="pb-3">
+  1080→              <CardTitle className="text-sm">Elements ({form.elements.length})</CardTitle>
+  1081→            </CardHeader>
+  1082→            <CardContent className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar">
+  1083→              {form.elements.map(el => (
+  1084→                <div
+  1085→                  key={el.id}
+  1086→                  onClick={() => setSelectedElement(el.id)}
+  1087→                  className={`flex items-center gap-2 p-2 rounded-md cursor-pointer text-xs transition-colors ${
+  1088→                    selectedElement === el.id
+  1089→                      ? 'bg-gradient-to-r from-violet-100 to-amber-50 dark:from-violet-950/30 dark:to-amber-950/20 border border-violet-300 dark:border-violet-700'
+  1090→                      : 'hover:bg-muted/50'
+  1091→                  }`}
+  1092→                >
+  1093→                  <GripVertical className="h-3 w-3 text-muted-foreground shrink-0" />
+  1094→                  <ElementIcon type={el.type} />
+  1095→                  <span className="flex-1 truncate">{el.label}</span>
+  1096→                  <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 text-red-500" onClick={e => { e.stopPropagation(); removeElement(el.id); }}>
+  1097→                    <Trash2 className="h-3 w-3" />
+  1098→                  </Button>
+  1099→                </div>
+  1100→              ))}
+  1101→            </CardContent>
+  1102→          </Card>
+  1103→
+  1104→          {/* Selected element properties */}
+  1105→          {selectedEl && (
+  1106→            <Card className="shadow-sm border-white/30 dark:border-white/10">
+  1107→              <CardHeader className="pb-3">
+  1108→                <CardTitle className="text-sm flex items-center gap-2">
+  1109→                  <Edit3 className="h-4 w-4 text-amber-600" /> Element Properties
+  1110→                </CardTitle>
+  1111→              </CardHeader>
+  1112→              <CardContent className="space-y-3">
+  1113→                <div className="space-y-1">
+  1114→                  <Label className="text-xs">Label</Label>
+  1115→                  <Input value={selectedEl.label} onChange={e => updateElement(selectedEl.id, { label: e.target.value })} className="h-8 text-sm" />
+  1116→                </div>
+  1117→                <div className="space-y-1">
+  1118→                  <Label className="text-xs">Value</Label>
+  1119→                  <Input value={selectedEl.value} onChange={e => updateElement(selectedEl.id, { value: e.target.value })} className="h-8 text-sm" />
+  1120→                </div>
+  1121→                <div className="grid grid-cols-2 gap-2">
+  1122→                  <div className="space-y-1">
+  1123→                    <Label className="text-xs">Position X (%)</Label>
+  1124→                    <Input type="number" min={0} max={100} value={selectedEl.x} onChange={e => updateElement(selectedEl.id, { x: Number(e.target.value) })} className="h-8 text-sm" />
+  1125→                  </div>
+  1126→                  <div className="space-y-1">
+  1127→                    <Label className="text-xs">Position Y (%)</Label>
+  1128→                    <Input type="number" min={0} max={100} value={selectedEl.y} onChange={e => updateElement(selectedEl.id, { y: Number(e.target.value) })} className="h-8 text-sm" />
+  1129→                  </div>
+  1130→                </div>
+  1131→                <div className="space-y-1">
+  1132→                  <Label className="text-xs">Font Family</Label>
+  1133→                  <Select value={selectedEl.fontFamily || 'system-ui, sans-serif'} onValueChange={v => updateElement(selectedEl.id, { fontFamily: v })}>
+  1134→                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+  1135→                    <SelectContent>
+  1136→                      {FONT_FAMILIES.map(f => (
+  1137→                        <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+  1138→                      ))}
+  1139→                    </SelectContent>
+  1140→                  </Select>
+  1141→                </div>
+  1142→                <div className="grid grid-cols-2 gap-2">
+  1143→                  <div className="space-y-1">
+  1144→                    <Label className="text-xs">Size</Label>
+  1145→                    <Select value={selectedEl.size || 'M'} onValueChange={v => updateElement(selectedEl.id, { size: v as CertElement['size'] })}>
+  1146→                      <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+  1147→                      <SelectContent>
+  1148→                        <SelectItem value="S">Small</SelectItem>
+  1149→                        <SelectItem value="M">Medium</SelectItem>
+  1150→                        <SelectItem value="L">Large</SelectItem>
+  1151→                        <SelectItem value="XL">Extra Large</SelectItem>
+  1152→                      </SelectContent>
+  1153→                    </Select>
+  1154→                  </div>
+  1155→                  <div className="space-y-1">
+  1156→                    <Label className="text-xs">Weight</Label>
+  1157→                    <Select value={selectedEl.fontWeight ?? 'normal'} onValueChange={v => updateElement(selectedEl.id, { fontWeight: v })}>
+  1158→                      <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+  1159→                      <SelectContent>
+  1160→                        <SelectItem value="normal">Normal</SelectItem>
+  1161→                        <SelectItem value="bold">Bold</SelectItem>
+  1162→                      </SelectContent>
+  1163→                    </Select>
+  1164→                  </div>
+  1165→                </div>
+  1166→                <div className="space-y-1">
+  1167→                  <Label className="text-xs">Alignment</Label>
+  1168→                  <div className="flex gap-1">
+  1169→                    {ALIGN_OPTIONS.map(a => (
+  1170→                      <Button
+  1171→                        key={a}
+  1172→                        variant={selectedEl.align === a ? 'default' : 'outline'}
+  1173→                        size="sm"
+  1174→                        className="flex-1 h-7 text-xs capitalize"
+  1175→                        onClick={() => updateElement(selectedEl.id, { align: a })}
+  1176→                      >
+  1177→                        {a === 'left' ? '←' : a === 'center' ? '↔' : '→'} {a}
+  1178→                      </Button>
+  1179→                    ))}
+  1180→                  </div>
+  1181→                </div>
+  1182→                <div className="space-y-1">
+  1183→                  <Label className="text-xs">Color</Label>
+  1184→                  <div className="flex items-center gap-2">
+  1185→                    <input type="color" value={selectedEl.color ?? '#1e293b'} onChange={e => updateElement(selectedEl.id, { color: e.target.value })} className="h-8 w-8 rounded border cursor-pointer" />
+  1186→                    <Input value={selectedEl.color ?? '#1e293b'} onChange={e => updateElement(selectedEl.id, { color: e.target.value })} className="h-8 text-sm flex-1" />
+  1187→                  </div>
+  1188→                </div>
+  1189→                <div className="space-y-1">
+  1190→                  <Label className="text-xs">Custom Font Size</Label>
+  1191→                  <Input type="number" min={6} max={72} value={selectedEl.fontSize ?? 14} onChange={e => updateElement(selectedEl.id, { fontSize: Number(e.target.value) })} className="h-8 text-sm" />
+  1192→                </div>
+  1193→              </CardContent>
+  1194→            </Card>
+  1195→          )}
+  1196→        </div>
+  1197→
+  1198→        {/* Right panel: Certificate Preview with Zoom */}
+  1199→        <div className="lg:col-span-9">
+  1200→          <Card className="h-full shadow-sm border-white/30 dark:border-white/10">
+  1201→            <CardHeader className="pb-3">
+  1202→              <div className="flex items-center justify-between">
+  1203→                <CardTitle className="text-sm flex items-center gap-2">
+  1204→                  <Eye className="h-4 w-4 text-emerald-600" /> Live Preview
+  1205→                </CardTitle>
+  1206→                <div className="flex items-center gap-2">
+  1207→                  {/* Zoom Controls */}
+  1208→                  <div className="flex items-center gap-1 bg-muted/50 rounded-md p-0.5">
+  1209→                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom(Math.max(50, zoom - 25))}>
+  1210→                      <ZoomOut className="h-3.5 w-3.5" />
+  1211→                    </Button>
+  1212→                    {zoomLevels.map(z => (
+  1213→                      <Button
+  1214→                        key={z}
+  1215→                        variant={zoom === z ? 'default' : 'ghost'}
+  1216→                        size="sm"
+  1217→                        className={`h-7 text-xs px-2 ${zoom === z ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white' : ''}`}
+  1218→                        onClick={() => setZoom(z)}
+  1219→                      >
+  1220→                        {z}%
+  1221→                      </Button>
+  1222→                    ))}
+  1223→                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom(Math.min(150, zoom + 25))}>
+  1224→                      <ZoomIn className="h-3.5 w-3.5" />
+  1225→                    </Button>
+  1226→                  </div>
+  1227→                  <Separator orientation="vertical" className="h-6" />
+  1228→                  {/* Download Sample */}
+  1229→                  <TooltipProvider>
+  1230→                    <Tooltip>
+  1231→                      <TooltipTrigger asChild>
+  1232→                        <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs">
+  1233→                          <Download className="h-3.5 w-3.5" /> Download Sample
+  1234→                        </Button>
+  1235→                      </TooltipTrigger>
+  1236→                      <TooltipContent>Download a sample certificate</TooltipContent>
+  1237→                    </Tooltip>
+  1238→                  </TooltipProvider>
+  1239→                </div>
+  1240→              </div>
+  1241→            </CardHeader>
+  1242→            <CardContent className="flex items-center justify-center p-6 bg-slate-100/80 dark:bg-slate-900/50 rounded-b-lg min-h-[500px] overflow-auto">
+  1243→              <div
+  1244→                className="relative shadow-2xl rounded-lg overflow-hidden transition-transform duration-300"
+  1245→                style={{
+  1246→                  width: '100%',
+  1247→                  maxWidth: `${form.width * (zoom / 100)}px`,
+  1248→                  aspectRatio: `${form.width}/${form.height}`,
+  1249→                  background: BG_TEMPLATES.find(b => b.value === form.backgroundTemplate)?.bg ||
+  1250→                    (isDark
+  1251→                      ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)'
+  1252→                      : form.bg_color === '#fefefe'
+  1253→                      ? 'linear-gradient(135deg, #fefefe 0%, #fafbfc 50%, #f1f5f9 100%)'
+  1254→                      : 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%)'),
+  1255→                  fontFamily: form.font_family,
+  1256→                }}
+  1257→              >
+  1258→                {/* Border */}
+  1259→                <CertificateBorder style={form.borderStyle || 'classic'} isDark={isDark} />
+  1260→
+  1261→                {/* Decorative line at top */}
+  1262→                <div className="absolute top-10 left-16 right-16 h-0.5" style={{
+  1263→                  background: 'linear-gradient(to right, transparent, #7c3aed, #10b981, transparent)',
+  1264→                  opacity: 0.5,
+  1265→                }} />
+  1266→
+  1267→                {/* Watermark */}
+  1268→                {form.hasWatermark && (
+  1269→                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ opacity: 0.04 }}>
+  1270→                    <div className="text-[80px] font-bold text-foreground -rotate-45" style={{ fontFamily: form.font_family }}>
+  1271→                      NEXTGEN LMS
+  1272→                    </div>
+  1273→                  </div>
+  1274→                )}
+  1275→
+  1276→                {/* Elements */}
+  1277→                {form.elements.map(el => {
+  1278→                  const isSelected = selectedElement === el.id;
+  1279→                  const sizeMultiplier = ELEMENT_SIZES[el.size || 'M'];
+  1280→                  return (
+  1281→                    <div
+  1282→                      key={el.id}
+  1283→                      className={`absolute cursor-pointer transition-all ${isSelected ? 'ring-2 ring-amber-500 ring-offset-1 rounded' : 'hover:ring-1 hover:ring-amber-300 hover:rounded'}`}
+  1284→                      style={{
+  1285→                        left: `${el.x}%`,
+  1286→                        top: `${el.y}%`,
+  1287→                        transform: 'translate(-50%, -50%)',
+  1288→                        fontSize: `${(el.fontSize ?? 14) * sizeMultiplier * 0.65}px`,
+  1289→                        fontWeight: el.fontWeight ?? 'normal',
+  1290→                        color: el.color ?? '#1e293b',
+  1291→                        textAlign: el.align || 'center',
+  1292→                        maxWidth: '80%',
+  1293→                        whiteSpace: el.type === 'text' ? 'pre-wrap' : 'nowrap',
+  1294→                        fontFamily: el.fontFamily || form.font_family,
+  1295→                      }}
+  1296→                      onClick={() => setSelectedElement(el.id)}
+  1297→                    >
+  1298→                      {el.type === 'image' && (
+  1299→                        <div className="flex flex-col items-center gap-1">
+  1300→                          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`}>
+  1301→                            <Shield className={`h-6 w-6 ${isDark ? 'text-amber-400' : 'text-violet-600'}`} />
+  1302→                          </div>
+  1303→                          <span className="text-[8px]" style={{ color: isDark ? '#94a3b8' : '#94a3b8' }}>{el.value}</span>
+  1304→                        </div>
+  1305→                      )}
+  1306→                      {el.type === 'qr_code' && (
+  1307→                        <div className="flex flex-col items-center gap-1">
+  1308→                          <div className={`w-10 h-10 rounded border ${isDark ? 'border-slate-600 bg-slate-800' : 'border-slate-300 bg-white'} flex items-center justify-center`}>
+  1309→                            <QrCode className={`h-7 w-7 ${isDark ? 'text-slate-300' : 'text-slate-700'}`} />
+  1310→                          </div>
+  1311→                          <span className="text-[7px]" style={{ color: isDark ? '#64748b' : '#94a3b8' }}>Verify</span>
+  1312→                        </div>
+  1313→                      )}
+  1314→                      {el.type === 'signature_line' && (
+  1315→                        <div className="flex flex-col items-center gap-1 min-w-[100px]">
+  1316→                          <div className="w-20 h-0.5" style={{ backgroundColor: isDark ? '#475569' : '#94a3b8' }} />
+  1317→                          <span className="text-[8px]" style={{ color: isDark ? '#64748b' : '#64748b' }}>{el.value}</span>
+  1318→                        </div>
+  1319→                      )}
+  1320→                      {el.type === 'date' && (
+  1321→                        <div className="flex items-center gap-1">
+  1322→                          <Calendar className="h-3 w-3 opacity-50" style={{ color: el.color }} />
+  1323→                          <span>{el.value.includes('{{') ? new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : el.value}</span>
+  1324→                        </div>
+  1325→                      )}
+  1326→                      {el.type === 'text' && <span>{el.value.includes('{{recipient_name}}') ? 'Jane Doe' : el.value.includes('{{course_name}}') ? 'Advanced Course Title' : el.value.includes('{{verification_code}}') ? 'NG-LMS-2024-ABC123' : el.value.includes('{{issue_date}}') ? new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : el.value}</span>}
+  1327→                    </div>
+  1328→                  );
+  1329→                })}
+  1330→
+  1331→                {/* Seal */}
+  1332→                {form.sealType && (
+  1333→                  <div className="absolute bottom-8 left-8">
+  1334→                    <SealRenderer type={form.sealType} isDark={isDark} />
+  1335→                  </div>
+  1336→                )}
+  1337→
+  1338→                {/* Decorative line at bottom */}
+  1339→                <div className="absolute bottom-10 left-16 right-16 h-0.5" style={{
+  1340→                  background: 'linear-gradient(to right, transparent, #7c3aed, #10b981, transparent)',
+  1341→                  opacity: 0.5,
+  1342→                }} />
+  1343→
+  1344→                {/* Corner ornaments */}
+  1345→                {form.borderStyle === 'ornate' && ['top-6 left-6', 'top-6 right-6', 'bottom-6 left-6', 'bottom-6 right-6'].map((pos, i) => (
+  1346→                  <div key={i} className={`absolute ${pos} w-4 h-4`}>
+  1347→                    <Sparkles className={`h-3 w-3 ${isDark ? 'text-amber-400/40' : 'text-amber-600/30'}`} />
+  1348→                  </div>
+  1349→                ))}
+  1350→              </div>
+  1351→            </CardContent>
+  1352→          </Card>
+  1353→        </div>
+  1354→      </div>
+  1355→    </div>
+  1356→  );
+  1357→}
+  1358→
+  1359→// ==========================
+  1360→// ISSUED CERTIFICATES TABLE (Enhanced)
+  1361→// ==========================
+  1362→function IssuedCertificatesTable() {
+  1363→  const [search, setSearch] = useState('');
+  1364→  const [certs, setCerts] = useState(demoIssuedCerts);
+  1365→  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  1366→  const [filterStatus, setFilterStatus] = useState<string>('all');
+  1367→  const [verifyDialogId, setVerifyDialogId] = useState<string | null>(null);
+  1368→  const [copiedId, setCopiedId] = useState<string | null>(null);
+  1369→  const [dateFilter, setDateFilter] = useState('');
+  1370→
+  1371→  const filtered = certs.filter(c => {
+  1372→    const matchSearch = c.recipientName.toLowerCase().includes(search.toLowerCase()) ||
+  1373→      c.courseName.toLowerCase().includes(search.toLowerCase()) ||
+  1374→      c.verificationCode.toLowerCase().includes(search.toLowerCase());
+  1375→    const matchStatus = filterStatus === 'all' || c.status === filterStatus;
+  1376→    const matchDate = !dateFilter || c.issuedAt.startsWith(dateFilter);
+  1377→    return matchSearch && matchStatus && matchDate;
+  1378→  });
+  1379→
+  1380→  const toggleSelect = (id: string) => {
+  1381→    setSelectedIds(prev => {
+  1382→      const next = new Set(prev);
+  1383→      if (next.has(id)) next.delete(id);
+  1384→      else next.add(id);
+  1385→      return next;
+  1386→    });
+  1387→  };
+  1388→
+  1389→  const toggleSelectAll = () => {
+  1390→    if (selectedIds.size === filtered.length) {
+  1391→      setSelectedIds(new Set());
+  1392→    } else {
+  1393→      setSelectedIds(new Set(filtered.map(c => c.id)));
+  1394→    }
+  1395→  };
+  1396→
+  1397→  const handleBulkRevoke = () => {
+  1398→    setCerts(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, status: 'revoked' as VerificationStatus } : c));
+  1399→    setSelectedIds(new Set());
+  1400→  };
+  1401→
+  1402→  const handleBulkResend = () => {
+  1403→    // Simulate resend
+  1404→    setSelectedIds(new Set());
+  1405→  };
+  1406→
+  1407→  const handleCopyLink = (code: string, id: string) => {
+  1408→    const link = `https://lms.nextgen.dev/verify/${code}`;
+  1409→    navigator.clipboard?.writeText(link).catch(() => {});
+  1410→    setCopiedId(id);
+  1411→    setTimeout(() => setCopiedId(null), 2000);
+  1412→  };
+  1413→
+  1414→  const handleExportCSV = () => {
+  1415→    const headers = ['Recipient', 'Course', 'Certificate', 'Issued Date', 'Verification Code', 'Status'];
+  1416→    const rows = filtered.map(c => [
+  1417→      c.recipientName, c.courseName, c.certName,
+  1418→      new Date(c.issuedAt).toLocaleDateString('en-US'),
+  1419→      c.verificationCode, c.status,
+  1420→    ]);
+  1421→    const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  1422→    const blob = new Blob([csv], { type: 'text/csv' });
+  1423→    const url = URL.createObjectURL(blob);
+  1424→    const a = document.createElement('a');
+  1425→    a.href = url;
+  1426→    a.download = 'certificates.csv';
+  1427→    a.click();
+  1428→    URL.revokeObjectURL(url);
+  1429→  };
+  1430→
+  1431→  const verifyCert = certs.find(c => c.id === verifyDialogId);
+  1432→
+  1433→  const statusColors: Record<VerificationStatus, string> = {
+  1434→    verified: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  1435→    pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  1436→    revoked: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  1437→  };
+  1438→
+  1439→  const rowBg: Record<VerificationStatus, string> = {
+  1440→    verified: '',
+  1441→    pending: 'bg-amber-50/40 dark:bg-amber-950/10',
+  1442→    revoked: 'bg-red-50/40 dark:bg-red-950/10',
+  1443→  };
+  1444→
+  1445→  return (
+  1446→    <div className="space-y-4">
+  1447→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+  1448→        <div>
+  1449→          <h2 className="text-2xl font-bold text-foreground">Issued Certificates</h2>
+  1450→          <p className="text-muted-foreground text-sm mt-1">Track and manage all issued certificates</p>
+  1451→        </div>
+  1452→        <div className="flex items-center gap-2 flex-wrap">
+  1453→          <Button variant="outline" size="sm" className="gap-1.5 h-8" onClick={handleExportCSV}>
+  1454→            <FileDown className="h-3.5 w-3.5" /> Export CSV
+  1455→          </Button>
+  1456→        </div>
+  1457→      </div>
+  1458→
+  1459→      {/* Search & Filters */}
+  1460→      <div className="flex flex-col sm:flex-row gap-3">
+  1461→        <div className="relative flex-1 max-w-md">
+  1462→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1463→          <Input placeholder="Search by recipient, course, code..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+  1464→        </div>
+  1465→        <Select value={filterStatus} onValueChange={setFilterStatus}>
+  1466→          <SelectTrigger className="w-36 h-9 text-sm">
+  1467→            <SelectValue placeholder="Status" />
+  1468→          </SelectTrigger>
+  1469→          <SelectContent>
+  1470→            <SelectItem value="all">All Status</SelectItem>
+  1471→            <SelectItem value="verified">Verified</SelectItem>
+  1472→            <SelectItem value="pending">Pending</SelectItem>
+  1473→            <SelectItem value="revoked">Revoked</SelectItem>
+  1474→          </SelectContent>
+  1475→        </Select>
+  1476→        <Input type="month" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="w-40 h-9 text-sm" placeholder="Filter by date" />
+  1477→      </div>
+  1478→
+  1479→      {/* Bulk Actions */}
+  1480→      {selectedIds.size > 0 && (
+  1481→        <motion.div
+  1482→          initial={{ opacity: 0, y: -10 }}
+  1483→          animate={{ opacity: 1, y: 0 }}
+  1484→          className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800"
+  1485→        >
+  1486→          <span className="text-sm font-medium text-amber-800 dark:text-amber-300">{selectedIds.size} selected</span>
+  1487→          <Button size="sm" variant="outline" className="gap-1.5 h-8 text-red-600 border-red-200 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950/30" onClick={handleBulkRevoke}>
+  1488→            <Ban className="h-3.5 w-3.5" /> Revoke Selected
+  1489→          </Button>
+  1490→          <Button size="sm" variant="outline" className="gap-1.5 h-8 text-blue-600 border-blue-200 hover:bg-blue-50 dark:border-blue-800 dark:hover:bg-blue-950/30" onClick={handleBulkResend}>
+  1491→            <Send className="h-3.5 w-3.5" /> Resend Selected
+  1492→          </Button>
+  1493→        </motion.div>
+  1494→      )}
+  1495→
+  1496→      <Card className="shadow-sm border-white/30 dark:border-white/10 overflow-hidden">
+  1497→        <CardContent className="p-0">
+  1498→          <div className="overflow-x-auto">
+  1499→            <Table>
+  1500→              <TableHeader>
+  1501→                <TableRow>
+  1502→                  <TableHead className="w-10">
+  1503→                    <Checkbox
+  1504→                      checked={selectedIds.size === filtered.length && filtered.length > 0}
+  1505→                      onCheckedChange={toggleSelectAll}
+  1506→                    />
+  1507→                  </TableHead>
+  1508→                  <TableHead>Recipient</TableHead>
+  1509→                  <TableHead>Course</TableHead>
+  1510→                  <TableHead>Certificate</TableHead>
+  1511→                  <TableHead>Issued Date</TableHead>
+  1512→                  <TableHead>Status</TableHead>
+  1513→                  <TableHead>Verification Code</TableHead>
+  1514→                  <TableHead className="text-right">Actions</TableHead>
+  1515→                </TableRow>
+  1516→              </TableHeader>
+  1517→              <TableBody>
+  1518→                {filtered.length === 0 ? (
+  1519→                  <TableRow>
+  1520→                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+  1521→                      No certificates found
+  1522→                    </TableCell>
+  1523→                  </TableRow>
+  1524→                ) : (
+  1525→                  filtered.map((cert, idx) => (
+  1526→                    <motion.tr
+  1527→                      key={cert.id}
+  1528→                      initial={{ opacity: 0, x: -10 }}
+  1529→                      animate={{ opacity: 1, x: 0 }}
+  1530→                      transition={{ delay: idx * 0.03 }}
+  1531→                      className={`border-b transition-colors hover:bg-muted/50 ${rowBg[cert.status]}`}
+  1532→                    >
+  1533→                      <TableCell>
+  1534→                        <Checkbox
+  1535→                          checked={selectedIds.has(cert.id)}
+  1536→                          onCheckedChange={() => toggleSelect(cert.id)}
+  1537→                        />
+  1538→                      </TableCell>
+  1539→                      <TableCell>
+  1540→                        <div className="flex items-center gap-2">
+  1541→                          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+  1542→                            {cert.recipientName.split(' ').map(n => n[0]).join('')}
+  1543→                          </div>
+  1544→                          <span className="font-medium text-sm">{cert.recipientName}</span>
+  1545→                        </div>
+  1546→                      </TableCell>
+  1547→                      <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">{cert.courseName}</TableCell>
+  1548→                      <TableCell>
+  1549→                        <Badge variant="outline" className="text-xs gap-1">
+  1550→                          <Award className="h-3 w-3" /> {cert.certName}
+  1551→                        </Badge>
+  1552→                      </TableCell>
+  1553→                      <TableCell className="text-sm text-muted-foreground">
+  1554→                        {new Date(cert.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+  1555→                      </TableCell>
+  1556→                      <TableCell>
+  1557→                        <Badge className={`text-[10px] gap-0.5 ${statusColors[cert.status]}`}>
+  1558→                          {cert.status === 'verified' && <CheckCircle2 className="h-3 w-3" />}
+  1559→                          {cert.status === 'pending' && <Clock className="h-3 w-3" />}
+  1560→                          {cert.status === 'revoked' && <AlertTriangle className="h-3 w-3" />}
+  1561→                          {cert.status.charAt(0).toUpperCase() + cert.status.slice(1)}
+  1562→                        </Badge>
+  1563→                      </TableCell>
+  1564→                      <TableCell>
+  1565→                        <code className="text-xs bg-muted px-2 py-1 rounded font-mono">{cert.verificationCode}</code>
+  1566→                      </TableCell>
+  1567→                      <TableCell className="text-right">
+  1568→                        <div className="flex items-center justify-end gap-1">
+  1569→                          <TooltipProvider>
+  1570→                            <Tooltip>
+  1571→                              <TooltipTrigger asChild>
+  1572→                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setVerifyDialogId(cert.id)}>
+  1573→                                  <Shield className="h-4 w-4" />
+  1574→                                </Button>
+  1575→                              </TooltipTrigger>
+  1576→                              <TooltipContent>Verify</TooltipContent>
+  1577→                            </Tooltip>
+  1578→                          </TooltipProvider>
+  1579→                          <TooltipProvider>
+  1580→                            <Tooltip>
+  1581→                              <TooltipTrigger asChild>
+  1582→                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCopyLink(cert.verificationCode, cert.id)}>
+  1583→                                  {copiedId === cert.id ? <Check className="h-4 w-4 text-emerald-500" /> : <Share2 className="h-4 w-4" />}
+  1584→                                </Button>
+  1585→                              </TooltipTrigger>
+  1586→                              <TooltipContent>{copiedId === cert.id ? 'Copied!' : 'Share / Copy Link'}</TooltipContent>
+  1587→                            </Tooltip>
+  1588→                          </TooltipProvider>
+  1589→                          <TooltipProvider>
+  1590→                            <Tooltip>
+  1591→                              <TooltipTrigger asChild>
+  1592→                                <Button variant="ghost" size="icon" className="h-8 w-8">
+  1593→                                  <Download className="h-4 w-4" />
+  1594→                                </Button>
+  1595→                              </TooltipTrigger>
+  1596→                              <TooltipContent>Download PDF</TooltipContent>
+  1597→                            </Tooltip>
+  1598→                          </TooltipProvider>
+  1599→                          {cert.status !== 'revoked' && (
+  1600→                            <TooltipProvider>
+  1601→                              <Tooltip>
+  1602→                                <TooltipTrigger asChild>
+  1603→                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600" onClick={() => {
+  1604→                                    setCerts(prev => prev.map(c => c.id === cert.id ? { ...c, status: 'revoked' as VerificationStatus } : c));
+  1605→                                  }}>
+  1606→                                    <Ban className="h-4 w-4" />
+  1607→                                  </Button>
+  1608→                                </TooltipTrigger>
+  1609→                                <TooltipContent>Revoke</TooltipContent>
+  1610→                              </Tooltip>
+  1611→                            </TooltipProvider>
+  1612→                          )}
+  1613→                          {cert.status === 'revoked' && (
+  1614→                            <TooltipProvider>
+  1615→                              <Tooltip>
+  1616→                                <TooltipTrigger asChild>
+  1617→                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-500 hover:text-emerald-600" onClick={() => {
+  1618→                                    setCerts(prev => prev.map(c => c.id === cert.id ? { ...c, status: 'verified' as VerificationStatus } : c));
+  1619→                                  }}>
+  1620→                                    <RotateCcw className="h-4 w-4" />
+  1621→                                  </Button>
+  1622→                                </TooltipTrigger>
+  1623→                                <TooltipContent>Reactivate</TooltipContent>
+  1624→                              </Tooltip>
+  1625→                            </TooltipProvider>
+  1626→                          )}
+  1627→                        </div>
+  1628→                      </TableCell>
+  1629→                    </motion.tr>
+  1630→                  ))
+  1631→                )}
+  1632→              </TableBody>
+  1633→            </Table>
+  1634→          </div>
+  1635→        </CardContent>
+  1636→      </Card>
+  1637→
+  1638→      {/* Verify Dialog */}
+  1639→      <Dialog open={!!verifyDialogId} onOpenChange={() => setVerifyDialogId(null)}>
+  1640→        <DialogContent className="max-w-md">
+  1641→          <DialogHeader>
+  1642→            <DialogTitle className="flex items-center gap-2">
+  1643→              <Shield className="h-5 w-5 text-emerald-600" /> Certificate Verification
+  1644→            </DialogTitle>
+  1645→            <DialogDescription>Verification details for this certificate</DialogDescription>
+  1646→          </DialogHeader>
+  1647→          {verifyCert && (
+  1648→            <div className="space-y-4">
+  1649→              <div className={`p-4 rounded-lg border ${verifyCert.status === 'verified' ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800' : verifyCert.status === 'pending' ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800' : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'}`}>
+  1650→                <div className="flex items-center gap-2 mb-2">
+  1651→                  {verifyCert.status === 'verified' ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : verifyCert.status === 'pending' ? <Clock className="h-5 w-5 text-amber-600" /> : <AlertTriangle className="h-5 w-5 text-red-600" />}
+  1652→                  <span className="font-semibold capitalize">{verifyCert.status}</span>
+  1653→                </div>
+  1654→                <p className="text-sm text-muted-foreground">
+  1655→                  {verifyCert.status === 'verified' && 'This certificate has been verified and is authentic.'}
+  1656→                  {verifyCert.status === 'pending' && 'This certificate is awaiting verification.'}
+  1657→                  {verifyCert.status === 'revoked' && 'This certificate has been revoked and is no longer valid.'}
+  1658→                </p>
+  1659→              </div>
+  1660→              <div className="space-y-2 text-sm">
+  1661→                <div className="flex justify-between">
+  1662→                  <span className="text-muted-foreground">Recipient</span>
+  1663→                  <span className="font-medium">{verifyCert.recipientName}</span>
+  1664→                </div>
+  1665→                <div className="flex justify-between">
+  1666→                  <span className="text-muted-foreground">Course</span>
+  1667→                  <span className="font-medium text-right max-w-[200px] truncate">{verifyCert.courseName}</span>
+  1668→                </div>
+  1669→                <div className="flex justify-between">
+  1670→                  <span className="text-muted-foreground">Certificate</span>
+  1671→                  <span className="font-medium">{verifyCert.certName}</span>
+  1672→                </div>
+  1673→                <Separator />
+  1674→                <div className="flex justify-between">
+  1675→                  <span className="text-muted-foreground">Code</span>
+  1676→                  <code className="text-xs bg-muted px-2 py-1 rounded font-mono">{verifyCert.verificationCode}</code>
+  1677→                </div>
+  1678→                <div className="flex justify-between">
+  1679→                  <span className="text-muted-foreground">Issued</span>
+  1680→                  <span>{new Date(verifyCert.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+  1681→                </div>
+  1682→              </div>
+  1683→            </div>
+  1684→          )}
+  1685→          <DialogFooter>
+  1686→            <Button variant="outline" onClick={() => setVerifyDialogId(null)}>Close</Button>
+  1687→            {verifyCert && (
+  1688→              <Button className="gap-1.5" onClick={() => { handleCopyLink(verifyCert.verificationCode, verifyCert.id); setVerifyDialogId(null); }}>
+  1689→                <ExternalLink className="h-4 w-4" /> Copy Verify Link
+  1690→              </Button>
+  1691→            )}
+  1692→          </DialogFooter>
+  1693→        </DialogContent>
+  1694→      </Dialog>
+  1695→    </div>
+  1696→  );
+  1697→}
+  1698→
+  1699→// ==========================
+  1700→// MAIN COMPONENT
+  1701→// ==========================
+  1702→export function AdminCertificates() {
+  1703→  const [templates, setTemplates] = useState<CertTemplate[]>(demoTemplates);
+  1704→  const [activeTab, setActiveTab] = useState('dashboard');
+  1705→  const [editingTemplate, setEditingTemplate] = useState<CertTemplate | null>(null);
+  1706→
+  1707→  const handleEdit = (t: CertTemplate) => {
+  1708→    setEditingTemplate({ ...t, elements: t.elements.map(e => ({ ...e })) });
+  1709→    setActiveTab('builder');
+  1710→  };
+  1711→
+  1712→  const handleCreateNew = () => {
+  1713→    const newTemplate: CertTemplate = {
+  1714→      id: `cert-tpl-${Date.now()}`,
+  1715→      tenantId: 'demo-tenant-1',
+  1716→      name: '',
+  1717→      template: 'custom',
+  1718→      backgroundUrl: '',
+  1719→      isActive: false,
+  1720→      bg_color: '#fefefe',
+  1721→      font_family: 'Georgia, serif',
+  1722→      width: 800,
+  1723→      height: 600,
+  1724→      borderStyle: 'classic',
+  1725→      sealType: 'gold',
+  1726→      hasWatermark: false,
+  1727→      backgroundTemplate: 'classic',
+  1728→      elements: [...defaultElements],
+  1729→    };
+  1730→    setEditingTemplate(newTemplate);
+  1731→    setActiveTab('builder');
+  1732→  };
+  1733→
+  1734→  const handleSave = (t: CertTemplate) => {
+  1735→    const idx = templates.findIndex(x => x.id === t.id);
+  1736→    if (idx >= 0) {
+  1737→      const updated = [...templates];
+  1738→      updated[idx] = t;
+  1739→      setTemplates(updated);
+  1740→    } else {
+  1741→      setTemplates(prev => [...prev, t]);
+  1742→    }
+  1743→    setEditingTemplate(null);
+  1744→    setActiveTab('templates');
+  1745→  };
+  1746→
+  1747→  const handleBackFromBuilder = () => {
+  1748→    setEditingTemplate(null);
+  1749→    setActiveTab('templates');
+  1750→  };
+  1751→
+  1752→  const handleUseLibraryTemplate = (tpl: typeof TEMPLATE_LIBRARY[number]) => {
+  1753→    const newTemplate: CertTemplate = {
+  1754→      id: `cert-tpl-${Date.now()}`,
+  1755→      tenantId: 'demo-tenant-1',
+  1756→      name: tpl.name,
+  1757→      template: tpl.category.toLowerCase(),
+  1758→      backgroundUrl: '',
+  1759→      isActive: true,
+  1760→      bg_color: tpl.bgTemplate === 'bold' ? '#0f172a' : tpl.bgTemplate === 'elegant' ? '#fef9e7' : tpl.bgTemplate === 'minimal' ? '#ffffff' : tpl.bgTemplate === 'modern' ? '#f8fafc' : '#fefefe',
+  1761→      font_family: tpl.fontFamily,
+  1762→      width: 800,
+  1763→      height: 600,
+  1764→      borderStyle: tpl.borderStyle,
+  1765→      sealType: tpl.sealType,
+  1766→      hasWatermark: false,
+  1767→      backgroundTemplate: tpl.bgTemplate,
+  1768→      elements: defaultElements.map(el => ({
+  1769→        ...el,
+  1770→        fontFamily: tpl.fontFamily,
+  1771→        color: tpl.bgTemplate === 'bold'
+  1772→          ? (el.label === 'Header' ? '#f8fafc' : el.label === 'Recipient Name' ? '#10b981' : el.label === 'Course Name' ? '#a78bfa' : el.color?.startsWith('#64748b') ? '#94a3b8' : el.color?.startsWith('#475569') ? '#94a3b8' : el.color)
+  1773→          : el.color,
+  1774→      })),
+  1775→    };
+  1776→    setEditingTemplate(newTemplate);
+  1777→    setActiveTab('builder');
+  1778→  };
+  1779→
+  1780→  return (
+  1781→    <div className="p-6">
+  1782→      <Tabs value={activeTab} onValueChange={setActiveTab}>
+  1783→        <TabsList className="mb-6">
+  1784→          <TabsTrigger value="dashboard" className="gap-1.5">
+  1785→            <BarChart3 className="h-4 w-4" /> Dashboard
+  1786→          </TabsTrigger>
+  1787→          <TabsTrigger value="templates" className="gap-1.5">
+  1788→            <Award className="h-4 w-4" /> Templates
+  1789→          </TabsTrigger>
+  1790→          <TabsTrigger value="library" className="gap-1.5">
+  1791→            <Sparkles className="h-4 w-4" /> Library
+  1792→          </TabsTrigger>
+  1793→          <TabsTrigger value="builder" className="gap-1.5" disabled={!editingTemplate}>
+  1794→            <Layout className="h-4 w-4" /> Designer
+  1795→          </TabsTrigger>
+  1796→          <TabsTrigger value="issued" className="gap-1.5">
+  1797→            <FileText className="h-4 w-4" /> Issued
+  1798→          </TabsTrigger>
+  1799→        </TabsList>
+  1800→
+  1801→        <AnimatePresence mode="wait">
+  1802→          <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
+  1803→            {activeTab === 'dashboard' && <StatsDashboard />}
+  1804→            {activeTab === 'templates' && (
+  1805→              <TemplatesList templates={templates} onEdit={handleEdit} onCreateNew={handleCreateNew} />
+  1806→            )}
+  1807→            {activeTab === 'library' && (
+  1808→              <TemplateLibrary onUseTemplate={handleUseLibraryTemplate} />
+  1809→            )}
+  1810→            {activeTab === 'builder' && editingTemplate && (
+  1811→              <CertificateBuilder template={editingTemplate} onBack={handleBackFromBuilder} onSave={handleSave} />
+  1812→            )}
+  1813→            {activeTab === 'issued' && (
+  1814→              <IssuedCertificatesTable />
+  1815→            )}
+  1816→          </motion.div>
+  1817→        </AnimatePresence>
+  1818→      </Tabs>
+  1819→    </div>
+  1820→  );
+  1821→}
+  1822→

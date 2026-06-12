@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '@/store/app-store';
-import { useUser, useUpdateUser, useEnrollments, useAchievements, useDeleteUser } from '@/hooks/use-data';
+import { useUser, useUpdateUser, useEnrollments, useAchievements, useDeleteUser, useCourses } from '@/hooks/use-data';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -346,78 +346,22 @@ const socialLinks = [
   { id: 'portfolio', label: 'Portfolio', icon: Globe, href: '#', placeholder: 'yoursite.com' },
 ];
 
-// ─── Portfolio Demo Data ─────────────────────────────────
-const demoProjects = [
-  {
-    id: 'p1',
-    title: 'E-Commerce Dashboard',
-    description: 'A full-stack dashboard built with Next.js, Prisma, and Tailwind CSS featuring real-time analytics and order management.',
-    url: 'https://github.com/alexjohnson/ecommerce-dashboard',
-    tags: ['Next.js', 'TypeScript', 'Prisma'],
-    color: 'from-emerald-500 to-teal-600',
-  },
-  {
-    id: 'p2',
-    title: 'ML Image Classifier',
-    description: 'Python-based image classification model using TensorFlow and Keras, achieving 94% accuracy on the test dataset.',
-    url: 'https://github.com/alexjohnson/ml-classifier',
-    tags: ['Python', 'TensorFlow', 'ML'],
-    color: 'from-violet-500 to-purple-600',
-  },
-  {
-    id: 'p3',
-    title: 'DevOps Pipeline Tool',
-    description: 'CI/CD pipeline automation tool using Docker and GitHub Actions for streamlined deployment workflows.',
-    url: 'https://github.com/alexjohnson/devops-pipeline',
-    tags: ['Docker', 'GitHub Actions', 'Bash'],
-    color: 'from-amber-500 to-orange-600',
-  },
-  {
-    id: 'p4',
-    title: 'Portfolio Website',
-    description: 'Personal portfolio and blog built with Astro and React, featuring dark mode and MDX content support.',
-    url: 'https://alexjohnson.dev',
-    tags: ['Astro', 'React', 'MDX'],
-    color: 'from-cyan-500 to-blue-600',
-  },
+// ─── Portfolio color palette for derived projects ───────
+const projectColors = [
+  'from-emerald-500 to-teal-600',
+  'from-violet-500 to-purple-600',
+  'from-amber-500 to-orange-600',
+  'from-cyan-500 to-blue-600',
+  'from-rose-500 to-pink-600',
+  'from-indigo-500 to-blue-600',
 ];
 
-const demoSkills = [
-  { id: 'sk1', name: 'React', endorsements: 24, level: 'Advanced' },
-  { id: 'sk2', name: 'TypeScript', endorsements: 18, level: 'Advanced' },
-  { id: 'sk3', name: 'Python', endorsements: 15, level: 'Intermediate' },
-  { id: 'sk4', name: 'Docker', endorsements: 8, level: 'Intermediate' },
-  { id: 'sk5', name: 'UI/UX Design', endorsements: 12, level: 'Intermediate' },
-  { id: 'sk6', name: 'Machine Learning', endorsements: 6, level: 'Beginner' },
-  { id: 'sk7', name: 'Node.js', endorsements: 20, level: 'Advanced' },
-  { id: 'sk8', name: 'GraphQL', endorsements: 4, level: 'Beginner' },
-];
-
-const demoRecommendations = [
-  {
-    id: 'r1',
-    from: 'Dr. Sarah Chen',
-    role: 'Instructor — Advanced React & Next.js',
-    text: 'Alex is an exceptional student who consistently goes above and beyond. Their project work demonstrated deep understanding of React patterns and server components. A true asset to any team.',
-    date: 'Nov 20, 2024',
-    avatar: 'SC',
-  },
-  {
-    id: 'r2',
-    from: 'Marcus Rivera',
-    role: 'Peer — Python for Data Science',
-    text: 'Alex was incredibly helpful during group projects, always willing to explain complex concepts and share resources. Their analytical skills and attention to detail are impressive.',
-    date: 'Oct 5, 2024',
-    avatar: 'MR',
-  },
-  {
-    id: 'r3',
-    from: 'Prof. James Liu',
-    role: 'Instructor — UI/UX Design Fundamentals',
-    text: 'Alex has a natural eye for design. Their final project was one of the best in the cohort, showing both technical proficiency and creative thinking. Highly recommended.',
-    date: 'Aug 25, 2024',
-    avatar: 'JL',
-  },
+// ─── Skill color palette for derived skills ──────────────
+const skillLevelMap = [
+  { min: 90, level: 'Expert' },
+  { min: 70, level: 'Advanced' },
+  { min: 40, level: 'Intermediate' },
+  { min: 0, level: 'Beginner' },
 ];
 
 // ─── Floating Particles for Profile Header ───────────────
@@ -595,7 +539,28 @@ export function LearnerProfile() {
   });
 
   // Portfolio state
-  const [skills, setSkills] = useState(demoSkills);
+  // ─── Fetch courses for recommendations ─────────────────
+  const { data: coursesData } = useCourses();
+
+  // ─── Compute skills from enrollments ────────────────────
+  const skillsFromApi = useMemo(() => {
+    if (userEnrollments.length === 0) return [];
+    const categoryMap: Record<string, { totalProgress: number; count: number }> = {};
+    userEnrollments.forEach((e: any) => {
+      const cat = e.course?.category || 'General';
+      if (!categoryMap[cat]) categoryMap[cat] = { totalProgress: 0, count: 0 };
+      categoryMap[cat].totalProgress += e.progress || 0;
+      categoryMap[cat].count += 1;
+    });
+    return Object.entries(categoryMap).map(([name, data], idx) => {
+      const avgProgress = data.count > 0 ? data.totalProgress / data.count : 0;
+      const level = skillLevelMap.find(l => avgProgress >= l.min)?.level || 'Beginner';
+      return { id: `sk-api-${idx}`, name, endorsements: data.count, level };
+    });
+  }, [userEnrollments]);
+
+  const [skills, setSkills] = useState<{ id: string; name: string; endorsements: number; level: string }[]>([]);
+  useEffect(() => { if (skillsFromApi.length > 0) setSkills(skillsFromApi); }, [skillsFromApi]);
   const [newSkillName, setNewSkillName] = useState('');
   const [showAddSkill, setShowAddSkill] = useState(false);
 
@@ -2398,8 +2363,27 @@ export function LearnerProfile() {
                   </Dialog>
                 </CardHeader>
                 <CardContent>
+                  {userEnrollments.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground text-sm">
+                      <Briefcase className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p>No portfolio items yet. Enroll in courses to build your portfolio.</p>
+                    </div>
+                  ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {demoProjects.map((project, index) => (
+                    {userEnrollments.slice(0, 6).map((enrollment: any, index: number) => {
+                      const course = enrollment.course || {};
+                      const category = course.category || 'General';
+                      const tags = [course.level || 'All Levels', category];
+                      if (course.durationHours) tags.push(`${course.durationHours}h`);
+                      const project = {
+                        id: enrollment.id || `proj-${index}`,
+                        title: course.title || 'Unknown Course',
+                        description: course.description || `Completed ${enrollment.progress || 0}% of this course`,
+                        url: '#',
+                        tags,
+                        color: projectColors[index % projectColors.length],
+                      };
+                      return (
                       <motion.div
                         key={project.id}
                         initial={{ opacity: 0, y: 15 }}
@@ -2439,8 +2423,10 @@ export function LearnerProfile() {
                           </CardContent>
                         </Card>
                       </motion.div>
-                    ))}
+                      );
+                    })}
                   </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -2533,7 +2519,27 @@ export function LearnerProfile() {
                   </Button>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {demoRecommendations.map((rec, index) => (
+                  {(() => {
+                    const enrolledCourseIds = new Set(userEnrollments.map((e: any) => e.courseId || e.course?.id));
+                    const availableCourses = (coursesData || []).filter((c: any) => !enrolledCourseIds.has(c.id));
+                    const recommendations = availableCourses.slice(0, 3).map((c: any, idx: number) => ({
+                      id: `rec-${c.id}`,
+                      from: c.instructor?.name || 'Course Instructor',
+                      role: `Instructor — ${c.title}`,
+                      text: c.description || 'A highly recommended course to advance your skills and career.',
+                      date: new Date(c.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                      avatar: (c.instructor?.name || 'CI').split(' ').map((n: string) => n[0]).join(''),
+                    }));
+                    if (recommendations.length === 0) {
+                      return (
+                        <div className="text-center py-8 text-muted-foreground text-sm">
+                          <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                          <p>No recommendations yet. Enroll in more courses to receive personalized recommendations.</p>
+                        </div>
+                      );
+                    }
+                    return recommendations.map((rec, index) => (
+                  
                     <motion.div
                       key={rec.id}
                       initial={{ opacity: 0, x: -10 }}
@@ -2562,7 +2568,8 @@ export function LearnerProfile() {
                         </CardContent>
                       </Card>
                     </motion.div>
-                  ))}
+                  ));
+                })()}
                 </CardContent>
               </Card>
             </div>

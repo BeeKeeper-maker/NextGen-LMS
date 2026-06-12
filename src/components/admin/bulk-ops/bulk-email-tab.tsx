@@ -58,9 +58,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useCourses } from '@/hooks/use-data';
+import { useCourses, useUsers } from '@/hooks/use-data';
+import { useAppStore } from '@/store/app-store';
 
-// TODO: Replace with real API when available - bulk user data not yet in the API
+// Bulk user display type for email UI
 interface BulkUser {
   id: string;
   name: string;
@@ -71,24 +72,36 @@ interface BulkUser {
   lastActive: string;
 }
 
-// TODO: Replace with real API when available - bulk user data not yet in the API
-const bulkUsers: BulkUser[] = [
-  { id: 'bu-1', name: 'Mike Chen', email: 'mike.chen@example.com', role: 'learner', status: 'active', coursesEnrolled: 3, lastActive: '2 hours ago' },
-  { id: 'bu-2', name: 'Emma Rodriguez', email: 'emma.r@example.com', role: 'learner', status: 'active', coursesEnrolled: 5, lastActive: '1 hour ago' },
-  { id: 'bu-3', name: 'David Park', email: 'david.park@example.com', role: 'instructor', status: 'active', coursesEnrolled: 2, lastActive: '30 min ago' },
-  { id: 'bu-4', name: 'Lisa Wang', email: 'lisa.wang@example.com', role: 'content_creator', status: 'active', coursesEnrolled: 4, lastActive: '3 hours ago' },
-  { id: 'bu-5', name: 'Jordan Lee', email: 'jordan.lee@example.com', role: 'learner', status: 'active', coursesEnrolled: 2, lastActive: '5 hours ago' },
-  { id: 'bu-6', name: 'Sophia Martinez', email: 'sophia.m@example.com', role: 'learner', status: 'active', coursesEnrolled: 6, lastActive: '15 min ago' },
-  { id: 'bu-7', name: 'Alex Kim', email: 'alex.kim@example.com', role: 'learner', status: 'inactive', coursesEnrolled: 1, lastActive: '2 weeks ago' },
-  { id: 'bu-8', name: 'Rachel Green', email: 'rachel.g@example.com', role: 'learner', status: 'active', coursesEnrolled: 3, lastActive: '4 hours ago' },
-  { id: 'bu-9', name: 'Tom Wilson', email: 'tom.w@example.com', role: 'learner', status: 'active', coursesEnrolled: 2, lastActive: '1 day ago' },
-  { id: 'bu-10', name: 'Priya Sharma', email: 'priya.s@example.com', role: 'instructor', status: 'active', coursesEnrolled: 1, lastActive: '6 hours ago' },
-  { id: 'bu-11', name: 'James Johnson', email: 'james.j@example.com', role: 'learner', status: 'active', coursesEnrolled: 4, lastActive: '45 min ago' },
-  { id: 'bu-12', name: 'Nina Patel', email: 'nina.p@example.com', role: 'learner', status: 'inactive', coursesEnrolled: 0, lastActive: '1 month ago' },
-  { id: 'bu-13', name: 'Carlos Ruiz', email: 'carlos.r@example.com', role: 'learner', status: 'active', coursesEnrolled: 3, lastActive: '2 days ago' },
-  { id: 'bu-14', name: 'Aisha Mohammed', email: 'aisha.m@example.com', role: 'learner', status: 'active', coursesEnrolled: 5, lastActive: '20 min ago' },
-  { id: 'bu-15', name: 'Ben Taylor', email: 'ben.t@example.com', role: 'content_creator', status: 'active', coursesEnrolled: 2, lastActive: '8 hours ago' },
-];
+/** Format a date as a relative time string */
+function formatRelativeTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'Never';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHrs = Math.floor(diffMin / 60);
+  if (diffHrs < 24) return `${diffHrs} hour${diffHrs > 1 ? 's' : ''} ago`;
+  const diffDays = Math.floor(diffHrs / 24);
+  if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  const diffWeeks = Math.floor(diffDays / 7);
+  if (diffWeeks < 4) return `${diffWeeks} week${diffWeeks > 1 ? 's' : ''} ago`;
+  return `${Math.floor(diffDays / 30)} month${Math.floor(diffDays / 30) > 1 ? 's' : ''} ago`;
+}
+
+/** Map API user data to BulkUser display type */
+function mapApiUserToBulkUser(apiUser: any): BulkUser {
+  return {
+    id: apiUser.id,
+    name: apiUser.name || apiUser.email?.split('@')[0] || 'Unknown',
+    email: apiUser.email || '',
+    role: apiUser.role || 'learner',
+    status: apiUser.isActive ? 'active' : 'inactive',
+    coursesEnrolled: apiUser._count?.enrollments ?? 0,
+    lastActive: formatRelativeTime(apiUser.lastLoginAt),
+  };
+}
 
 // TODO: Replace with real API when available - bulk email history not yet in the API
 interface BulkEmailRecord {
@@ -151,22 +164,30 @@ export function BulkEmailTab() {
   const [dateFilter, setDateFilter] = useState('all');
   const { data: coursesData } = useCourses();
   const demoCourses = coursesData || [];
+  const tenantId = useAppStore((s) => s.currentTenant?.id) || '';
+  const { data: usersData, isLoading: usersLoading } = useUsers(tenantId || undefined);
+  // Map API users to display type
+  const bulkUsers: BulkUser[] = useMemo(() => {
+    if (!usersData?.users) return [];
+    return usersData.users.map(mapApiUserToBulkUser);
+  }, [usersData]);
 
   // Estimate recipient count
   const recipientCount = useMemo(() => {
+    if (usersLoading) return 0;
     switch (recipientType) {
       case 'all':
-        return 3847;
+        return bulkUsers.length;
       case 'course':
         return demoCourses.find((c: any) => c.id === selectedCourse)?.enrollmentCount || 0;
       case 'role':
-        return bulkUsers.filter((u) => u.role === selectedRole).length * 257;
+        return bulkUsers.filter((u) => u.role === selectedRole).length;
       case 'custom':
-        return 156;
+        return bulkUsers.length;
       default:
         return 0;
     }
-  }, [recipientType, selectedCourse, selectedRole, demoCourses]);
+  }, [recipientType, selectedCourse, selectedRole, demoCourses, bulkUsers, usersLoading]);
 
   // Insert variable into subject
   const insertVariable = useCallback(

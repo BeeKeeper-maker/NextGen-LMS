@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import {
   Map,
@@ -24,11 +24,8 @@ import {
   Clock,
   TrendingUp,
   BarChart3,
-  ChevronDown,
   Save,
   Globe,
-  Star,
-  Zap,
   Target,
   Award,
 } from 'lucide-react';
@@ -62,9 +59,10 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { validateFields, required, minLength } from '@/lib/validations';
 import {
   BarChart,
   Bar,
@@ -79,6 +77,14 @@ import {
   Pie,
   Cell,
 } from 'recharts';
+import {
+  useLearningPaths,
+  useCourses,
+  useCreateLearningPath,
+  useUpdateLearningPath,
+  useDeleteLearningPath,
+} from '@/hooks/use-data';
+import { useAppStore } from '@/store/app-store';
 
 // ---- Types ----
 interface PathCourse {
@@ -107,99 +113,7 @@ interface LearningPath {
   createdAt: string;
 }
 
-// ---- Mock Data ----
-const mockCourses: { id: string; title: string; duration: number; level: 'beginner' | 'intermediate' | 'advanced' | 'expert' }[] = [
-  { id: 'c1', title: 'HTML & CSS Fundamentals', duration: 8, level: 'beginner' },
-  { id: 'c2', title: 'JavaScript Essentials', duration: 16, level: 'beginner' },
-  { id: 'c3', title: 'React Fundamentals', duration: 20, level: 'intermediate' },
-  { id: 'c4', title: 'Node.js Backend Development', duration: 18, level: 'intermediate' },
-  { id: 'c5', title: 'TypeScript Mastery', duration: 14, level: 'intermediate' },
-  { id: 'c6', title: 'Next.js Full Stack', duration: 22, level: 'advanced' },
-  { id: 'c7', title: 'Database Design & SQL', duration: 12, level: 'intermediate' },
-  { id: 'c8', title: 'DevOps & Deployment', duration: 10, level: 'advanced' },
-  { id: 'c9', title: 'System Design', duration: 16, level: 'expert' },
-  { id: 'c10', title: 'API Design Patterns', duration: 12, level: 'advanced' },
-];
-
-const mockPaths: LearningPath[] = [
-  {
-    id: 'lp1',
-    name: 'Full-Stack Web Developer',
-    description: 'A comprehensive journey from beginner to full-stack developer. Master front-end, back-end, and deployment.',
-    category: 'Web Development',
-    difficulty: 'intermediate',
-    status: 'published',
-    courseCount: 6,
-    enrolledCount: 234,
-    completionRate: 68,
-    estimatedDuration: 98,
-    courses: [
-      { id: 'c1', title: 'HTML & CSS Fundamentals', duration: 8, level: 'beginner', isRequired: true, prerequisiteIds: [], milestone: 'Foundation Complete' },
-      { id: 'c2', title: 'JavaScript Essentials', duration: 16, level: 'beginner', isRequired: true, prerequisiteIds: ['c1'] },
-      { id: 'c3', title: 'React Fundamentals', duration: 20, level: 'intermediate', isRequired: true, prerequisiteIds: ['c2'], milestone: 'Frontend Ready' },
-      { id: 'c5', title: 'TypeScript Mastery', duration: 14, level: 'intermediate', isRequired: true, prerequisiteIds: ['c2'] },
-      { id: 'c4', title: 'Node.js Backend Development', duration: 18, level: 'intermediate', isRequired: true, prerequisiteIds: ['c2'], milestone: 'Backend Ready' },
-      { id: 'c6', title: 'Next.js Full Stack', duration: 22, level: 'advanced', isRequired: true, prerequisiteIds: ['c3', 'c4'], milestone: 'Full-Stack Developer' },
-    ],
-    createdAt: '2024-08-15T00:00:00Z',
-  },
-  {
-    id: 'lp2',
-    name: 'Data Science & Analytics',
-    description: 'Learn data analysis, visualization, and machine learning fundamentals.',
-    category: 'Data Science',
-    difficulty: 'advanced',
-    status: 'published',
-    courseCount: 4,
-    enrolledCount: 156,
-    completionRate: 52,
-    estimatedDuration: 60,
-    courses: [
-      { id: 'c7', title: 'Database Design & SQL', duration: 12, level: 'intermediate', isRequired: true, prerequisiteIds: [], milestone: 'Data Foundation' },
-      { id: 'c2', title: 'JavaScript Essentials', duration: 16, level: 'beginner', isRequired: true, prerequisiteIds: [] },
-      { id: 'c9', title: 'System Design', duration: 16, level: 'expert', isRequired: true, prerequisiteIds: ['c7'], milestone: 'Advanced Ready' },
-      { id: 'c8', title: 'DevOps & Deployment', duration: 10, level: 'advanced', isRequired: false, prerequisiteIds: ['c7'] },
-    ],
-    createdAt: '2024-09-01T00:00:00Z',
-  },
-  {
-    id: 'lp3',
-    name: 'API Architect',
-    description: 'Master API design, development, and deployment patterns.',
-    category: 'Backend',
-    difficulty: 'advanced',
-    status: 'draft',
-    courseCount: 3,
-    enrolledCount: 0,
-    completionRate: 0,
-    estimatedDuration: 40,
-    courses: [
-      { id: 'c4', title: 'Node.js Backend Development', duration: 18, level: 'intermediate', isRequired: true, prerequisiteIds: [] },
-      { id: 'c10', title: 'API Design Patterns', duration: 12, level: 'advanced', isRequired: true, prerequisiteIds: ['c4'], milestone: 'API Designer' },
-      { id: 'c8', title: 'DevOps & Deployment', duration: 10, level: 'advanced', isRequired: false, prerequisiteIds: ['c4'] },
-    ],
-    createdAt: '2024-10-20T00:00:00Z',
-  },
-  {
-    id: 'lp4',
-    name: 'React Advanced Patterns',
-    description: 'Deep dive into advanced React patterns, performance, and architecture.',
-    category: 'Web Development',
-    difficulty: 'advanced',
-    status: 'published',
-    courseCount: 3,
-    enrolledCount: 89,
-    completionRate: 45,
-    estimatedDuration: 56,
-    courses: [
-      { id: 'c3', title: 'React Fundamentals', duration: 20, level: 'intermediate', isRequired: true, prerequisiteIds: [] },
-      { id: 'c5', title: 'TypeScript Mastery', duration: 14, level: 'intermediate', isRequired: true, prerequisiteIds: [] },
-      { id: 'c6', title: 'Next.js Full Stack', duration: 22, level: 'advanced', isRequired: true, prerequisiteIds: ['c3', 'c5'], milestone: 'React Expert' },
-    ],
-    createdAt: '2024-11-01T00:00:00Z',
-  },
-];
-
+// ---- Chart Data (static analytics mock) ----
 const enrollmentTrendData = [
   { month: 'Jul', enrollments: 45 },
   { month: 'Aug', enrollments: 62 },
@@ -225,6 +139,42 @@ const completionPieData = [
   { name: 'In Progress', value: 22, color: '#f59e0b' },
   { name: 'Not Started', value: 10, color: '#94a3b8' },
 ];
+
+// ---- API Data Mappers ----
+function mapApiPathToLearningPath(apiPath: any): LearningPath {
+  return {
+    id: apiPath.id,
+    name: apiPath.title,
+    description: apiPath.description || '',
+    category: apiPath.category || '',
+    difficulty: (apiPath.level as 'beginner' | 'intermediate' | 'advanced') || 'beginner',
+    status: apiPath.isPublished ? 'published' : 'draft',
+    thumbnailUrl: apiPath.thumbnailUrl || undefined,
+    courseCount: apiPath.courseCount ?? apiPath.courses?.length ?? 0,
+    enrolledCount: apiPath.enrolledCount ?? apiPath.enrollments?.length ?? 0,
+    completionRate: apiPath.completionRate ?? 0,
+    estimatedDuration: apiPath.estimatedDuration ?? 0,
+    courses: (apiPath.courses || []).map((pc: any) => ({
+      id: pc.courseId || pc.course?.id,
+      title: pc.course?.title || '',
+      duration: pc.course?.durationHours || 0,
+      level: (pc.course?.level as 'beginner' | 'intermediate' | 'advanced' | 'expert') || 'beginner',
+      isRequired: pc.isRequired ?? true,
+      prerequisiteIds: pc.prerequisiteIds ? pc.prerequisiteIds.split(',').filter(Boolean) : [],
+      milestone: pc.milestone || undefined,
+    })),
+    createdAt: apiPath.createdAt,
+  };
+}
+
+function mapApiCourseToPathCourseSource(apiCourse: any) {
+  return {
+    id: apiCourse.id,
+    title: apiCourse.title,
+    duration: apiCourse.durationHours || 0,
+    level: (apiCourse.level as 'beginner' | 'intermediate' | 'advanced' | 'expert') || 'beginner',
+  };
+}
 
 // ---- Sub-Components ----
 
@@ -391,10 +341,12 @@ function PathBuilderPanel({
   editingPath,
   onSave,
   onCancel,
+  availableCourses,
 }: {
   editingPath: LearningPath | null;
   onSave: (path: LearningPath) => void;
   onCancel: () => void;
+  availableCourses: { id: string; title: string; duration: number; level: 'beginner' | 'intermediate' | 'advanced' | 'expert' }[];
 }) {
   const [name, setName] = useState(editingPath?.name || '');
   const [description, setDescription] = useState(editingPath?.description || '');
@@ -405,14 +357,43 @@ function PathBuilderPanel({
   const [courseSearch, setCourseSearch] = useState('');
   const [showCourseDropdown, setShowCourseDropdown] = useState(false);
   const [selectedCourseForPrereq, setSelectedCourseForPrereq] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
-  const filteredAvailableCourses = mockCourses.filter(
+  const validate = (isPublish: boolean = false): boolean => {
+    const errs = validateFields({
+      name: [required(name, 'Path name'), minLength(name, 3, 'Path name')],
+    });
+    if (isPublish && courses.length === 0) {
+      errs.courses = 'At least 1 course is required to publish';
+    }
+    setFormErrors(errs);
+    setTouched({ name: true });
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleBlur = (field: string) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+    const errs = validateFields({
+      name: [required(name, 'Path name'), minLength(name, 3, 'Path name')],
+    });
+    setFormErrors(prev => {
+      const next = { ...prev };
+      if (touched[field] || errs[field]) {
+        next[field] = errs[field] || '';
+        if (!next[field]) delete next[field];
+      }
+      return next;
+    });
+  };
+
+  const filteredAvailableCourses = availableCourses.filter(
     (c) => !courses.find((pc) => pc.id === c.id) &&
       c.title.toLowerCase().includes(courseSearch.toLowerCase())
   );
 
   const addCourse = (courseId: string) => {
-    const course = mockCourses.find((c) => c.id === courseId);
+    const course = availableCourses.find((c) => c.id === courseId);
     if (!course) return;
     const newCourse: PathCourse = {
       id: course.id,
@@ -457,14 +438,15 @@ function PathBuilderPanel({
 
   const totalDuration = courses.reduce((sum, c) => sum + c.duration, 0);
 
-  const handleSave = () => {
+  const handleSave = (publishStatus: 'published' | 'draft') => {
+    if (!validate(publishStatus === 'published')) return;
     const path: LearningPath = {
       id: editingPath?.id || `lp-${Date.now()}`,
       name,
       description,
       category,
       difficulty,
-      status,
+      status: publishStatus,
       courseCount: courses.length,
       enrolledCount: editingPath?.enrolledCount || 0,
       completionRate: editingPath?.completionRate || 0,
@@ -487,10 +469,10 @@ function PathBuilderPanel({
           <Button variant="outline" size="sm" onClick={onCancel}>
             <X className="h-4 w-4 mr-1" /> Cancel
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setStatus('draft')} className={cn(status === 'draft' && 'border-amber-500')}>
+          <Button variant="outline" size="sm" onClick={() => handleSave('draft')} className={cn(status === 'draft' && 'border-amber-500')}>
             <Save className="h-4 w-4 mr-1" /> Save Draft
           </Button>
-          <Button size="sm" onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700">
+          <Button size="sm" onClick={() => handleSave('published')} className="bg-emerald-600 hover:bg-emerald-700">
             <Globe className="h-4 w-4 mr-1" /> Publish
           </Button>
         </div>
@@ -509,9 +491,11 @@ function PathBuilderPanel({
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  onBlur={() => handleBlur('name')}
                   placeholder="e.g., Full-Stack Developer"
-                  className="h-9"
+                  className={`h-9 ${formErrors.name ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                 />
+                {formErrors.name && <p className="text-sm text-destructive mt-1">{formErrors.name}</p>}
               </div>
               <div className="space-y-2">
                 <Label className="text-xs">Description</Label>
@@ -603,6 +587,9 @@ function PathBuilderPanel({
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm">Course Sequence</CardTitle>
+                {formErrors.courses && (
+                  <span className="text-xs text-destructive">{formErrors.courses}</span>
+                )}
                 <div className="relative">
                   <Button
                     variant="outline"
@@ -925,9 +912,69 @@ function PathAnalyticsPanel() {
   );
 }
 
+// ---- Loading Skeletons ----
+
+function PathCardSkeleton() {
+  return (
+    <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+      <div className="h-1.5 w-full bg-gradient-to-r from-muted to-muted/50" />
+      <CardHeader className="pb-3">
+        <Skeleton className="h-5 w-3/4 mb-2" />
+        <Skeleton className="h-3 w-full" />
+        <div className="flex items-center gap-2 mt-2">
+          <Skeleton className="h-5 w-16 rounded-full" />
+          <Skeleton className="h-5 w-20 rounded-full" />
+          <Skeleton className="h-3 w-16" />
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <div className="grid grid-cols-3 gap-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="text-center">
+              <Skeleton className="h-4 w-8 mx-auto mb-1" />
+              <Skeleton className="h-2.5 w-12 mx-auto" />
+            </div>
+          ))}
+        </div>
+        <Skeleton className="h-3 w-24 mt-3" />
+      </CardContent>
+    </Card>
+  );
+}
+
+function PathListSkeleton() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {[1, 2, 3].map((i) => (
+        <PathCardSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
+
 // ---- Main Component ----
 export function AdminLearningPaths() {
-  const [paths, setPaths] = useState<LearningPath[]>(mockPaths);
+  const tenant = useAppStore((s) => s.currentTenant);
+  const tenantId = tenant?.id || '';
+
+  // API data hooks
+  const { data: apiPaths, isLoading: pathsLoading, error: pathsError } = useLearningPaths(tenantId);
+  const { data: apiCourses } = useCourses();
+  const createPathMutation = useCreateLearningPath();
+  const updatePathMutation = useUpdateLearningPath();
+  const deletePathMutation = useDeleteLearningPath();
+
+  // Map API data to component interfaces
+  const paths: LearningPath[] = useMemo(
+    () => (apiPaths || []).map(mapApiPathToLearningPath),
+    [apiPaths]
+  );
+
+  const availableCourses = useMemo(
+    () => (apiCourses || []).map(mapApiCourseToPathCourseSource),
+    [apiCourses]
+  );
+
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -944,37 +991,71 @@ export function AdminLearningPaths() {
     return matchesSearch && matchesStatus && matchesCategory;
   });
 
-  const categories = [...new Set(paths.map((p) => p.category))];
+  const categories = [...new Set(paths.map((p) => p.category).filter(Boolean))];
 
-  const handleSave = useCallback((path: LearningPath) => {
-    setPaths((prev) => {
-      const exists = prev.find((p) => p.id === path.id);
-      if (exists) {
-        return prev.map((p) => p.id === path.id ? path : p);
-      }
-      return [...prev, path];
-    });
-    setEditingPath(null);
-    setIsCreating(false);
-  }, []);
-
-  const handleDuplicate = useCallback((path: LearningPath) => {
-    const newPath: LearningPath = {
-      ...path,
-      id: `lp-${Date.now()}`,
-      name: `${path.name} (Copy)`,
-      status: 'draft',
-      enrolledCount: 0,
-      completionRate: 0,
-      createdAt: new Date().toISOString(),
+  const handleSave = useCallback(async (path: LearningPath) => {
+    const isEdit = paths.some((p) => p.id === path.id);
+    const payload = {
+      tenantId,
+      title: path.name,
+      description: path.description || null,
+      category: path.category || null,
+      level: path.difficulty,
+      isPublished: path.status === 'published',
+      courses: path.courses.map((c, i) => ({
+        courseId: c.id,
+        orderIndex: i,
+        isRequired: c.isRequired,
+        milestone: c.milestone || null,
+        prerequisiteIds: c.prerequisiteIds.length > 0 ? c.prerequisiteIds.join(',') : null,
+      })),
     };
-    setPaths((prev) => [...prev, newPath]);
-  }, []);
 
-  const handleDelete = useCallback((id: string) => {
-    setPaths((prev) => prev.filter((p) => p.id !== id));
-    setDeleteConfirmId(null);
-  }, []);
+    try {
+      if (isEdit) {
+        await updatePathMutation.mutateAsync({ id: path.id, ...payload });
+      } else {
+        await createPathMutation.mutateAsync(payload);
+      }
+      setEditingPath(null);
+      setIsCreating(false);
+    } catch {
+      // Error is handled by mutation hooks with toast
+    }
+  }, [paths, tenantId, createPathMutation, updatePathMutation]);
+
+  const handleDuplicate = useCallback(async (path: LearningPath) => {
+    const payload = {
+      tenantId,
+      title: `${path.name} (Copy)`,
+      description: path.description || null,
+      category: path.category || null,
+      level: path.difficulty,
+      isPublished: false, // Duplicates are always drafts
+      courses: path.courses.map((c, i) => ({
+        courseId: c.id,
+        orderIndex: i,
+        isRequired: c.isRequired,
+        milestone: c.milestone || null,
+        prerequisiteIds: c.prerequisiteIds.length > 0 ? c.prerequisiteIds.join(',') : null,
+      })),
+    };
+
+    try {
+      await createPathMutation.mutateAsync(payload);
+    } catch {
+      // Error is handled by mutation hooks
+    }
+  }, [tenantId, createPathMutation]);
+
+  const handleDelete = useCallback(async (id: string) => {
+    try {
+      await deletePathMutation.mutateAsync(id);
+      setDeleteConfirmId(null);
+    } catch {
+      // Error is handled by mutation hooks
+    }
+  }, [deletePathMutation]);
 
   if (isCreating || editingPath) {
     return (
@@ -983,6 +1064,7 @@ export function AdminLearningPaths() {
           editingPath={editingPath}
           onSave={handleSave}
           onCancel={() => { setEditingPath(null); setIsCreating(false); }}
+          availableCourses={availableCourses}
         />
       </div>
     );
@@ -1050,27 +1132,60 @@ export function AdminLearningPaths() {
             </Select>
           </div>
 
-          {/* Path Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            <AnimatePresence mode="popLayout">
-              {filteredPaths.map((path) => (
-                <PathCard
-                  key={path.id}
-                  path={path}
-                  onEdit={() => setEditingPath(path)}
-                  onDuplicate={() => handleDuplicate(path)}
-                  onDelete={() => setDeleteConfirmId(path.id)}
-                  onView={() => setEditingPath(path)}
-                />
-              ))}
-            </AnimatePresence>
-          </div>
+          {/* Loading State */}
+          {pathsLoading && <PathListSkeleton />}
 
-          {filteredPaths.length === 0 && (
+          {/* Error State */}
+          {pathsError && (
+            <div className="text-center py-12">
+              <div className="h-12 w-12 mx-auto mb-4 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                <Trash2 className="h-6 w-6 text-red-500" />
+              </div>
+              <p className="text-sm text-muted-foreground">Failed to load learning paths</p>
+              <p className="text-xs text-muted-foreground mt-1">Please try again later</p>
+            </div>
+          )}
+
+          {/* Path Grid */}
+          {!pathsLoading && !pathsError && (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              <AnimatePresence mode="popLayout">
+                {filteredPaths.map((path) => (
+                  <PathCard
+                    key={path.id}
+                    path={path}
+                    onEdit={() => setEditingPath(path)}
+                    onDuplicate={() => handleDuplicate(path)}
+                    onDelete={() => setDeleteConfirmId(path.id)}
+                    onView={() => setEditingPath(path)}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!pathsLoading && !pathsError && filteredPaths.length === 0 && (
             <div className="text-center py-12">
               <Map className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
-              <p className="text-sm text-muted-foreground">No learning paths found</p>
-              <p className="text-xs text-muted-foreground mt-1">Try adjusting your filters or create a new path</p>
+              {paths.length === 0 ? (
+                <>
+                  <p className="text-sm text-muted-foreground">No learning paths yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">Create your first learning path to guide your learners</p>
+                  <Button
+                    onClick={() => setIsCreating(true)}
+                    className="mt-4 bg-emerald-600 hover:bg-emerald-700 gap-1.5"
+                    size="sm"
+                  >
+                    <Plus className="h-4 w-4" /> Create Path
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">No learning paths found</p>
+                  <p className="text-xs text-muted-foreground mt-1">Try adjusting your filters or create a new path</p>
+                </>
+              )}
             </div>
           )}
         </TabsContent>
@@ -1091,8 +1206,12 @@ export function AdminLearningPaths() {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => deleteConfirmId && handleDelete(deleteConfirmId)}>
-              Delete
+            <Button
+              variant="destructive"
+              onClick={() => deleteConfirmId && handleDelete(deleteConfirmId)}
+              disabled={deletePathMutation.isPending}
+            >
+              {deletePathMutation.isPending ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

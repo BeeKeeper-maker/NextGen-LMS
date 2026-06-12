@@ -1,0 +1,960 @@
+     1→'use client';
+     2→
+     3→import { useState, useMemo, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Star,
+     7→  ThumbsUp,
+     8→  CheckCircle2,
+     9→  Flag,
+    10→  MessageSquare,
+    11→  ChevronDown,
+    12→  Pencil,
+    13→  Trash2,
+    14→  X,
+    15→  Send,
+    16→  ShieldCheck,
+    17→  TrendingUp,
+    18→} from 'lucide-react';
+    19→import { Card, CardContent } from '@/components/ui/card';
+    20→import { Button } from '@/components/ui/button';
+    21→import { Badge } from '@/components/ui/badge';
+    22→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    23→import { Progress } from '@/components/ui/progress';
+    24→import {
+    25→  Dialog,
+    26→  DialogContent,
+    27→  DialogHeader,
+    28→  DialogTitle,
+    29→  DialogFooter,
+    30→  DialogDescription,
+    31→} from '@/components/ui/dialog';
+    32→import { Textarea } from '@/components/ui/textarea';
+    33→import { Input } from '@/components/ui/input';
+    34→import {
+    35→  Select,
+    36→  SelectContent,
+    37→  SelectItem,
+    38→  SelectTrigger,
+    39→  SelectValue,
+    40→} from '@/components/ui/select';
+    41→import { useCourses } from '@/hooks/use-data';
+    42→import { cn } from '@/lib/utils';
+    43→
+    44→// TODO: Replace with real API when available - review API not yet implemented
+    45→interface CourseReview {
+    46→  id: string;
+    47→  courseId: string;
+    48→  userId: string;
+    49→  userName: string;
+    50→  userAvatar: string;
+    51→  rating: number;
+    52→  title: string;
+    53→  content: string;
+    54→  date: string;
+    55→  helpfulCount: number;
+    56→  isHelpful: boolean;
+    57→  courseProgress: number;
+    58→  isVerifiedPurchase: boolean;
+    59→  tags: string[];
+    60→  status: 'published' | 'flagged' | 'hidden';
+    61→  instructorReply?: {
+    62→    instructorName: string;
+    63→    content: string;
+    64→    date: string;
+    65→  };
+    66→  isOwnReview?: boolean;
+    67→}
+    68→
+    69→// TODO: Replace with real API when available - review data not yet in the API
+    70→const allMockReviews: CourseReview[] = [
+    71→  { id: 'rev-1', courseId: 'course-1', userId: 'user-2', userName: 'Emma Rodriguez', userAvatar: 'ER', rating: 5, title: 'Absolutely Incredible Course!', content: 'This course completely transformed how I think about React architecture. The Server Components section alone was worth the investment.', date: '2024-10-14T10:30:00Z', helpfulCount: 24, isHelpful: false, courseProgress: 100, isVerifiedPurchase: true, tags: ['Great Content', 'Life Changing', 'Well Structured'], status: 'published', instructorReply: { instructorName: 'Sarah Mitchell', content: 'Thank you so much, Emma!', date: '2024-10-15T08:00:00Z' } },
+    72→  { id: 'rev-2', courseId: 'course-1', userId: 'user-1', userName: 'Mike Chen', userAvatar: 'MC', rating: 5, title: 'Best React Course I\'ve Ever Taken', content: 'I\'ve taken multiple React courses over the years, and this one stands head and shoulders above the rest.', date: '2024-10-10T15:45:00Z', helpfulCount: 18, isHelpful: true, courseProgress: 85, isVerifiedPurchase: true, tags: ['Great Content', 'Practical'], status: 'published' },
+    73→  { id: 'rev-3', courseId: 'course-1', userId: 'user-6', userName: 'Priya Sharma', userAvatar: 'PS', rating: 4, title: 'Great Content, Minor Gaps in Testing', content: 'Great content overall. The TypeScript patterns section was excellent.', date: '2024-10-05T09:20:00Z', helpfulCount: 12, isHelpful: false, courseProgress: 72, isVerifiedPurchase: true, tags: ['Well Structured', 'Advanced'], status: 'published' },
+    74→  { id: 'rev-4', courseId: 'course-1', userId: 'user-7', userName: 'Alex Johnson', userAvatar: 'AJ', rating: 5, title: 'Game-Changer for My Career', content: 'This course is a game-changer. I went from struggling with React concepts to building production apps confidently.', date: '2024-09-28T14:00:00Z', helpfulCount: 31, isHelpful: false, courseProgress: 100, isVerifiedPurchase: true, tags: ['Life Changing', 'Practical', 'Great Content'], status: 'published', instructorReply: { instructorName: 'Sarah Mitchell', content: 'Congratulations on the new role, Alex!', date: '2024-09-29T10:00:00Z' } },
+    75→  { id: 'rev-5', courseId: 'course-1', userId: 'user-8', userName: 'Tom Wilson', userAvatar: 'TW', rating: 4, title: 'Comprehensive Deep Dive', content: 'Very comprehensive course. The App Router deep-dive was particularly helpful.', date: '2024-09-20T11:30:00Z', helpfulCount: 8, isHelpful: false, courseProgress: 60, isVerifiedPurchase: true, tags: ['Advanced', 'Well Structured'], status: 'published' },
+    76→  { id: 'rev-6', courseId: 'course-2', userId: 'user-1', userName: 'Mike Chen', userAvatar: 'MC', rating: 5, title: 'AI Development Made Accessible', content: 'This course demystified AI integration for me. The section on building autonomous agents was mind-blowing.', date: '2024-10-12T16:00:00Z', helpfulCount: 22, isHelpful: true, courseProgress: 100, isVerifiedPurchase: true, tags: ['Life Changing', 'Practical', 'Great Content'], status: 'published', instructorReply: { instructorName: 'Sarah Mitchell', content: 'So glad you found the RAG implementation useful, Mike!', date: '2024-10-13T09:00:00Z' } },
+    77→  { id: 'rev-7', courseId: 'course-2', userId: 'user-3', userName: 'David Park', userAvatar: 'DP', rating: 5, title: 'Essential for Modern Full-Stack', content: 'As an instructor myself, I appreciate the pedagogical approach here.', date: '2024-10-08T13:20:00Z', helpfulCount: 15, isHelpful: false, courseProgress: 90, isVerifiedPurchase: true, tags: ['Practical', 'Well Structured', 'Advanced'], status: 'published' },
+    78→  { id: 'rev-8', courseId: 'course-2', userId: 'user-9', userName: 'Jordan Lee', userAvatar: 'JL', rating: 4, title: 'Solid AI Foundation', content: 'Great course for getting started with AI integration.', date: '2024-10-01T10:45:00Z', helpfulCount: 9, isHelpful: false, courseProgress: 65, isVerifiedPurchase: true, tags: ['Great Content', 'Beginner Friendly'], status: 'published' },
+    79→  { id: 'rev-9', courseId: 'course-3', userId: 'user-7', userName: 'Alex Johnson', userAvatar: 'AJ', rating: 5, title: 'FAANG-Level Preparation', content: 'This course is exactly what you need for system design interviews.', date: '2024-10-11T08:30:00Z', helpfulCount: 28, isHelpful: true, courseProgress: 100, isVerifiedPurchase: true, tags: ['Life Changing', 'Advanced', 'Practical'], status: 'published' },
+    80→  { id: 'rev-10', courseId: 'course-3', userId: 'user-5', userName: 'Lisa Wang', userAvatar: 'LW', rating: 4, title: 'Thorough but Demanding', content: 'Very thorough coverage of system design concepts.', date: '2024-09-25T17:15:00Z', helpfulCount: 14, isHelpful: false, courseProgress: 80, isVerifiedPurchase: true, tags: ['Advanced', 'Well Structured'], status: 'published' },
+    81→  { id: 'rev-11', courseId: 'course-4', userId: 'user-4', userName: 'Nina Kovac', userAvatar: 'NK', rating: 5, title: 'Beautiful Visualizations Made Easy', content: 'I never thought I could create such stunning data visualizations.', date: '2024-10-09T12:00:00Z', helpfulCount: 16, isHelpful: false, courseProgress: 100, isVerifiedPurchase: true, tags: ['Great Content', 'Practical', 'Well Structured'], status: 'published' },
+    82→  { id: 'rev-12', courseId: 'course-4', userId: 'user-8', userName: 'Tom Wilson', userAvatar: 'TW', rating: 4, title: 'Great for Dashboard Builders', content: 'Solid course for anyone building analytics dashboards.', date: '2024-10-03T09:00:00Z', helpfulCount: 7, isHelpful: false, courseProgress: 55, isVerifiedPurchase: true, tags: ['Practical', 'Beginner Friendly'], status: 'published' },
+    83→  { id: 'rev-13', courseId: 'course-5', userId: 'user-9', userName: 'Jordan Lee', userAvatar: 'JL', rating: 5, title: 'Design Thinking Transformed', content: 'As a developer, I was skeptical about a design course. But this changed my perspective entirely.', date: '2024-10-07T14:30:00Z', helpfulCount: 19, isHelpful: true, courseProgress: 100, isVerifiedPurchase: true, tags: ['Life Changing', 'Beginner Friendly', 'Practical'], status: 'published' },
+    84→  { id: 'rev-14', courseId: 'course-5', userId: 'user-6', userName: 'Priya Sharma', userAvatar: 'PS', rating: 4, title: 'Good Introduction to UX/UI', content: 'A well-structured introduction to UX/UI principles.', date: '2024-09-30T16:45:00Z', helpfulCount: 10, isHelpful: false, courseProgress: 70, isVerifiedPurchase: true, tags: ['Beginner Friendly', 'Well Structured'], status: 'published' },
+    85→  { id: 'rev-15', courseId: 'course-6', userId: 'user-3', userName: 'David Park', userAvatar: 'DP', rating: 5, title: 'DevOps Mastery Achieved', content: 'The Kubernetes and Docker sections are incredibly detailed.', date: '2024-10-06T11:00:00Z', helpfulCount: 13, isHelpful: false, courseProgress: 88, isVerifiedPurchase: true, tags: ['Advanced', 'Practical', 'Great Content'], status: 'published' },
+    86→  { id: 'rev-16', courseId: 'course-1', userId: 'user-10', userName: 'Sam Taylor', userAvatar: 'ST', rating: 3, title: 'Good but Needs Updates', content: 'The core content is strong, but some sections feel outdated.', date: '2024-09-15T08:00:00Z', helpfulCount: 5, isHelpful: false, courseProgress: 45, isVerifiedPurchase: true, tags: ['Well Structured'], status: 'published' },
+    87→  { id: 'rev-17', courseId: 'course-2', userId: 'user-10', userName: 'Sam Taylor', userAvatar: 'ST', rating: 2, title: 'Not Enough Depth on Fine-Tuning', content: 'The course covers AI integration basics well, but I was expecting more on fine-tuning.', date: '2024-09-10T07:30:00Z', helpfulCount: 3, isHelpful: false, courseProgress: 30, isVerifiedPurchase: true, tags: ['Beginner Friendly'], status: 'published' },
+    88→  { id: 'rev-18', courseId: 'course-3', userId: 'user-11', userName: 'Chris Adams', userAvatar: 'CA', rating: 1, title: 'Too Theoretical', content: 'I was expecting hands-on system design exercises but found the course too theoretical.', date: '2024-08-20T19:00:00Z', helpfulCount: 2, isHelpful: false, courseProgress: 20, isVerifiedPurchase: false, tags: [], status: 'flagged' },
+    89→  { id: 'rev-19', courseId: 'course-1', userId: 'demo-learner-1', userName: 'You', userAvatar: 'YO', rating: 5, title: 'Excellent Learning Experience', content: 'I\'m still working through this course but I can already tell it\'s one of the best investments I\'ve made.', date: '2024-10-13T20:00:00Z', helpfulCount: 6, isHelpful: false, courseProgress: 68, isVerifiedPurchase: true, tags: ['Great Content', 'Well Structured'], status: 'published', isOwnReview: true },
+    90→  { id: 'rev-20', courseId: 'course-6', userId: 'user-11', userName: 'Chris Adams', userAvatar: 'CA', rating: 4, title: 'Solid Cloud Architecture Guide', content: 'Comprehensive coverage of cloud-native patterns.', date: '2024-09-18T13:00:00Z', helpfulCount: 8, isHelpful: false, courseProgress: 75, isVerifiedPurchase: true, tags: ['Practical', 'Advanced'], status: 'published' },
+    91→];
+    92→
+    93→// TODO: Replace with real API when available - rating distribution not yet in the API
+    94→const reviewRatingDistribution: Record<string, { stars: number; count: number; percentage: number }[]> = {
+    95→  'course-1': [{ stars: 5, count: 186, percentage: 59.6 }, { stars: 4, count: 89, percentage: 28.5 }, { stars: 3, count: 24, percentage: 7.7 }, { stars: 2, count: 9, percentage: 2.9 }, { stars: 1, count: 4, percentage: 1.3 }],
+    96→  'course-2': [{ stars: 5, count: 128, percentage: 64.6 }, { stars: 4, count: 45, percentage: 22.7 }, { stars: 3, count: 16, percentage: 8.1 }, { stars: 2, count: 6, percentage: 3.0 }, { stars: 1, count: 3, percentage: 1.5 }],
+    97→  'course-3': [{ stars: 5, count: 98, percentage: 62.8 }, { stars: 4, count: 38, percentage: 24.4 }, { stars: 3, count: 12, percentage: 7.7 }, { stars: 2, count: 5, percentage: 3.2 }, { stars: 1, count: 3, percentage: 1.9 }],
+    98→  'course-4': [{ stars: 5, count: 82, percentage: 57.7 }, { stars: 4, count: 38, percentage: 26.8 }, { stars: 3, count: 14, percentage: 9.9 }, { stars: 2, count: 5, percentage: 3.5 }, { stars: 1, count: 3, percentage: 2.1 }],
+    99→  'course-5': [{ stars: 5, count: 112, percentage: 55.2 }, { stars: 4, count: 58, percentage: 28.6 }, { stars: 3, count: 22, percentage: 10.8 }, { stars: 2, count: 8, percentage: 3.9 }, { stars: 1, count: 3, percentage: 1.5 }],
+   100→  'course-6': [{ stars: 5, count: 52, percentage: 58.4 }, { stars: 4, count: 22, percentage: 24.7 }, { stars: 3, count: 9, percentage: 10.1 }, { stars: 2, count: 4, percentage: 4.5 }, { stars: 1, count: 2, percentage: 2.2 }],
+   101→};
+   102→
+   103→// TODO: Replace with real API when available - review tags not yet in the API
+   104→const reviewTags = ['Great Content', 'Well Structured', 'Practical', 'Beginner Friendly', 'Advanced', 'Life Changing'] as const;
+   105→
+   106→// ─── Animation variants ────────────────────────────────────
+   107→const containerVariants = {
+   108→  hidden: { opacity: 0 },
+   109→  visible: { opacity: 1, transition: { staggerChildren: 0.06 } },
+   110→};
+   111→
+   112→const itemVariants = {
+   113→  hidden: { opacity: 0, y: 12 },
+   114→  visible: { opacity: 1, y: 0, transition: { duration: 0.35 } },
+   115→};
+   116→
+   117→// ─── Animated Counter ──────────────────────────────────────
+   118→function AnimatedCounter({ value, decimals = 1 }: { value: number; decimals?: number }) {
+   119→  const [displayValue, setDisplayValue] = useState(0);
+   120→  const duration = 800;
+   121→
+   122→  useState(() => {
+   123→    const startTime = Date.now();
+   124→    const animate = () => {
+   125→      const elapsed = Date.now() - startTime;
+   126→      const progress = Math.min(elapsed / duration, 1);
+   127→      // easeOutCubic
+   128→      const eased = 1 - Math.pow(1 - progress, 3);
+   129→      setDisplayValue(value * eased);
+   130→      if (progress < 1) requestAnimationFrame(animate);
+   131→    };
+   132→    requestAnimationFrame(animate);
+   133→  });
+   134→
+   135→  return <span>{displayValue.toFixed(decimals)}</span>;
+   136→}
+   137→
+   138→// ─── Star Rating Display ───────────────────────────────────
+   139→function StarRating({ rating, size = 'md' }: { rating: number; size?: 'sm' | 'md' | 'lg' }) {
+   140→  const sizeClass = size === 'lg' ? 'h-6 w-6' : size === 'md' ? 'h-4 w-4' : 'h-3.5 w-3.5';
+   141→  return (
+   142→    <div className="flex items-center gap-0.5">
+   143→      {[1, 2, 3, 4, 5].map((star) => (
+   144→        <Star
+   145→          key={star}
+   146→          className={cn(
+   147→            sizeClass,
+   148→            star <= Math.floor(rating)
+   149→              ? 'fill-amber-400 text-amber-400'
+   150→              : star - 0.5 <= rating
+   151→                ? 'fill-amber-400/50 text-amber-400'
+   152→                : 'text-muted-foreground/30'
+   153→          )}
+   154→        />
+   155→      ))}
+   156→    </div>
+   157→  );
+   158→}
+   159→
+   160→// ─── Interactive Star Selector ──────────────────────────────
+   161→function StarSelector({
+   162→  value,
+   163→  onChange,
+   164→}: {
+   165→  value: number;
+   166→  onChange: (rating: number) => void;
+   167→}) {
+   168→  const [hovered, setHovered] = useState(0);
+   169→
+   170→  return (
+   171→    <div className="flex items-center gap-1">
+   172→      {[1, 2, 3, 4, 5].map((star) => (
+   173→        <motion.button
+   174→          key={star}
+   175→          type="button"
+   176→          whileHover={{ scale: 1.2 }}
+   177→          whileTap={{ scale: 0.9 }}
+   178→          onMouseEnter={() => setHovered(star)}
+   179→          onMouseLeave={() => setHovered(0)}
+   180→          onClick={() => onChange(star)}
+   181→          className="focus:outline-none"
+   182→        >
+   183→          <Star
+   184→            className={cn(
+   185→              'h-8 w-8 transition-colors duration-150',
+   186→              star <= (hovered || value)
+   187→                ? 'fill-amber-400 text-amber-400'
+   188→                : 'text-muted-foreground/30'
+   189→            )}
+   190→          />
+   191→        </motion.button>
+   192→      ))}
+   193→      {value > 0 && (
+   194→        <span className="ml-2 text-sm font-medium text-amber-600 dark:text-amber-400">
+   195→          {value === 1 ? 'Poor' : value === 2 ? 'Fair' : value === 3 ? 'Good' : value === 4 ? 'Very Good' : 'Excellent'}
+   196→        </span>
+   197→      )}
+   198→    </div>
+   199→  );
+   200→}
+   201→
+   202→// ─── Rating Summary Card ────────────────────────────────────
+   203→function RatingSummaryCard({
+   204→  courseId,
+   205→  avgRating,
+   206→  totalRatings,
+   207→}: {
+   208→  courseId: string;
+   209→  avgRating: number;
+   210→  totalRatings: number;
+   211→}) {
+   212→  const distribution = reviewRatingDistribution[courseId] || reviewRatingDistribution['course-1'];
+   213→
+   214→  // Compute "would recommend" = (4+5 star) / total * 100
+   215→  const wouldRecommend = useMemo(() => {
+   216→    const positive = distribution.filter(d => d.stars >= 4).reduce((s, d) => s + d.count, 0);
+   217→    const total = distribution.reduce((s, d) => s + d.count, 0);
+   218→    return total > 0 ? Math.round((positive / total) * 100) : 0;
+   219→  }, [distribution]);
+   220→
+   221→  // Compute top tags from reviews for this course
+   222→  const topTags = useMemo(() => {
+   223→    const courseReviews = allMockReviews.filter(r => r.courseId === courseId);
+   224→    const tagCount: Record<string, number> = {};
+   225→    courseReviews.forEach(r => r.tags.forEach(t => { tagCount[t] = (tagCount[t] || 0) + 1; }));
+   226→    return Object.entries(tagCount)
+   227→      .sort(([, a], [, b]) => b - a)
+   228→      .slice(0, 6)
+   229→      .map(([tag, count]) => ({ tag, count }));
+   230→  }, [courseId]);
+   231→
+   232→  return (
+   233→    <motion.div variants={itemVariants}>
+   234→      <Card className="overflow-hidden backdrop-blur-sm bg-card/80 border-border/50">
+   235→        <CardContent className="p-6">
+   236→          <div className="flex flex-col lg:flex-row gap-6">
+   237→            {/* Left: Big Rating */}
+   238→            <div className="text-center lg:text-left lg:w-48 shrink-0">
+   239→              <div className="flex items-center justify-center lg:justify-start gap-3">
+   240→                <p className="text-5xl font-bold text-foreground">
+   241→                  <AnimatedCounter value={avgRating} />
+   242→                </p>
+   243→                <div>
+   244→                  <StarRating rating={avgRating} size="md" />
+   245→                  <p className="text-sm text-muted-foreground mt-1">
+   246→                    {totalRatings.toLocaleString()} ratings
+   247→                  </p>
+   248→                </div>
+   249→              </div>
+   250→              <div className="mt-4 flex items-center justify-center lg:justify-start gap-2">
+   251→                <TrendingUp className="h-4 w-4 text-emerald-500" />
+   252→                <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+   253→                  {wouldRecommend}% would recommend
+   254→                </span>
+   255→              </div>
+   256→            </div>
+   257→
+   258→            {/* Middle: Distribution Bars */}
+   259→            <div className="flex-1 space-y-2">
+   260→              <h4 className="text-sm font-semibold text-foreground mb-3">Rating Distribution</h4>
+   261→              {distribution.map((dist) => (
+   262→                <div key={dist.stars} className="flex items-center gap-2">
+   263→                  <span className="text-xs text-muted-foreground w-8 text-right font-medium">
+   264→                    {dist.stars}★
+   265→                  </span>
+   266→                  <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
+   267→                    <motion.div
+   268→                      initial={{ width: 0 }}
+   269→                      animate={{ width: `${dist.percentage}%` }}
+   270→                      transition={{ duration: 0.8, delay: (5 - dist.stars) * 0.1, ease: 'easeOut' }}
+   271→                      className={cn(
+   272→                        'h-full rounded-full',
+   273→                        dist.stars >= 4
+   274→                          ? 'bg-gradient-to-r from-amber-400 to-amber-500'
+   275→                          : dist.stars === 3
+   276→                            ? 'bg-gradient-to-r from-amber-300 to-amber-400'
+   277→                            : 'bg-gradient-to-r from-orange-300 to-orange-400'
+   278→                      )}
+   279→                    />
+   280→                  </div>
+   281→                  <span className="text-xs text-muted-foreground w-12 text-right">
+   282→                    {dist.count} ({dist.percentage}%)
+   283→                  </span>
+   284→                </div>
+   285→              ))}
+   286→            </div>
+   287→
+   288→            {/* Right: Top Tags */}
+   289→            <div className="lg:w-48 shrink-0">
+   290→              <h4 className="text-sm font-semibold text-foreground mb-3">Top Tags</h4>
+   291→              <div className="flex flex-wrap gap-2">
+   292→                {topTags.map(({ tag, count }) => (
+   293→                  <Badge
+   294→                    key={tag}
+   295→                    variant="secondary"
+   296→                    className="text-xs bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+   297→                  >
+   298→                    {tag} ({count})
+   299→                  </Badge>
+   300→                ))}
+   301→              </div>
+   302→            </div>
+   303→          </div>
+   304→        </CardContent>
+   305→      </Card>
+   306→    </motion.div>
+   307→  );
+   308→}
+   309→
+   310→// ─── Single Review Card ─────────────────────────────────────
+   311→function ReviewCard({
+   312→  review,
+   313→  onHelpful,
+   314→  onEdit,
+   315→  onDelete,
+   316→}: {
+   317→  review: CourseReview;
+   318→  onHelpful: (id: string) => void;
+   319→  onEdit: (review: CourseReview) => void;
+   320→  onDelete: (id: string) => void;
+   321→}) {
+   322→  const formatDate = (dateStr: string) => {
+   323→    const date = new Date(dateStr);
+   324→    const now = new Date();
+   325→    const diffMs = now.getTime() - date.getTime();
+   326→    const diffDays = Math.floor(diffMs / 86400000);
+   327→    if (diffDays < 1) return 'Today';
+   328→    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+   329→    if (diffDays < 30) return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) > 1 ? 's' : ''} ago`;
+   330→    if (diffDays < 365) return `${Math.floor(diffDays / 30)} month${Math.floor(diffDays / 30) > 1 ? 's' : ''} ago`;
+   331→    return date.toLocaleDateString();
+   332→  };
+   333→
+   334→  return (
+   335→    <motion.div variants={itemVariants} layout>
+   336→      <Card className="overflow-hidden backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-shadow">
+   337→        <CardContent className="p-5">
+   338→          <div className="flex items-start gap-3">
+   339→            <Avatar className="h-10 w-10 shrink-0">
+   340→              <AvatarFallback className="text-xs bg-gradient-to-br from-amber-100 to-amber-200 text-amber-700 dark:from-amber-900/40 dark:to-amber-800/40 dark:text-amber-300">
+   341→                {review.userAvatar}
+   342→              </AvatarFallback>
+   343→            </Avatar>
+   344→            <div className="flex-1 min-w-0">
+   345→              {/* Header Row */}
+   346→              <div className="flex items-center flex-wrap gap-2 mb-1">
+   347→                <span className="text-sm font-semibold text-foreground">{review.userName}</span>
+   348→                {review.isVerifiedPurchase && (
+   349→                  <Badge
+   350→                    variant="secondary"
+   351→                    className="text-[10px] px-1.5 py-0 gap-0.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
+   352→                  >
+   353→                    <ShieldCheck className="h-3 w-3" />
+   354→                    Verified
+   355→                  </Badge>
+   356→                )}
+   357→                {review.isOwnReview && (
+   358→                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+   359→                    Your Review
+   360→                  </Badge>
+   361→                )}
+   362→                <span className="text-xs text-muted-foreground">· {formatDate(review.date)}</span>
+   363→              </div>
+   364→
+   365→              {/* Star Rating + Progress */}
+   366→              <div className="flex items-center gap-3 mb-2">
+   367→                <StarRating rating={review.rating} size="sm" />
+   368→                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+   369→                  <Progress value={review.courseProgress} className="h-1.5 w-16" />
+   370→                  <span>{review.courseProgress}% complete</span>
+   371→                </div>
+   372→              </div>
+   373→
+   374→              {/* Title */}
+   375→              <h4 className="text-sm font-semibold text-foreground mb-1">{review.title}</h4>
+   376→
+   377→              {/* Content */}
+   378→              <p className="text-sm text-muted-foreground leading-relaxed mb-3">{review.content}</p>
+   379→
+   380→              {/* Tags */}
+   381→              {review.tags.length > 0 && (
+   382→                <div className="flex flex-wrap gap-1.5 mb-3">
+   383→                  {review.tags.map((tag) => (
+   384→                    <Badge
+   385→                      key={tag}
+   386→                      variant="secondary"
+   387→                      className="text-[10px] px-2 py-0.5 bg-amber-50/80 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
+   388→                    >
+   389→                      {tag}
+   390→                    </Badge>
+   391→                  ))}
+   392→                </div>
+   393→              )}
+   394→
+   395→              {/* Instructor Reply */}
+   396→              {review.instructorReply && (
+   397→                <div className="ml-2 pl-4 border-l-2 border-amber-300 dark:border-amber-700 mb-3">
+   398→                  <div className="flex items-center gap-2 mb-1">
+   399→                    <Badge className="text-[10px] px-1.5 py-0 gap-0.5 bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 border-violet-200 dark:border-violet-800">
+   400→                      <ShieldCheck className="h-3 w-3" />
+   401→                      Instructor
+   402→                    </Badge>
+   403→                    <span className="text-xs font-medium text-foreground">
+   404→                      {review.instructorReply.instructorName}
+   405→                    </span>
+   406→                    <span className="text-xs text-muted-foreground">· {formatDate(review.instructorReply.date)}</span>
+   407→                  </div>
+   408→                  <p className="text-sm text-muted-foreground leading-relaxed">
+   409→                    {review.instructorReply.content}
+   410→                  </p>
+   411→                </div>
+   412→              )}
+   413→
+   414→              {/* Actions */}
+   415→              <div className="flex items-center gap-2">
+   416→                <Button
+   417→                  variant="ghost"
+   418→                  size="sm"
+   419→                  className={cn(
+   420→                    'h-7 text-xs gap-1.5',
+   421→                    review.isHelpful
+   422→                      ? 'text-amber-600 hover:text-amber-700'
+   423→                      : 'text-muted-foreground hover:text-foreground'
+   424→                  )}
+   425→                  onClick={() => onHelpful(review.id)}
+   426→                >
+   427→                  <ThumbsUp className={cn('h-3.5 w-3.5', review.isHelpful && 'fill-amber-400')} />
+   428→                  Helpful ({review.helpfulCount})
+   429→                </Button>
+   430→
+   431→                {review.isOwnReview && (
+   432→                  <>
+   433→                    <Button
+   434→                      variant="ghost"
+   435→                      size="sm"
+   436→                      className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+   437→                      onClick={() => onEdit(review)}
+   438→                    >
+   439→                      <Pencil className="h-3.5 w-3.5" />
+   440→                      Edit
+   441→                    </Button>
+   442→                    <Button
+   443→                      variant="ghost"
+   444→                      size="sm"
+   445→                      className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-red-600"
+   446→                      onClick={() => onDelete(review.id)}
+   447→                    >
+   448→                      <Trash2 className="h-3.5 w-3.5" />
+   449→                      Delete
+   450→                    </Button>
+   451→                  </>
+   452→                )}
+   453→              </div>
+   454→            </div>
+   455→          </div>
+   456→        </CardContent>
+   457→      </Card>
+   458→    </motion.div>
+   459→  );
+   460→}
+   461→
+   462→// ─── Write Review Dialog ────────────────────────────────────
+   463→function WriteReviewDialog({
+   464→  open,
+   465→  onClose,
+   466→  onSubmit,
+   467→  editingReview,
+   468→}: {
+   469→  open: boolean;
+   470→  onClose: () => void;
+   471→  onSubmit: (review: Partial<CourseReview>) => void;
+   472→  editingReview: CourseReview | null;
+   473→}) {
+   474→  const [rating, setRating] = useState(editingReview?.rating || 0);
+   475→  const [title, setTitle] = useState(editingReview?.title || '');
+   476→  const [content, setContent] = useState(editingReview?.content || '');
+   477→  const [selectedTags, setSelectedTags] = useState<string[]>(editingReview?.tags || []);
+   478→  const [submitted, setSubmitted] = useState(false);
+   479→
+   480→  const charCount = content.length;
+   481→  const maxChars = 2000;
+   482→  const minChars = 20;
+   483→  const canSubmit = rating > 0 && title.trim().length > 0 && charCount >= minChars;
+   484→
+   485→  const handleSubmit = () => {
+   486→    if (!canSubmit) return;
+   487→    onSubmit({
+   488→      rating,
+   489→      title: title.trim(),
+   490→      content: content.trim(),
+   491→      tags: selectedTags,
+   492→    });
+   493→    setSubmitted(true);
+   494→    setTimeout(() => {
+   495→      setSubmitted(false);
+   496→      setRating(0);
+   497→      setTitle('');
+   498→      setContent('');
+   499→      setSelectedTags([]);
+   500→      onClose();
+   501→    }, 1500);
+   502→  };
+   503→
+   504→  const toggleTag = (tag: string) => {
+   505→    setSelectedTags((prev) =>
+   506→      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+   507→    );
+   508→  };
+   509→
+   510→  return (
+   511→    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+   512→      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+   513→        <AnimatePresence mode="wait">
+   514→          {submitted ? (
+   515→            <motion.div
+   516→              key="success"
+   517→              initial={{ scale: 0.8, opacity: 0 }}
+   518→              animate={{ scale: 1, opacity: 1 }}
+   519→              exit={{ scale: 0.8, opacity: 0 }}
+   520→              className="py-12 flex flex-col items-center justify-center"
+   521→            >
+   522→              <motion.div
+   523→                initial={{ scale: 0 }}
+   524→                animate={{ scale: 1 }}
+   525→                transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.2 }}
+   526→              >
+   527→                <CheckCircle2 className="h-16 w-16 text-emerald-500 mb-4" />
+   528→              </motion.div>
+   529→              <h3 className="text-lg font-semibold text-foreground">Review Submitted!</h3>
+   530→              <p className="text-sm text-muted-foreground mt-1">Thank you for your feedback</p>
+   531→            </motion.div>
+   532→          ) : (
+   533→            <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+   534→              <DialogHeader>
+   535→                <DialogTitle className="flex items-center gap-2">
+   536→                  <Star className="h-5 w-5 text-amber-400" />
+   537→                  {editingReview ? 'Edit Your Review' : 'Write a Review'}
+   538→                </DialogTitle>
+   539→                <DialogDescription>
+   540→                  Share your experience with this course. Your feedback helps other learners make informed decisions.
+   541→                </DialogDescription>
+   542→              </DialogHeader>
+   543→
+   544→              <div className="space-y-5 mt-4">
+   545→                {/* Star Rating */}
+   546→                <div>
+   547→                  <label className="text-sm font-medium text-foreground mb-2 block">
+   548→                    Your Rating <span className="text-red-500">*</span>
+   549→                  </label>
+   550→                  <StarSelector value={rating} onChange={setRating} />
+   551→                </div>
+   552→
+   553→                {/* Review Title */}
+   554→                <div>
+   555→                  <label className="text-sm font-medium text-foreground mb-2 block">
+   556→                    Review Title <span className="text-red-500">*</span>
+   557→                  </label>
+   558→                  <Input
+   559→                    placeholder="Summarize your experience"
+   560→                    value={title}
+   561→                    onChange={(e) => setTitle(e.target.value)}
+   562→                    maxLength={100}
+   563→                  />
+   564→                </div>
+   565→
+   566→                {/* Review Body */}
+   567→                <div>
+   568→                  <label className="text-sm font-medium text-foreground mb-2 block">
+   569→                    Your Review <span className="text-red-500">*</span>
+   570→                  </label>
+   571→                  <Textarea
+   572→                    placeholder={`Share your detailed experience (minimum ${minChars} characters)...`}
+   573→                    value={content}
+   574→                    onChange={(e) => setContent(e.target.value.slice(0, maxChars))}
+   575→                    rows={5}
+   576→                  />
+   577→                  <div className="flex items-center justify-between mt-1">
+   578→                    <span
+   579→                      className={cn(
+   580→                        'text-xs',
+   581→                        charCount < minChars
+   582→                          ? 'text-red-500'
+   583→                          : charCount > maxChars * 0.9
+   584→                            ? 'text-amber-600'
+   585→                            : 'text-muted-foreground'
+   586→                      )}
+   587→                    >
+   588→                      {charCount < minChars
+   589→                        ? `${minChars - charCount} more characters needed`
+   590→                        : `${charCount}/${maxChars} characters`}
+   591→                    </span>
+   592→                    {charCount >= minChars && (
+   593→                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+   594→                    )}
+   595→                  </div>
+   596→                </div>
+   597→
+   598→                {/* Tags */}
+   599→                <div>
+   600→                  <label className="text-sm font-medium text-foreground mb-2 block">
+   601→                    Tags (select all that apply)
+   602→                  </label>
+   603→                  <div className="flex flex-wrap gap-2">
+   604→                    {reviewTags.map((tag) => (
+   605→                      <motion.button
+   606→                        key={tag}
+   607→                        type="button"
+   608→                        whileHover={{ scale: 1.05 }}
+   609→                        whileTap={{ scale: 0.95 }}
+   610→                        onClick={() => toggleTag(tag)}
+   611→                        className={cn(
+   612→                          'px-3 py-1.5 rounded-full text-xs font-medium transition-colors border',
+   613→                          selectedTags.includes(tag)
+   614→                            ? 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700'
+   615→                            : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+   616→                        )}
+   617→                      >
+   618→                        {tag}
+   619→                      </motion.button>
+   620→                    ))}
+   621→                  </div>
+   622→                </div>
+   623→              </div>
+   624→
+   625→              <DialogFooter className="mt-6 gap-2">
+   626→                <Button variant="outline" onClick={onClose}>
+   627→                  Cancel
+   628→                </Button>
+   629→                <Button
+   630→                  onClick={handleSubmit}
+   631→                  disabled={!canSubmit}
+   632→                  className="gap-2 bg-amber-600 hover:bg-amber-700 text-white"
+   633→                >
+   634→                  <Send className="h-4 w-4" />
+   635→                  {editingReview ? 'Update Review' : 'Submit Review'}
+   636→                </Button>
+   637→              </DialogFooter>
+   638→            </motion.div>
+   639→          )}
+   640→        </AnimatePresence>
+   641→      </DialogContent>
+   642→    </Dialog>
+   643→  );
+   644→}
+   645→
+   646→// ─── Delete Confirmation Dialog ─────────────────────────────
+   647→function DeleteReviewDialog({
+   648→  open,
+   649→  onClose,
+   650→  onConfirm,
+   651→}: {
+   652→  open: boolean;
+   653→  onClose: () => void;
+   654→  onConfirm: () => void;
+   655→}) {
+   656→  return (
+   657→    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+   658→      <DialogContent className="sm:max-w-md">
+   659→        <DialogHeader>
+   660→          <DialogTitle>Delete Review</DialogTitle>
+   661→          <DialogDescription>
+   662→            Are you sure you want to delete your review? This action cannot be undone.
+   663→          </DialogDescription>
+   664→        </DialogHeader>
+   665→        <DialogFooter className="gap-2">
+   666→          <Button variant="outline" onClick={onClose}>
+   667→            Cancel
+   668→          </Button>
+   669→          <Button variant="destructive" onClick={onConfirm}>
+   670→            Delete
+   671→          </Button>
+   672→        </DialogFooter>
+   673→      </DialogContent>
+   674→    </Dialog>
+   675→  );
+   676→}
+   677→
+   678→// ─── Main CourseReviews Component ───────────────────────────
+   679→export function CourseReviews({
+   680→  courseId,
+   681→  avgRating,
+   682→  totalRatings,
+   683→}: {
+   684→  courseId: string;
+   685→  avgRating: number;
+   686→  totalRatings: number;
+   687→}) {
+   688→  const [reviews, setReviews] = useState<CourseReview[]>(allMockReviews);
+   689→  const [sortBy, setSortBy] = useState('most_recent');
+   690→  const [filterStars, setFilterStars] = useState<number | null>(null);
+   691→  const [showWriteDialog, setShowWriteDialog] = useState(false);
+   692→  const [editingReview, setEditingReview] = useState<CourseReview | null>(null);
+   693→  const [deleteReviewId, setDeleteReviewId] = useState<string | null>(null);
+   694→  const [visibleCount, setVisibleCount] = useState(5);
+   695→
+   696→  // Filter and sort reviews for current course
+   697→  const filteredReviews = useMemo(() => {
+   698→    let result = reviews.filter((r) => r.courseId === courseId);
+   699→
+   700→    // Filter by star rating
+   701→    if (filterStars !== null) {
+   702→      result = result.filter((r) => r.rating === filterStars);
+   703→    }
+   704→
+   705→    // Sort
+   706→    switch (sortBy) {
+   707→      case 'most_recent':
+   708→        result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+   709→        break;
+   710→      case 'most_helpful':
+   711→        result.sort((a, b) => b.helpfulCount - a.helpfulCount);
+   712→        break;
+   713→      case 'highest_rated':
+   714→        result.sort((a, b) => b.rating - a.rating);
+   715→        break;
+   716→      case 'lowest_rated':
+   717→        result.sort((a, b) => a.rating - b.rating);
+   718→        break;
+   719→    }
+   720→
+   721→    return result;
+   722→  }, [reviews, courseId, filterStars, sortBy]);
+   723→
+   724→  // Visible reviews for pagination
+   725→  const visibleReviews = filteredReviews.slice(0, visibleCount);
+   726→  const hasMore = visibleCount < filteredReviews.length;
+   727→
+   728→  // Handle helpful click
+   729→  const handleHelpful = useCallback((id: string) => {
+   730→    setReviews((prev) =>
+   731→      prev.map((r) =>
+   732→        r.id === id
+   733→          ? {
+   734→              ...r,
+   735→              isHelpful: !r.isHelpful,
+   736→              helpfulCount: r.isHelpful ? r.helpfulCount - 1 : r.helpfulCount + 1,
+   737→            }
+   738→          : r
+   739→      )
+   740→    );
+   741→  }, []);
+   742→
+   743→  // Handle write/edit review submit
+   744→  const handleSubmitReview = useCallback(
+   745→    (data: Partial<CourseReview>) => {
+   746→      if (editingReview) {
+   747→        // Update existing review
+   748→        setReviews((prev) =>
+   749→          prev.map((r) =>
+   750→            r.id === editingReview.id
+   751→              ? { ...r, ...data, date: new Date().toISOString() }
+   752→              : r
+   753→          )
+   754→        );
+   755→        setEditingReview(null);
+   756→      } else {
+   757→        // Create new review
+   758→        const newReview: CourseReview = {
+   759→          id: `rev-new-${Date.now()}`,
+   760→          courseId,
+   761→          userId: 'demo-learner-1',
+   762→          userName: 'You',
+   763→          userAvatar: 'YO',
+   764→          rating: data.rating || 5,
+   765→          title: data.title || '',
+   766→          content: data.content || '',
+   767→          date: new Date().toISOString(),
+   768→          helpfulCount: 0,
+   769→          isHelpful: false,
+   770→          courseProgress: 68,
+   771→          isVerifiedPurchase: true,
+   772→          tags: data.tags || [],
+   773→          status: 'published',
+   774→          isOwnReview: true,
+   775→        };
+   776→        setReviews((prev) => [newReview, ...prev]);
+   777→      }
+   778→    },
+   779→    [editingReview, courseId]
+   780→  );
+   781→
+   782→  // Handle edit review
+   783→  const handleEdit = useCallback((review: CourseReview) => {
+   784→    setEditingReview(review);
+   785→    setShowWriteDialog(true);
+   786→  }, []);
+   787→
+   788→  // Handle delete review
+   789→  const handleDelete = useCallback(() => {
+   790→    if (deleteReviewId) {
+   791→      setReviews((prev) => prev.filter((r) => r.id !== deleteReviewId));
+   792→      setDeleteReviewId(null);
+   793→    }
+   794→  }, [deleteReviewId]);
+   795→
+   796→  // Distribution click to filter
+   797→  const handleDistributionClick = useCallback((stars: number) => {
+   798→    setFilterStars((prev) => (prev === stars ? null : stars));
+   799→    setVisibleCount(5);
+   800→  }, []);
+   801→
+   802→  const { data: coursesData } = useCourses();
+   803→  const demoCourses = coursesData || [];
+   804→  const courseName = demoCourses.find((c: any) => c.id === courseId)?.title || 'Course';
+   805→
+   806→  return (
+   807→    <motion.div
+   808→      className="space-y-6"
+   809→      variants={containerVariants}
+   810→      initial="hidden"
+   811→      animate="visible"
+   812→    >
+   813→      {/* Header */}
+   814→      <motion.div variants={itemVariants} className="flex items-center justify-between">
+   815→        <div>
+   816→          <h3 className="font-semibold text-foreground text-lg">Course Reviews</h3>
+   817→          <p className="text-sm text-muted-foreground">
+   818→            What learners are saying about {courseName}
+   819→          </p>
+   820→        </div>
+   821→        <Button
+   822→          onClick={() => {
+   823→            setEditingReview(null);
+   824→            setShowWriteDialog(true);
+   825→          }}
+   826→          className="gap-2 bg-amber-600 hover:bg-amber-700 text-white"
+   827→        >
+   828→          <Star className="h-4 w-4" />
+   829→          Write a Review
+   830→        </Button>
+   831→      </motion.div>
+   832→
+   833→      {/* Rating Summary Card */}
+   834→      <RatingSummaryCard courseId={courseId} avgRating={avgRating} totalRatings={totalRatings} />
+   835→
+   836→      {/* Filter / Sort Bar */}
+   837→      <motion.div variants={itemVariants}>
+   838→        <Card className="backdrop-blur-sm bg-card/80 border-border/50">
+   839→          <CardContent className="p-4">
+   840→            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+   841→              {/* Star Filter Indicator */}
+   842→              {filterStars !== null && (
+   843→                <Badge
+   844→                  variant="secondary"
+   845→                  className="gap-1.5 bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 cursor-pointer"
+   846→                  onClick={() => setFilterStars(null)}
+   847→                >
+   848→                  {filterStars} Star{filterStars > 1 ? 's' : ''} Only
+   849→                  <X className="h-3 w-3" />
+   850→                </Badge>
+   851→              )}
+   852→
+   853→              {/* Filter by Distribution (clickable) */}
+   854→              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+   855→                <span>Filter:</span>
+   856→                {[5, 4, 3, 2, 1].map((star) => (
+   857→                  <button
+   858→                    key={star}
+   859→                    onClick={() => handleDistributionClick(star)}
+   860→                    className={cn(
+   861→                      'px-2 py-1 rounded-md transition-colors',
+   862→                      filterStars === star
+   863→                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+   864→                        : 'hover:bg-muted'
+   865→                    )}
+   866→                  >
+   867→                    {star}★
+   868→                  </button>
+   869→                ))}
+   870→              </div>
+   871→
+   872→              <div className="sm:ml-auto">
+   873→                <Select value={sortBy} onValueChange={setSortBy}>
+   874→                  <SelectTrigger className="w-[180px] h-8 text-xs">
+   875→                    <SelectValue />
+   876→                  </SelectTrigger>
+   877→                  <SelectContent>
+   878→                    <SelectItem value="most_recent">Most Recent</SelectItem>
+   879→                    <SelectItem value="most_helpful">Most Helpful</SelectItem>
+   880→                    <SelectItem value="highest_rated">Highest Rated</SelectItem>
+   881→                    <SelectItem value="lowest_rated">Lowest Rated</SelectItem>
+   882→                  </SelectContent>
+   883→                </Select>
+   884→              </div>
+   885→            </div>
+   886→          </CardContent>
+   887→        </Card>
+   888→      </motion.div>
+   889→
+   890→      {/* Reviews List */}
+   891→      <AnimatePresence mode="wait">
+   892→        {filteredReviews.length > 0 ? (
+   893→          <motion.div
+   894→            key={`${filterStars}-${sortBy}`}
+   895→            className="space-y-3"
+   896→            variants={containerVariants}
+   897→            initial="hidden"
+   898→            animate="visible"
+   899→          >
+   900→            {visibleReviews.map((review) => (
+   901→              <ReviewCard
+   902→                key={review.id}
+   903→                review={review}
+   904→                onHelpful={handleHelpful}
+   905→                onEdit={handleEdit}
+   906→                onDelete={setDeleteReviewId}
+   907→              />
+   908→            ))}
+   909→          </motion.div>
+   910→        ) : (
+   911→          <motion.div
+   912→            initial={{ opacity: 0, y: 20 }}
+   913→            animate={{ opacity: 1, y: 0 }}
+   914→            className="text-center py-12"
+   915→          >
+   916→            <MessageSquare className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+   917→            <p className="text-muted-foreground">
+   918→              {filterStars
+   919→                ? `No ${filterStars}-star reviews found. Try a different filter.`
+   920→                : 'No reviews yet. Be the first to review!'}
+   921→            </p>
+   922→          </motion.div>
+   923→        )}
+   924→      </AnimatePresence>
+   925→
+   926→      {/* Load More */}
+   927→      {hasMore && (
+   928→        <motion.div variants={itemVariants} className="flex justify-center">
+   929→          <Button
+   930→            variant="outline"
+   931→            onClick={() => setVisibleCount((prev) => prev + 5)}
+   932→            className="gap-2"
+   933→          >
+   934→            <ChevronDown className="h-4 w-4" />
+   935→            Load More Reviews ({filteredReviews.length - visibleCount} remaining)
+   936→          </Button>
+   937→        </motion.div>
+   938→      )}
+   939→
+   940→      {/* Write/Edit Review Dialog */}
+   941→      <WriteReviewDialog
+   942→        open={showWriteDialog}
+   943→        onClose={() => {
+   944→          setShowWriteDialog(false);
+   945→          setEditingReview(null);
+   946→        }}
+   947→        onSubmit={handleSubmitReview}
+   948→        editingReview={editingReview}
+   949→      />
+   950→
+   951→      {/* Delete Confirmation Dialog */}
+   952→      <DeleteReviewDialog
+   953→        open={!!deleteReviewId}
+   954→        onClose={() => setDeleteReviewId(null)}
+   955→        onConfirm={handleDelete}
+   956→      />
+   957→    </motion.div>
+   958→  );
+   959→}
+   960→

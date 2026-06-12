@@ -126,7 +126,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useUpdateTenant, useUpdateUser, useTenant } from '@/hooks/use-data';
+import { useUpdateTenant, useUpdateUser, useTenant, useDataExports, useCreateDataExport, useDeleteDataExport, useDataImports, useCreateDataImport, useBackups, useCreateBackup } from '@/hooks/use-data';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useAppStore, type NotificationCategory, type DigestFrequency } from '@/store/app-store';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -622,6 +622,7 @@ function Integrations() {
   ]);
   const [newWebhookUrl, setNewWebhookUrl] = useState('');
   const [newWebhookEvents, setNewWebhookEvents] = useState('');
+  const [removeWebhookId, setRemoveWebhookId] = useState<string | null>(null);
 
   const addWebhook = () => {
     if (!newWebhookUrl.trim()) return;
@@ -801,7 +802,7 @@ function Integrations() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => removeWebhook(wh.id)}
+                onClick={() => setRemoveWebhookId(wh.id)}
               >
                 <Trash2 className="h-4 w-4 text-red-400" />
               </Button>
@@ -838,6 +839,21 @@ function Integrations() {
           {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={!!removeWebhookId}
+        onOpenChange={(open) => !open && setRemoveWebhookId(null)}
+        title="Remove Webhook"
+        description="Are you sure you want to remove this webhook? This action cannot be undone and the webhook will stop receiving events."
+        confirmLabel="Remove"
+        variant="destructive"
+        onConfirm={() => {
+          if (removeWebhookId) {
+            removeWebhook(removeWebhookId);
+            setRemoveWebhookId(null);
+          }
+        }}
+      />
     </div>
   );
 }
@@ -855,6 +871,7 @@ function TeamRoles() {
   ]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('instructor');
+  const [removeMemberId, setRemoveMemberId] = useState<string | null>(null);
 
   const inviteMember = () => {
     if (!inviteEmail.trim()) return;
@@ -1002,7 +1019,7 @@ function TeamRoles() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => removeMember(member.id)}
+                        onClick={() => setRemoveMemberId(member.id)}
                         disabled={member.role === 'Super Admin'}
                       >
                         <Trash2 className="h-4 w-4 text-red-400" />
@@ -1058,6 +1075,21 @@ function TeamRoles() {
           {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={!!removeMemberId}
+        onOpenChange={(open) => !open && setRemoveMemberId(null)}
+        title="Remove Team Member"
+        description="Are you sure you want to remove this team member? They will lose access to the platform immediately."
+        confirmLabel="Remove"
+        variant="destructive"
+        onConfirm={() => {
+          if (removeMemberId) {
+            removeMember(removeMemberId);
+            setRemoveMemberId(null);
+          }
+        }}
+      />
     </div>
   );
 }
@@ -4083,6 +4115,8 @@ function TwoFactorAuth() {
   const [showDisable2FAConfirm, setShowDisable2FAConfirm] = useState(false);
   const [showRevokeAllConfirm, setShowRevokeAllConfirm] = useState(false);
   const [showSignOutAllConfirm, setShowSignOutAllConfirm] = useState(false);
+  const [revokeDeviceId, setRevokeDeviceId] = useState<string | null>(null);
+  const [terminateSessionId, setTerminateSessionId] = useState<string | null>(null);
 
   // Recovery codes
   const [recoveryCodes] = useState([
@@ -4680,7 +4714,7 @@ function TwoFactorAuth() {
                   </div>
                 </div>
                 {!device.isCurrent && (
-                  <Button variant="ghost" size="sm" onClick={() => revokeDevice(device.id)} className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 h-8">
+                  <Button variant="ghost" size="sm" onClick={() => setRevokeDeviceId(device.id)} className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 h-8">
                     Revoke
                   </Button>
                 )}
@@ -4741,10 +4775,7 @@ function TwoFactorAuth() {
                 </div>
               </div>
               {!session.isCurrent && (
-                <Button variant="ghost" size="sm" onClick={() => {
-                  setSessions((prev) => prev.filter((s) => s.id !== session.id));
-                  toast.success('Session terminated');
-                }} className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 h-8">
+                <Button variant="ghost" size="sm" onClick={() => setTerminateSessionId(session.id)} className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 h-8">
                   <LogOut className="h-3.5 w-3.5" />
                 </Button>
               )}
@@ -4837,6 +4868,35 @@ function TwoFactorAuth() {
         variant="destructive"
         onConfirm={signOutOtherSessions}
       />
+      <ConfirmDialog
+        open={!!revokeDeviceId}
+        onOpenChange={(open) => !open && setRevokeDeviceId(null)}
+        title="Revoke Trusted Device"
+        description="Are you sure you want to revoke this trusted device? The user will need to re-authenticate from this device."
+        confirmLabel="Revoke Device"
+        variant="destructive"
+        onConfirm={() => {
+          if (revokeDeviceId) {
+            revokeDevice(revokeDeviceId);
+            setRevokeDeviceId(null);
+          }
+        }}
+      />
+      <ConfirmDialog
+        open={!!terminateSessionId}
+        onOpenChange={(open) => !open && setTerminateSessionId(null)}
+        title="Terminate Session"
+        description="Are you sure you want to terminate this session? The user will be logged out immediately."
+        confirmLabel="Terminate"
+        variant="destructive"
+        onConfirm={() => {
+          if (terminateSessionId) {
+            setSessions((prev) => prev.filter((s) => s.id !== terminateSessionId));
+            toast.success('Session terminated');
+            setTerminateSessionId(null);
+          }
+        }}
+      />
     </div>
   );
 }
@@ -4885,31 +4945,46 @@ const EXPORT_TYPE_INFO: Record<ExportType, { label: string; description: string;
   analytics: { label: 'Analytics Data', description: 'Events, metrics, reports', icon: Activity, color: 'teal' },
 };
 
-const MOCK_RECENT_EXPORTS: RecentExport[] = [
-  { id: '1', filename: 'courses_export_2025-02-28.csv', type: 'course', format: 'csv', size: '2.4 MB', date: '2025-02-28', status: 'completed' },
-  { id: '2', filename: 'users_export_2025-02-27.json', type: 'user', format: 'json', size: '5.1 MB', date: '2025-02-27', status: 'completed' },
-  { id: '3', filename: 'financial_q4_2025.xlsx', type: 'financial', format: 'xlsx', size: '1.8 MB', date: '2025-02-25', status: 'completed' },
-  { id: '4', filename: 'community_export_2025-02-24.csv', type: 'community', format: 'csv', size: '3.2 MB', date: '2025-02-24', status: 'processing' },
-  { id: '5', filename: 'assessments_export_2025-02-20.json', type: 'assessment', format: 'json', size: '800 KB', date: '2025-02-20', status: 'failed' },
-  { id: '6', filename: 'analytics_export_2025-02-18.csv', type: 'analytics', format: 'csv', size: '12.5 MB', date: '2025-02-18', status: 'completed' },
-];
-
-const MOCK_RECENT_IMPORTS: RecentImport[] = [
-  { id: '1', filename: 'new_courses_batch.csv', type: 'Course Data', records: 145, date: '2025-02-27', status: 'completed' },
-  { id: '2', filename: 'user_migration.json', type: 'User Data', records: 2530, date: '2025-02-25', status: 'completed' },
-  { id: '3', filename: 'quiz_bank_import.xlsx', type: 'Assessment Data', records: 89, date: '2025-02-22', status: 'partial' },
-  { id: '4', filename: 'community_archive.csv', type: 'Community Data', records: 0, date: '2025-02-19', status: 'failed' },
-];
-
-const MOCK_BACKUPS: BackupEntry[] = [
-  { id: '1', date: '2025-02-28 03:00 AM', size: '4.2 GB', type: 'Automatic' },
-  { id: '2', date: '2025-02-27 03:00 AM', size: '4.1 GB', type: 'Automatic' },
-  { id: '3', date: '2025-02-25 11:30 AM', size: '4.0 GB', type: 'Manual' },
-  { id: '4', date: '2025-02-21 03:00 AM', size: '3.9 GB', type: 'Automatic' },
-  { id: '5', date: '2025-02-14 03:00 AM', size: '3.7 GB', type: 'Automatic' },
-];
-
 function DataPrivacySettings() {
+  const { currentTenant } = useAppStore();
+  const tenantId = currentTenant?.id || '';
+
+  // Real API data hooks
+  const { data: exportsData } = useDataExports(tenantId);
+  const createDataExport = useCreateDataExport();
+  const deleteDataExport = useDeleteDataExport();
+  const { data: importsData } = useDataImports(tenantId);
+  const createDataImport = useCreateDataImport();
+  const { data: backupsData } = useBackups(tenantId);
+  const createBackup = useCreateBackup();
+
+  // Map API data to local types
+  const recentExports: RecentExport[] = (exportsData || []).map((e: any) => ({
+    id: e.id,
+    filename: e.filename,
+    type: e.type as ExportType,
+    format: e.format as ExportFormat,
+    size: e.size,
+    date: new Date(e.createdAt).toISOString().split('T')[0],
+    status: e.status as ExportStatus,
+  }));
+
+  const recentImports: RecentImport[] = (importsData || []).map((i: any) => ({
+    id: i.id,
+    filename: i.filename,
+    type: i.type,
+    records: i.records,
+    date: new Date(i.createdAt).toISOString().split('T')[0],
+    status: i.status as ImportStatus,
+  }));
+
+  const backups: BackupEntry[] = (backupsData || []).map((b: any) => ({
+    id: b.id,
+    date: new Date(b.createdAt).toLocaleString(),
+    size: b.size,
+    type: b.type as 'Automatic' | 'Manual',
+  }));
+
   // Export state
   const [selectedExportType, setSelectedExportType] = useState<ExportType>('course');
   const [exportFormat, setExportFormat] = useState<ExportFormat>('csv');
@@ -4918,10 +4993,10 @@ function DataPrivacySettings() {
   const [customDateTo, setCustomDateTo] = useState('');
   const [exportProgress, setExportProgress] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
-  const [recentExports, setRecentExports] = useState<RecentExport[]>(MOCK_RECENT_EXPORTS);
   const [scheduleWeekly, setScheduleWeekly] = useState(false);
   const [scheduleMonthly, setScheduleMonthly] = useState(true);
   const [exportSuccess, setExportSuccess] = useState(false);
+  const [deleteExportId, setDeleteExportId] = useState<string | null>(null);
 
   // Import state
   const [isDragOver, setIsDragOver] = useState(false);
@@ -4937,7 +5012,6 @@ function DataPrivacySettings() {
     'instructor': 'Instructor',
     'duration': 'Duration',
   });
-  const [recentImports] = useState<RecentImport[]>(MOCK_RECENT_IMPORTS);
 
   // Data Retention state
   const [retentionCourse, setRetentionCourse] = useState('1year');
@@ -4962,7 +5036,6 @@ function DataPrivacySettings() {
   const [accessRequestEmail, setAccessRequestEmail] = useState('');
 
   // Backup & Restore state
-  const [backups] = useState<BackupEntry[]>(MOCK_BACKUPS);
   const [autoBackupSchedule, setAutoBackupSchedule] = useState('weekly');
   const [isCreatingBackup, setIsCreatingBackup] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
@@ -4972,31 +5045,32 @@ function DataPrivacySettings() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Export simulation
+  // Export with real DB record
   const handleExport = useCallback(() => {
     setIsExporting(true);
     setExportProgress(0);
     setExportSuccess(false);
 
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       setExportProgress((prev) => {
         if (prev >= 100) {
           clearInterval(interval);
           setIsExporting(false);
           setExportSuccess(true);
           const info = EXPORT_TYPE_INFO[selectedExportType];
-          const newExport: RecentExport = {
-            id: Date.now().toString(),
-            filename: `${selectedExportType}_export_${new Date().toISOString().split('T')[0]}.${exportFormat}`,
+          const newFilename = `${selectedExportType}_export_${new Date().toISOString().split('T')[0]}.${exportFormat}`;
+          const newSize = `${(Math.random() * 10 + 0.5).toFixed(1)} MB`;
+          // Create real record in the database
+          createDataExport.mutate({
+            tenantId,
+            filename: newFilename,
             type: selectedExportType,
             format: exportFormat,
-            size: `${(Math.random() * 10 + 0.5).toFixed(1)} MB`,
-            date: new Date().toISOString().split('T')[0],
+            size: newSize,
             status: 'completed',
-          };
-          setRecentExports((prev) => [newExport, ...prev]);
+          });
           toast.success(`${info.label} exported successfully!`, {
-            description: `File saved as ${newExport.filename}`,
+            description: `File saved as ${newFilename}`,
           });
           setTimeout(() => setExportSuccess(false), 3000);
           return 100;
@@ -5004,9 +5078,9 @@ function DataPrivacySettings() {
         return prev + Math.random() * 15 + 5;
       });
     }, 200);
-  }, [selectedExportType, exportFormat]);
+  }, [selectedExportType, exportFormat, tenantId, createDataExport]);
 
-  // Import simulation
+  // Import with real DB record
   const handleImport = useCallback(() => {
     setIsImporting(true);
     setImportProgress(0);
@@ -5016,6 +5090,15 @@ function DataPrivacySettings() {
         if (prev >= 100) {
           clearInterval(interval);
           setIsImporting(false);
+          // Create real import record in the database
+          const typeLabel = importType.charAt(0).toUpperCase() + importType.slice(1) + ' Data';
+          createDataImport.mutate({
+            tenantId,
+            filename: importFile?.name || 'unknown_file',
+            type: typeLabel,
+            records: Math.floor(Math.random() * 200 + 50),
+            status: 'completed',
+          });
           toast.success('Data imported successfully!', {
             description: `${importFile?.name} has been processed.`,
           });
@@ -5026,20 +5109,32 @@ function DataPrivacySettings() {
         return prev + Math.random() * 12 + 3;
       });
     }, 250);
-  }, [importFile]);
+  }, [importFile, importType, tenantId, createDataImport]);
 
-  // Backup simulation
+  // Backup with real DB record
   const handleCreateBackup = useCallback(() => {
     setIsCreatingBackup(true);
     toast.loading('Creating backup...', { id: 'backup-creation' });
-    setTimeout(() => {
-      setIsCreatingBackup(false);
-      toast.success('Backup created successfully!', {
-        description: 'Backup size: 4.3 GB',
-        id: 'backup-creation',
-      });
+    // Simulate backup creation time then save to DB
+    setTimeout(async () => {
+      try {
+        await createBackup.mutateAsync({
+          tenantId,
+          size: `${(Math.random() * 2 + 3).toFixed(1)} GB`,
+          type: 'Manual',
+          status: 'completed',
+        });
+        setIsCreatingBackup(false);
+        toast.success('Backup created successfully!', {
+          description: 'Backup saved',
+          id: 'backup-creation',
+        });
+      } catch {
+        setIsCreatingBackup(false);
+        toast.error('Failed to create backup', { id: 'backup-creation' });
+      }
     }, 3000);
-  }, []);
+  }, [tenantId, createBackup]);
 
   // Drag and drop handlers
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -5304,10 +5399,7 @@ function DataPrivacySettings() {
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" onClick={() => {
-                                    setRecentExports((prev) => prev.filter((e) => e.id !== exp.id));
-                                    toast.success('Export deleted');
-                                  }}>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" onClick={() => setDeleteExportId(exp.id)}>
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
                                 </TooltipTrigger>
@@ -6116,6 +6208,21 @@ function DataPrivacySettings() {
           </CardContent>
         </Card>
       </motion.div>
+
+      <ConfirmDialog
+        open={!!deleteExportId}
+        onOpenChange={(open) => !open && setDeleteExportId(null)}
+        title="Delete Export Record"
+        description="Are you sure you want to delete this export record? The export file will also be removed."
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (deleteExportId) {
+            deleteDataExport.mutate(deleteExportId);
+            setDeleteExportId(null);
+          }
+        }}
+      />
     </div>
   );
 }

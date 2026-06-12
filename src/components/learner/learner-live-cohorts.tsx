@@ -22,15 +22,14 @@ import {
   Play,
   Eye,
   Radio,
-  ExternalLink,
+  Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useCourses } from '@/hooks/use-data';
+import { useCourses, useLiveCohorts } from '@/hooks/use-data';
+import { useAppStore } from '@/store/app-store';
 import type { CalendarEvent } from '@/types';
 
 // Event type color mapping
@@ -54,190 +53,97 @@ const eventTypeLabels: Record<string, string> = {
   deadline: 'Deadline',
 };
 
-// TODO: Replace with real API when available - calendar events API not yet implemented
-const demoCalendarEvents: CalendarEvent[] = [
-  {
-    id: 'evt-1',
-    title: 'React & Next.js Live Q&A',
-    description: 'Weekly live session for React course students. Bring your questions!',
-    type: 'live_session' as const,
-    startDate: new Date(Date.now() + 86400000 * 1 + 3600000 * 10).toISOString(),
-    endDate: new Date(Date.now() + 86400000 * 1 + 3600000 * 11.5).toISOString(),
-    courseId: 'course-1',
-    instructorName: 'Sarah Mitchell',
-    meetingUrl: 'https://meet.nextgen-lms.com/react-qa',
-    color: '#6366F1',
-    attendees: 34,
-    maxAttendees: 50,
-  },
-  {
-    id: 'evt-2',
-    title: 'System Design Cohort Kickoff',
-    description: 'Orientation session for the new System Design cohort. Meet your peers and instructor.',
-    type: 'cohort_start' as const,
-    startDate: new Date(Date.now() + 86400000 * 3 + 3600000 * 18).toISOString(),
-    endDate: new Date(Date.now() + 86400000 * 3 + 3600000 * 19).toISOString(),
-    courseId: 'course-3',
-    instructorName: 'David Park',
-    meetingUrl: 'https://meet.nextgen-lms.com/system-design',
-    color: '#EF4444',
-    attendees: 18,
-    maxAttendees: 25,
-  },
-  {
-    id: 'evt-3',
-    title: 'AI Lab: Building with LLMs',
-    description: 'Hands-on workshop: Build an AI-powered chatbot from scratch using modern APIs.',
-    type: 'workshop' as const,
-    startDate: new Date(Date.now() + 86400000 * 5 + 3600000 * 14).toISOString(),
-    endDate: new Date(Date.now() + 86400000 * 5 + 3600000 * 17).toISOString(),
-    courseId: 'course-2',
-    instructorName: 'Sarah Mitchell',
-    meetingUrl: 'https://meet.nextgen-lms.com/ai-lab',
-    color: '#10B981',
-    attendees: 22,
-    maxAttendees: 30,
-  },
-  {
-    id: 'evt-4',
-    title: 'Office Hours: Data Visualization',
-    description: 'Drop-in office hours for Data Visualization students. Get help with your projects.',
-    type: 'office_hours' as const,
-    startDate: new Date(Date.now() + 86400000 * 2 + 3600000 * 15).toISOString(),
-    endDate: new Date(Date.now() + 86400000 * 2 + 3600000 * 16).toISOString(),
-    courseId: 'course-4',
-    instructorName: 'Lisa Wang',
-    meetingUrl: 'https://meet.nextgen-lms.com/data-viz-office',
-    color: '#F59E0B',
-    attendees: 8,
-    maxAttendees: 15,
-  },
-  {
-    id: 'evt-5',
-    title: 'Webinar: Future of AI in Education',
-    description: 'Special guest panel discussing the impact of AI on learning and education technology.',
-    type: 'webinar' as const,
-    startDate: new Date(Date.now() + 86400000 * 7 + 3600000 * 12).toISOString(),
-    endDate: new Date(Date.now() + 86400000 * 7 + 3600000 * 13.5).toISOString(),
-    color: '#8B5CF6',
-    attendees: 156,
-    maxAttendees: 500,
-  },
-  {
-    id: 'evt-6',
-    title: 'Assessment Deadline: React Quiz',
-    description: 'Final deadline for the React & Next.js Fundamentals Quiz.',
-    type: 'deadline' as const,
-    startDate: new Date(Date.now() + 86400000 * 4 + 3600000 * 23).toISOString(),
-    endDate: new Date(Date.now() + 86400000 * 4 + 3600000 * 23.05).toISOString(),
-    courseId: 'course-1',
-    color: '#DC2626',
-  },
-  {
-    id: 'evt-7',
-    title: 'Cohort Wrap-Up: AI Full Stack',
-    description: 'Final presentations and celebration for the AI Full Stack cohort.',
-    type: 'cohort_end' as const,
-    startDate: new Date(Date.now() + 86400000 * 10 + 3600000 * 17).toISOString(),
-    endDate: new Date(Date.now() + 86400000 * 10 + 3600000 * 19).toISOString(),
-    courseId: 'course-2',
-    instructorName: 'Sarah Mitchell',
-    color: '#10B981',
-    attendees: 20,
-    maxAttendees: 25,
-  },
-  {
-    id: 'evt-8',
-    title: 'Design Critique Session',
-    description: 'Live design review for UX/UI students. Share your work and get feedback.',
-    type: 'live_session' as const,
-    startDate: new Date(Date.now() + 86400000 * 6 + 3600000 * 16).toISOString(),
-    endDate: new Date(Date.now() + 86400000 * 6 + 3600000 * 17.5).toISOString(),
-    courseId: 'course-5',
-    instructorName: 'Lisa Wang',
-    meetingUrl: 'https://meet.nextgen-lms.com/design-crit',
-    color: '#EC4899',
-    attendees: 12,
-    maxAttendees: 20,
-  },
-];
+// Session recording display type derived from completed cohorts
+interface SessionRecording {
+  id: string;
+  title: string;
+  date: string;
+  duration: number;
+  instructor: string;
+  views: number;
+  courseId?: string;
+}
 
-// Mock session recordings
-// TODO: Replace with real API when available - session recordings not yet in the API
-const sessionRecordings = [
-  {
-    id: 'rec-1',
-    title: 'React Hooks Deep Dive',
-    date: '2025-12-28T18:00:00Z',
-    duration: 87,
-    instructor: 'Sarah Mitchell',
-    views: 342,
-    courseId: 'course-1',
-  },
-  {
-    id: 'rec-2',
-    title: 'System Design: Load Balancers',
-    date: '2025-12-25T17:00:00Z',
-    duration: 62,
-    instructor: 'David Park',
-    views: 189,
-    courseId: 'course-3',
-  },
-  {
-    id: 'rec-3',
-    title: 'AI Prompt Engineering Workshop',
-    date: '2025-12-22T14:00:00Z',
-    duration: 120,
-    instructor: 'Sarah Mitchell',
-    views: 524,
-    courseId: 'course-2',
-  },
-  {
-    id: 'rec-4',
-    title: 'Data Viz: D3.js Fundamentals',
-    date: '2025-12-20T15:00:00Z',
-    duration: 55,
-    instructor: 'Lisa Wang',
-    views: 156,
-    courseId: 'course-4',
-  },
-];
+/** Map a completed live cohort to a session recording display object */
+function mapCohortToRecording(cohort: any): SessionRecording {
+  const start = new Date(cohort.startDate);
+  const end = new Date(cohort.endDate);
+  const duration = Math.round(differenceInMinutes(end, start));
+  return {
+    id: cohort.id,
+    title: cohort.title,
+    date: cohort.startDate,
+    duration,
+    instructor: cohort.instructorName || 'Unknown',
+    views: cohort.attendees || 0,
+    courseId: cohort.courseId,
+  };
+}
 
 export function LearnerLiveCohorts() {
   const [rsvpIds, setRsvpIds] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'upcoming' | 'schedule' | 'recordings'>('upcoming');
+  const tenantId = useAppStore((s) => s.currentTenant?.id) || '';
   const { data: coursesData } = useCourses();
+  const { data: cohortsData, isLoading: cohortsLoading } = useLiveCohorts(tenantId || undefined);
   const demoCourses = coursesData || [];
+
+  // Map API cohort data to CalendarEvent format (API already returns CalendarEvent-like shape)
+  const calendarEvents: CalendarEvent[] = useMemo(() => {
+    if (!cohortsData) return [];
+    return (cohortsData as any[]).map((c) => ({
+      id: c.id,
+      title: c.title,
+      description: c.description,
+      type: c.type || c.category || 'live_session',
+      startDate: c.startDate,
+      endDate: c.endDate,
+      courseId: c.courseId,
+      instructorName: c.instructorName,
+      meetingUrl: c.meetingUrl,
+      color: c.color,
+      attendees: c.attendees,
+      maxAttendees: c.maxAttendees,
+    }));
+  }, [cohortsData]);
+
+  // Derive session recordings from completed cohorts
+  const sessionRecordings: SessionRecording[] = useMemo(() => {
+    if (!cohortsData) return [];
+    return (cohortsData as any[])
+      .filter((c) => c.status === 'completed')
+      .map(mapCohortToRecording);
+  }, [cohortsData]);
 
   // Check for live/starting-soon sessions
   const liveSessions = useMemo(() => {
     const now = new Date();
-    return demoCalendarEvents.filter((event) => {
+    return calendarEvents.filter((event) => {
       const start = parseISO(event.startDate);
       const end = parseISO(event.endDate);
       // Currently live or starting within 30 min
       return (isBefore(start, addMinutes(now, 30)) && isAfter(end, now)) || 
              (isAfter(start, now) && isBefore(start, addMinutes(now, 30)));
     });
-  }, []);
+  }, [calendarEvents]);
 
-  // Upcoming events (future only)
+  // Upcoming events (future only, not completed)
   const upcomingEvents = useMemo(() => {
-    return demoCalendarEvents
+    return calendarEvents
       .filter((e) => isAfter(parseISO(e.startDate), new Date()))
       .sort((a, b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime());
-  }, []);
+  }, [calendarEvents]);
 
   // Weekly schedule data (current week)
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const weekEvents = useMemo(() => {
-    return demoCalendarEvents.filter((event) => {
+    return calendarEvents.filter((event) => {
       const start = parseISO(event.startDate);
       return weekDays.some((day) => format(day, 'yyyy-MM-dd') === format(start, 'yyyy-MM-dd'));
     });
-  }, [weekDays]);
+  }, [calendarEvents, weekDays]);
 
   // RSVP toggle
   const toggleRsvp = (id: string) => {
@@ -254,6 +160,22 @@ export function LearnerLiveCohorts() {
 
   // Time slots for weekly view (8am - 9pm)
   const timeSlots = Array.from({ length: 14 }, (_, i) => i + 8);
+
+  // Loading state
+  if (cohortsLoading) {
+    return (
+      <div className="p-4 md:p-6 space-y-6 max-w-[1400px] mx-auto">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Live Cohorts</h1>
+          <p className="text-sm text-muted-foreground mt-1">Join live sessions, attend workshops, and never miss an event</p>
+        </div>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          <span className="ml-3 text-muted-foreground">Loading cohorts...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-[1400px] mx-auto">
@@ -538,6 +460,13 @@ export function LearnerLiveCohorts() {
                   })}
                 </div>
               ))}
+
+              {weekEvents.length === 0 && (
+                <div className="py-12 text-center">
+                  <CalendarPlus className="h-10 w-10 mx-auto text-muted-foreground/30 mb-2" />
+                  <p className="text-sm text-muted-foreground">No events scheduled this week</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -556,57 +485,67 @@ export function LearnerLiveCohorts() {
             </CardContent>
           </Card>
 
-          {sessionRecordings.map((recording, idx) => {
-            const courseName = demoCourses.find((c: any) => c.id === recording.courseId)?.title;
-            return (
-              <motion.div
-                key={recording.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, delay: idx * 0.05 }}
-              >
-                <Card className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      {/* Recording Info */}
-                      <div className="flex items-start gap-3">
-                        <div className="h-12 w-12 rounded-lg bg-violet-100 dark:bg-violet-950 flex items-center justify-center shrink-0">
-                          <Play className="h-5 w-5 text-violet-600" />
-                        </div>
-                        <div className="space-y-1">
-                          <h4 className="font-semibold text-foreground text-sm">{recording.title}</h4>
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                            <span>{format(parseISO(recording.date), 'MMM d, yyyy')}</span>
-                            <span>·</span>
-                            <span>{recording.duration} min</span>
-                            <span>·</span>
-                            <span>{recording.instructor}</span>
+          {sessionRecordings.length > 0 ? (
+            sessionRecordings.map((recording, idx) => {
+              const courseName = demoCourses.find((c: any) => c.id === recording.courseId)?.title;
+              return (
+                <motion.div
+                  key={recording.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, delay: idx * 0.05 }}
+                >
+                  <Card className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        {/* Recording Info */}
+                        <div className="flex items-start gap-3">
+                          <div className="h-12 w-12 rounded-lg bg-violet-100 dark:bg-violet-950 flex items-center justify-center shrink-0">
+                            <Play className="h-5 w-5 text-violet-600" />
                           </div>
-                          <div className="flex items-center gap-2">
-                            {courseName && (
-                              <Badge variant="outline" className="text-[10px]">
-                                {courseName}
-                              </Badge>
-                            )}
-                            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                              <Eye className="h-3 w-3" />
-                              {recording.views} views
-                            </span>
+                          <div className="space-y-1">
+                            <h4 className="font-semibold text-foreground text-sm">{recording.title}</h4>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                              <span>{format(parseISO(recording.date), 'MMM d, yyyy')}</span>
+                              <span>·</span>
+                              <span>{recording.duration} min</span>
+                              <span>·</span>
+                              <span>{recording.instructor}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {courseName && (
+                                <Badge variant="outline" className="text-[10px]">
+                                  {courseName}
+                                </Badge>
+                              )}
+                              <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                <Eye className="h-3 w-3" />
+                                {recording.views} attendees
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Watch Button */}
-                      <Button variant="outline" size="sm" className="gap-1.5 shrink-0">
-                        <Play className="h-3.5 w-3.5" />
-                        Watch Recording
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            );
-          })}
+                        {/* Watch Button */}
+                        <Button variant="outline" size="sm" className="gap-1.5 shrink-0">
+                          <Play className="h-3.5 w-3.5" />
+                          Watch Recording
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              );
+            })
+          ) : (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <Play className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
+                <p className="text-muted-foreground">No session recordings available yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Recordings will appear here after live sessions are completed</p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </div>

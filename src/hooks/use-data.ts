@@ -250,6 +250,76 @@ export function useToggleReaction() {
   });
 }
 
+// ─── Course Reviews ────────────────────────────────────────────
+
+export function useCommunityReviews(params?: {
+  status?: string;
+  courseId?: string;
+  rating?: string;
+  sort?: string;
+  tenantId?: string;
+}) {
+  const searchParams = new URLSearchParams();
+  if (params?.status && params.status !== 'all') searchParams.set('status', params.status);
+  if (params?.courseId) searchParams.set('courseId', params.courseId);
+  if (params?.rating) searchParams.set('rating', params.rating);
+  if (params?.sort) searchParams.set('sort', params.sort);
+  if (params?.tenantId) searchParams.set('tenantId', params.tenantId);
+
+  const qs = searchParams.toString();
+  const path = `/community/reviews${qs ? `?${qs}` : ''}`;
+
+  return useQuery({
+    queryKey: ['community-reviews', params],
+    queryFn: () => apiGet<{ reviews: any[] }>(path),
+  });
+}
+
+export function useModerateReview() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ reviewId, action, reason, adminName }: {
+      reviewId: string;
+      action: 'approved' | 'rejected' | 'flagged';
+      reason?: string;
+      adminName?: string;
+    }) =>
+      fetch(`/api/community/reviews/${reviewId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, reason, adminName }),
+      }).then(async (res) => {
+        if (!res.ok) throw new Error(`API Error: ${res.status}`);
+        return res.json();
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['community-reviews'] });
+      toast.success('Review moderated successfully');
+    },
+    onError: () => toast.error('Failed to moderate review'),
+  });
+}
+
+export function useRespondToReview() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ reviewId, adminResponse }: { reviewId: string; adminResponse: string }) =>
+      fetch(`/api/community/reviews/${reviewId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'respond', adminResponse }),
+      }).then(async (res) => {
+        if (!res.ok) throw new Error(`API Error: ${res.status}`);
+        return res.json();
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['community-reviews'] });
+      toast.success('Response sent successfully');
+    },
+    onError: () => toast.error('Failed to send response'),
+  });
+}
+
 // ─── Assessments ──────────────────────────────────────────────
 
 export function useAssessments(courseId?: string) {
@@ -370,9 +440,18 @@ export function useAwardCertificate() {
       apiPost(`/certificates/${certificateId}/award`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['certificates'] });
+      queryClient.invalidateQueries({ queryKey: ['certificate-awards'] });
       toast.success('Certificate awarded');
     },
     onError: () => toast.error('Failed to award certificate'),
+  });
+}
+
+export function useCertificateAwards(tenantId?: string) {
+  const params = tenantId ? `?tenantId=${tenantId}` : '';
+  return useQuery({
+    queryKey: ['certificate-awards', tenantId],
+    queryFn: () => apiGet<any[]>(`/certificates/awards${params}`),
   });
 }
 
@@ -382,6 +461,34 @@ export function useAnalytics() {
   return useQuery({
     queryKey: ['analytics'],
     queryFn: () => apiGet<{ metrics: any[] }>('/analytics'),
+  });
+}
+
+export function useAnalyticsEvents(params?: {
+  tenantId?: string;
+  eventType?: string;
+  startDate?: string;
+  endDate?: string;
+  userId?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const searchParams = new URLSearchParams();
+  if (params?.tenantId) searchParams.set('tenantId', params.tenantId);
+  if (params?.eventType) searchParams.set('eventType', params.eventType);
+  if (params?.startDate) searchParams.set('startDate', params.startDate);
+  if (params?.endDate) searchParams.set('endDate', params.endDate);
+  if (params?.userId) searchParams.set('userId', params.userId);
+  if (params?.page) searchParams.set('page', String(params.page));
+  if (params?.limit) searchParams.set('limit', String(params.limit));
+
+  const qs = searchParams.toString();
+  const path = `/analytics/events${qs ? `?${qs}` : ''}`;
+
+  return useQuery({
+    queryKey: ['analytics-events', params],
+    queryFn: () => apiGet<{ events: any[]; summary?: Record<string, number>; pagination: { page: number; limit: number; total: number; totalPages: number } }>(path),
+    enabled: !!params?.tenantId,
   });
 }
 
@@ -490,6 +597,61 @@ export function useUpdateTenant() {
   });
 }
 
+// ─── Learning Paths ────────────────────────────────────────────
+
+export function useLearningPaths(tenantId?: string) {
+  const params = tenantId ? `?tenantId=${tenantId}` : '';
+  return useQuery({
+    queryKey: ['learning-paths', tenantId],
+    queryFn: () => apiGet<any[]>(`/learning-paths${params}`),
+  });
+}
+
+export function useLearningPath(pathId: string | null) {
+  return useQuery({
+    queryKey: ['learning-paths', pathId],
+    queryFn: () => apiGet<any>(`/learning-paths/${pathId}`),
+    enabled: !!pathId,
+  });
+}
+
+export function useCreateLearningPath() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => apiPost('/learning-paths', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['learning-paths'] });
+      toast.success('Learning path created successfully');
+    },
+    onError: () => toast.error('Failed to create learning path'),
+  });
+}
+
+export function useUpdateLearningPath() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: any) => apiPut(`/learning-paths/${id}`, data),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['learning-paths'] });
+      queryClient.invalidateQueries({ queryKey: ['learning-paths', variables.id] });
+      toast.success('Learning path updated successfully');
+    },
+    onError: () => toast.error('Failed to update learning path'),
+  });
+}
+
+export function useDeleteLearningPath() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiDelete(`/learning-paths/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['learning-paths'] });
+      toast.success('Learning path deleted successfully');
+    },
+    onError: () => toast.error('Failed to delete learning path'),
+  });
+}
+
 // ─── Bulk Operations ──────────────────────────────────────────
 
 export function useBulkOperation() {
@@ -503,5 +665,205 @@ export function useBulkOperation() {
       toast.success('Bulk operation completed');
     },
     onError: () => toast.error('Bulk operation failed'),
+  });
+}
+
+// ─── Lesson Discussions ────────────────────────────────────────
+
+export function useLessonDiscussions(params?: { lessonId?: string; courseId?: string }) {
+  const searchParams = new URLSearchParams();
+  if (params?.lessonId) searchParams.set('lessonId', params.lessonId);
+  if (params?.courseId) searchParams.set('courseId', params.courseId);
+
+  const qs = searchParams.toString();
+  const path = `/discussions${qs ? `?${qs}` : ''}`;
+
+  return useQuery({
+    queryKey: ['discussions', params],
+    queryFn: () => apiGet<{ discussions: any[] }>(path),
+    enabled: !!(params?.lessonId || params?.courseId),
+  });
+}
+
+export function useCreateDiscussion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => apiPost('/discussions', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['discussions'] });
+      toast.success('Discussion posted');
+    },
+    onError: () => toast.error('Failed to post discussion'),
+  });
+}
+
+// ─── Live Cohorts ────────────────────────────────────────────
+
+export function useLiveCohorts(tenantId?: string) {
+  const params = tenantId ? `?tenantId=${tenantId}` : '';
+  return useQuery({
+    queryKey: ['live-cohorts', tenantId],
+    queryFn: () => apiGet<any[]>(`/live-cohorts${params}`),
+  });
+}
+
+export function useLiveCohort(cohortId: string | null) {
+  return useQuery({
+    queryKey: ['live-cohorts', cohortId],
+    queryFn: () => apiGet<any>(`/live-cohorts/${cohortId}`),
+    enabled: !!cohortId,
+  });
+}
+
+export function useCreateLiveCohort() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => apiPost('/live-cohorts', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['live-cohorts'] });
+      toast.success('Live cohort created successfully');
+    },
+    onError: () => toast.error('Failed to create live cohort'),
+  });
+}
+
+export function useUpdateLiveCohort() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: any) => apiPut(`/live-cohorts/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['live-cohorts'] });
+      toast.success('Live cohort updated successfully');
+    },
+    onError: () => toast.error('Failed to update live cohort'),
+  });
+}
+
+export function useDeleteLiveCohort() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiDelete(`/live-cohorts/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['live-cohorts'] });
+      toast.success('Live cohort deleted successfully');
+    },
+    onError: () => toast.error('Failed to delete live cohort'),
+  });
+}
+
+// ─── Products ────────────────────────────────────────────────
+
+export function useProducts(tenantId?: string) {
+  const params = tenantId ? `?tenantId=${tenantId}` : '';
+  return useQuery({
+    queryKey: ['products', tenantId],
+    queryFn: () => apiGet<any[]>(`/products${params}`),
+  });
+}
+
+// ─── Orders ──────────────────────────────────────────────────
+
+export function useOrders(userId?: string, tenantId?: string) {
+  const searchParams = new URLSearchParams();
+  if (userId) searchParams.set('userId', userId);
+  if (tenantId) searchParams.set('tenantId', tenantId);
+  const qs = searchParams.toString();
+  const path = `/orders${qs ? `?${qs}` : ''}`;
+
+  return useQuery({
+    queryKey: ['orders', userId, tenantId],
+    queryFn: () => apiGet<any[]>(path),
+    enabled: !!userId || !!tenantId,
+  });
+}
+
+export function useCreateOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => apiPost('/orders', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      toast.success('Order created successfully');
+    },
+    onError: () => toast.error('Failed to create order'),
+  });
+}
+
+// ─── Data Exports ─────────────────────────────────────────────
+
+export function useDataExports(tenantId?: string) {
+  const params = tenantId ? `?tenantId=${tenantId}` : '';
+  return useQuery({
+    queryKey: ['data-exports', tenantId],
+    queryFn: () => apiGet<any[]>(`/data-exports${params}`),
+    enabled: !!tenantId,
+  });
+}
+
+export function useCreateDataExport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => apiPost('/data-exports', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['data-exports'] });
+    },
+    onError: () => toast.error('Failed to create data export'),
+  });
+}
+
+export function useDeleteDataExport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiDelete(`/data-exports?id=${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['data-exports'] });
+      toast.success('Export deleted');
+    },
+    onError: () => toast.error('Failed to delete data export'),
+  });
+}
+
+// ─── Data Imports ─────────────────────────────────────────────
+
+export function useDataImports(tenantId?: string) {
+  const params = tenantId ? `?tenantId=${tenantId}` : '';
+  return useQuery({
+    queryKey: ['data-imports', tenantId],
+    queryFn: () => apiGet<any[]>(`/data-imports${params}`),
+    enabled: !!tenantId,
+  });
+}
+
+export function useCreateDataImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => apiPost('/data-imports', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['data-imports'] });
+    },
+    onError: () => toast.error('Failed to create data import'),
+  });
+}
+
+// ─── Backups ──────────────────────────────────────────────────
+
+export function useBackups(tenantId?: string) {
+  const params = tenantId ? `?tenantId=${tenantId}` : '';
+  return useQuery({
+    queryKey: ['backups', tenantId],
+    queryFn: () => apiGet<any[]>(`/backups${params}`),
+    enabled: !!tenantId,
+  });
+}
+
+export function useCreateBackup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => apiPost('/backups', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['backups'] });
+      toast.success('Backup created successfully');
+    },
+    onError: () => toast.error('Failed to create backup'),
   });
 }

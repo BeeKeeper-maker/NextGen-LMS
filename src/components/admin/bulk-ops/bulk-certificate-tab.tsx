@@ -53,9 +53,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useCourses } from '@/hooks/use-data';
+import { useCourses, useCertificateAwards } from '@/hooks/use-data';
+import { useAppStore } from '@/store/app-store';
 
-// TODO: Replace with real API when available - bulk certificate records not yet in the API
 interface BulkCertificateRecord {
   id: string;
   userName: string;
@@ -65,18 +65,6 @@ interface BulkCertificateRecord {
   verificationCode: string;
   status: 'issued' | 'revoked' | 'pending';
 }
-
-// TODO: Replace with real API when available - bulk certificate records not yet in the API
-const bulkCertificateRecords: BulkCertificateRecord[] = [
-  { id: 'cert-r-1', userName: 'Emma Rodriguez', email: 'emma.r@example.com', courseName: 'Advanced React & Next.js Masterclass', issuedDate: '2024-10-14', verificationCode: 'CERT-2024-001', status: 'issued' },
-  { id: 'cert-r-2', userName: 'Jordan Lee', email: 'jordan.lee@example.com', courseName: 'Data Visualization & Analytics', issuedDate: '2024-10-13', verificationCode: 'CERT-2024-002', status: 'issued' },
-  { id: 'cert-r-3', userName: 'Sophia Martinez', email: 'sophia.m@example.com', courseName: 'AI-Powered Full Stack Development', issuedDate: '2024-10-12', verificationCode: 'CERT-2024-003', status: 'issued' },
-  { id: 'cert-r-4', userName: 'Rachel Green', email: 'rachel.g@example.com', courseName: 'UX/UI Design Principles', issuedDate: '2024-10-11', verificationCode: 'CERT-2024-004', status: 'revoked' },
-  { id: 'cert-r-5', userName: 'James Johnson', email: 'james.j@example.com', courseName: 'System Design for Senior Engineers', issuedDate: '2024-10-10', verificationCode: 'CERT-2024-005', status: 'issued' },
-  { id: 'cert-r-6', userName: 'Aisha Mohammed', email: 'aisha.m@example.com', courseName: 'Advanced React & Next.js Masterclass', issuedDate: '2024-10-09', verificationCode: 'CERT-2024-006', status: 'issued' },
-  { id: 'cert-r-7', userName: 'Carlos Ruiz', email: 'carlos.r@example.com', courseName: 'DevOps & Cloud Architecture', issuedDate: '2024-10-08', verificationCode: 'CERT-2024-007', status: 'pending' },
-  { id: 'cert-r-8', userName: 'Mike Chen', email: 'mike.chen@example.com', courseName: 'AI-Powered Full Stack Development', issuedDate: '2024-10-07', verificationCode: 'CERT-2024-008', status: 'issued' },
-];
 
 // Certificate templates
 const certTemplates = [
@@ -93,8 +81,22 @@ type IssueStep = 'configure' | 'confirm' | 'processing' | 'complete';
 export function BulkCertificateTab() {
   // Sub-tab
   const [subTab, setSubTab] = useState<CertSubTab>('issue');
+  const { currentTenant } = useAppStore();
+  const tenantId = currentTenant?.id || '';
   const { data: coursesData } = useCourses();
+  const { data: awardsData } = useCertificateAwards(tenantId);
   const demoCourses = coursesData || [];
+
+  // Map real certificate awards to BulkCertificateRecord
+  const bulkCertificateRecords: BulkCertificateRecord[] = (awardsData || []).map((award: any) => ({
+    id: award.id,
+    userName: award.recipientName || award.user?.name || award.user?.email || 'Unknown',
+    email: award.user?.email || '',
+    courseName: award.courseName || 'General Certificate',
+    issuedDate: new Date(award.issuedAt).toISOString().split('T')[0],
+    verificationCode: award.verificationCode,
+    status: 'issued' as const,
+  }));
   // Issue state
   const [selectedCourseId, setSelectedCourseId] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');

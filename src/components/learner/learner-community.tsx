@@ -43,6 +43,7 @@ import {
 } from '@/hooks/use-data';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useAppStore } from '@/store/app-store';
+import { validateFields, required, minLength } from '@/lib/validations';
 import type { CommunityPost } from '@/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -472,6 +473,7 @@ export function LearnerCommunity() {
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [composerFocused, setComposerFocused] = useState(false);
+  const [postErrors, setPostErrors] = useState<Record<string, string>>({});
 
   // Delete confirmation state
   const [deletePostId, setDeletePostId] = useState<string | null>(null);
@@ -528,6 +530,13 @@ export function LearnerCommunity() {
   };
 
   const handleCreatePost = () => {
+    const errs = validateFields({
+      title: [required(newPost.title, 'Title'), minLength(newPost.title, 3, 'Title')],
+      content: [required(newPost.content, 'Content'), minLength(newPost.content, 10, 'Content')],
+    });
+    setPostErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
     const tags = selectedTags.length > 0
       ? selectedTags
       : (newPost.tags ? newPost.tags.split(',').map(t => t.trim()).filter(Boolean) : []);
@@ -547,6 +556,7 @@ export function LearnerCommunity() {
           setShowCreateDialog(false);
           setNewPost({ title: '', content: '', type: 'discussion', categoryId: categories.length > 1 ? categories[1].id : '', tags: '' });
           setSelectedTags([]);
+          setPostErrors({});
         },
       }
     );
@@ -905,9 +915,10 @@ export function LearnerCommunity() {
               <Input
                 placeholder="What's on your mind?"
                 value={newPost.title}
-                onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
-                className="border-border focus:border-emerald-400"
+                onChange={(e) => { setNewPost({ ...newPost, title: e.target.value }); if (postErrors.title) setPostErrors(prev => { const n = {...prev}; delete n.title; return n; }); }}
+                className={`border-border focus:border-emerald-400 ${postErrors.title ? 'border-destructive focus:border-destructive' : ''}`}
               />
+              {postErrors.title && <p className="text-sm text-destructive mt-1">{postErrors.title}</p>}
             </div>
 
             {/* Content with Markdown Toolbar */}
@@ -980,17 +991,19 @@ export function LearnerCommunity() {
                       id="post-content-textarea"
                       placeholder="Share your thoughts, questions, or resources... (Markdown supported)"
                       value={newPost.content}
-                      onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
+                      onChange={(e) => { setNewPost({ ...newPost, content: e.target.value }); if (postErrors.content) setPostErrors(prev => { const n = {...prev}; delete n.content; return n; }); }}
                       onFocus={() => setComposerFocused(true)}
                       onBlur={() => setComposerFocused(false)}
                       rows={5}
-                      className="border-border focus:border-emerald-400 resize-none rounded-t-none border-t-0 focus:ring-0"
+                      className={`border-border focus:border-emerald-400 resize-none rounded-t-none border-t-0 focus:ring-0 ${postErrors.content ? 'border-destructive focus:border-destructive' : ''}`}
                     />
                   </>
                 )}
               </div>
               {/* Character Count */}
-              <div className="flex justify-end mt-1">
+              <div className="flex justify-between mt-1">
+                {postErrors.content && <span className="text-xs text-destructive">{postErrors.content}</span>}
+                {!postErrors.content && <span />}
                 <span className={`text-xs font-medium ${charColor}`}>
                   {charCount}/{maxChars}
                 </span>
@@ -1063,7 +1076,7 @@ export function LearnerCommunity() {
             </Button>
             <Button
               onClick={handleCreatePost}
-              disabled={!newPost.title.trim() || !newPost.content.trim() || createPostMutation.isPending}
+              disabled={createPostMutation.isPending}
               className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
             >
               {createPostMutation.isPending ? (
