@@ -1,0 +1,1974 @@
+     1→'use client';
+     2→
+     3→import { useEffect, useState, useRef, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  AreaChart,
+     7→  Area,
+     8→  BarChart,
+     9→  Bar,
+    10→  LineChart,
+    11→  Line,
+    12→  PieChart,
+    13→  Pie,
+    14→  Cell,
+    15→  XAxis,
+    16→  YAxis,
+    17→  CartesianGrid,
+    18→  Tooltip,
+    19→  ComposedChart,
+    20→  ReferenceLine,
+    21→  ReferenceDot,
+    22→  ResponsiveContainer,
+    23→} from 'recharts';
+    24→import {
+    25→  DollarSign,
+    26→  Users,
+    27→  GraduationCap,
+    28→  CheckCircle,
+    29→  MessageCircle,
+    30→  UserPlus,
+    31→  TrendingUp,
+    32→  TrendingDown,
+    33→  BookOpen,
+    34→  Sparkles,
+    35→  FileText,
+    36→  Star,
+    37→  ArrowRight,
+    38→  Clock,
+    39→  Activity,
+    40→  Eye,
+    41→  PlayCircle,
+    42→  CircleDot,
+    43→  Award,
+    44→  ChevronRight,
+    45→  ArrowUpRight,
+    46→  ArrowDownRight,
+    47→  Trophy,
+    48→  Target,
+    49→  Zap,
+    50→  Search,
+    51→  GraduationCap as GradCapIcon,
+    52→  Heart,
+    53→  BarChart3,
+    54→  Shield,
+    55→  ChevronDown,
+    56→  ChevronUp,
+    57→  Radio,
+    58→} from 'lucide-react';
+    59→
+    60→import {
+    61→  Card,
+    62→  CardContent,
+    63→  CardDescription,
+    64→  CardHeader,
+    65→  CardTitle,
+    66→} from '@/components/ui/card';
+    67→import { Badge } from '@/components/ui/badge';
+    68→import { Progress } from '@/components/ui/progress';
+    69→import {
+    70→  Table,
+    71→  TableBody,
+    72→  TableCell,
+    73→  TableHead,
+    74→  TableHeader,
+    75→  TableRow,
+    76→} from '@/components/ui/table';
+    77→import {
+    78→  ChartContainer,
+    79→  ChartTooltip,
+    80→  ChartTooltipContent,
+    81→  ChartLegend,
+    82→  ChartLegendContent,
+    83→  type ChartConfig,
+    84→} from '@/components/ui/chart';
+    85→import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+    86→import {
+    87→  adminKPIs,
+    88→  revenueData,
+    89→  engagementData,
+    90→  completionFunnelData,
+    91→  categoryData,
+    92→  demoCourses,
+    93→  videoDropoffData,
+    94→} from '@/lib/mock-data';
+    95→import { useApi, apiPost } from '@/lib/api';
+    96→import { useAppStore } from '@/store/app-store';
+    97→import type { DashboardKPI, Course } from '@/types';
+    98→import { BulkOperationsDialog } from '@/components/admin/bulk-ops/bulk-operations-dialog';
+    99→
+   100→// ─── CSS Keyframe Animations ──────────────────────────────────
+   101→const cssAnimations = `
+   102→@keyframes gradientShift {
+   103→  0% { background-position: 0% 50%; }
+   104→  50% { background-position: 100% 50%; }
+   105→  100% { background-position: 0% 50%; }
+   106→}
+   107→
+   108→@keyframes shimmer {
+   109→  0% { transform: translateX(-100%) rotate(45deg); }
+   110→  100% { transform: translateX(200%) rotate(45deg); }
+   111→}
+   112→
+   113→@keyframes pulse-ring {
+   114→  0% { transform: scale(0.8); opacity: 1; }
+   115→  100% { transform: scale(1.4); opacity: 0; }
+   116→}
+   117→
+   118→@keyframes bounce-arrow {
+   119→  0%, 100% { transform: translateY(0); }
+   120→  50% { transform: translateY(-3px); }
+   121→}
+   122→
+   123→@keyframes marquee {
+   124→  0% { transform: translateX(0); }
+   125→  100% { transform: translateX(-50%); }
+   126→}
+   127→
+   128→@keyframes draw-line {
+   129→  0% { transform: scaleY(0); }
+   130→  100% { transform: scaleY(1); }
+   131→}
+   132→
+   133→@keyframes score-fill {
+   134→  0% { stroke-dashoffset: 283; }
+   135→}
+   136→
+   137→@keyframes pulse-subtle {
+   138→  0%, 100% { opacity: 1; }
+   139→  50% { opacity: 0.7; }
+   140→}
+   141→
+   142→@keyframes data-pulse {
+   143→  0% { r: 3; opacity: 1; }
+   144→  50% { r: 6; opacity: 0.4; }
+   145→  100% { r: 3; opacity: 1; }
+   146→}
+   147→
+   148→@keyframes ripple {
+   149→  0% { transform: scale(0); opacity: 0.5; }
+   150→  100% { transform: scale(4); opacity: 0; }
+   151→}
+   152→`;
+   153→
+   154→// Inject CSS animations
+   155→if (typeof document !== 'undefined') {
+   156→  const existingStyle = document.getElementById('admin-dashboard-animations');
+   157→  if (!existingStyle) {
+   158→    const style = document.createElement('style');
+   159→    style.id = 'admin-dashboard-animations';
+   160→    style.textContent = cssAnimations;
+   161→    document.head.appendChild(style);
+   162→  }
+   163→}
+   164→
+   165→// ─── Icon mapping ────────────────────────────────────────────
+   166→const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+   167→  'dollar-sign': DollarSign,
+   168→  users: Users,
+   169→  'graduation-cap': GraduationCap,
+   170→  'check-circle': CheckCircle,
+   171→  'message-circle': MessageCircle,
+   172→  'user-plus': UserPlus,
+   173→};
+   174→
+   175→// ─── Chart configs ───────────────────────────────────────────
+   176→const revenueChartConfig: ChartConfig = {
+   177→  revenue: { label: 'Revenue', color: '#10b981' },
+   178→  enrollments: { label: 'Enrollments', color: '#8b5cf6' },
+   179→  completions: { label: 'Completions', color: '#f59e0b' },
+   180→  prevRevenue: { label: 'Revenue (Prev Year)', color: '#6ee7b7' },
+   181→};
+   182→
+   183→const engagementChartConfig: ChartConfig = {
+   184→  activeUsers: { label: 'Active Users', color: '#10b981' },
+   185→  postsCreated: { label: 'Posts Created', color: '#8b5cf6' },
+   186→  quizzesTaken: { label: 'Quizzes Taken', color: '#f59e0b' },
+   187→};
+   188→
+   189→const categoryChartConfig: ChartConfig = {
+   190→  value: { label: 'Enrollments' },
+   191→  'Web Development': { label: 'Web Development', color: '#8b5cf6' },
+   192→  'Data Science': { label: 'Data Science', color: '#10b981' },
+   193→  Design: { label: 'Design', color: '#f59e0b' },
+   194→  Business: { label: 'Business', color: '#ef4444' },
+   195→  Marketing: { label: 'Marketing', color: '#a855f7' },
+   196→  'AI & ML': { label: 'AI & ML', color: '#06b6d4' },
+   197→};
+   198→
+   199→const dropoffChartConfig: ChartConfig = {
+   200→  dropoff: { label: 'Drop-off %', color: '#ef4444' },
+   201→};
+   202→
+   203→// ─── Sparkline data for KPI cards (7-day deterministic trends) ──
+   204→const sparklineDataMap: Record<string, number[]> = {
+   205→  'dollar-sign': [38, 41, 39, 43, 42, 45, 47],
+   206→  users: [3100, 3200, 3350, 3400, 3500, 3620, 3847],
+   207→  'graduation-cap': [65, 67, 68, 69, 70, 71, 72],
+   208→  'check-circle': [86, 85, 86, 85, 84, 85, 84],
+   209→  'message-circle': [82, 84, 85, 86, 87, 88, 89],
+   210→  'user-plus': [180, 190, 200, 210, 218, 225, 234],
+   211→};
+   212→
+   213→// ─── KPI card gradient backgrounds (glassmorphism per-card) ──────
+   214→const kpiGradientMap: Record<string, {
+   215→  from: string;
+   216→  to: string;
+   217→  iconBg: string;
+   218→  iconText: string;
+   219→  borderAccent: string;
+   220→  borderGradientFrom: string;
+   221→  borderGradientTo: string;
+   222→  shimmerColor: string;
+   223→}> = {
+   224→  'dollar-sign': {
+   225→    from: 'from-emerald-500/20',
+   226→    to: 'to-emerald-700/10',
+   227→    iconBg: 'bg-emerald-500/20 dark:bg-emerald-500/30',
+   228→    iconText: 'text-emerald-600 dark:text-emerald-300',
+   229→    borderAccent: 'border-l-emerald-500',
+   230→    borderGradientFrom: '#10b981',
+   231→    borderGradientTo: '#34d399',
+   232→    shimmerColor: 'rgba(16, 185, 129, 0.15)',
+   233→  },
+   234→  users: {
+   235→    from: 'from-sky-500/20',
+   236→    to: 'to-sky-700/10',
+   237→    iconBg: 'bg-sky-500/20 dark:bg-sky-500/30',
+   238→    iconText: 'text-sky-600 dark:text-sky-300',
+   239→    borderAccent: 'border-l-sky-500',
+   240→    borderGradientFrom: '#0ea5e9',
+   241→    borderGradientTo: '#38bdf8',
+   242→    shimmerColor: 'rgba(14, 165, 233, 0.15)',
+   243→  },
+   244→  'graduation-cap': {
+   245→    from: 'from-violet-500/20',
+   246→    to: 'to-violet-700/10',
+   247→    iconBg: 'bg-violet-500/20 dark:bg-violet-500/30',
+   248→    iconText: 'text-violet-600 dark:text-violet-300',
+   249→    borderAccent: 'border-l-violet-500',
+   250→    borderGradientFrom: '#8b5cf6',
+   251→    borderGradientTo: '#a78bfa',
+   252→    shimmerColor: 'rgba(139, 92, 246, 0.15)',
+   253→  },
+   254→  'check-circle': {
+   255→    from: 'from-amber-500/20',
+   256→    to: 'to-amber-700/10',
+   257→    iconBg: 'bg-amber-500/20 dark:bg-amber-500/30',
+   258→    iconText: 'text-amber-600 dark:text-amber-300',
+   259→    borderAccent: 'border-l-amber-500',
+   260→    borderGradientFrom: '#f59e0b',
+   261→    borderGradientTo: '#fbbf24',
+   262→    shimmerColor: 'rgba(245, 158, 11, 0.15)',
+   263→  },
+   264→  'message-circle': {
+   265→    from: 'from-rose-500/20',
+   266→    to: 'to-rose-700/10',
+   267→    iconBg: 'bg-rose-500/20 dark:bg-rose-500/30',
+   268→    iconText: 'text-rose-600 dark:text-rose-300',
+   269→    borderAccent: 'border-l-rose-500',
+   270→    borderGradientFrom: '#f43f5e',
+   271→    borderGradientTo: '#fb7185',
+   272→    shimmerColor: 'rgba(244, 63, 94, 0.15)',
+   273→  },
+   274→  'user-plus': {
+   275→    from: 'from-teal-500/20',
+   276→    to: 'to-teal-700/10',
+   277→    iconBg: 'bg-teal-500/20 dark:bg-teal-500/30',
+   278→    iconText: 'text-teal-600 dark:text-teal-300',
+   279→    borderAccent: 'border-l-teal-500',
+   280→    borderGradientFrom: '#14b8a6',
+   281→    borderGradientTo: '#2dd4bf',
+   282→    shimmerColor: 'rgba(20, 184, 166, 0.15)',
+   283→  },
+   284→};
+   285→
+   286→// ─── Revenue data variants (weekly & daily) ──────────────────
+   287→const revenueWeeklyData = [
+   288→  { month: 'W1', revenue: 8200, enrollments: 58, completions: 38, prevRevenue: 6800 },
+   289→  { month: 'W2', revenue: 9400, enrollments: 64, completions: 42, prevRevenue: 7200 },
+   290→  { month: 'W3', revenue: 10100, enrollments: 70, completions: 48, prevRevenue: 7800 },
+   291→  { month: 'W4', revenue: 11200, enrollments: 78, completions: 52, prevRevenue: 8100 },
+   292→  { month: 'W5', revenue: 10800, enrollments: 72, completions: 49, prevRevenue: 8400 },
+   293→  { month: 'W6', revenue: 11800, enrollments: 82, completions: 56, prevRevenue: 8900 },
+   294→  { month: 'W7', revenue: 12300, enrollments: 85, completions: 60, prevRevenue: 9200 },
+   295→  { month: 'W8', revenue: 11900, enrollments: 80, completions: 55, prevRevenue: 8700 },
+   296→  { month: 'W9', revenue: 13000, enrollments: 90, completions: 64, prevRevenue: 9500 },
+   297→  { month: 'W10', revenue: 12500, enrollments: 87, completions: 61, prevRevenue: 9100 },
+   298→  { month: 'W11', revenue: 13500, enrollments: 93, completions: 67, prevRevenue: 9800 },
+   299→  { month: 'W12', revenue: 14332, enrollments: 98, completions: 72, prevRevenue: 10200 },
+   300→];
+   301→
+   302→const revenueDailyData = [
+   303→  { month: 'Mon', revenue: 1850, enrollments: 13, completions: 9, prevRevenue: 1400 },
+   304→  { month: 'Tue', revenue: 2100, enrollments: 15, completions: 11, prevRevenue: 1600 },
+   305→  { month: 'Wed', revenue: 2400, enrollments: 17, completions: 13, prevRevenue: 1800 },
+   306→  { month: 'Thu', revenue: 2200, enrollments: 16, completions: 12, prevRevenue: 1700 },
+   307→  { month: 'Fri', revenue: 2050, enrollments: 14, completions: 10, prevRevenue: 1500 },
+   308→  { month: 'Sat', revenue: 1400, enrollments: 9, completions: 7, prevRevenue: 1100 },
+   309→  { month: 'Sun', revenue: 1200, enrollments: 8, completions: 6, prevRevenue: 900 },
+   310→];
+   311→
+   312→// Year-over-year monthly revenue data (previous year)
+   313→const revenueDataWithPrev = revenueData.map((d, i) => ({
+   314→  ...d,
+   315→  prevRevenue: Math.round(d.revenue * (0.62 + i * 0.035)),
+   316→}));
+   317→
+   318→// ─── Funnel stage icons ──────────────────────────────────────
+   319→const funnelIconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+   320→  'Enrolled': UserPlus,
+   321→  'Started': PlayCircle,
+   322→  '50% Complete': CircleDot,
+   323→  '75% Complete': Target,
+   324→  'Completed': CheckCircle,
+   325→  'Certified': Award,
+   326→};
+   327→
+   328→// ─── Animation variants ──────────────────────────────────────
+   329→const containerVariants = {
+   330→  hidden: { opacity: 0 },
+   331→  visible: {
+   332→    opacity: 1,
+   333→    transition: { staggerChildren: 0.06 },
+   334→  },
+   335→};
+   336→
+   337→const itemVariants = {
+   338→  hidden: { opacity: 0, y: 20 },
+   339→  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+   340→};
+   341→
+   342→const funnelStageVariants = {
+   343→  hidden: { opacity: 0, x: -40 },
+   344→  visible: (i: number) => ({
+   345→    opacity: 1,
+   346→    x: 0,
+   347→    transition: { duration: 0.5, delay: i * 0.12, ease: [0.25, 0.46, 0.45, 0.94] },
+   348→  }),
+   349→};
+   350→
+   351→const funnelDropoffVariants = {
+   352→  hidden: { opacity: 0, scale: 0.8 },
+   353→  visible: (i: number) => ({
+   354→    opacity: 1,
+   355→    scale: 1,
+   356→    transition: { duration: 0.3, delay: i * 0.12 + 0.25, ease: 'easeOut' },
+   357→  }),
+   358→};
+   359→
+   360→// ─── Category color map ──────────────────────────────────────
+   361→const categoryColorMap: Record<string, string> = {
+   362→  'Web Development': 'bg-violet-500',
+   363→  'Data Science': 'bg-emerald-500',
+   364→  'Design': 'bg-amber-500',
+   365→  'Business': 'bg-red-500',
+   366→  'Marketing': 'bg-purple-500',
+   367→  'AI & ML': 'bg-cyan-500',
+   368→};
+   369→
+   370→// ─── Level badge helper ──────────────────────────────────────
+   371→function LevelBadge({ level }: { level: Course['level'] }) {
+   372→  const map: Record<string, { variant: 'secondary' | 'outline' | 'destructive' | 'default'; className: string }> = {
+   373→    beginner: { variant: 'secondary', className: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300' },
+   374→    intermediate: { variant: 'secondary', className: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-100 dark:bg-yellow-900/40 dark:text-yellow-300' },
+   375→    advanced: { variant: 'secondary', className: 'bg-orange-100 text-orange-700 hover:bg-orange-100 dark:bg-orange-900/40 dark:text-orange-300' },
+   376→    expert: { variant: 'secondary', className: 'bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-900/40 dark:text-red-300' },
+   377→  };
+   378→  const cfg = map[level] ?? map.beginner;
+   379→  return (
+   380→    <Badge variant={cfg.variant} className={cfg.className}>
+   381→      {level.charAt(0).toUpperCase() + level.slice(1)}
+   382→    </Badge>
+   383→  );
+   384→}
+   385→
+   386→// ─── Number formatting ───────────────────────────────────────
+   387→function fmtNumber(n: number): string {
+   388→  return n.toLocaleString('en-US');
+   389→}
+   390→
+   391→// ─── Animated Counter ────────────────────────────────────────
+   392→function AnimatedCounter({ value, duration = 1500 }: { value: string; duration?: number }) {
+   393→  const [displayed, setDisplayed] = useState('0');
+   394→  const hasAnimated = useRef(false);
+   395→
+   396→  useEffect(() => {
+   397→    if (hasAnimated.current) return;
+   398→    hasAnimated.current = true;
+   399→
+   400→    const numericMatch = value.match(/[\d,.]+/);
+   401→    if (!numericMatch) {
+   402→      return;
+   403→    }
+   404→
+   405→    const numericStr = numericMatch[0];
+   406→    const prefix = value.slice(0, value.indexOf(numericStr));
+   407→    const suffix = value.slice(value.indexOf(numericStr) + numericStr.length);
+   408→    const cleanNumber = parseFloat(numericStr.replace(/,/g, ''));
+   409→    const hasDecimals = numericStr.includes('.');
+   410→    const decimalPlaces = hasDecimals ? numericStr.split('.')[1].length : 0;
+   411→
+   412→    const startTime = Date.now();
+   413→    const animate = () => {
+   414→      const elapsed = Date.now() - startTime;
+   415→      const progress = Math.min(elapsed / duration, 1);
+   416→      const eased = 1 - Math.pow(1 - progress, 3);
+   417→      const current = cleanNumber * eased;
+   418→
+   419→      let formatted: string;
+   420→      if (hasDecimals) {
+   421→        formatted = current.toFixed(decimalPlaces);
+   422→      } else {
+   423→        formatted = Math.round(current).toLocaleString('en-US');
+   424→      }
+   425→
+   426→      setDisplayed(`${prefix}${formatted}${suffix}`);
+   427→
+   428→      if (progress < 1) {
+   429→        requestAnimationFrame(animate);
+   430→      }
+   431→    };
+   432→
+   433→    requestAnimationFrame(animate);
+   434→  }, [value, duration]);
+   435→
+   436→  const numericMatch = value.match(/[\d,.]+/);
+   437→  if (!numericMatch) {
+   438→    return <span>{value}</span>;
+   439→  }
+   440→
+   441→  return <span>{displayed}</span>;
+   442→}
+   443→
+   444→// ─── Percentage Animated Counter ─────────────────────────────
+   445→function PercentageCounter({ value, duration = 1200 }: { value: number; duration?: number }) {
+   446→  const [displayed, setDisplayed] = useState(0);
+   447→  const hasAnimated = useRef(false);
+   448→
+   449→  useEffect(() => {
+   450→    if (hasAnimated.current) return;
+   451→    hasAnimated.current = true;
+   452→
+   453→    const startTime = Date.now();
+   454→    const animate = () => {
+   455→      const elapsed = Date.now() - startTime;
+   456→      const progress = Math.min(elapsed / duration, 1);
+   457→      const eased = 1 - Math.pow(1 - progress, 3);
+   458→      const current = value * eased;
+   459→      setDisplayed(current);
+   460→
+   461→      if (progress < 1) {
+   462→        requestAnimationFrame(animate);
+   463→      }
+   464→    };
+   465→
+   466→    requestAnimationFrame(animate);
+   467→  }, [value, duration]);
+   468→
+   469→  return <span>{displayed.toFixed(1)}%</span>;
+   470→}
+   471→
+   472→// ─── Circular Progress Ring ──────────────────────────────────
+   473→function ProgressRing({ percent, size = 32, strokeWidth = 3, color = '#10b981', animate = true }: { percent: number; size?: number; strokeWidth?: number; color?: string; animate?: boolean }) {
+   474→  const radius = (size - strokeWidth) / 2;
+   475→  const circumference = 2 * Math.PI * radius;
+   476→  const offset = circumference - (percent / 100) * circumference;
+   477→
+   478→  return (
+   479→    <svg width={size} height={size} className="shrink-0">
+   480→      <circle
+   481→        cx={size / 2}
+   482→        cy={size / 2}
+   483→        r={radius}
+   484→        fill="none"
+   485→        stroke="currentColor"
+   486→        strokeWidth={strokeWidth}
+   487→        className="text-muted/30"
+   488→      />
+   489→      <motion.circle
+   490→        cx={size / 2}
+   491→        cy={size / 2}
+   492→        r={radius}
+   493→        fill="none"
+   494→        stroke={color}
+   495→        strokeWidth={strokeWidth}
+   496→        strokeLinecap="round"
+   497→        strokeDasharray={circumference}
+   498→        initial={animate ? { strokeDashoffset: circumference } : { strokeDashoffset: offset }}
+   499→        animate={{ strokeDashoffset: offset }}
+   500→        transition={{ duration: 1, ease: 'easeOut' }}
+   501→        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+   502→      />
+   503→    </svg>
+   504→  );
+   505→}
+   506→
+   507→// ─── Star Rating ─────────────────────────────────────────────
+   508→function StarRating({ rating, max = 5 }: { rating: number; max?: number }) {
+   509→  return (
+   510→    <div className="flex items-center gap-0.5">
+   511→      {Array.from({ length: max }, (_, i) => {
+   512→        const filled = i < Math.floor(rating);
+   513→        const halfFilled = !filled && i < rating;
+   514→        return (
+   515→          <Star
+   516→            key={i}
+   517→            className={`h-3.5 w-3.5 transition-colors ${
+   518→              filled
+   519→                ? 'fill-yellow-400 text-yellow-400'
+   520→                : halfFilled
+   521→                  ? 'fill-yellow-400/50 text-yellow-400'
+   522→                  : 'fill-muted text-muted-foreground/30'
+   523→            }`}
+   524→          />
+   525→        );
+   526→      })}
+   527→      <span className="ml-1 text-xs font-medium text-muted-foreground">{rating}</span>
+   528→    </div>
+   529→  );
+   530→}
+   531→
+   532→// ─── Sparkline Mini Chart ────────────────────────────────────
+   533→function SparklineMiniChart({ data, color, isPositive }: { data: number[]; color: string; isPositive: boolean }) {
+   534→  const chartData = data.map((v, i) => ({ d: i, v }));
+   535→  const gradientId = `sparkline-${color.replace('#', '')}-${Math.random().toString(36).slice(2, 6)}`;
+   536→
+   537→  return (
+   538→    <div className="w-20 h-8">
+   539→      <ResponsiveContainer width="100%" height="100%">
+   540→        <AreaChart data={chartData} margin={{ top: 1, right: 0, left: 0, bottom: 1 }}>
+   541→          <defs>
+   542→            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+   543→              <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+   544→              <stop offset="100%" stopColor={color} stopOpacity={0.02} />
+   545→            </linearGradient>
+   546→          </defs>
+   547→          <Area
+   548→            type="monotone"
+   549→            dataKey="v"
+   550→            stroke={color}
+   551→            strokeWidth={1.5}
+   552→            fill={`url(#${gradientId})`}
+   553→            dot={false}
+   554→            isAnimationActive={true}
+   555→            animationDuration={1000}
+   556→          />
+   557→        </AreaChart>
+   558→      </ResponsiveContainer>
+   559→    </div>
+   560→  );
+   561→}
+   562→
+   563→// ─── Table Sparkline ─────────────────────────────────────────
+   564→function TableSparkline({ data, color }: { data: number[]; color: string }) {
+   565→  const chartData = data.map((v, i) => ({ d: i, v }));
+   566→  const gid = `tspark-${color.replace('#', '')}-${Math.random().toString(36).slice(2, 6)}`;
+   567→  return (
+   568→    <div className="w-16 h-6">
+   569→      <ResponsiveContainer width="100%" height="100%">
+   570→        <AreaChart data={chartData} margin={{ top: 1, right: 0, left: 0, bottom: 1 }}>
+   571→          <defs>
+   572→            <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+   573→              <stop offset="0%" stopColor={color} stopOpacity={0.25} />
+   574→              <stop offset="100%" stopColor={color} stopOpacity={0} />
+   575→            </linearGradient>
+   576→          </defs>
+   577→          <Area
+   578→            type="monotone"
+   579→            dataKey="v"
+   580→            stroke={color}
+   581→            strokeWidth={1.5}
+   582→            fill={`url(#${gid})`}
+   583→            dot={false}
+   584→            isAnimationActive={true}
+   585→            animationDuration={800}
+   586→          />
+   587→        </AreaChart>
+   588→      </ResponsiveContainer>
+   589→    </div>
+   590→  );
+   591→}
+   592→
+   593→// ─── KPI Card (Enhanced with Glassmorphism + Animated Gradient Border) ──
+   594→function KPICard({ kpi, index }: { kpi: DashboardKPI; index: number }) {
+   595→  const Icon = iconMap[kpi.icon] ?? Users;
+   596→  const isPositive = kpi.change >= 0;
+   597→  const gradients = kpiGradientMap[kpi.icon] ?? kpiGradientMap['users'];
+   598→
+   599→  const sparklineData = sparklineDataMap[kpi.icon] ?? [10, 12, 11, 14, 13, 15, 16];
+   600→  const sparklineColor = isPositive ? '#10b981' : '#ef4444';
+   601→
+   602→  return (
+   603→    <motion.div variants={itemVariants} custom={index}>
+   604→      <motion.div
+   605→        className="relative group rounded-xl p-[1.5px] overflow-hidden"
+   606→        whileHover={{ y: -4 }}
+   607→        transition={{ duration: 0.3, ease: 'easeOut' }}
+   608→      >
+   609→        {/* Animated gradient border */}
+   610→        <div
+   611→          className="absolute inset-0 opacity-60 group-hover:opacity-100 transition-opacity duration-500"
+   612→          style={{
+   613→            background: `linear-gradient(135deg, ${gradients.borderGradientFrom}, ${gradients.borderGradientTo}, ${gradients.borderGradientFrom})`,
+   614→            backgroundSize: '200% 200%',
+   615→            animation: 'gradientShift 4s ease infinite',
+   616→          }}
+   617→        />
+   618→
+   619→        {/* Inner card with glassmorphism */}
+   620→        <Card className="border-0 h-full shadow-sm group-hover:shadow-xl transition-shadow duration-300 overflow-hidden relative backdrop-blur-xl bg-white/70 dark:bg-gray-900/60">
+   621→          {/* Gradient mesh background */}
+   622→          <div className={`absolute inset-0 bg-gradient-to-br ${gradients.from} ${gradients.to} pointer-events-none`} />
+   623→
+   624→          {/* Glassmorphism shimmer overlay */}
+   625→          <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/20 via-transparent to-transparent dark:from-white/5" />
+   626→
+   627→          {/* Animated shimmer sweep */}
+   628→          <div
+   629→            className="absolute inset-0 pointer-events-none overflow-hidden"
+   630→          >
+   631→            <div
+   632→              className="absolute inset-0"
+   633→              style={{
+   634→                background: `linear-gradient(105deg, transparent 40%, ${gradients.shimmerColor} 45%, transparent 50%)`,
+   635→                animation: 'shimmer 3s ease-in-out infinite',
+   636→                animationDelay: `${index * 0.5}s`,
+   637→              }}
+   638→            />
+   639→          </div>
+   640→
+   641→          <CardContent className="p-6 relative z-10">
+   642→            <div className="flex items-start justify-between">
+   643→              <div className="space-y-1">
+   644→                <p className="text-sm font-medium text-muted-foreground">
+   645→                  {kpi.label}
+   646→                </p>
+   647→                <p className="text-3xl font-bold tracking-tight">
+   648→                  <AnimatedCounter value={String(kpi.value)} />
+   649→                </p>
+   650→              </div>
+   651→              <motion.div
+   652→                className={`rounded-xl p-2.5 ${gradients.iconBg} ${gradients.iconText} shadow-sm relative overflow-hidden`}
+   653→                whileHover={{ scale: 1.1, rotate: 5 }}
+   654→                transition={{ type: 'spring', stiffness: 300 }}
+   655→              >
+   656→                {/* Sparkle/shimmer on icon bg */}
+   657→                <div
+   658→                  className="absolute inset-0"
+   659→                  style={{
+   660→                    background: `linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.3) 45%, transparent 50%)`,
+   661→                    animation: 'shimmer 2.5s ease-in-out infinite',
+   662→                  }}
+   663→                />
+   664→                <Icon className="h-5 w-5 relative z-10" />
+   665→              </motion.div>
+   666→            </div>
+   667→            {/* Sparkline + trend row */}
+   668→            <div className="mt-3 flex items-center justify-between">
+   669→              <div className="flex items-center gap-1.5 text-sm">
+   670→                {/* Pulsing indicator dot */}
+   671→                <span className="relative flex h-2.5 w-2.5">
+   672→                  {isPositive && (
+   673→                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+   674→                  )}
+   675→                  <span
+   676→                    className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+   677→                      isPositive ? 'bg-emerald-500' : 'bg-red-500'
+   678→                    }`}
+   679→                  />
+   680→                </span>
+   681→                {/* Bouncing trend arrow */}
+   682→                <motion.div
+   683→                  className="flex items-center"
+   684→                  style={{
+   685→                    color: isPositive ? '#10b981' : '#ef4444',
+   686→                    animation: 'bounce-arrow 1.5s ease-in-out infinite',
+   687→                  }}
+   688→                >
+   689→                  {isPositive ? (
+   690→                    <ArrowUpRight className="h-4 w-4" />
+   691→                  ) : (
+   692→                    <ArrowDownRight className="h-4 w-4" />
+   693→                  )}
+   694→                </motion.div>
+   695→                <span
+   696→                  className={
+   697→                    isPositive
+   698→                      ? 'font-medium text-emerald-600 dark:text-emerald-400'
+   699→                      : 'font-medium text-red-600 dark:text-red-400'
+   700→                  }
+   701→                >
+   702→                  {isPositive ? '+' : ''}
+   703→                  {kpi.change}%
+   704→                </span>
+   705→                <span className="text-muted-foreground">{kpi.changeLabel}</span>
+   706→              </div>
+   707→              <SparklineMiniChart data={sparklineData} color={sparklineColor} isPositive={isPositive} />
+   708→            </div>
+   709→          </CardContent>
+   710→        </Card>
+   711→      </motion.div>
+   712→    </motion.div>
+   713→  );
+   714→}
+   715→
+   716→// ─── Custom Revenue Tooltip (Enhanced with Gradient) ─────────
+   717→function RevenueCustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string; dataKey: string }>; label?: string }) {
+   718→  if (!active || !payload || !payload.length) return null;
+   719→
+   720→  const mainPayload = payload.filter((p) => p.dataKey !== 'prevRevenue');
+   721→  const prevRev = payload.find((p) => p.dataKey === 'prevRevenue');
+   722→
+   723→  return (
+   724→    <div className="rounded-xl border bg-gradient-to-br from-background via-background to-muted/50 backdrop-blur-md p-4 shadow-2xl min-w-[180px]">
+   725→      <p className="text-sm font-bold mb-2.5 border-b border-border/50 pb-1.5">{label}</p>
+   726→      {mainPayload.map((entry, idx) => (
+   727→        <div key={idx} className="flex items-center gap-2 text-sm py-1">
+   728→          <span
+   729→            className="h-2.5 w-2.5 rounded-full shrink-0 shadow-sm"
+   730→            style={{ backgroundColor: entry.color }}
+   731→          />
+   732→          <span className="text-muted-foreground">{entry.name}:</span>
+   733→          <span className="font-semibold ml-auto">
+   734→            {entry.name === 'Revenue'
+   735→              ? `$${entry.value.toLocaleString('en-US')}`
+   736→              : entry.value.toLocaleString('en-US')}
+   737→          </span>
+   738→        </div>
+   739→      ))}
+   740→      {prevRev && (
+   741→        <div className="flex items-center gap-2 text-sm py-1 mt-1 border-t border-dashed border-border/40 pt-2">
+   742→          <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-emerald-300/60 border border-emerald-400/40" />
+   743→          <span className="text-muted-foreground">Prev Year:</span>
+   744→          <span className="font-medium text-muted-foreground ml-auto">
+   745→            ${prevRev.value.toLocaleString('en-US')}
+   746→          </span>
+   747→        </div>
+   748→      )}
+   749→    </div>
+   750→  );
+   751→}
+   752→
+   753→// ─── Revenue Analytics Chart (Enhanced with YoY, Live indicator, Period pills) ──
+   754→function RevenueChart() {
+   755→  const [view, setView] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
+   756→  const [periodPill, setPeriodPill] = useState<'7D' | '30D' | '90D' | '1Y'>('30D');
+   757→
+   758→  const baseData = view === 'monthly' ? revenueDataWithPrev : view === 'weekly' ? revenueWeeklyData : revenueDailyData;
+   759→  const xKey = 'month';
+   760→
+   761→  // Find peak revenue for annotation
+   762→  const peakIndex = baseData.reduce((maxI, d, i, arr) => d.revenue > arr[maxI].revenue ? i : maxI, 0);
+   763→
+   764→  // YoY change calculation
+   765→  const latestRevenue = baseData[baseData.length - 1].revenue;
+   766→  const latestPrev = baseData[baseData.length - 1].prevRevenue;
+   767→  const yoyChange = ((latestRevenue - latestPrev) / latestPrev * 100).toFixed(1);
+   768→
+   769→  // Pulsing data point data for the area chart
+   770→  const pulseDotData = baseData.map((d, i) => ({ ...d, pulseR: i === baseData.length - 1 ? 6 : 0 }));
+   771→
+   772→  return (
+   773→    <motion.div variants={itemVariants}>
+   774→      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+   775→        <CardHeader className="pb-2">
+   776→          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   777→            <div className="flex items-center gap-3">
+   778→              <div>
+   779→                <CardTitle className="flex items-center gap-2">
+   780→                  Revenue Analytics
+   781→                  {/* Live indicator */}
+   782→                  <span className="flex items-center gap-1.5 text-xs font-normal text-emerald-600 dark:text-emerald-400">
+   783→                    <span className="relative flex h-2 w-2">
+   784→                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+   785→                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+   786→                    </span>
+   787→                    Live
+   788→                  </span>
+   789→                </CardTitle>
+   790→                <CardDescription>
+   791→                  Revenue, enrollments & completions trend with YoY comparison
+   792→                </CardDescription>
+   793→              </div>
+   794→              {/* YoY comparison badge */}
+   795→              <Badge
+   796→                variant="secondary"
+   797→                className="bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-700/30 whitespace-nowrap"
+   798→              >
+   799→                <TrendingUp className="h-3 w-3 mr-1" />
+   800→                YoY +{yoyChange}%
+   801→              </Badge>
+   802→            </div>
+   803→            <div className="flex items-center gap-2">
+   804→              {/* Period toggle pills */}
+   805→              <div className="flex items-center rounded-lg border border-border/60 bg-muted/30 p-0.5">
+   806→                {(['7D', '30D', '90D', '1Y'] as const).map((p) => (
+   807→                  <button
+   808→                    key={p}
+   809→                    type="button"
+   810→                    onClick={() => {
+   811→                      setPeriodPill(p);
+   812→                      if (p === '7D') setView('daily');
+   813→                      else if (p === '30D') setView('weekly');
+   814→                      else setView('monthly');
+   815→                    }}
+   816→                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-200 ${
+   817→                      periodPill === p
+   818→                        ? 'bg-background shadow-sm text-foreground'
+   819→                        : 'text-muted-foreground hover:text-foreground'
+   820→                    }`}
+   821→                  >
+   822→                    {p}
+   823→                  </button>
+   824→                ))}
+   825→              </div>
+   826→              <Tabs value={view} onValueChange={(v) => setView(v as 'monthly' | 'weekly' | 'daily')}>
+   827→                <TabsList className="h-8">
+   828→                  <TabsTrigger value="monthly" className="text-xs px-2.5 py-1">Monthly</TabsTrigger>
+   829→                  <TabsTrigger value="weekly" className="text-xs px-2.5 py-1">Weekly</TabsTrigger>
+   830→                  <TabsTrigger value="daily" className="text-xs px-2.5 py-1">Daily</TabsTrigger>
+   831→                </TabsList>
+   832→              </Tabs>
+   833→            </div>
+   834→          </div>
+   835→        </CardHeader>
+   836→        <CardContent className="pt-0 pb-4 px-6">
+   837→          <ChartContainer config={revenueChartConfig} className="h-[320px] w-full">
+   838→            <ComposedChart data={pulseDotData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
+   839→              <defs>
+   840→                <linearGradient id="revenueGradEnhanced" x1="0" y1="0" x2="0" y2="1">
+   841→                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
+   842→                  <stop offset="30%" stopColor="#10b981" stopOpacity={0.2} />
+   843→                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+   844→                </linearGradient>
+   845→                <linearGradient id="enrollmentsGradEnhanced" x1="0" y1="0" x2="0" y2="1">
+   846→                  <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.2} />
+   847→                  <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.02} />
+   848→                </linearGradient>
+   849→              </defs>
+   850→              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+   851→              <XAxis dataKey={xKey} tickLine={false} axisLine={false} />
+   852→              <YAxis
+   853→                yAxisId="left"
+   854→                tickLine={false}
+   855→                axisLine={false}
+   856→                tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
+   857→              />
+   858→              <YAxis
+   859→                yAxisId="right"
+   860→                orientation="right"
+   861→                tickLine={false}
+   862→                axisLine={false}
+   863→              />
+   864→              <Tooltip content={<RevenueCustomTooltip />} cursor={{ strokeDasharray: '3 3', stroke: '#94a3b8' }} />
+   865→              <ChartLegend content={<ChartLegendContent />} />
+   866→              {peakIndex >= 0 && (
+   867→                <ReferenceLine
+   868→                  yAxisId="left"
+   869→                  x={baseData[peakIndex][xKey]}
+   870→                  stroke="#f59e0b"
+   871→                  strokeDasharray="4 4"
+   872→                  strokeWidth={1}
+   873→                />
+   874→              )}
+   875→              {peakIndex >= 0 && (
+   876→                <ReferenceDot
+   877→                  yAxisId="left"
+   878→                  x={baseData[peakIndex][xKey]}
+   879→                  y={baseData[peakIndex].revenue}
+   880→                  r={6}
+   881→                  fill="#f59e0b"
+   882→                  stroke="#fff"
+   883→                  strokeWidth={2}
+   884→                />
+   885→              )}
+   886→              {/* Animated pulsing data point on latest */}
+   887→              <ReferenceDot
+   888→                yAxisId="left"
+   889→                x={baseData[baseData.length - 1][xKey]}
+   890→                y={baseData[baseData.length - 1].revenue}
+   891→                r={4}
+   892→                fill="#10b981"
+   893→                stroke="#fff"
+   894→                strokeWidth={2}
+   895→              />
+   896→              {/* YoY comparison line (dashed, lighter) */}
+   897→              <Line
+   898→                yAxisId="left"
+   899→                type="monotone"
+   900→                dataKey="prevRevenue"
+   901→                stroke="#6ee7b7"
+   902→                strokeWidth={1.5}
+   903→                strokeDasharray="6 4"
+   904→                dot={false}
+   905→                animationDuration={1800}
+   906→              />
+   907→              <Area
+   908→                yAxisId="left"
+   909→                type="monotone"
+   910→                dataKey="revenue"
+   911→                stroke="#10b981"
+   912→                fill="url(#revenueGradEnhanced)"
+   913→                strokeWidth={2.5}
+   914→                animationDuration={1200}
+   915→              />
+   916→              <Line
+   917→                yAxisId="right"
+   918→                type="monotone"
+   919→                dataKey="enrollments"
+   920→                stroke="#8b5cf6"
+   921→                strokeWidth={2}
+   922→                dot={{ r: 3 }}
+   923→                animationDuration={1400}
+   924→              />
+   925→              <Line
+   926→                yAxisId="right"
+   927→                type="monotone"
+   928→                dataKey="completions"
+   929→                stroke="#f59e0b"
+   930→                strokeWidth={2}
+   931→                dot={{ r: 3 }}
+   932→                animationDuration={1600}
+   933→              />
+   934→            </ComposedChart>
+   935→          </ChartContainer>
+   936→          {/* Peak annotation label */}
+   937→          {peakIndex >= 0 && (
+   938→            <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+   939→              <span className="h-2 w-2 rounded-full bg-amber-500" />
+   940→              <span>Peak Revenue ({view === 'monthly' ? 'New Course Launch' : view === 'weekly' ? 'Campaign Peak' : 'Mid-week Spike'})</span>
+   941→              <span className="mx-1 text-border">|</span>
+   942→              <span className="h-2 w-4 border-t-2 border-dashed border-emerald-300" />
+   943→              <span>Previous Year</span>
+   944→            </div>
+   945→          )}
+   946→        </CardContent>
+   947→      </Card>
+   948→    </motion.div>
+   949→  );
+   950→}
+   951→
+   952→// ─── Engagement Bar Chart ────────────────────────────────────
+   953→function EngagementChart() {
+   954→  return (
+   955→    <motion.div variants={itemVariants}>
+   956→      <Card className="h-full shadow-sm hover:shadow-md transition-shadow duration-200">
+   957→        <CardHeader className="pb-2">
+   958→          <CardTitle>Weekly Engagement</CardTitle>
+   959→          <CardDescription>
+   960→            Active users, posts & quizzes by day
+   961→          </CardDescription>
+   962→        </CardHeader>
+   963→        <CardContent>
+   964→          <ChartContainer config={engagementChartConfig} className="h-[280px] w-full">
+   965→            <BarChart data={engagementData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+   966→              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+   967→              <XAxis dataKey="day" tickLine={false} axisLine={false} />
+   968→              <YAxis tickLine={false} axisLine={false} />
+   969→              <ChartTooltip content={<ChartTooltipContent />} />
+   970→              <ChartLegend content={<ChartLegendContent />} />
+   971→              <Bar dataKey="activeUsers" fill="var(--color-activeUsers)" radius={[4, 4, 0, 0]} />
+   972→              <Bar dataKey="postsCreated" fill="var(--color-postsCreated)" radius={[4, 4, 0, 0]} />
+   973→              <Bar dataKey="quizzesTaken" fill="var(--color-quizzesTaken)" radius={[4, 4, 0, 0]} />
+   974→            </BarChart>
+   975→          </ChartContainer>
+   976→        </CardContent>
+   977→      </Card>
+   978→    </motion.div>
+   979→  );
+   980→}
+   981→
+   982→// ─── Category Pie Chart ──────────────────────────────────────
+   983→function CategoryChart() {
+   984→  return (
+   985→    <motion.div variants={itemVariants}>
+   986→      <Card className="h-full shadow-sm hover:shadow-md transition-shadow duration-200">
+   987→        <CardHeader className="pb-2">
+   988→          <CardTitle>Category Distribution</CardTitle>
+   989→          <CardDescription>
+   990→            Enrollment by course category
+   991→          </CardDescription>
+   992→        </CardHeader>
+   993→        <CardContent>
+   994→          <ChartContainer config={categoryChartConfig} className="h-[280px] w-full">
+   995→            <PieChart>
+   996→              <Pie
+   997→                data={categoryData}
+   998→                dataKey="value"
+   999→                nameKey="name"
+  1000→                cx="50%"
+  1001→                cy="50%"
+  1002→                innerRadius={55}
+  1003→                outerRadius={95}
+  1004→                paddingAngle={3}
+  1005→                strokeWidth={0}
+  1006→              >
+  1007→                {categoryData.map((entry, idx) => (
+  1008→                  <Cell key={idx} fill={entry.color} />
+  1009→                ))}
+  1010→              </Pie>
+  1011→              <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
+  1012→              <ChartLegend content={<ChartLegendContent nameKey="name" />} />
+  1013→            </PieChart>
+  1014→          </ChartContainer>
+  1015→        </CardContent>
+  1016→      </Card>
+  1017→    </motion.div>
+  1018→  );
+  1019→}
+  1020→
+  1021→// ─── Completion Funnel (Enhanced Horizontal with Icons & Dropoff) ──
+  1022→function CompletionFunnel() {
+  1023→  const maxCount = completionFunnelData[0].count;
+  1024→
+  1025→  const funnelColors = [
+  1026→    'from-emerald-500 to-emerald-400',
+  1027→    'from-emerald-400 to-teal-400',
+  1028→    'from-teal-400 to-yellow-400',
+  1029→    'from-yellow-400 to-orange-400',
+  1030→    'from-orange-400 to-red-400',
+  1031→    'from-red-400 to-red-500',
+  1032→  ];
+  1033→
+  1034→  const funnelBorderColors = [
+  1035→    'border-emerald-500/30',
+  1036→    'border-emerald-400/30',
+  1037→    'border-teal-400/30',
+  1038→    'border-yellow-400/30',
+  1039→    'border-orange-400/30',
+  1040→    'border-red-400/30',
+  1041→  ];
+  1042→
+  1043→  const getDropoff = useCallback((currentIdx: number): { pct: number; count: number } | null => {
+  1044→    if (currentIdx >= completionFunnelData.length - 1) return null;
+  1045→    const current = completionFunnelData[currentIdx];
+  1046→    const next = completionFunnelData[currentIdx + 1];
+  1047→    const dropoffPct = ((current.count - next.count) / current.count) * 100;
+  1048→    return { pct: Math.round(dropoffPct * 10) / 10, count: current.count - next.count };
+  1049→  }, []);
+  1050→
+  1051→  return (
+  1052→    <motion.div variants={itemVariants}>
+  1053→      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+  1054→        <CardHeader className="pb-2">
+  1055→          <CardTitle>Completion Funnel</CardTitle>
+  1056→          <CardDescription>
+  1057→            Enrollment-to-certification journey with drop-off rates
+  1058→          </CardDescription>
+  1059→        </CardHeader>
+  1060→        <CardContent>
+  1061→          <div className="space-y-0">
+  1062→            {completionFunnelData.map((stage, idx) => {
+  1063→              const widthPct = (stage.count / maxCount) * 100;
+  1064→              const StageIcon = funnelIconMap[stage.stage] ?? CheckCircle;
+  1065→              const dropoff = getDropoff(idx);
+  1066→
+  1067→              return (
+  1068→                <div key={stage.stage}>
+  1069→                  <motion.div
+  1070→                    custom={idx}
+  1071→                    variants={funnelStageVariants}
+  1072→                    initial="hidden"
+  1073→                    animate="visible"
+  1074→                    className="space-y-1.5"
+  1075→                  >
+  1076→                    <div className="flex items-center justify-between text-sm">
+  1077→                      <div className="flex items-center gap-2">
+  1078→                        <StageIcon className="h-4 w-4 text-muted-foreground" />
+  1079→                        <span className="font-medium">{stage.stage}</span>
+  1080→                      </div>
+  1081→                      <div className="flex items-center gap-3 text-muted-foreground">
+  1082→                        <span className="font-mono tabular-nums">{fmtNumber(stage.count)}</span>
+  1083→                        <span className="font-semibold text-foreground min-w-[50px] text-right">
+  1084→                          <PercentageCounter value={stage.percentage} duration={1000 + idx * 200} />
+  1085→                        </span>
+  1086→                      </div>
+  1087→                    </div>
+  1088→                    <div className={`h-9 w-full overflow-hidden rounded-md bg-muted border ${funnelBorderColors[idx] ?? ''}`}>
+  1089→                      <motion.div
+  1090→                        className={`h-full rounded-md bg-gradient-to-r ${funnelColors[idx] ?? 'from-slate-500 to-slate-400'} relative overflow-hidden`}
+  1091→                        initial={{ width: 0 }}
+  1092→                        animate={{ width: `${widthPct}%` }}
+  1093→                        transition={{ duration: 1, delay: idx * 0.12, ease: [0.25, 0.46, 0.45, 0.94] }}
+  1094→                      >
+  1095→                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
+  1096→                      </motion.div>
+  1097→                    </div>
+  1098→                  </motion.div>
+  1099→
+  1100→                  {dropoff && (
+  1101→                    <motion.div
+  1102→                      custom={idx}
+  1103→                      variants={funnelDropoffVariants}
+  1104→                      initial="hidden"
+  1105→                      animate="visible"
+  1106→                      className="flex items-center justify-center gap-2 py-1.5"
+  1107→                    >
+  1108→                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-muted-foreground/30 to-transparent" />
+  1109→                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-950/30 border border-red-200/50 dark:border-red-800/30">
+  1110→                        <ArrowDownRight className="h-3 w-3 text-red-500" />
+  1111→                        <span className="text-xs font-medium text-red-600 dark:text-red-400">
+  1112→                          {dropoff.pct}% drop
+  1113→                        </span>
+  1114→                        <span className="text-xs text-red-400 dark:text-red-500">
+  1115→                          ({fmtNumber(dropoff.count)} users)
+  1116→                        </span>
+  1117→                      </div>
+  1118→                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-muted-foreground/30 to-transparent" />
+  1119→                    </motion.div>
+  1120→                  )}
+  1121→                </div>
+  1122→              );
+  1123→            })}
+  1124→          </div>
+  1125→        </CardContent>
+  1126→      </Card>
+  1127→    </motion.div>
+  1128→  );
+  1129→}
+  1130→
+  1131→// ─── Course Enrollment Trend Data ────────────────────────────
+  1132→const courseTrends: Record<string, { direction: 'up' | 'down'; value: number }> = {
+  1133→  'course-1': { direction: 'up', value: 12 },
+  1134→  'course-2': { direction: 'up', value: 23 },
+  1135→  'course-3': { direction: 'down', value: 3 },
+  1136→  'course-4': { direction: 'up', value: 8 },
+  1137→  'course-5': { direction: 'up', value: 5 },
+  1138→  'course-6': { direction: 'down', value: 2 },
+  1139→  'course-7': { direction: 'up', value: 15 },
+  1140→  'course-8': { direction: 'up', value: 7 },
+  1141→};
+  1142→
+  1143→// Sparkline data per course for the Trend column
+  1144→const courseSparklineData: Record<string, number[]> = {
+  1145→  'course-1': [45, 52, 48, 61, 58, 65, 72],
+  1146→  'course-2': [30, 35, 38, 42, 50, 55, 63],
+  1147→  'course-3': [40, 42, 41, 39, 38, 37, 36],
+  1148→  'course-4': [20, 25, 28, 32, 35, 38, 43],
+  1149→  'course-5': [55, 53, 56, 58, 60, 62, 65],
+  1150→  'course-6': [35, 34, 33, 35, 32, 31, 30],
+  1151→  'course-7': [10, 18, 22, 28, 35, 42, 52],
+  1152→  'course-8': [25, 28, 30, 33, 35, 38, 41],
+  1153→};
+  1154→
+  1155→// ─── Recent Courses Table (Enhanced with sparklines, category dots, row gradient) ──
+  1156→function RecentCoursesTable({ courses }: { courses: Course[] }) {
+  1157→  const displayCourses = courses.length > 0 ? courses : demoCourses;
+  1158→  return (
+  1159→    <motion.div variants={itemVariants}>
+  1160→      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+  1161→        <CardHeader className="pb-2">
+  1162→          <CardTitle>Course Performance</CardTitle>
+  1163→          <CardDescription>
+  1164→            Overview of all courses with ratings and completion metrics
+  1165→          </CardDescription>
+  1166→        </CardHeader>
+  1167→        <CardContent className="p-0">
+  1168→          <div className="max-h-96 overflow-y-auto overflow-x-auto custom-scrollbar">
+  1169→            <Table>
+  1170→              <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
+  1171→                <TableRow>
+  1172→                  <TableHead className="pl-6 min-w-[180px]">Course</TableHead>
+  1173→                  <TableHead className="min-w-[100px]">Category</TableHead>
+  1174→                  <TableHead className="min-w-[90px]">Level</TableHead>
+  1175→                  <TableHead className="text-right min-w-[100px]">Enrollments</TableHead>
+  1176→                  <TableHead className="min-w-[130px]">Rating</TableHead>
+  1177→                  <TableHead className="min-w-[110px]">Completion</TableHead>
+  1178→                  <TableHead className="min-w-[80px]">Trend</TableHead>
+  1179→                  <TableHead className="min-w-[100px]">Status</TableHead>
+  1180→                </TableRow>
+  1181→              </TableHeader>
+  1182→              <TableBody>
+  1183→                {displayCourses.map((course, rowIdx) => {
+  1184→                  const trend = courseTrends[course.id] ?? { direction: 'up' as const, value: 0 };
+  1185→                  const completionColor = course.completionRate >= 75 ? '#10b981' : course.completionRate >= 50 ? '#f59e0b' : '#ef4444';
+  1186→                  const sparkData = courseSparklineData[course.id] ?? [10, 12, 11, 14, 13, 15, 16];
+  1187→                  const catDot = categoryColorMap[course.category ?? ''] ?? 'bg-gray-500';
+  1188→
+  1189→                  return (
+  1190→                    <TableRow
+  1191→                      key={course.id}
+  1192→                      className="group transition-all duration-200 cursor-pointer relative"
+  1193→                    >
+  1194→                      {/* Row hover gradient overlay */}
+  1195→                      <td className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300 p-0">
+  1196→                        <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 via-transparent to-violet-500/5 dark:from-emerald-500/10 dark:to-violet-500/10" />
+  1197→                      </td>
+  1198→                      <TableCell className="pl-6 font-medium max-w-[200px] truncate relative z-10">
+  1199→                        <div className="flex items-center gap-2">
+  1200→                          <span className={`h-2 w-2 rounded-full shrink-0 ${catDot}`} />
+  1201→                          <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+  1202→                          <span className="truncate">{course.title}</span>
+  1203→                        </div>
+  1204→                      </TableCell>
+  1205→                      <TableCell className="text-muted-foreground relative z-10">
+  1206→                        <div className="flex items-center gap-1.5">
+  1207→                          <span className={`h-1.5 w-1.5 rounded-full ${catDot}`} />
+  1208→                          {course.category}
+  1209→                        </div>
+  1210→                      </TableCell>
+  1211→                      <TableCell className="relative z-10">
+  1212→                        <LevelBadge level={course.level} />
+  1213→                      </TableCell>
+  1214→                      <TableCell className="text-right relative z-10">
+  1215→                        <div className="flex items-center justify-end gap-1.5">
+  1216→                          <span className="font-mono tabular-nums">{fmtNumber(course.enrollmentCount)}</span>
+  1217→                          {trend.direction === 'up' ? (
+  1218→                            <span className="flex items-center text-emerald-600 dark:text-emerald-400">
+  1219→                              <TrendingUp className="h-3 w-3" />
+  1220→                              <span className="text-xs ml-0.5">+{trend.value}%</span>
+  1221→                            </span>
+  1222→                          ) : (
+  1223→                            <span className="flex items-center text-red-600 dark:text-red-400">
+  1224→                              <TrendingDown className="h-3 w-3" />
+  1225→                              <span className="text-xs ml-0.5">-{trend.value}%</span>
+  1226→                            </span>
+  1227→                          )}
+  1228→                        </div>
+  1229→                      </TableCell>
+  1230→                      <TableCell className="relative z-10">
+  1231→                        <StarRating rating={course.avgRating} />
+  1232→                      </TableCell>
+  1233→                      <TableCell className="relative z-10">
+  1234→                        <div className="flex items-center gap-2">
+  1235→                          <ProgressRing percent={course.completionRate} size={32} strokeWidth={3} color={completionColor} />
+  1236→                          <span className="text-xs text-muted-foreground font-mono tabular-nums w-8">
+  1237→                            {course.completionRate}%
+  1238→                          </span>
+  1239→                        </div>
+  1240→                      </TableCell>
+  1241→                      <TableCell className="relative z-10">
+  1242→                        <TableSparkline
+  1243→                          data={sparkData}
+  1244→                          color={trend.direction === 'up' ? '#10b981' : '#ef4444'}
+  1245→                        />
+  1246→                      </TableCell>
+  1247→                      <TableCell className="relative z-10">
+  1248→                        {course.isPublished ? (
+  1249→                          <Badge
+  1250→                            variant="secondary"
+  1251→                            className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300 relative"
+  1252→                          >
+  1253→                            <span className="relative flex h-2 w-2 mr-1.5">
+  1254→                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+  1255→                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+  1256→                            </span>
+  1257→                            Published
+  1258→                          </Badge>
+  1259→                        ) : (
+  1260→                          <Badge variant="secondary" className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+  1261→                            Draft
+  1262→                          </Badge>
+  1263→                        )}
+  1264→                      </TableCell>
+  1265→                    </TableRow>
+  1266→                  );
+  1267→                })}
+  1268→              </TableBody>
+  1269→            </Table>
+  1270→          </div>
+  1271→        </CardContent>
+  1272→      </Card>
+  1273→    </motion.div>
+  1274→  );
+  1275→}
+  1276→
+  1277→// ─── Video Drop-off Chart ────────────────────────────────────
+  1278→function VideoDropoffChart() {
+  1279→  const maxDropoff = Math.max(...videoDropoffData.map((d) => d.dropoff));
+  1280→
+  1281→  return (
+  1282→    <motion.div variants={itemVariants}>
+  1283→      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+  1284→        <CardHeader className="pb-2">
+  1285→          <CardTitle>Video Engagement Drop-off</CardTitle>
+  1286→          <CardDescription>
+  1287→            Viewer drop-off rate by video segment
+  1288→          </CardDescription>
+  1289→        </CardHeader>
+  1290→        <CardContent>
+  1291→          <ChartContainer config={dropoffChartConfig} className="h-[260px] w-full">
+  1292→            <BarChart data={videoDropoffData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+  1293→              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+  1294→              <XAxis dataKey="segment" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+  1295→              <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => `${v}%`} />
+  1296→              <ChartTooltip content={<ChartTooltipContent />} />
+  1297→              <Bar dataKey="dropoff" radius={[4, 4, 0, 0]}>
+  1298→                {videoDropoffData.map((entry, idx) => {
+  1299→                  const ratio = entry.dropoff / maxDropoff;
+  1300→                  const color =
+  1301→                    ratio < 0.3
+  1302→                      ? '#10b981'
+  1303→                      : ratio < 0.6
+  1304→                        ? '#f59e0b'
+  1305→                        : '#ef4444';
+  1306→                  return <Cell key={idx} fill={color} />;
+  1307→                })}
+  1308→              </Bar>
+  1309→            </BarChart>
+  1310→          </ChartContainer>
+  1311→        </CardContent>
+  1312→      </Card>
+  1313→    </motion.div>
+  1314→  );
+  1315→}
+  1316→
+  1317→// ─── Quick Actions Panel (Enhanced with gradient icons, NEW badge, ripple) ──
+  1318→const quickActions = [
+  1319→  {
+  1320→    title: 'Create New Course',
+  1321→    description: 'Build and publish a new course with our AI-assisted builder',
+  1322→    icon: BookOpen,
+  1323→    accent: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400',
+  1324→    gradientBorder: 'from-emerald-400 to-emerald-600',
+  1325→    iconGradient: 'from-emerald-500 to-emerald-600',
+  1326→  },
+  1327→  {
+  1328→    title: 'Generate AI Content',
+  1329→    description: 'Auto-generate lessons, quizzes, and summaries with AI',
+  1330→    icon: Sparkles,
+  1331→    accent: 'bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-400',
+  1332→    pulse: true,
+  1333→    gradientBorder: 'from-violet-400 to-violet-600',
+  1334→    iconGradient: 'from-violet-500 to-violet-600',
+  1335→    isNew: true,
+  1336→  },
+  1337→  {
+  1338→    title: 'Bulk Operations',
+  1339→    description: 'Bulk enroll, email, and issue certificates to users',
+  1340→    icon: Zap,
+  1341→    accent: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-400',
+  1342→    pulse: true,
+  1343→    gradientBorder: 'from-cyan-400 to-cyan-600',
+  1344→    iconGradient: 'from-cyan-500 to-cyan-600',
+  1345→    isBulkOps: true,
+  1346→  },
+  1347→  {
+  1348→    title: 'View Reports',
+  1349→    description: 'Export detailed analytics and performance reports',
+  1350→    icon: FileText,
+  1351→    accent: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400',
+  1352→    gradientBorder: 'from-amber-400 to-amber-600',
+  1353→    iconGradient: 'from-amber-500 to-amber-600',
+  1354→  },
+  1355→  {
+  1356→    title: 'Manage Community',
+  1357→    description: 'Moderate posts, manage categories, and engage members',
+  1358→    icon: Users,
+  1359→    accent: 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400',
+  1360→    gradientBorder: 'from-rose-400 to-rose-600',
+  1361→    iconGradient: 'from-rose-500 to-rose-600',
+  1362→  },
+  1363→];
+  1364→
+  1365→function QuickActionsPanel({ onBulkOpsClick }: { onBulkOpsClick: () => void }) {
+  1366→  return (
+  1367→    <motion.div variants={itemVariants}>
+  1368→      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200 h-full">
+  1369→        <CardHeader className="pb-2">
+  1370→          <CardTitle>Quick Actions</CardTitle>
+  1371→          <CardDescription>
+  1372→            Common tasks and shortcuts
+  1373→          </CardDescription>
+  1374→        </CardHeader>
+  1375→        <CardContent>
+  1376→          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+  1377→            {quickActions.map((action, idx) => {
+  1378→              const IconComp = action.icon;
+  1379→              const isBulkOps = 'isBulkOps' in action && action.isBulkOps;
+  1380→              const isNew = 'isNew' in action && action.isNew;
+  1381→              return (
+  1382→                <motion.button
+  1383→                  key={action.title}
+  1384→                  type="button"
+  1385→                  whileHover={{ scale: 1.02, y: -3 }}
+  1386→                  whileTap={{ scale: 0.98 }}
+  1387→                  onClick={isBulkOps ? onBulkOpsClick : undefined}
+  1388→                  className="group relative flex flex-col items-start gap-3 rounded-xl p-[1px] text-left transition-all duration-300 focus:outline-none overflow-hidden"
+  1389→                >
+  1390→                  {/* Glassmorphism border */}
+  1391→                  <div className={`absolute inset-0 rounded-xl bg-gradient-to-br ${action.gradientBorder} opacity-0 group-hover:opacity-60 transition-opacity duration-300 blur-[0.5px]`} />
+  1392→                  <div className="relative w-full flex flex-col items-start gap-3 rounded-xl border border-border/50 bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm p-4 transition-all duration-300 group-hover:bg-white/90 dark:group-hover:bg-slate-900/80 group-hover:shadow-lg group-hover:border-border/80">
+  1393→                    {/* Ripple effect container */}
+  1394→                    <div className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
+  1395→                      <span
+  1396→                        className="absolute rounded-full bg-white/20"
+  1397→                        style={{
+  1398→                          width: 20,
+  1399→                          height: 20,
+  1400→                          top: '50%',
+  1401→                          left: '50%',
+  1402→                          transform: 'translate(-50%, -50%)',
+  1403→                          animation: 'ripple 0s ease-out forwards',
+  1404→                        }}
+  1405→                      />
+  1406→                    </div>
+  1407→
+  1408→                    {/* Gradient icon container */}
+  1409→                    <motion.div
+  1410→                      className={`rounded-xl p-2.5 bg-gradient-to-br ${action.iconGradient} text-white shadow-md relative`}
+  1411→                      initial={{ opacity: 0, scale: 0.5 }}
+  1412→                      animate={{ opacity: 1, scale: 1 }}
+  1413→                      transition={{ duration: 0.4, delay: idx * 0.1, type: 'spring', stiffness: 200 }}
+  1414→                      whileHover={{ rotate: 8, scale: 1.1 }}
+  1415→                    >
+  1416→                      <IconComp className="h-5 w-5" />
+  1417→                      {action.pulse && (
+  1418→                        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+  1419→                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
+  1420→                          <span className="relative inline-flex rounded-full h-3 w-3 bg-violet-500" />
+  1421→                        </span>
+  1422→                      )}
+  1423→                    </motion.div>
+  1424→                    <div className="relative">
+  1425→                      <p className="font-semibold text-sm flex items-center gap-1.5">
+  1426→                        {action.title}
+  1427→                        {isNew && (
+  1428→                          <Badge className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white text-[10px] px-1.5 py-0 h-4 font-bold border-0 shadow-sm">
+  1429→                            NEW
+  1430→                          </Badge>
+  1431→                        )}
+  1432→                      </p>
+  1433→                      <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+  1434→                        {action.description}
+  1435→                      </p>
+  1436→                    </div>
+  1437→                    <div className="mt-auto flex items-center gap-1 text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+  1438→                      <span>Open</span>
+  1439→                      <motion.div
+  1440→                        animate={{ x: 0 }}
+  1441→                        whileHover={{ x: 3 }}
+  1442→                        transition={{ type: 'spring', stiffness: 400 }}
+  1443→                      >
+  1444→                        <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+  1445→                      </motion.div>
+  1446→                    </div>
+  1447→                  </div>
+  1448→                </motion.button>
+  1449→              );
+  1450→            })}
+  1451→          </div>
+  1452→        </CardContent>
+  1453→      </Card>
+  1454→    </motion.div>
+  1455→  );
+  1456→}
+  1457→
+  1458→// ─── Recent Activity Feed (Enhanced with animated timeline, colored dots, expand/collapse) ──
+  1459→const activityTypeColors: Record<string, { dot: string; bg: string; text: string }> = {
+  1460→  enrollment: { dot: 'bg-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-600 dark:text-emerald-400' },
+  1461→  completion: { dot: 'bg-violet-500', bg: 'bg-violet-50 dark:bg-violet-950/40', text: 'text-violet-600 dark:text-violet-400' },
+  1462→  community: { dot: 'bg-sky-500', bg: 'bg-sky-50 dark:bg-sky-950/40', text: 'text-sky-600 dark:text-sky-400' },
+  1463→  assessment: { dot: 'bg-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-600 dark:text-amber-400' },
+  1464→  achievement: { dot: 'bg-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-600 dark:text-amber-400' },
+  1465→  milestone: { dot: 'bg-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-600 dark:text-emerald-400' },
+  1466→  system: { dot: 'bg-slate-500', bg: 'bg-slate-50 dark:bg-slate-950/40', text: 'text-slate-600 dark:text-slate-400' },
+  1467→};
+  1468→
+  1469→const recentActivityItems = [
+  1470→  {
+  1471→    id: 'ra-1',
+  1472→    icon: UserPlus,
+  1473→    iconColor: 'text-emerald-500',
+  1474→    iconBg: 'bg-emerald-50 dark:bg-emerald-950/40',
+  1475→    dotColor: 'bg-emerald-500',
+  1476→    title: 'New enrollment: Mike Chen joined Advanced React Masterclass',
+  1477→    time: '5 minutes ago',
+  1478→    type: 'enrollment',
+  1479→    detail: 'Mike Chen enrolled via the Pro Annual plan. Course start date: today. Payment: $197 via Stripe.',
+  1480→  },
+  1481→  {
+  1482→    id: 'ra-2',
+  1483→    icon: Trophy,
+  1484→    iconColor: 'text-amber-500',
+  1485→    iconBg: 'bg-amber-50 dark:bg-amber-950/40',
+  1486→    dotColor: 'bg-amber-500',
+  1487→    title: 'Achievement unlocked: Lisa Wang earned "React Master" badge',
+  1488→    time: '23 minutes ago',
+  1489→    type: 'achievement',
+  1490→    detail: 'Lisa completed all 12 modules and scored 95%+ on every assessment. Badge earned: React Master Gold.',
+  1491→  },
+  1492→  {
+  1493→    id: 'ra-3',
+  1494→    icon: MessageCircle,
+  1495→    iconColor: 'text-sky-500',
+  1496→    iconBg: 'bg-sky-50 dark:bg-sky-950/40',
+  1497→    dotColor: 'bg-sky-500',
+  1498→    title: 'New discussion: "Best practices for API auth?" in Community',
+  1499→    time: '1 hour ago',
+  1500→    type: 'community',
+  1501→    detail: 'Posted by Alex Rivera in Web Development category. 3 replies so far. Trending in the community feed.',
+  1502→  },
+  1503→  {
+  1504→    id: 'ra-4',
+  1505→    icon: CheckCircle,
+  1506→    iconColor: 'text-violet-500',
+  1507→    iconBg: 'bg-violet-50 dark:bg-violet-950/40',
+  1508→    dotColor: 'bg-violet-500',
+  1509→    title: 'Assessment completed: 45 students submitted Quiz #3 in Data Viz',
+  1510→    time: '2 hours ago',
+  1511→    type: 'assessment',
+  1512→    detail: 'Average score: 82.3%. Pass rate: 91%. 4 students requested retake. Quiz difficulty: Intermediate.',
+  1513→  },
+  1514→  {
+  1515→    id: 'ra-5',
+  1516→    icon: DollarSign,
+  1517→    iconColor: 'text-emerald-500',
+  1518→    iconBg: 'bg-emerald-50 dark:bg-emerald-950/40',
+  1519→    dotColor: 'bg-emerald-500',
+  1520→    title: 'Revenue milestone: $47K MRR reached!',
+  1521→    time: '3 hours ago',
+  1522→    type: 'milestone',
+  1523→    detail: 'Monthly recurring revenue crossed $47,000 for the first time. Growth driven by enterprise plan upgrades.',
+  1524→  },
+  1525→  {
+  1526→    id: 'ra-6',
+  1527→    icon: GraduationCap,
+  1528→    iconColor: 'text-amber-500',
+  1529→    iconBg: 'bg-amber-50 dark:bg-amber-950/40',
+  1530→    dotColor: 'bg-amber-500',
+  1531→    title: 'Certificate issued: 12 new certifications this week',
+  1532→    time: '5 hours ago',
+  1533→    type: 'completion',
+  1534→    detail: 'Top courses: Advanced React (4), Data Science (3), ML Basics (3), UX Design (2). All certificates verified.',
+  1535→  },
+  1536→];
+  1537→
+  1538→function RecentActivityFeed() {
+  1539→  const [showAll, setShowAll] = useState(false);
+  1540→  const [expandedId, setExpandedId] = useState<string | null>(null);
+  1541→  const displayedItems = showAll ? recentActivityItems : recentActivityItems.slice(0, 4);
+  1542→
+  1543→  return (
+  1544→    <motion.div variants={itemVariants}>
+  1545→      <Card className="h-full">
+  1546→        <CardHeader className="pb-3">
+  1547→          <div className="flex items-center justify-between">
+  1548→            <CardTitle className="flex items-center gap-2 text-base">
+  1549→              <span className="relative flex h-2.5 w-2.5">
+  1550→                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+  1551→                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+  1552→              </span>
+  1553→              <Activity className="h-4 w-4 text-emerald-500" />
+  1554→              Recent Activity
+  1555→            </CardTitle>
+  1556→            <CardDescription className="text-xs">Live feed of platform events</CardDescription>
+  1557→          </div>
+  1558→        </CardHeader>
+  1559→        <CardContent>
+  1560→          <div className="relative">
+  1561→            {/* Animated timeline connecting line */}
+  1562→            <div
+  1563→              className="absolute left-[15px] top-2 bottom-2 w-0.5 bg-gradient-to-b from-emerald-500/40 via-violet-500/40 to-amber-500/40 origin-top"
+  1564→              style={{
+  1565→                animation: 'draw-line 1.2s ease-out forwards',
+  1566→              }}
+  1567→            />
+  1568→
+  1569→            <div className="space-y-0">
+  1570→              {displayedItems.map((item, i) => {
+  1571→                const ItemIcon = item.icon;
+  1572→                const typeColor = activityTypeColors[item.type] ?? activityTypeColors.system;
+  1573→                const isExpanded = expandedId === item.id;
+  1574→                return (
+  1575→                  <motion.div
+  1576→                    key={item.id}
+  1577→                    initial={{ opacity: 0, x: -10 }}
+  1578→                    animate={{ opacity: 1, x: 0 }}
+  1579→                    transition={{ duration: 0.3, delay: 0.08 * i }}
+  1580→                    className="relative"
+  1581→                  >
+  1582→                    <button
+  1583→                      type="button"
+  1584→                      className={`relative flex items-start gap-3 py-3 w-full text-left border-b border-border/50 last:border-0 transition-colors duration-200 hover:bg-muted/20 rounded-md px-1 -mx-1 ${
+  1585→                        i % 2 === 0 ? 'bg-muted/5' : ''
+  1586→                      }`}
+  1587→                      onClick={() => setExpandedId(isExpanded ? null : item.id)}
+  1588→                    >
+  1589→                      {/* Colored timeline dot */}
+  1590→                      <div className="relative z-10 flex items-center justify-center mt-0.5">
+  1591→                        <span className={`h-3 w-3 rounded-full ${typeColor.dot} ring-2 ring-background shrink-0`} />
+  1592→                      </div>
+  1593→                      {/* Activity icon */}
+  1594→                      <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${typeColor.bg}`}>
+  1595→                        <ItemIcon className={`h-4 w-4 ${typeColor.text}`} />
+  1596→                      </div>
+  1597→                      <div className="min-w-0 flex-1">
+  1598→                        <p className="text-sm text-foreground line-clamp-2">{item.title}</p>
+  1599→                        <div className="mt-0.5 flex items-center gap-2">
+  1600→                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+  1601→                            <Clock className="h-3 w-3" />
+  1602→                            {item.time}
+  1603→                          </span>
+  1604→                          {/* Relative time badge */}
+  1605→                          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 ${typeColor.text} border-current/20`}>
+  1606→                            {item.type}
+  1607→                          </Badge>
+  1608→                          {/* Expand/collapse chevron */}
+  1609→                          <motion.div
+  1610→                            animate={{ rotate: isExpanded ? 180 : 0 }}
+  1611→                            transition={{ duration: 0.2 }}
+  1612→                            className="ml-auto"
+  1613→                          >
+  1614→                            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+  1615→                          </motion.div>
+  1616→                        </div>
+  1617→                      </div>
+  1618→                    </button>
+  1619→
+  1620→                    {/* Expandable detail */}
+  1621→                    <AnimatePresence>
+  1622→                      {isExpanded && (
+  1623→                        <motion.div
+  1624→                          initial={{ height: 0, opacity: 0 }}
+  1625→                          animate={{ height: 'auto', opacity: 1 }}
+  1626→                          exit={{ height: 0, opacity: 0 }}
+  1627→                          transition={{ duration: 0.2, ease: 'easeOut' }}
+  1628→                          className="overflow-hidden"
+  1629→                        >
+  1630→                          <div className="ml-[54px] mb-3 p-3 rounded-lg bg-muted/30 border border-border/30 text-xs text-muted-foreground leading-relaxed">
+  1631→                            {item.detail}
+  1632→                          </div>
+  1633→                        </motion.div>
+  1634→                      )}
+  1635→                    </AnimatePresence>
+  1636→                  </motion.div>
+  1637→                );
+  1638→              })}
+  1639→            </div>
+  1640→          </div>
+  1641→
+  1642→          {/* View All button - subtle pulse */}
+  1643→          {recentActivityItems.length > 4 && (
+  1644→            <motion.button
+  1645→              type="button"
+  1646→              onClick={() => setShowAll(!showAll)}
+  1647→              className="mt-3 flex items-center gap-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors w-full justify-center py-1.5 rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/30 relative"
+  1648→              whileHover={{ scale: 1.02 }}
+  1649→              whileTap={{ scale: 0.98 }}
+  1650→            >
+  1651→              <span style={{ animation: 'pulse-subtle 2s ease-in-out infinite' }}>
+  1652→                {showAll ? 'Show Less' : 'View All Activity'}
+  1653→              </span>
+  1654→              <motion.div
+  1655→                animate={{ rotate: showAll ? -90 : 0 }}
+  1656→                transition={{ duration: 0.2 }}
+  1657→              >
+  1658→                <ChevronRight className="h-4 w-4" />
+  1659→              </motion.div>
+  1660→            </motion.button>
+  1661→          )}
+  1662→        </CardContent>
+  1663→      </Card>
+  1664→    </motion.div>
+  1665→  );
+  1666→}
+  1667→
+  1668→// ─── Real-time Metrics Ticker ────────────────────────────────
+  1669→const tickerItems = [
+  1670→  { icon: Search, label: 'users browsing now', value: '3', color: 'text-sky-500' },
+  1671→  { icon: GradCapIcon, label: 'lessons completed today', value: '12', color: 'text-emerald-500' },
+  1672→  { icon: DollarSign, label: 'revenue today', value: '$1,240', color: 'text-amber-500' },
+  1673→  { icon: UserPlus, label: 'new enrollments this week', value: '8', color: 'text-violet-500' },
+  1674→  { icon: Star, label: 'avg rating this month', value: '4.8', color: 'text-rose-500' },
+  1675→];
+  1676→
+  1677→function MetricsTicker() {
+  1678→  // Duplicate items for seamless loop
+  1679→  const items = [...tickerItems, ...tickerItems];
+  1680→
+  1681→  return (
+  1682→    <motion.div
+  1683→      initial={{ opacity: 0, y: -10 }}
+  1684→      animate={{ opacity: 1, y: 0 }}
+  1685→      transition={{ duration: 0.4, delay: 0.2 }}
+  1686→      className="relative overflow-hidden rounded-xl border border-border/40 bg-gradient-to-r from-muted/30 via-background to-muted/30 py-2"
+  1687→    >
+  1688→      {/* Fade edges */}
+  1689→      <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none" />
+  1690→      <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none" />
+  1691→
+  1692→      <div
+  1693→        className="flex items-center gap-8 whitespace-nowrap"
+  1694→        style={{
+  1695→          animation: 'marquee 30s linear infinite',
+  1696→        }}
+  1697→      >
+  1698→        {items.map((item, i) => {
+  1699→          const TickerIcon = item.icon;
+  1700→          return (
+  1701→            <div key={i} className="flex items-center gap-2 text-sm">
+  1702→              <TickerIcon className={`h-4 w-4 ${item.color}`} />
+  1703→              <span className="font-bold text-foreground">{item.value}</span>
+  1704→              <span className="text-muted-foreground">{item.label}</span>
+  1705→              <span className="text-border">•</span>
+  1706→            </div>
+  1707→          );
+  1708→        })}
+  1709→      </div>
+  1710→    </motion.div>
+  1711→  );
+  1712→}
+  1713→
+  1714→// ─── Performance Score Ring ──────────────────────────────────
+  1715→function PerformanceScoreRing() {
+  1716→  const score = 87;
+  1717→  const maxScore = 100;
+  1718→  const size = 120;
+  1719→  const strokeWidth = 8;
+  1720→  const radius = (size - strokeWidth) / 2;
+  1721→  const circumference = 2 * Math.PI * radius;
+  1722→  const offset = circumference - (score / maxScore) * circumference;
+  1723→  const color = score > 80 ? '#10b981' : score > 60 ? '#f59e0b' : '#ef4444';
+  1724→  const colorLabel = score > 80 ? 'Excellent' : score > 60 ? 'Good' : 'Needs Attention';
+  1725→
+  1726→  const breakdown = [
+  1727→    { label: 'Uptime', value: 99.9, color: '#10b981' },
+  1728→    { label: 'Load Speed', value: 92, color: '#0ea5e9' },
+  1729→    { label: 'User Satisfaction', value: 88, color: '#8b5cf6' },
+  1730→    { label: 'Content Quality', value: 85, color: '#f59e0b' },
+  1731→    { label: 'Completion Rate', value: 72, color: '#14b8a6' },
+  1732→  ];
+  1733→
+  1734→  return (
+  1735→    <motion.div variants={itemVariants}>
+  1736→      <Card className="shadow-sm hover:shadow-md transition-shadow duration-200 h-full">
+  1737→        <CardHeader className="pb-2">
+  1738→          <CardTitle className="flex items-center gap-2">
+  1739→            <Shield className="h-4 w-4 text-emerald-500" />
+  1740→            Platform Health
+  1741→          </CardTitle>
+  1742→          <CardDescription>Overall platform performance score</CardDescription>
+  1743→        </CardHeader>
+  1744→        <CardContent className="flex flex-col items-center gap-4">
+  1745→          {/* Circular progress ring */}
+  1746→          <div className="relative group cursor-pointer">
+  1747→            <svg width={size} height={size} className="transform -rotate-90">
+  1748→              <circle
+  1749→                cx={size / 2}
+  1750→                cy={size / 2}
+  1751→                r={radius}
+  1752→                fill="none"
+  1753→                stroke="currentColor"
+  1754→                strokeWidth={strokeWidth}
+  1755→                className="text-muted/20"
+  1756→              />
+  1757→              <motion.circle
+  1758→                cx={size / 2}
+  1759→                cy={size / 2}
+  1760→                r={radius}
+  1761→                fill="none"
+  1762→                stroke={color}
+  1763→                strokeWidth={strokeWidth}
+  1764→                strokeLinecap="round"
+  1765→                strokeDasharray={circumference}
+  1766→                initial={{ strokeDashoffset: circumference }}
+  1767→                animate={{ strokeDashoffset: offset }}
+  1768→                transition={{ duration: 1.5, ease: 'easeOut', delay: 0.5 }}
+  1769→              />
+  1770→            </svg>
+  1771→            {/* Center text */}
+  1772→            <div className="absolute inset-0 flex flex-col items-center justify-center">
+  1773→              <motion.span
+  1774→                className="text-2xl font-bold"
+  1775→                style={{ color }}
+  1776→                initial={{ opacity: 0 }}
+  1777→                animate={{ opacity: 1 }}
+  1778→                transition={{ delay: 1.2 }}
+  1779→              >
+  1780→                {score}
+  1781→              </motion.span>
+  1782→              <span className="text-[10px] text-muted-foreground font-medium">/ {maxScore}</span>
+  1783→            </div>
+  1784→
+  1785→            {/* Breakdown tooltip on hover */}
+  1786→            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 rounded-xl border bg-background/95 backdrop-blur-md shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+  1787→              <p className="text-xs font-semibold mb-2">Score Breakdown</p>
+  1788→              <div className="space-y-2">
+  1789→                {breakdown.map((b) => (
+  1790→                  <div key={b.label} className="flex items-center gap-2">
+  1791→                    <div className="flex-1">
+  1792→                      <div className="flex items-center justify-between text-[10px] mb-0.5">
+  1793→                        <span className="text-muted-foreground">{b.label}</span>
+  1794→                        <span className="font-medium">{b.value}%</span>
+  1795→                      </div>
+  1796→                      <div className="h-1 rounded-full bg-muted overflow-hidden">
+  1797→                        <motion.div
+  1798→                          className="h-full rounded-full"
+  1799→                          style={{ backgroundColor: b.color }}
+  1800→                          initial={{ width: 0 }}
+  1801→                          animate={{ width: `${b.value}%` }}
+  1802→                          transition={{ duration: 0.8, delay: 0.8 }}
+  1803→                        />
+  1804→                      </div>
+  1805→                    </div>
+  1806→                  </div>
+  1807→                ))}
+  1808→              </div>
+  1809→            </div>
+  1810→          </div>
+  1811→
+  1812→          <Badge
+  1813→            variant="secondary"
+  1814→            className="text-xs"
+  1815→            style={{
+  1816→              backgroundColor: score > 80 ? 'rgba(16, 185, 129, 0.1)' : score > 60 ? 'rgba(245, 158, 11, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+  1817→              color: color,
+  1818→            }}
+  1819→          >
+  1820→            {colorLabel}
+  1821→          </Badge>
+  1822→        </CardContent>
+  1823→      </Card>
+  1824→    </motion.div>
+  1825→  );
+  1826→}
+  1827→
+  1828→// ─── Main Dashboard ──────────────────────────────────────────
+  1829→export function AdminDashboard() {
+  1830→  const { currentUser, currentTenant } = useAppStore();
+  1831→  const firstName = currentUser?.name?.split(' ')[0] || 'Sarah';
+  1832→
+  1833→  const [currentDateTime, setCurrentDateTime] = useState('');
+  1834→  const [showBulkOps, setShowBulkOps] = useState(false);
+  1835→
+  1836→  // Fetch real data from API, fall back to mock data
+  1837→  const { data: analyticsData } = useApi<{metrics: any[], summary: any}>('/api/analytics');
+  1838→  const { data: coursesData } = useApi<any[]>('/api/courses');
+  1839→
+  1840→  // Compute KPIs from real analytics data when available
+  1841→  const kpis = analyticsData ? [
+  1842→    { label: 'Monthly Recurring Revenue', value: `$${(analyticsData.summary.mrr || 0).toLocaleString()}`, change: 12.5, changeLabel: 'vs last month', icon: 'dollar-sign' },
+  1843→    { label: 'Active Learners', value: (analyticsData.summary.avgActiveUsers || 0).toLocaleString(), change: 8.3, changeLabel: 'vs last month', icon: 'users' },
+  1844→    { label: 'Course Completion Rate', value: '72.4%', change: 4.1, changeLabel: 'vs last month', icon: 'graduation-cap' },
+  1845→    { label: 'Avg. Quiz Score', value: '84.7%', change: -1.2, changeLabel: 'vs last month', icon: 'check-circle' },
+  1846→    { label: 'Community Engagement', value: '89.3%', change: 6.7, changeLabel: 'vs last month', icon: 'message-circle' },
+  1847→    { label: 'New Enrollments', value: (analyticsData.summary.totalEnrollments || 0).toLocaleString(), change: 15.8, changeLabel: 'vs last month', icon: 'user-plus' },
+  1848→  ] : adminKPIs;
+  1849→
+  1850→  // Use real courses from API when available
+  1851→  const courses: Course[] = coursesData && coursesData.length > 0 ? coursesData : [];
+  1852→
+  1853→  // Track dashboard view event
+  1854→  useEffect(() => {
+  1855→    if (currentTenant?.id) {
+  1856→      apiPost('/api/analytics/events', {
+  1857→        tenantId: currentTenant.id,
+  1858→        userId: currentUser?.id,
+  1859→        eventType: 'dashboard_view',
+  1860→        eventData: { view: 'admin-dashboard' },
+  1861→      }).catch(() => {/* silent */});
+  1862→    }
+  1863→  }, [currentTenant?.id, currentUser?.id]);
+  1864→
+  1865→  useEffect(() => {
+  1866→    const update = () => {
+  1867→      setCurrentDateTime(
+  1868→        new Date().toLocaleDateString('en-US', {
+  1869→          weekday: 'long',
+  1870→          year: 'numeric',
+  1871→          month: 'long',
+  1872→          day: 'numeric',
+  1873→        }) +
+  1874→        ' · ' +
+  1875→        new Date().toLocaleTimeString('en-US', {
+  1876→          hour: '2-digit',
+  1877→          minute: '2-digit',
+  1878→        })
+  1879→      );
+  1880→    };
+  1881→    update();
+  1882→    const interval = setInterval(update, 60000);
+  1883→    return () => clearInterval(interval);
+  1884→  }, []);
+  1885→
+  1886→  return (
+  1887→    <div className="p-6 space-y-6">
+  1888→      {/* Header with greeting */}
+  1889→      <motion.div
+  1890→        initial={{ opacity: 0, y: -10 }}
+  1891→        animate={{ opacity: 1, y: 0 }}
+  1892→        transition={{ duration: 0.4 }}
+  1893→        className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"
+  1894→      >
+  1895→        <div>
+  1896→          <h1 className="text-2xl font-bold tracking-tight">
+  1897→            Welcome back, {firstName}! 👋
+  1898→          </h1>
+  1899→          <p className="text-muted-foreground text-sm">
+  1900→            Overview of your LMS platform performance and metrics
+  1901→          </p>
+  1902→        </div>
+  1903→        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1 sm:mt-0">
+  1904→          <Clock className="h-3.5 w-3.5" />
+  1905→          {currentDateTime}
+  1906→          <span className="text-muted-foreground/60">·</span>
+  1907→          <span className="text-muted-foreground/80">Last updated: just now</span>
+  1908→        </div>
+  1909→      </motion.div>
+  1910→
+  1911→      {/* Real-time Metrics Ticker */}
+  1912→      <MetricsTicker />
+  1913→
+  1914→      <motion.div
+  1915→        variants={containerVariants}
+  1916→        initial="hidden"
+  1917→        animate="visible"
+  1918→        className="space-y-6"
+  1919→      >
+  1920→        {/* Section 1: KPI Cards */}
+  1921→        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  1922→          {kpis.map((kpi, idx) => (
+  1923→            <KPICard key={kpi.label} kpi={kpi} index={idx} />
+  1924→          ))}
+  1925→        </div>
+  1926→
+  1927→        {/* Section 1.5: Recent Activity + Quick Actions + Performance Ring */}
+  1928→        <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
+  1929→          <div className="lg:col-span-2">
+  1930→            <RecentActivityFeed />
+  1931→          </div>
+  1932→          <div className="hidden lg:block">
+  1933→            <QuickActionsPanel onBulkOpsClick={() => setShowBulkOps(true)} />
+  1934→          </div>
+  1935→          <div className="hidden lg:block">
+  1936→            <PerformanceScoreRing />
+  1937→          </div>
+  1938→        </div>
+  1939→
+  1940→        {/* Section 2: Revenue Analytics */}
+  1941→        <RevenueChart />
+  1942→
+  1943→        {/* Section 3: Engagement + Category side by side */}
+  1944→        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+  1945→          <EngagementChart />
+  1946→          <CategoryChart />
+  1947→        </div>
+  1948→
+  1949→        {/* Section 4: Completion Funnel */}
+  1950→        <CompletionFunnel />
+  1951→
+  1952→        {/* Section 5: Course Performance Table */}
+  1953→        <RecentCoursesTable courses={courses} />
+  1954→
+  1955→        {/* Section 6: Video Drop-off */}
+  1956→        <VideoDropoffChart />
+  1957→
+  1958→        {/* Section 7: Quick Actions (visible on smaller screens) */}
+  1959→        <div className="lg:hidden">
+  1960→          <QuickActionsPanel onBulkOpsClick={() => setShowBulkOps(true)} />
+  1961→        </div>
+  1962→
+  1963→        {/* Performance Score Ring on mobile */}
+  1964→        <div className="lg:hidden">
+  1965→          <PerformanceScoreRing />
+  1966→        </div>
+  1967→      </motion.div>
+  1968→
+  1969→      {/* Bulk Operations Dialog */}
+  1970→      <BulkOperationsDialog open={showBulkOps} onOpenChange={setShowBulkOps} />
+  1971→    </div>
+  1972→  );
+  1973→}
+  1974→

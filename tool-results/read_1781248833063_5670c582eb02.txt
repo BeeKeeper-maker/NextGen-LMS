@@ -1,0 +1,1188 @@
+     1→'use client';
+     2→
+     3→import { useEffect, useState, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { useAppStore } from '@/store/app-store';
+     6→import { demoAchievements, leaderboardData } from '@/lib/mock-data';
+     7→import { Card, CardContent } from '@/components/ui/card';
+     8→import { Button } from '@/components/ui/button';
+     9→import { Badge } from '@/components/ui/badge';
+    10→import {
+    11→  Trophy,
+    12→  Star,
+    13→  Lock,
+    14→  Flame,
+    15→  Award,
+    16→  TrendingUp,
+    17→  ArrowLeft,
+    18→  CheckCircle2,
+    19→  GraduationCap,
+    20→  Crown,
+    21→  ChevronDown,
+    22→  ChevronUp,
+    23→  Zap,
+    24→  Users,
+    25→  BookOpen,
+    26→  Target,
+    27→  Sparkles,
+    28→  ArrowUp,
+    29→  ArrowDown,
+    30→  Minus,
+    31→} from 'lucide-react';
+    32→import { cn } from '@/lib/utils';
+    33→
+    34→// ─────────────────────────────────────────────────────────────
+    35→// Types & Constants
+    36→// ─────────────────────────────────────────────────────────────
+    37→
+    38→type BadgeTier = 'bronze' | 'silver' | 'gold' | 'platinum';
+    39→type AchievementCategory = 'learning' | 'streak' | 'social' | 'mastery' | 'community' | 'special';
+    40→
+    41→interface AchievementMeta {
+    42→  tier: BadgeTier;
+    43→  category: AchievementCategory;
+    44→}
+    45→
+    46→const tierConfig: Record<BadgeTier, { label: string; colors: string; border: string; glow: string }> = {
+    47→  bronze: {
+    48→    label: 'Bronze',
+    49→    colors: 'from-amber-600 to-orange-700',
+    50→    border: 'border-amber-500',
+    51→    glow: 'shadow-amber-500/30',
+    52→  },
+    53→  silver: {
+    54→    label: 'Silver',
+    55→    colors: 'from-slate-300 to-slate-500',
+    56→    border: 'border-slate-400',
+    57→    glow: 'shadow-slate-400/30',
+    58→  },
+    59→  gold: {
+    60→    label: 'Gold',
+    61→    colors: 'from-yellow-400 to-amber-500',
+    62→    border: 'border-yellow-400',
+    63→    glow: 'shadow-yellow-400/30',
+    64→  },
+    65→  platinum: {
+    66→    label: 'Platinum',
+    67→    colors: 'from-cyan-300 to-teal-500',
+    68→    border: 'border-cyan-400',
+    69→    glow: 'shadow-cyan-400/30',
+    70→  },
+    71→};
+    72→
+    73→const categoryConfig: Record<AchievementCategory, { label: string; emoji: string; gradient: string; headerBg: string }> = {
+    74→  learning: { label: 'Learning', emoji: '📚', gradient: 'from-emerald-500 to-teal-600', headerBg: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30' },
+    75→  streak: { label: 'Streak', emoji: '🔥', gradient: 'from-orange-500 to-red-500', headerBg: 'from-orange-50 to-red-50 dark:from-orange-950/30 dark:to-red-950/30' },
+    76→  social: { label: 'Social', emoji: '💬', gradient: 'from-pink-500 to-rose-500', headerBg: 'from-pink-50 to-rose-50 dark:from-pink-950/30 dark:to-rose-950/30' },
+    77→  mastery: { label: 'Mastery', emoji: '🏆', gradient: 'from-yellow-500 to-amber-600', headerBg: 'from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/30' },
+    78→  community: { label: 'Community', emoji: '🤝', gradient: 'from-violet-500 to-purple-600', headerBg: 'from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30' },
+    79→  special: { label: 'Special', emoji: '⚡', gradient: 'from-cyan-500 to-blue-600', headerBg: 'from-cyan-50 to-blue-50 dark:from-cyan-950/30 dark:to-blue-950/30' },
+    80→};
+    81→
+    82→// Map each achievement to its tier and category
+    83→const achievementMeta: Record<string, AchievementMeta> = {
+    84→  'ach-1': { tier: 'bronze', category: 'learning' },
+    85→  'ach-2': { tier: 'silver', category: 'learning' },
+    86→  'ach-3': { tier: 'bronze', category: 'streak' },
+    87→  'ach-4': { tier: 'gold', category: 'streak' },
+    88→  'ach-5': { tier: 'gold', category: 'mastery' },
+    89→  'ach-6': { tier: 'silver', category: 'community' },
+    90→  'ach-7': { tier: 'platinum', category: 'learning' },
+    91→  'ach-8': { tier: 'platinum', category: 'mastery' },
+    92→};
+    93→
+    94→// Earned achievements map
+    95→const earnedAchievementIds: Record<string, { earned: boolean; earnedAt?: string }> = {
+    96→  'ach-1': { earned: true, earnedAt: '2024-08-16T00:00:00Z' },
+    97→  'ach-2': { earned: true, earnedAt: '2024-09-10T00:00:00Z' },
+    98→  'ach-3': { earned: true, earnedAt: '2024-09-05T00:00:00Z' },
+    99→  'ach-4': { earned: true, earnedAt: '2024-10-12T00:00:00Z' },
+   100→  'ach-5': { earned: false },
+   101→  'ach-6': { earned: true, earnedAt: '2024-09-20T00:00:00Z' },
+   102→  'ach-7': { earned: true, earnedAt: '2024-08-20T00:00:00Z' },
+   103→  'ach-8': { earned: false },
+   104→};
+   105→
+   106→// Milestones
+   107→const milestones = [
+   108→  { id: 'm1', label: 'First Lesson', xp: 10, icon: BookOpen },
+   109→  { id: 'm2', label: 'Course Complete', xp: 150, icon: GraduationCap },
+   110→  { id: 'm3', label: '5 Courses', xp: 500, icon: Target },
+   111→  { id: 'm4', label: '100 Day Streak', xp: 300, icon: Flame },
+   112→  { id: 'm5', label: 'Community Leader', xp: 200, icon: Users },
+   113→  { id: 'm6', label: 'Master Learner', xp: 1000, icon: Crown },
+   114→];
+   115→const completedMilestones = 4; // First 4 are completed, 5th is current
+   116→
+   117→// Weekly change data for leaderboard
+   118→const weeklyChanges: Record<string, number> = {
+   119→  'Emma Rodriguez': 1,
+   120→  'David Park': -1,
+   121→  'Sarah Mitchell': 2,
+   122→  'Lisa Wang': 0,
+   123→  'Alex Johnson': 3,
+   124→  'Mike Chen': -2,
+   125→  'Jordan Lee': 1,
+   126→  'Priya Sharma': 0,
+   127→  'Tom Wilson': -1,
+   128→  'Nina Kovac': 2,
+   129→};
+   130→
+   131→// ─────────────────────────────────────────────────────────────
+   132→// Utility Functions
+   133→// ─────────────────────────────────────────────────────────────
+   134→
+   135→function formatDate(dateStr?: string) {
+   136→  if (!dateStr) return '';
+   137→  return new Date(dateStr).toLocaleDateString('en-US', {
+   138→    month: 'short',
+   139→    day: 'numeric',
+   140→    year: 'numeric',
+   141→  });
+   142→}
+   143→
+   144→// ─────────────────────────────────────────────────────────────
+   145→// Animated Counter
+   146→// ─────────────────────────────────────────────────────────────
+   147→
+   148→function AnimatedCounter({ target, duration = 1.5 }: { target: number; duration?: number }) {
+   149→  const [count, setCount] = useState(0);
+   150→
+   151→  useEffect(() => {
+   152→    let startTime: number;
+   153→    let rafId: number;
+   154→    const animate = (timestamp: number) => {
+   155→      if (!startTime) startTime = timestamp;
+   156→      const progress = Math.min((timestamp - startTime) / (duration * 1000), 1);
+   157→      setCount(Math.floor(progress * target));
+   158→      if (progress < 1) {
+   159→        rafId = requestAnimationFrame(animate);
+   160→      }
+   161→    };
+   162→    rafId = requestAnimationFrame(animate);
+   163→    return () => cancelAnimationFrame(rafId);
+   164→  }, [target, duration]);
+   165→
+   166→  return <>{count.toLocaleString()}</>;
+   167→}
+   168→
+   169→// ─────────────────────────────────────────────────────────────
+   170→// Progress Ring Component (SVG)
+   171→// ─────────────────────────────────────────────────────────────
+   172→
+   173→function ProgressRing({
+   174→  size = 120,
+   175→  strokeWidth = 8,
+   176→  progress = 0,
+   177→  gradientId = 'ring-gradient',
+   178→  animate = true,
+   179→  label,
+   180→  sublabel,
+   181→}: {
+   182→  size?: number;
+   183→  strokeWidth?: number;
+   184→  progress?: number;
+   185→  gradientId?: string;
+   186→  animate?: boolean;
+   187→  label?: string;
+   188→  sublabel?: string;
+   189→}) {
+   190→  const [animatedProgress, setAnimatedProgress] = useState(animate ? 0 : progress);
+   191→  const radius = (size - strokeWidth) / 2;
+   192→  const circumference = 2 * Math.PI * radius;
+   193→  const offset = circumference - (animatedProgress / 100) * circumference;
+   194→
+   195→  useEffect(() => {
+   196→    if (!animate) return;
+   197→    const timer = setTimeout(() => setAnimatedProgress(progress), 200);
+   198→    return () => clearTimeout(timer);
+   199→  }, [progress, animate]);
+   200→
+   201→  return (
+   202→    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+   203→      <svg width={size} height={size} className="-rotate-90">
+   204→        <defs>
+   205→          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+   206→            <stop offset="0%" stopColor="#10b981" />
+   207→            <stop offset="50%" stopColor="#14b8a6" />
+   208→            <stop offset="100%" stopColor="#06b6d4" />
+   209→          </linearGradient>
+   210→        </defs>
+   211→        {/* Background ring */}
+   212→        <circle
+   213→          cx={size / 2}
+   214→          cy={size / 2}
+   215→          r={radius}
+   216→          fill="none"
+   217→          stroke="currentColor"
+   218→          strokeWidth={strokeWidth}
+   219→          className="text-slate-200 dark:text-slate-700"
+   220→        />
+   221→        {/* Progress ring */}
+   222→        <motion.circle
+   223→          cx={size / 2}
+   224→          cy={size / 2}
+   225→          r={radius}
+   226→          fill="none"
+   227→          stroke={`url(#${gradientId})`}
+   228→          strokeWidth={strokeWidth}
+   229→          strokeLinecap="round"
+   230→          strokeDasharray={circumference}
+   231→          initial={{ strokeDashoffset: circumference }}
+   232→          animate={{ strokeDashoffset: offset }}
+   233→          transition={{ duration: 1.5, ease: 'easeOut', delay: 0.3 }}
+   234→        />
+   235→      </svg>
+   236→      {/* Center text */}
+   237→      <div className="absolute inset-0 flex flex-col items-center justify-center">
+   238→        {label && (
+   239→          <span className="text-lg font-bold text-slate-900 dark:text-slate-50">
+   240→            {Math.round(animatedProgress)}%
+   241→          </span>
+   242→        )}
+   243→        {sublabel && (
+   244→          <span className="text-[10px] text-muted-foreground leading-tight text-center">
+   245→            {sublabel}
+   246→          </span>
+   247→        )}
+   248→      </div>
+   249→    </div>
+   250→  );
+   251→}
+   252→
+   253→// ─────────────────────────────────────────────────────────────
+   254→// Achievement Badge Tile
+   255→// ─────────────────────────────────────────────────────────────
+   256→
+   257→function BadgeTile({
+   258→  achievement,
+   259→  isEarned,
+   260→  earnedAt,
+   261→  index,
+   262→}: {
+   263→  achievement: typeof demoAchievements[0];
+   264→  isEarned: boolean;
+   265→  earnedAt?: string;
+   266→  index: number;
+   267→}) {
+   268→  const meta = achievementMeta[achievement.id] || { tier: 'bronze' as BadgeTier, category: 'learning' as AchievementCategory };
+   269→  const tier = tierConfig[meta.tier];
+   270→  const [showTooltip, setShowTooltip] = useState(false);
+   271→
+   272→  return (
+   273→    <motion.div
+   274→      initial={{ opacity: 0, scale: 0.8 }}
+   275→      animate={{ opacity: 1, scale: 1 }}
+   276→      transition={{ duration: 0.4, delay: 0.06 * index }}
+   277→      className="relative"
+   278→      onMouseEnter={() => setShowTooltip(true)}
+   279→      onMouseLeave={() => setShowTooltip(false)}
+   280→    >
+   281→      <motion.div
+   282→        whileHover={{ scale: 1.08 }}
+   283→        transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+   284→        className={cn(
+   285→          'relative flex flex-col items-center rounded-2xl p-4 transition-all duration-300',
+   286→          isEarned
+   287→            ? cn('bg-white dark:bg-slate-900 border-2', tier.border, 'shadow-lg', tier.glow)
+   288→            : 'bg-slate-50 dark:bg-slate-900/50 border-2 border-dashed border-slate-300 dark:border-slate-700'
+   289→        )}
+   290→      >
+   291→        {/* Glow effect for earned */}
+   292→        {isEarned && (
+   293→          <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-emerald-500/5 via-transparent to-cyan-500/5 dark:from-emerald-500/10 dark:to-cyan-500/10" />
+   294→        )}
+   295→
+   296→        {/* Tier badge indicator */}
+   297→        {isEarned && (
+   298→          <div className={cn(
+   299→            'absolute -top-2 -right-2 rounded-full px-1.5 py-0.5 text-[9px] font-bold text-white bg-gradient-to-r',
+   300→            tier.colors
+   301→          )}>
+   302→            {tier.label}
+   303→          </div>
+   304→        )}
+   305→
+   306→        {/* Badge shape - circular with gradient border */}
+   307→        <div className="relative mb-3">
+   308→          {isEarned ? (
+   309→            <>
+   310→              {/* Sparkle animation */}
+   311→              <motion.div
+   312→                className="absolute -top-1 -right-1 z-10"
+   313→                animate={{ rotate: [0, 360], scale: [1, 1.2, 1] }}
+   314→                transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+   315→              >
+   316→                <Sparkles className="h-3.5 w-3.5 text-yellow-400" />
+   317→              </motion.div>
+   318→              {/* Gradient border circle */}
+   319→              <div className={cn(
+   320→                'flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br p-[2px] shadow-lg',
+   321→                tier.colors
+   322→              )}>
+   323→                <div className="flex h-full w-full items-center justify-center rounded-full bg-white dark:bg-slate-900 text-2xl">
+   324→                  {achievement.icon}
+   325→                </div>
+   326→              </div>
+   327→            </>
+   328→          ) : (
+   329→            <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 grayscale">
+   330→              <span className="text-2xl opacity-40">{achievement.icon}</span>
+   331→              {/* Lock overlay */}
+   332→              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-900/30">
+   333→                <Lock className="h-5 w-5 text-slate-300" />
+   334→              </div>
+   335→            </div>
+   336→          )}
+   337→        </div>
+   338→
+   339→        {/* Name */}
+   340→        <h3 className={cn(
+   341→          'text-xs font-semibold text-center mb-1 line-clamp-1',
+   342→          isEarned ? 'text-slate-900 dark:text-slate-50' : 'text-slate-400 dark:text-slate-500'
+   343→        )}>
+   344→          {achievement.name}
+   345→        </h3>
+   346→
+   347→        {/* Points */}
+   348→        <div className={cn(
+   349→          'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+   350→          isEarned
+   351→            ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
+   352→            : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500'
+   353→        )}>
+   354→          <Star className="h-2.5 w-2.5" />
+   355→          {achievement.points}
+   356→        </div>
+   357→
+   358→        {/* Category label */}
+   359→        <div className={cn(
+   360→          'mt-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-medium',
+   361→          isEarned
+   362→            ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+   363→            : 'bg-slate-50 text-slate-400 dark:bg-slate-900 dark:text-slate-600'
+   364→        )}>
+   365→          {categoryConfig[meta.category].emoji} {categoryConfig[meta.category].label}
+   366→        </div>
+   367→      </motion.div>
+   368→
+   369→      {/* Tooltip */}
+   370→      <AnimatePresence>
+   371→        {showTooltip && (
+   372→          <motion.div
+   373→            initial={{ opacity: 0, y: 8, scale: 0.95 }}
+   374→            animate={{ opacity: 1, y: 0, scale: 1 }}
+   375→            exit={{ opacity: 0, y: 8, scale: 0.95 }}
+   376→            transition={{ duration: 0.15 }}
+   377→            className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-44 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl p-3 pointer-events-none"
+   378→          >
+   379→            <p className="text-xs font-semibold text-slate-900 dark:text-slate-50 mb-1">
+   380→              {achievement.name}
+   381→            </p>
+   382→            <p className="text-[10px] text-muted-foreground mb-1.5">
+   383→              {achievement.description}
+   384→            </p>
+   385→            {isEarned && earnedAt && (
+   386→              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+   387→                <CheckCircle2 className="h-2.5 w-2.5" />
+   388→                Earned {formatDate(earnedAt)}
+   389→              </p>
+   390→            )}
+   391→            {!isEarned && (
+   392→              <p className="text-[10px] text-slate-400 flex items-center gap-1">
+   393→                <Lock className="h-2.5 w-2.5" />
+   394→                Locked
+   395→              </p>
+   396→            )}
+   397→            {/* Tooltip arrow */}
+   398→            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+   399→              <div className="h-2.5 w-2.5 rotate-45 bg-white dark:bg-slate-800 border-r border-b border-slate-200 dark:border-slate-700" />
+   400→            </div>
+   401→          </motion.div>
+   402→        )}
+   403→      </AnimatePresence>
+   404→    </motion.div>
+   405→  );
+   406→}
+   407→
+   408→// ─────────────────────────────────────────────────────────────
+   409→// Category Section
+   410→// ─────────────────────────────────────────────────────────────
+   411→
+   412→function CategorySection({
+   413→  category,
+   414→  achievements,
+   415→  earnedMap,
+   416→  delay = 0,
+   417→}: {
+   418→  category: AchievementCategory;
+   419→  achievements: typeof demoAchievements;
+   420→  earnedMap: typeof earnedAchievementIds;
+   421→  delay?: number;
+   422→}) {
+   423→  const config = categoryConfig[category];
+   424→  const [isExpanded, setIsExpanded] = useState(true);
+   425→  const earnedInCategory = achievements.filter((a) => earnedMap[a.id]?.earned).length;
+   426→
+   427→  return (
+   428→    <motion.div
+   429→      initial={{ opacity: 0, y: 20 }}
+   430→      animate={{ opacity: 1, y: 0 }}
+   431→      transition={{ duration: 0.4, delay }}
+   432→    >
+   433→      {/* Category Header */}
+   434→      <button
+   435→        onClick={() => setIsExpanded(!isExpanded)}
+   436→        className={cn(
+   437→          'w-full flex items-center justify-between rounded-xl px-4 py-3 mb-3 bg-gradient-to-r',
+   438→          config.headerBg
+   439→        )}
+   440→      >
+   441→        <div className="flex items-center gap-2">
+   442→          <span className="text-lg">{config.emoji}</span>
+   443→          <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+   444→            {config.label}
+   445→          </span>
+   446→          <Badge variant="secondary" className="text-[10px] h-5">
+   447→            {earnedInCategory}/{achievements.length}
+   448→          </Badge>
+   449→        </div>
+   450→        <div className="flex items-center gap-2">
+   451→          {/* Mini progress ring */}
+   452→          <ProgressRing
+   453→            size={32}
+   454→            strokeWidth={4}
+   455→            progress={achievements.length > 0 ? (earnedInCategory / achievements.length) * 100 : 0}
+   456→            gradientId={`cat-ring-${category}`}
+   457→            animate={false}
+   458→          />
+   459→          {isExpanded ? (
+   460→            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+   461→          ) : (
+   462→            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+   463→          )}
+   464→        </div>
+   465→      </button>
+   466→
+   467→      {/* Category Badges Grid */}
+   468→      <AnimatePresence>
+   469→        {isExpanded && (
+   470→          <motion.div
+   471→            initial={{ height: 0, opacity: 0 }}
+   472→            animate={{ height: 'auto', opacity: 1 }}
+   473→            exit={{ height: 0, opacity: 0 }}
+   474→            transition={{ duration: 0.3 }}
+   475→            className="overflow-hidden"
+   476→          >
+   477→            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6 pb-4">
+   478→              {achievements.map((achievement, i) => {
+   479→                const earnedStatus = earnedMap[achievement.id];
+   480→                return (
+   481→                  <BadgeTile
+   482→                    key={achievement.id}
+   483→                    achievement={achievement}
+   484→                    isEarned={earnedStatus?.earned || false}
+   485→                    earnedAt={earnedStatus?.earnedAt}
+   486→                    index={i}
+   487→                  />
+   488→                );
+   489→              })}
+   490→            </div>
+   491→          </motion.div>
+   492→        )}
+   493→      </AnimatePresence>
+   494→    </motion.div>
+   495→  );
+   496→}
+   497→
+   498→// ─────────────────────────────────────────────────────────────
+   499→// Milestone Tracker
+   500→// ─────────────────────────────────────────────────────────────
+   501→
+   502→function MilestoneTracker() {
+   503→  return (
+   504→    <div className="overflow-x-auto pb-2">
+   505→      <div className="flex items-center min-w-[600px] sm:min-w-0 px-2">
+   506→        {milestones.map((milestone, i) => {
+   507→          const isCompleted = i < completedMilestones;
+   508→          const isCurrent = i === completedMilestones;
+   509→          const isUpcoming = i > completedMilestones;
+   510→          const Icon = milestone.icon;
+   511→
+   512→          return (
+   513→            <div key={milestone.id} className="flex items-center flex-1">
+   514→              {/* Node */}
+   515→              <div className="flex flex-col items-center relative">
+   516→                <motion.div
+   517→                  initial={{ scale: 0 }}
+   518→                  animate={{ scale: 1 }}
+   519→                  transition={{ duration: 0.4, delay: 0.1 * i }}
+   520→                  className={cn(
+   521→                    'relative flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 transition-all',
+   522→                    isCompleted && 'border-emerald-500 bg-emerald-500 text-white',
+   523→                    isCurrent && 'border-amber-500 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400',
+   524→                    isUpcoming && 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-400'
+   525→                  )}
+   526→                >
+   527→                  {isCompleted ? (
+   528→                    <CheckCircle2 className="h-5 w-5 sm:h-6 sm:w-6" />
+   529→                  ) : (
+   530→                    <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+   531→                  )}
+   532→
+   533→                  {/* Pulsing ring for current */}
+   534→                  {isCurrent && (
+   535→                    <motion.div
+   536→                      className="absolute inset-0 rounded-full border-2 border-amber-500"
+   537→                      animate={{ scale: [1, 1.3, 1], opacity: [1, 0, 1] }}
+   538→                      transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+   539→                    />
+   540→                  )}
+   541→                </motion.div>
+   542→
+   543→                {/* Label */}
+   544→                <span className={cn(
+   545→                  'mt-1.5 text-[10px] sm:text-xs font-medium text-center max-w-[80px] leading-tight',
+   546→                  isCompleted && 'text-emerald-700 dark:text-emerald-400',
+   547→                  isCurrent && 'text-amber-700 dark:text-amber-400',
+   548→                  isUpcoming && 'text-slate-400 dark:text-slate-500'
+   549→                )}>
+   550→                  {milestone.label}
+   551→                </span>
+   552→
+   553→                {/* XP reward */}
+   554→                <span className={cn(
+   555→                  'mt-0.5 text-[9px] font-medium flex items-center gap-0.5',
+   556→                  isCompleted && 'text-emerald-600 dark:text-emerald-400',
+   557→                  isCurrent && 'text-amber-600 dark:text-amber-400',
+   558→                  isUpcoming && 'text-slate-400 dark:text-slate-500'
+   559→                )}>
+   560→                  <Zap className="h-2.5 w-2.5" />
+   561→                  {milestone.xp} XP
+   562→                </span>
+   563→              </div>
+   564→
+   565→              {/* Connector line */}
+   566→              {i < milestones.length - 1 && (
+   567→                <div className="flex-1 mx-1 sm:mx-2 relative h-0.5 min-w-[24px]">
+   568→                  {/* Background line */}
+   569→                  <div className="absolute inset-0 bg-slate-200 dark:bg-slate-700 rounded-full" />
+   570→                  {/* Animated progress line */}
+   571→                  <motion.div
+   572→                    className={cn(
+   573→                      'absolute inset-y-0 left-0 rounded-full',
+   574→                      i < completedMilestones
+   575→                        ? 'bg-emerald-500'
+   576→                        : i === completedMilestones
+   577→                          ? 'bg-gradient-to-r from-emerald-500 to-amber-500'
+   578→                          : 'bg-transparent'
+   579→                    )}
+   580→                    initial={{ width: '0%' }}
+   581→                    animate={{ width: i < completedMilestones ? '100%' : i === completedMilestones ? '50%' : '0%' }}
+   582→                    transition={{ duration: 1, delay: 0.3 + 0.15 * i, ease: 'easeOut' }}
+   583→                  />
+   584→                </div>
+   585→              )}
+   586→            </div>
+   587→          );
+   588→        })}
+   589→      </div>
+   590→    </div>
+   591→  );
+   592→}
+   593→
+   594→// ─────────────────────────────────────────────────────────────
+   595→// Podium Display (Top 3)
+   596→// ─────────────────────────────────────────────────────────────
+   597→
+   598→function PodiumDisplay() {
+   599→  const top3 = leaderboardData.slice(0, 3);
+   600→  // Reorder: 2nd, 1st, 3rd for podium visual
+   601→  const podiumOrder = [top3[1], top3[0], top3[2]];
+   602→  const podiumPositions = [2, 1, 3] as const;
+   603→  const podiumColors = [
+   604→    { border: 'from-slate-300 to-slate-500', bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-300', barBg: 'bg-gradient-to-r from-slate-400 to-slate-500', height: 'h-16' },
+   605→    { border: 'from-yellow-400 to-amber-500', bg: 'bg-yellow-50 dark:bg-yellow-950/30', text: 'text-yellow-600 dark:text-yellow-400', barBg: 'bg-gradient-to-r from-yellow-400 to-amber-500', height: 'h-24' },
+   606→    { border: 'from-amber-600 to-orange-700', bg: 'bg-amber-50 dark:bg-amber-950/30', text: 'text-amber-700 dark:text-amber-400', barBg: 'bg-gradient-to-r from-amber-600 to-orange-700', height: 'h-12' },
+   607→  ];
+   608→
+   609→  return (
+   610→    <div className="flex items-end justify-center gap-3 sm:gap-6 pt-6 pb-2">
+   611→      {podiumOrder.map((entry, i) => {
+   612→        if (!entry) return null;
+   613→        const pos = podiumPositions[i];
+   614→        const style = podiumColors[i];
+   615→        const isCenter = pos === 1;
+   616→        const change = weeklyChanges[entry.name] || 0;
+   617→
+   618→        return (
+   619→          <motion.div
+   620→            key={entry.rank}
+   621→            initial={{ opacity: 0, y: 30 }}
+   622→            animate={{ opacity: 1, y: 0 }}
+   623→            transition={{ duration: 0.5, delay: 0.1 * i + 0.2 }}
+   624→            className="flex flex-col items-center"
+   625→          >
+   626→            {/* Avatar */}
+   627→            <div className="relative mb-2">
+   628→              {isCenter && (
+   629→                <motion.div
+   630→                  className="absolute -top-5 left-1/2 -translate-x-1/2"
+   631→                  animate={{ y: [0, -3, 0] }}
+   632→                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+   633→                >
+   634→                  <Crown className="h-5 w-5 text-yellow-500 fill-yellow-500" />
+   635→                </motion.div>
+   636→              )}
+   637→              <div className={cn(
+   638→                'flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full text-sm font-bold bg-gradient-to-br p-[2px] shadow-lg',
+   639→                style.border
+   640→              )}>
+   641→                <div className={cn('flex h-full w-full items-center justify-center rounded-full', style.bg, style.text)}>
+   642→                  {entry.name.split(' ').map((n) => n[0]).join('')}
+   643→                </div>
+   644→              </div>
+   645→            </div>
+   646→
+   647→            {/* Name */}
+   648→            <p className={cn('text-xs sm:text-sm font-semibold text-center', style.text)}>
+   649→              {entry.name.split(' ')[0]}
+   650→            </p>
+   651→
+   652→            {/* Points */}
+   653→            <p className="text-[10px] sm:text-xs text-muted-foreground">
+   654→              {entry.points.toLocaleString()} pts
+   655→            </p>
+   656→
+   657→            {/* Weekly change */}
+   658→            <div className={cn(
+   659→              'mt-0.5 flex items-center gap-0.5 text-[9px] font-medium',
+   660→              change > 0 ? 'text-emerald-500' : change < 0 ? 'text-red-500' : 'text-slate-400'
+   661→            )}>
+   662→              {change > 0 && <ArrowUp className="h-2.5 w-2.5" />}
+   663→              {change < 0 && <ArrowDown className="h-2.5 w-2.5" />}
+   664→              {change === 0 && <Minus className="h-2.5 w-2.5" />}
+   665→              {change !== 0 ? Math.abs(change) : '–'}
+   666→            </div>
+   667→
+   668→            {/* XP Bar */}
+   669→            <div className="mt-1.5 w-16 sm:w-20">
+   670→              <div className="h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+   671→                <motion.div
+   672→                  className={cn('h-full rounded-full', style.barBg)}
+   673→                  initial={{ width: 0 }}
+   674→                  animate={{ width: `${(entry.points / 4250) * 100}%` }}
+   675→                  transition={{ duration: 1, delay: 0.5 + 0.1 * i }}
+   676→                />
+   677→              </div>
+   678→            </div>
+   679→
+   680→            {/* Podium block */}
+   681→            <div className={cn('mt-2 w-16 sm:w-20 rounded-t-lg flex items-start justify-center pt-1.5', style.height, style.barBg)}>
+   682→              <span className="text-white text-sm font-bold">#{pos}</span>
+   683→            </div>
+   684→          </motion.div>
+   685→        );
+   686→      })}
+   687→    </div>
+   688→  );
+   689→}
+   690→
+   691→// ─────────────────────────────────────────────────────────────
+   692→// Section Animation Wrapper
+   693→// ─────────────────────────────────────────────────────────────
+   694→
+   695→function Section({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+   696→  return (
+   697→    <motion.div
+   698→      initial={{ opacity: 0, y: 20 }}
+   699→      animate={{ opacity: 1, y: 0 }}
+   700→      transition={{ duration: 0.5, delay }}
+   701→    >
+   702→      {children}
+   703→    </motion.div>
+   704→  );
+   705→}
+   706→
+   707→// ─────────────────────────────────────────────────────────────
+   708→// Main Component
+   709→// ─────────────────────────────────────────────────────────────
+   710→
+   711→export function LearnerAchievements() {
+   712→  const { currentUser } = useAppStore();
+   713→
+   714→  // Calculate achievement stats
+   715→  const totalAchievements = demoAchievements.length;
+   716→  const earnedCount = demoAchievements.filter(
+   717→    (a) => earnedAchievementIds[a.id]?.earned
+   718→  ).length;
+   719→  const totalPoints = demoAchievements.reduce((sum, a) => {
+   720→    return sum + (earnedAchievementIds[a.id]?.earned ? a.points : 0);
+   721→  }, 0);
+   722→  const maxPoints = demoAchievements.reduce((sum, a) => sum + a.points, 0);
+   723→  const overallProgress = Math.round((earnedCount / totalAchievements) * 100);
+   724→
+   725→  // Level calculation
+   726→  const currentLevel = Math.floor(totalPoints / 200) + 1;
+   727→  const pointsInCurrentLevel = totalPoints % 200;
+   728→  const pointsForNextLevel = 200;
+   729→
+   730→  // Group achievements by category
+   731→  const groupedAchievements = useCallback(() => {
+   732→    const groups: Record<AchievementCategory, typeof demoAchievements> = {
+   733→      learning: [],
+   734→      streak: [],
+   735→      social: [],
+   736→      mastery: [],
+   737→      community: [],
+   738→      special: [],
+   739→    };
+   740→    demoAchievements.forEach((a) => {
+   741→      const meta = achievementMeta[a.id];
+   742→      if (meta) {
+   743→        groups[meta.category].push(a);
+   744→      }
+   745→    });
+   746→    return groups;
+   747→  }, [])();
+   748→
+   749→  // Category progress for rings
+   750→  const categoryProgress: Record<AchievementCategory, number> = {
+   751→    learning: groupedAchievements.learning.length > 0
+   752→      ? Math.round((groupedAchievements.learning.filter((a) => earnedAchievementIds[a.id]?.earned).length / groupedAchievements.learning.length) * 100)
+   753→      : 0,
+   754→    streak: groupedAchievements.streak.length > 0
+   755→      ? Math.round((groupedAchievements.streak.filter((a) => earnedAchievementIds[a.id]?.earned).length / groupedAchievements.streak.length) * 100)
+   756→      : 0,
+   757→    social: groupedAchievements.social.length > 0
+   758→      ? Math.round((groupedAchievements.social.filter((a) => earnedAchievementIds[a.id]?.earned).length / groupedAchievements.social.length) * 100)
+   759→      : 0,
+   760→    mastery: groupedAchievements.mastery.length > 0
+   761→      ? Math.round((groupedAchievements.mastery.filter((a) => earnedAchievementIds[a.id]?.earned).length / groupedAchievements.mastery.length) * 100)
+   762→      : 0,
+   763→    community: groupedAchievements.community.length > 0
+   764→      ? Math.round((groupedAchievements.community.filter((a) => earnedAchievementIds[a.id]?.earned).length / groupedAchievements.community.length) * 100)
+   765→      : 0,
+   766→    special: groupedAchievements.special.length > 0
+   767→      ? Math.round((groupedAchievements.special.filter((a) => earnedAchievementIds[a.id]?.earned).length / groupedAchievements.special.length) * 100)
+   768→      : 0,
+   769→  };
+   770→
+   771→  // Global rank (Alex Johnson is #5)
+   772→  const globalRank = 5;
+   773→
+   774→  return (
+   775→    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+   776→      <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:p-8">
+   777→        {/* ============ HEADER ============ */}
+   778→        <Section delay={0}>
+   779→          <div className="flex items-center gap-3">
+   780→            <Button
+   781→              variant="ghost"
+   782→              size="icon"
+   783→              className="h-9 w-9"
+   784→              onClick={() => useAppStore.getState().setView('learner-dashboard')}
+   785→            >
+   786→              <ArrowLeft className="h-4 w-4" />
+   787→            </Button>
+   788→            <div>
+   789→              <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-50">
+   790→                Achievements & Leaderboard
+   791→              </h1>
+   792→              <p className="text-sm text-muted-foreground mt-0.5">
+   793→                Track your progress, earn badges, and compete with others
+   794→              </p>
+   795→            </div>
+   796→          </div>
+   797→        </Section>
+   798→
+   799→        {/* ============ STATS SUMMARY CARDS (Glassmorphism) ============ */}
+   800→        <Section delay={0.05}>
+   801→          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+   802→            {/* Total XP */}
+   803→            <motion.div
+   804→              initial={{ opacity: 0, scale: 0.9 }}
+   805→              animate={{ opacity: 1, scale: 1 }}
+   806→              transition={{ duration: 0.3, delay: 0.05 }}
+   807→            >
+   808→              <div className="relative overflow-hidden rounded-2xl border border-yellow-200/50 dark:border-yellow-800/30 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl shadow-lg">
+   809→                <div className="absolute -top-4 -right-4 h-20 w-20 rounded-full bg-yellow-400/20 blur-2xl" />
+   810→                <div className="p-4 sm:p-5 relative">
+   811→                  <div className="flex items-center gap-3">
+   812→                    <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-gradient-to-br from-yellow-400 to-amber-500 shadow-md">
+   813→                      <Star className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+   814→                    </div>
+   815→                    <div>
+   816→                      <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider font-medium">Total XP</p>
+   817→                      <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-50">
+   818→                        <AnimatedCounter target={totalPoints} />
+   819→                      </p>
+   820→                    </div>
+   821→                  </div>
+   822→                  <div className="mt-2 flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
+   823→                    <TrendingUp className="h-3 w-3" />
+   824→                    +340 this week
+   825→                  </div>
+   826→                </div>
+   827→              </div>
+   828→            </motion.div>
+   829→
+   830→            {/* Current Level */}
+   831→            <motion.div
+   832→              initial={{ opacity: 0, scale: 0.9 }}
+   833→              animate={{ opacity: 1, scale: 1 }}
+   834→              transition={{ duration: 0.3, delay: 0.1 }}
+   835→            >
+   836→              <div className="relative overflow-hidden rounded-2xl border border-emerald-200/50 dark:border-emerald-800/30 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl shadow-lg">
+   837→                <div className="absolute -top-4 -right-4 h-20 w-20 rounded-full bg-emerald-400/20 blur-2xl" />
+   838→                <div className="p-4 sm:p-5 relative">
+   839→                  <div className="flex items-center gap-3">
+   840→                    <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 shadow-md">
+   841→                      <Crown className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+   842→                    </div>
+   843→                    <div>
+   844→                      <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider font-medium">Level</p>
+   845→                      <div className="flex items-center gap-2">
+   846→                        <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-50">
+   847→                          {currentLevel}
+   848→                        </p>
+   849→                        <span className="rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
+   850→                          LVL
+   851→                        </span>
+   852→                      </div>
+   853→                    </div>
+   854→                  </div>
+   855→                  <div className="mt-2 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+   856→                    <motion.div
+   857→                      className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500"
+   858→                      initial={{ width: 0 }}
+   859→                      animate={{ width: `${(pointsInCurrentLevel / pointsForNextLevel) * 100}%` }}
+   860→                      transition={{ duration: 1, delay: 0.5 }}
+   861→                    />
+   862→                  </div>
+   863→                </div>
+   864→              </div>
+   865→            </motion.div>
+   866→
+   867→            {/* Achievements Unlocked */}
+   868→            <motion.div
+   869→              initial={{ opacity: 0, scale: 0.9 }}
+   870→              animate={{ opacity: 1, scale: 1 }}
+   871→              transition={{ duration: 0.3, delay: 0.15 }}
+   872→            >
+   873→              <div className="relative overflow-hidden rounded-2xl border border-violet-200/50 dark:border-violet-800/30 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl shadow-lg">
+   874→                <div className="absolute -top-4 -right-4 h-20 w-20 rounded-full bg-violet-400/20 blur-2xl" />
+   875→                <div className="p-4 sm:p-5 relative">
+   876→                  <div className="flex items-center gap-3">
+   877→                    <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-400 to-purple-500 shadow-md">
+   878→                      <Trophy className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+   879→                    </div>
+   880→                    <div>
+   881→                      <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider font-medium">Unlocked</p>
+   882→                      <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-50">
+   883→                        {earnedCount}<span className="text-sm font-normal text-muted-foreground">/{totalAchievements}</span>
+   884→                      </p>
+   885→                    </div>
+   886→                  </div>
+   887→                  <div className="mt-2 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+   888→                    <motion.div
+   889→                      className="h-full rounded-full bg-gradient-to-r from-violet-400 to-purple-500"
+   890→                      initial={{ width: 0 }}
+   891→                      animate={{ width: `${overallProgress}%` }}
+   892→                      transition={{ duration: 1, delay: 0.6 }}
+   893→                    />
+   894→                  </div>
+   895→                </div>
+   896→              </div>
+   897→            </motion.div>
+   898→
+   899→            {/* Global Rank */}
+   900→            <motion.div
+   901→              initial={{ opacity: 0, scale: 0.9 }}
+   902→              animate={{ opacity: 1, scale: 1 }}
+   903→              transition={{ duration: 0.3, delay: 0.2 }}
+   904→            >
+   905→              <div className="relative overflow-hidden rounded-2xl border border-cyan-200/50 dark:border-cyan-800/30 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl shadow-lg">
+   906→                <div className="absolute -top-4 -right-4 h-20 w-20 rounded-full bg-cyan-400/20 blur-2xl" />
+   907→                <div className="p-4 sm:p-5 relative">
+   908→                  <div className="flex items-center gap-3">
+   909→                    <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400 to-blue-500 shadow-md">
+   910→                      <Award className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+   911→                    </div>
+   912→                    <div>
+   913→                      <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider font-medium">Global Rank</p>
+   914→                      <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-50">
+   915→                        #{globalRank}
+   916→                      </p>
+   917→                    </div>
+   918→                  </div>
+   919→                  <div className="mt-2 flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
+   920→                    <ArrowUp className="h-3 w-3" />
+   921→                    Up 3 this week
+   922→                  </div>
+   923→                </div>
+   924→              </div>
+   925→            </motion.div>
+   926→          </div>
+   927→        </Section>
+   928→
+   929→        {/* ============ OVERALL PROGRESS RING + LEVEL ============ */}
+   930→        <Section delay={0.1}>
+   931→          <Card className="border-border dark:border-slate-800 overflow-hidden">
+   932→            <CardContent className="p-6">
+   933→              <div className="flex flex-col sm:flex-row items-center gap-6">
+   934→                {/* Large progress ring */}
+   935→                <div className="flex-shrink-0">
+   936→                  <ProgressRing
+   937→                    size={140}
+   938→                    strokeWidth={10}
+   939→                    progress={overallProgress}
+   940→                    gradientId="overall-ring"
+   941→                    sublabel="Overall"
+   942→                  />
+   943→                </div>
+   944→
+   945→                {/* Level & progress details */}
+   946→                <div className="flex-1 text-center sm:text-left">
+   947→                  <div className="flex items-center justify-center sm:justify-start gap-2 mb-2">
+   948→                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500">
+   949→                      <Crown className="h-4 w-4 text-white" />
+   950→                    </div>
+   951→                    <span className="text-lg font-bold text-slate-900 dark:text-slate-50">
+   952→                      Level {currentLevel}
+   953→                    </span>
+   954→                    <Badge variant="secondary" className="text-[10px]">
+   955→                      {pointsInCurrentLevel}/{pointsForNextLevel} XP
+   956→                    </Badge>
+   957→                  </div>
+   958→                  <p className="text-sm text-muted-foreground mb-3">
+   959→                    Earn {pointsForNextLevel - pointsInCurrentLevel} more XP to reach Level {currentLevel + 1}
+   960→                  </p>
+   961→                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+   962→                    <span className="flex items-center gap-1">
+   963→                      <Star className="h-3 w-3 text-yellow-500" />
+   964→                      {totalPoints} total points earned
+   965→                    </span>
+   966→                    <span className="flex items-center gap-1">
+   967→                      <TrendingUp className="h-3 w-3 text-emerald-500" />
+   968→                      {Math.round((totalPoints / maxPoints) * 100)}% of all achievement points
+   969→                    </span>
+   970→                  </div>
+   971→
+   972→                  {/* Per-category mini rings */}
+   973→                  <div className="mt-4 flex items-center gap-4 justify-center sm:justify-start">
+   974→                    {(Object.keys(categoryConfig) as AchievementCategory[]).map((cat) => {
+   975→                      const config = categoryConfig[cat];
+   976→                      const progress = categoryProgress[cat];
+   977→                      if (groupedAchievements[cat].length === 0) return null;
+   978→                      return (
+   979→                        <div key={cat} className="flex flex-col items-center gap-1">
+   980→                          <ProgressRing
+   981→                            size={44}
+   982→                            strokeWidth={4}
+   983→                            progress={progress}
+   984→                            gradientId={`mini-ring-${cat}`}
+   985→                          />
+   986→                          <span className="text-[9px] text-muted-foreground">{config.emoji}</span>
+   987→                        </div>
+   988→                      );
+   989→                    })}
+   990→                  </div>
+   991→                </div>
+   992→              </div>
+   993→            </CardContent>
+   994→          </Card>
+   995→        </Section>
+   996→
+   997→        {/* ============ MILESTONE TRACKER ============ */}
+   998→        <Section delay={0.15}>
+   999→          <Card className="border-border dark:border-slate-800 overflow-hidden">
+  1000→            <Card className="border-0 shadow-none">
+  1001→              <CardContent className="p-5 pb-0">
+  1002→                <div className="flex items-center justify-between mb-4">
+  1003→                  <h2 className="text-base font-semibold text-slate-900 dark:text-slate-50 flex items-center gap-2">
+  1004→                    <Target className="h-5 w-5 text-emerald-500" />
+  1005→                    Learning Path
+  1006→                  </h2>
+  1007→                  <Badge variant="secondary" className="text-[10px] gap-1">
+  1008→                    {completedMilestones}/{milestones.length} completed
+  1009→                  </Badge>
+  1010→                </div>
+  1011→              </CardContent>
+  1012→            </Card>
+  1013→            <CardContent className="px-5 pb-5 pt-2">
+  1014→              <MilestoneTracker />
+  1015→            </CardContent>
+  1016→          </Card>
+  1017→        </Section>
+  1018→
+  1019→        {/* ============ ACHIEVEMENT BADGES BY CATEGORY ============ */}
+  1020→        <Section delay={0.2}>
+  1021→          <div className="flex items-center justify-between mb-4">
+  1022→            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50 flex items-center gap-2">
+  1023→              <Award className="h-5 w-5 text-violet-500" />
+  1024→              Achievement Badges
+  1025→            </h2>
+  1026→            <div className="flex items-center gap-2">
+  1027→              <Badge variant="secondary" className="text-xs gap-1">
+  1028→                <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+  1029→                {earnedCount} Earned
+  1030→              </Badge>
+  1031→              <Badge variant="secondary" className="text-xs gap-1">
+  1032→                <Lock className="h-3 w-3 text-slate-400 dark:text-slate-500" />
+  1033→                {totalAchievements - earnedCount} Locked
+  1034→              </Badge>
+  1035→            </div>
+  1036→          </div>
+  1037→
+  1038→          <div className="space-y-4">
+  1039→            {(Object.keys(categoryConfig) as AchievementCategory[]).map((category, i) => {
+  1040→              const categoryAchievements = groupedAchievements[category];
+  1041→              if (categoryAchievements.length === 0) return null;
+  1042→              return (
+  1043→                <CategorySection
+  1044→                  key={category}
+  1045→                  category={category}
+  1046→                  achievements={categoryAchievements}
+  1047→                  earnedMap={earnedAchievementIds}
+  1048→                  delay={0.05 * i}
+  1049→                />
+  1050→              );
+  1051→            })}
+  1052→          </div>
+  1053→        </Section>
+  1054→
+  1055→        {/* ============ LEADERBOARD WITH PODIUM ============ */}
+  1056→        <Section delay={0.25}>
+  1057→          <div className="flex items-center justify-between mb-4">
+  1058→            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50 flex items-center gap-2">
+  1059→              <Trophy className="h-5 w-5 text-yellow-500" />
+  1060→              Global Leaderboard
+  1061→            </h2>
+  1062→            <Badge variant="secondary" className="text-xs">This Week</Badge>
+  1063→          </div>
+  1064→
+  1065→          <Card className="border-border dark:border-slate-800 overflow-hidden">
+  1066→            <CardContent className="p-0">
+  1067→              {/* Podium for top 3 */}
+  1068→              <div className="bg-gradient-to-b from-yellow-50/50 to-transparent dark:from-yellow-950/10 dark:to-transparent pb-4">
+  1069→                <PodiumDisplay />
+  1070→              </div>
+  1071→
+  1072→              {/* Divider */}
+  1073→              <div className="h-px bg-border dark:bg-slate-800" />
+  1074→
+  1075→              {/* Remaining leaderboard entries (4-10) */}
+  1076→              <div>
+  1077→                {/* Header row */}
+  1078→                <div className="flex items-center gap-4 px-5 py-3 border-b border-border dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 text-xs font-medium text-muted-foreground">
+  1079→                  <div className="w-10 text-center">Rank</div>
+  1080→                  <div className="flex-1">Name</div>
+  1081→                  <div className="w-20 text-right hidden sm:block">Points</div>
+  1082→                  <div className="w-16 text-right hidden sm:block">Streak</div>
+  1083→                  <div className="w-24 text-right hidden md:block">Courses</div>
+  1084→                  <div className="w-10 text-center hidden sm:block">Change</div>
+  1085→                </div>
+  1086→
+  1087→                {leaderboardData.slice(3).map((entry, i) => {
+  1088→                  const isCurrentUser = entry.name === 'Alex Johnson';
+  1089→                  const change = weeklyChanges[entry.name] || 0;
+  1090→
+  1091→                  return (
+  1092→                    <motion.div
+  1093→                      key={entry.rank}
+  1094→                      initial={{ opacity: 0, x: -20 }}
+  1095→                      animate={{ opacity: 1, x: 0 }}
+  1096→                      transition={{ duration: 0.3, delay: 0.05 * i }}
+  1097→                      className={cn(
+  1098→                        'flex items-center gap-4 px-5 py-3.5 border-b border-slate-100 dark:border-slate-800/50 last:border-0 transition-colors',
+  1099→                        isCurrentUser
+  1100→                          ? 'bg-emerald-50 dark:bg-emerald-950/20'
+  1101→                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/30'
+  1102→                      )}
+  1103→                    >
+  1104→                      {/* Rank */}
+  1105→                      <div className="w-10 text-center">
+  1106→                        <span className={cn(
+  1107→                          'inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold',
+  1108→                          isCurrentUser
+  1109→                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+  1110→                            : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+  1111→                        )}>
+  1112→                          {entry.rank}
+  1113→                        </span>
+  1114→                      </div>
+  1115→
+  1116→                      {/* Name + avatar */}
+  1117→                      <div className="flex-1 flex items-center gap-3 min-w-0">
+  1118→                        <div className={cn(
+  1119→                          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold border-2',
+  1120→                          isCurrentUser
+  1121→                            ? 'bg-gradient-to-br from-emerald-400 to-teal-500 text-white border-emerald-400'
+  1122→                            : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+  1123→                        )}>
+  1124→                          {entry.name.split(' ').map((n) => n[0]).join('')}
+  1125→                        </div>
+  1126→                        <div className="min-w-0">
+  1127→                          <p className={cn(
+  1128→                            'text-sm font-medium truncate',
+  1129→                            isCurrentUser ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-900 dark:text-slate-100'
+  1130→                          )}>
+  1131→                            {entry.name}
+  1132→                            {isCurrentUser && (
+  1133→                              <span className="ml-1.5 text-xs font-normal text-emerald-500">(You)</span>
+  1134→                            )}
+  1135→                          </p>
+  1136→                          <p className="text-xs text-muted-foreground sm:hidden">
+  1137→                            {entry.points.toLocaleString()} pts · 🔥 {entry.streak}
+  1138→                          </p>
+  1139→                        </div>
+  1140→                      </div>
+  1141→
+  1142→                      {/* Points */}
+  1143→                      <div className="w-20 text-right hidden sm:block">
+  1144→                        <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+  1145→                          {entry.points.toLocaleString()}
+  1146→                        </span>
+  1147→                        <span className="text-xs text-muted-foreground ml-0.5">pts</span>
+  1148→                      </div>
+  1149→
+  1150→                      {/* Streak */}
+  1151→                      <div className="w-16 text-right hidden sm:flex sm:items-center sm:justify-end sm:gap-1">
+  1152→                        <Flame className="h-3.5 w-3.5 text-orange-500" />
+  1153→                        <span className="text-sm text-slate-700 dark:text-slate-300">{entry.streak}</span>
+  1154→                      </div>
+  1155→
+  1156→                      {/* Courses */}
+  1157→                      <div className="w-24 text-right hidden md:flex md:items-center md:justify-end md:gap-1">
+  1158→                        <GraduationCap className="h-3.5 w-3.5 text-violet-500" />
+  1159→                        <span className="text-sm text-slate-700 dark:text-slate-300">{entry.coursesCompleted}</span>
+  1160→                      </div>
+  1161→
+  1162→                      {/* Weekly Change */}
+  1163→                      <div className="w-10 text-center hidden sm:flex sm:items-center sm:justify-center">
+  1164→                        <span className={cn(
+  1165→                          'inline-flex items-center gap-0.5 text-xs font-medium',
+  1166→                          change > 0 ? 'text-emerald-500' : change < 0 ? 'text-red-500' : 'text-slate-400'
+  1167→                        )}>
+  1168→                          {change > 0 && <ArrowUp className="h-3 w-3" />}
+  1169→                          {change < 0 && <ArrowDown className="h-3 w-3" />}
+  1170→                          {change === 0 && <Minus className="h-3 w-3" />}
+  1171→                          {change !== 0 ? Math.abs(change) : ''}
+  1172→                        </span>
+  1173→                      </div>
+  1174→                    </motion.div>
+  1175→                  );
+  1176→                })}
+  1177→              </div>
+  1178→            </CardContent>
+  1179→          </Card>
+  1180→        </Section>
+  1181→
+  1182→        {/* Bottom spacing */}
+  1183→        <div className="h-8" />
+  1184→      </div>
+  1185→    </div>
+  1186→  );
+  1187→}
+  1188→

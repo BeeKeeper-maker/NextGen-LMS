@@ -10,7 +10,6 @@ import {
   Users,
   Clock,
   Copy,
-  Archive,
   Pencil,
   ChevronDown,
   ChevronRight,
@@ -43,7 +42,6 @@ import {
   Download,
   Send,
   X,
-  AlertTriangle,
   ArrowUp,
   ArrowDown,
   Bold,
@@ -55,6 +53,7 @@ import {
   Palette,
   ExternalLink,
   Minus,
+  Loader2,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -89,11 +88,96 @@ import {
 } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { demoCourses } from '@/lib/mock-data';
-import { courseReviews as allMockReviews, reviewTags } from '@/lib/mock-data';
-import type { CourseReview } from '@/lib/mock-data';
+// TODO: Replace with real API when available - review API not yet implemented
+interface CourseReview {
+  id: string;
+  courseId: string;
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  rating: number;
+  title: string;
+  content: string;
+  date: string;
+  helpfulCount: number;
+  isHelpful: boolean;
+  courseProgress: number;
+  isVerifiedPurchase: boolean;
+  tags: string[];
+  status: 'published' | 'flagged' | 'hidden';
+  instructorReply?: {
+    instructorName: string;
+    content: string;
+    date: string;
+  };
+  isOwnReview?: boolean;
+}
+
+// TODO: Replace with real API when available - review data not yet in the API
+const allMockReviews: CourseReview[] = [
+  { id: 'rev-1', courseId: 'course-1', userId: 'user-2', userName: 'Emma Rodriguez', userAvatar: 'ER', rating: 5, title: 'Absolutely Incredible Course!', content: 'This course completely transformed how I think about React architecture.', date: '2024-10-14T10:30:00Z', helpfulCount: 24, isHelpful: false, courseProgress: 100, isVerifiedPurchase: true, tags: ['Great Content', 'Life Changing', 'Well Structured'], status: 'published', instructorReply: { instructorName: 'Sarah Mitchell', content: 'Thank you so much, Emma!', date: '2024-10-15T08:00:00Z' } },
+  { id: 'rev-2', courseId: 'course-1', userId: 'user-1', userName: 'Mike Chen', userAvatar: 'MC', rating: 5, title: 'Best React Course I\'ve Ever Taken', content: 'I\'ve taken multiple React courses over the years, and this one stands head and shoulders above the rest.', date: '2024-10-10T15:45:00Z', helpfulCount: 18, isHelpful: true, courseProgress: 85, isVerifiedPurchase: true, tags: ['Great Content', 'Practical'], status: 'published' },
+  { id: 'rev-3', courseId: 'course-1', userId: 'user-6', userName: 'Priya Sharma', userAvatar: 'PS', rating: 4, title: 'Great Content, Minor Gaps in Testing', content: 'Great content overall. The TypeScript patterns section was excellent.', date: '2024-10-05T09:20:00Z', helpfulCount: 12, isHelpful: false, courseProgress: 72, isVerifiedPurchase: true, tags: ['Well Structured', 'Advanced'], status: 'published' },
+  { id: 'rev-4', courseId: 'course-1', userId: 'user-7', userName: 'Alex Johnson', userAvatar: 'AJ', rating: 5, title: 'Game-Changer for My Career', content: 'This course is a game-changer. I went from struggling with React concepts to building production apps confidently.', date: '2024-09-28T14:00:00Z', helpfulCount: 31, isHelpful: false, courseProgress: 100, isVerifiedPurchase: true, tags: ['Life Changing', 'Practical', 'Great Content'], status: 'published', instructorReply: { instructorName: 'Sarah Mitchell', content: 'Congratulations on the new role, Alex!', date: '2024-09-29T10:00:00Z' } },
+  { id: 'rev-5', courseId: 'course-1', userId: 'user-8', userName: 'Tom Wilson', userAvatar: 'TW', rating: 4, title: 'Comprehensive Deep Dive', content: 'Very comprehensive course. The App Router deep-dive was particularly helpful.', date: '2024-09-20T11:30:00Z', helpfulCount: 8, isHelpful: false, courseProgress: 60, isVerifiedPurchase: true, tags: ['Advanced', 'Well Structured'], status: 'published' },
+  { id: 'rev-6', courseId: 'course-2', userId: 'user-1', userName: 'Mike Chen', userAvatar: 'MC', rating: 5, title: 'AI Development Made Accessible', content: 'This course demystified AI integration for me.', date: '2024-10-12T16:00:00Z', helpfulCount: 22, isHelpful: true, courseProgress: 100, isVerifiedPurchase: true, tags: ['Life Changing', 'Practical', 'Great Content'], status: 'published', instructorReply: { instructorName: 'Sarah Mitchell', content: 'So glad you found it useful, Mike!', date: '2024-10-13T09:00:00Z' } },
+  { id: 'rev-7', courseId: 'course-2', userId: 'user-3', userName: 'David Park', userAvatar: 'DP', rating: 5, title: 'Essential for Modern Full-Stack', content: 'As an instructor myself, I appreciate the pedagogical approach here.', date: '2024-10-08T13:20:00Z', helpfulCount: 15, isHelpful: false, courseProgress: 90, isVerifiedPurchase: true, tags: ['Practical', 'Well Structured', 'Advanced'], status: 'published' },
+  { id: 'rev-8', courseId: 'course-2', userId: 'user-9', userName: 'Jordan Lee', userAvatar: 'JL', rating: 4, title: 'Solid AI Foundation', content: 'Great course for getting started with AI integration.', date: '2024-10-01T10:45:00Z', helpfulCount: 9, isHelpful: false, courseProgress: 65, isVerifiedPurchase: true, tags: ['Great Content', 'Beginner Friendly'], status: 'published' },
+  { id: 'rev-9', courseId: 'course-3', userId: 'user-7', userName: 'Alex Johnson', userAvatar: 'AJ', rating: 5, title: 'FAANG-Level Preparation', content: 'This course is exactly what you need for system design interviews.', date: '2024-10-11T08:30:00Z', helpfulCount: 28, isHelpful: true, courseProgress: 100, isVerifiedPurchase: true, tags: ['Life Changing', 'Advanced', 'Practical'], status: 'published' },
+  { id: 'rev-10', courseId: 'course-3', userId: 'user-5', userName: 'Lisa Wang', userAvatar: 'LW', rating: 4, title: 'Thorough but Demanding', content: 'Very thorough coverage of system design concepts.', date: '2024-09-25T17:15:00Z', helpfulCount: 14, isHelpful: false, courseProgress: 80, isVerifiedPurchase: true, tags: ['Advanced', 'Well Structured'], status: 'published' },
+  { id: 'rev-11', courseId: 'course-4', userId: 'user-4', userName: 'Nina Kovac', userAvatar: 'NK', rating: 5, title: 'Beautiful Visualizations Made Easy', content: 'I never thought I could create such stunning data visualizations.', date: '2024-10-09T12:00:00Z', helpfulCount: 16, isHelpful: false, courseProgress: 100, isVerifiedPurchase: true, tags: ['Great Content', 'Practical', 'Well Structured'], status: 'published' },
+  { id: 'rev-12', courseId: 'course-4', userId: 'user-8', userName: 'Tom Wilson', userAvatar: 'TW', rating: 4, title: 'Great for Dashboard Builders', content: 'Solid course for anyone building analytics dashboards.', date: '2024-10-03T09:00:00Z', helpfulCount: 7, isHelpful: false, courseProgress: 55, isVerifiedPurchase: true, tags: ['Practical', 'Beginner Friendly'], status: 'published' },
+  { id: 'rev-13', courseId: 'course-5', userId: 'user-9', userName: 'Jordan Lee', userAvatar: 'JL', rating: 5, title: 'Design Thinking Transformed', content: 'As a developer, I was skeptical about a design course. But this changed my perspective entirely.', date: '2024-10-07T14:30:00Z', helpfulCount: 19, isHelpful: true, courseProgress: 100, isVerifiedPurchase: true, tags: ['Life Changing', 'Beginner Friendly', 'Practical'], status: 'published' },
+  { id: 'rev-14', courseId: 'course-5', userId: 'user-6', userName: 'Priya Sharma', userAvatar: 'PS', rating: 4, title: 'Good Introduction to UX/UI', content: 'A well-structured introduction to UX/UI principles.', date: '2024-09-30T16:45:00Z', helpfulCount: 10, isHelpful: false, courseProgress: 70, isVerifiedPurchase: true, tags: ['Beginner Friendly', 'Well Structured'], status: 'published' },
+  { id: 'rev-15', courseId: 'course-6', userId: 'user-3', userName: 'David Park', userAvatar: 'DP', rating: 5, title: 'DevOps Mastery Achieved', content: 'The Kubernetes and Docker sections are incredibly detailed.', date: '2024-10-06T11:00:00Z', helpfulCount: 13, isHelpful: false, courseProgress: 88, isVerifiedPurchase: true, tags: ['Advanced', 'Practical', 'Great Content'], status: 'published' },
+  { id: 'rev-16', courseId: 'course-1', userId: 'user-10', userName: 'Sam Taylor', userAvatar: 'ST', rating: 3, title: 'Good but Needs Updates', content: 'The core content is strong, but some sections feel outdated.', date: '2024-09-15T08:00:00Z', helpfulCount: 5, isHelpful: false, courseProgress: 45, isVerifiedPurchase: true, tags: ['Well Structured'], status: 'published' },
+  { id: 'rev-17', courseId: 'course-2', userId: 'user-10', userName: 'Sam Taylor', userAvatar: 'ST', rating: 2, title: 'Not Enough Depth on Fine-Tuning', content: 'The course covers AI integration basics well, but I was expecting more on fine-tuning.', date: '2024-09-10T07:30:00Z', helpfulCount: 3, isHelpful: false, courseProgress: 30, isVerifiedPurchase: true, tags: ['Beginner Friendly'], status: 'published' },
+  { id: 'rev-18', courseId: 'course-3', userId: 'user-11', userName: 'Chris Adams', userAvatar: 'CA', rating: 1, title: 'Too Theoretical', content: 'I was expecting hands-on system design exercises but found the course too theoretical.', date: '2024-08-20T19:00:00Z', helpfulCount: 2, isHelpful: false, courseProgress: 20, isVerifiedPurchase: false, tags: [], status: 'flagged' },
+  { id: 'rev-19', courseId: 'course-1', userId: 'demo-learner-1', userName: 'You', userAvatar: 'YO', rating: 5, title: 'Excellent Learning Experience', content: 'I\'m still working through this course but I can already tell it\'s one of the best investments I\'ve made.', date: '2024-10-13T20:00:00Z', helpfulCount: 6, isHelpful: false, courseProgress: 68, isVerifiedPurchase: true, tags: ['Great Content', 'Well Structured'], status: 'published', isOwnReview: true },
+  { id: 'rev-20', courseId: 'course-6', userId: 'user-11', userName: 'Chris Adams', userAvatar: 'CA', rating: 4, title: 'Solid Cloud Architecture Guide', content: 'Comprehensive coverage of cloud-native patterns.', date: '2024-09-18T13:00:00Z', helpfulCount: 8, isHelpful: false, courseProgress: 75, isVerifiedPurchase: true, tags: ['Practical', 'Advanced'], status: 'published' },
+];
 import type { Course, Module, Lesson } from '@/types';
 import { cn } from '@/lib/utils';
+import { useAppStore } from '@/store/app-store';
+import { slugify } from '@/lib/slugify';
+import {
+  useCourses,
+  useCreateCourse,
+  useUpdateCourse,
+  useDeleteCourse,
+  useCreateModule,
+  useUpdateModule,
+  useDeleteModule,
+  useCreateLesson,
+  useUpdateLesson,
+  useDeleteLesson,
+} from '@/hooks/use-data';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+
+// ─── Courses Context for sharing API data ─────────────────────
+interface CoursesContextValue {
+  courses: Course[];
+  loading: boolean;
+  refetch: () => Promise<void>;
+  createCourse: (data: Record<string, unknown>) => Promise<Course | null>;
+  deleteCourse: (id: string) => Promise<boolean>;
+  updateCourse: (id: string, data: Record<string, unknown>) => Promise<Course | null>;
+}
+
+import { createContext, useContext } from 'react';
+
+const CoursesContext = createContext<CoursesContextValue>({
+  courses: [],
+  loading: true,
+  refetch: async () => {},
+  createCourse: async () => null,
+  deleteCourse: async () => false,
+  updateCourse: async () => null,
+});
+
+function useCoursesData() {
+  return useContext(CoursesContext);
+}
 
 // ─── Helpers ────────────────────────────────────────────────
 
@@ -153,18 +237,19 @@ function renderStars(rating: number) {
 // ─── Tab 1: Course Catalog ──────────────────────────────────
 
 function CourseCatalogTab() {
+  const { courses } = useCoursesData();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [levelFilter, setLevelFilter] = useState('all');
 
   const categories = useMemo(
-    () => ['all', ...Array.from(new Set(demoCourses.map((c) => c.category).filter(Boolean)))],
-    []
+    () => ['all', ...Array.from(new Set(courses.map((c) => c.category).filter(Boolean)))],
+    [courses]
   );
 
   const levels = ['all', 'beginner', 'intermediate', 'advanced', 'expert'];
 
-  const filtered = demoCourses.filter((c) => {
+  const filtered = courses.filter((c) => {
     const matchSearch =
       !search ||
       c.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -219,7 +304,7 @@ function CourseCatalogTab() {
 
       {/* Results count */}
       <p className="text-sm text-muted-foreground">
-        Showing {filtered.length} of {demoCourses.length} courses
+        Showing {filtered.length} of {courses.length} courses
       </p>
 
       {/* Course Grid */}
@@ -243,6 +328,9 @@ function CourseCatalogTab() {
 }
 
 function CourseCard({ course }: { course: Course }) {
+  const { deleteCourse, updateCourse } = useCoursesData();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const gradient = categoryGradients[course.category || ''] || 'from-slate-500 to-slate-600';
   const catBadge = categoryBadgeColors[course.category || ''] || 'bg-slate-100 text-slate-700 dark:text-slate-300 dark:bg-slate-950 dark:text-slate-300';
   const lvlBadge = levelBadgeColors[course.level] || 'bg-slate-100 text-slate-700 dark:text-slate-300 dark:bg-slate-950 dark:text-slate-300';
@@ -331,25 +419,89 @@ function CourseCard({ course }: { course: Course }) {
             </Badge>
 
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                <Pencil className="h-3.5 w-3.5" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={() => updateCourse(course.id, { isPublished: !course.isPublished })}
+                title={course.isPublished ? 'Unpublish' : 'Publish'}
+              >
+                {course.isPublished ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
               </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
                 <Copy className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                <Archive className="h-3.5 w-3.5" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={() => setDeleteDialogOpen(true)}
+                disabled={deleting}
+              >
+                {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
               </Button>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete Course?"
+        description={`Are you sure you want to delete "${course.title}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={async () => {
+          setDeleting(true);
+          await deleteCourse(course.id);
+          setDeleting(false);
+          setDeleteDialogOpen(false);
+        }}
+      />
     </motion.div>
   );
 }
 
 function NewCourseDialog() {
+  const tenantId = useAppStore((s) => s.currentTenant?.id) || 'demo-tenant-1';
+  const createCourseMutation = useCreateCourse();
   const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('');
+  const [level, setLevel] = useState('beginner');
+  const [price, setPrice] = useState('0');
+  const [compareAtPrice, setCompareAtPrice] = useState('');
+
+  const handleCreate = () => {
+    if (!title.trim()) return;
+    createCourseMutation.mutate(
+      {
+        tenantId,
+        slug: slugify(title.trim()),
+        title: title.trim(),
+        description: description.trim(),
+        category: category || 'Web Development',
+        level: level || 'beginner',
+        price: parseFloat(price) || 0,
+        compareAtPrice: compareAtPrice ? parseFloat(compareAtPrice) : null,
+        isPublished: false,
+        isFeatured: false,
+      },
+      {
+        onSuccess: () => {
+          setOpen(false);
+          setTitle('');
+          setDescription('');
+          setCategory('');
+          setLevel('beginner');
+          setPrice('0');
+          setCompareAtPrice('');
+        },
+      }
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -369,31 +521,31 @@ function NewCourseDialog() {
         <div className="grid gap-5 py-4">
           <div className="grid gap-2">
             <Label htmlFor="course-title">Course Title</Label>
-            <Input id="course-title" placeholder="e.g. Advanced TypeScript Patterns" />
+            <Input id="course-title" placeholder="e.g. Advanced TypeScript Patterns" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="course-desc">Description</Label>
-            <Textarea id="course-desc" placeholder="Brief description of the course..." rows={3} className="resize-none" />
+            <Textarea id="course-desc" placeholder="Brief description of the course..." rows={3} className="resize-none" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
           <Separator />
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label>Category</Label>
-              <Select>
+              <Select value={category || 'Web Development'} onValueChange={setCategory}>
                 <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="web-dev">Web Development</SelectItem>
-                  <SelectItem value="ai-ml">AI & ML</SelectItem>
-                  <SelectItem value="data-science">Data Science</SelectItem>
-                  <SelectItem value="design">Design</SelectItem>
-                  <SelectItem value="business">Business</SelectItem>
-                  <SelectItem value="marketing">Marketing</SelectItem>
+                  <SelectItem value="Web Development">Web Development</SelectItem>
+                  <SelectItem value="AI & ML">AI & ML</SelectItem>
+                  <SelectItem value="Data Science">Data Science</SelectItem>
+                  <SelectItem value="Design">Design</SelectItem>
+                  <SelectItem value="Business">Business</SelectItem>
+                  <SelectItem value="Marketing">Marketing</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
               <Label>Level</Label>
-              <Select>
+              <Select value={level} onValueChange={setLevel}>
                 <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="beginner">Beginner</SelectItem>
@@ -407,19 +559,19 @@ function NewCourseDialog() {
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="course-price">Price ($)</Label>
-              <Input id="course-price" type="number" placeholder="0" />
+              <Input id="course-price" type="number" placeholder="0" value={price} onChange={(e) => setPrice(e.target.value)} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="course-compare">Compare-at Price ($)</Label>
-              <Input id="course-compare" type="number" placeholder="0" />
+              <Input id="course-compare" type="number" placeholder="0" value={compareAtPrice} onChange={(e) => setCompareAtPrice(e.target.value)} />
             </div>
           </div>
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={() => setOpen(false)}>
-            <BookOpen className="h-4 w-4" />
-            Create Course
+          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={handleCreate} disabled={createCourseMutation.isPending || !title.trim()}>
+            {createCourseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookOpen className="h-4 w-4" />}
+            {createCourseMutation.isPending ? 'Creating...' : 'Create Course'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -430,15 +582,16 @@ function NewCourseDialog() {
 // ─── Tab 2: Course Builder ──────────────────────────────────
 
 function CourseBuilderTab() {
-  const [selectedCourseId, setSelectedCourseId] = useState<string>(demoCourses[0].id);
+  const { courses } = useCoursesData();
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(courses[0]?.id || '');
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(
-    new Set(demoCourses[0].modules?.map((m) => m.id) || [])
+    new Set(courses[0]?.modules?.map((m) => m.id) || [])
   );
 
   const selectedCourse = useMemo(
-    () => demoCourses.find((c) => c.id === selectedCourseId) || demoCourses[0],
-    [selectedCourseId]
+    () => courses.find((c) => c.id === selectedCourseId) || courses[0],
+    [selectedCourseId, courses]
   );
 
   const selectedLesson = useMemo(() => {
@@ -492,7 +645,7 @@ function CourseBuilderTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {demoCourses.map((c) => (
+            {courses.map((c) => (
               <SelectItem key={c.id} value={c.id}>
                 {c.title}
               </SelectItem>
@@ -550,7 +703,7 @@ function CourseBuilderTab() {
         {/* Right panel: Content Editor */}
         <Card className="overflow-hidden">
           {selectedLesson ? (
-            <LessonEditor lesson={selectedLesson} />
+            <LessonEditor lesson={selectedLesson} courseId={selectedCourse.id} moduleId={selectedLesson.moduleId} />
           ) : (
             <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-muted-foreground">
               <BookOpen className="h-12 w-12 mb-4 opacity-30" />
@@ -679,7 +832,8 @@ function LessonTreeItem({
   );
 }
 
-function LessonEditor({ lesson }: { lesson: Lesson }) {
+function LessonEditor({ lesson, courseId, moduleId }: { lesson: Lesson; courseId: string; moduleId: string }) {
+  const updateLessonMutation = useUpdateLesson();
   const [title, setTitle] = useState(lesson.title);
   const [contentType, setContentType] = useState(lesson.contentType);
   const [videoUrl, setVideoUrl] = useState(lesson.videoUrl || '');
@@ -701,8 +855,28 @@ function LessonEditor({ lesson }: { lesson: Lesson }) {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="h-8 text-xs">Cancel</Button>
-          <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1">
-            <CheckCircle2 className="h-3 w-3" /> Save
+          <Button
+            size="sm"
+            className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+            disabled={updateLessonMutation.isPending}
+            onClick={() => {
+              updateLessonMutation.mutate({
+                courseId,
+                moduleId,
+                lessonId: lesson.id,
+                title,
+                contentType,
+                videoUrl,
+                content: textContent,
+                videoDuration: duration * 60,
+                isPreview,
+                isPublished,
+                resources: resources.join(','),
+              });
+            }}
+          >
+            {updateLessonMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+            {updateLessonMutation.isPending ? 'Saving...' : 'Save'}
           </Button>
         </div>
       </div>
@@ -884,11 +1058,12 @@ function LessonEditor({ lesson }: { lesson: Lesson }) {
 // ─── Tab 3: Curriculum Overview ─────────────────────────────
 
 function CurriculumOverviewTab() {
-  const [selectedCourseId, setSelectedCourseId] = useState<string>(demoCourses[0].id);
+  const { courses } = useCoursesData();
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(courses[0]?.id || '');
 
   const selectedCourse = useMemo(
-    () => demoCourses.find((c) => c.id === selectedCourseId) || demoCourses[0],
-    [selectedCourseId]
+    () => courses.find((c) => c.id === selectedCourseId) || courses[0],
+    [selectedCourseId, courses]
   );
 
   const modules = useMemo(
@@ -929,7 +1104,7 @@ function CurriculumOverviewTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {demoCourses.map((c) => (
+            {courses.map((c) => (
               <SelectItem key={c.id} value={c.id}>
                 {c.title}
               </SelectItem>
@@ -1108,7 +1283,15 @@ type BuilderResource = { id: string; name: string; type: 'file' | 'link' | 'docu
 type ViewDensity = 'compact' | 'comfortable' | 'spacious';
 
 function VisualCourseBuilderTab() {
-  const [selectedCourseId, setSelectedCourseId] = useState<string>(demoCourses[0].id);
+  const { courses } = useCoursesData();
+  const createModuleMutation = useCreateModule();
+  const updateModuleMutation = useUpdateModule();
+  const deleteModuleMutation = useDeleteModule();
+  const createLessonMutation = useCreateLesson();
+  const updateLessonMutation = useUpdateLesson();
+  const deleteLessonMutation = useDeleteLesson();
+  const updateCourseMutation = useUpdateCourse();
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(courses[0]?.id || '');
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
   const [addModuleOpen, setAddModuleOpen] = useState(false);
@@ -1122,13 +1305,13 @@ function VisualCourseBuilderTab() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [viewDensity, setViewDensity] = useState<ViewDensity>('comfortable');
   const [lastSaved, setLastSaved] = useState<string>('just now');
-  const [courseTitle, setCourseTitle] = useState(demoCourses[0].title);
-  const [isCoursePublished, setIsCoursePublished] = useState(demoCourses[0].isPublished);
+  const [courseTitle, setCourseTitle] = useState(courses[0]?.title || '');
+  const [isCoursePublished, setIsCoursePublished] = useState(courses[0]?.isPublished || false);
 
   // Local mutable modules state
   const [modules, setModules] = useState<BuilderModule[]>(() => {
-    const c = demoCourses[0];
-    return (c.modules || []).map((m, i) => ({
+    const c = courses[0];
+    return (c?.modules || []).map((m, i) => ({
       ...m,
       lessons: [...(m.lessons || [])].map((l) => ({
         ...l,
@@ -1142,8 +1325,8 @@ function VisualCourseBuilderTab() {
   });
 
   const selectedCourse = useMemo(
-    () => demoCourses.find((c) => c.id === selectedCourseId) || demoCourses[0],
-    [selectedCourseId]
+    () => courses.find((c) => c.id === selectedCourseId) || courses[0],
+    [selectedCourseId, courses]
   );
 
   // Auto-save simulation
@@ -1158,7 +1341,7 @@ function VisualCourseBuilderTab() {
   const handleCourseChange = useCallback((courseId: string) => {
     setSelectedCourseId(courseId);
     setSelectedLessonId(null);
-    const c = demoCourses.find((co) => co.id === courseId) || demoCourses[0];
+    const c = courses.find((co) => co.id === courseId) || courses[0];
     setCourseTitle(c.title);
     setIsCoursePublished(c.isPublished);
     setModules(
@@ -1175,7 +1358,7 @@ function VisualCourseBuilderTab() {
       })) as BuilderModule[]
     );
     setExpandedModules(new Set());
-  }, []);
+  }, [courses]);
 
   const toggleModule = (moduleId: string) => {
     setExpandedModules((prev) => {
@@ -1242,11 +1425,12 @@ function VisualCourseBuilderTab() {
 
   // Add module
   const handleAddModule = (title: string, description: string) => {
+    const tempId = `mod-new-${Date.now()}`;
     const newMod: BuilderModule = {
-      id: `mod-new-${Date.now()}`,
+      id: tempId,
       courseId: selectedCourseId,
       title,
-      description: description || undefined,
+      description: description || '',
       orderIndex: modules.length,
       isPublished: false,
       lessons: [],
@@ -1254,21 +1438,41 @@ function VisualCourseBuilderTab() {
     };
     setModules((prev) => [...prev, newMod]);
     setAddModuleOpen(false);
-    setExpandedModules((prev) => new Set([...prev, newMod.id]));
+    setExpandedModules((prev) => new Set([...prev, tempId]));
+    createModuleMutation.mutate(
+      {
+        courseId: selectedCourseId,
+        title,
+        description: description || undefined,
+        orderIndex: modules.length,
+        isPublished: false,
+      },
+      {
+        onSuccess: (data: any) => {
+          // Replace temp ID with real ID from API
+          if (data?.id && data.id !== tempId) {
+            setModules((prev) =>
+              prev.map((m) => (m.id === tempId ? { ...m, id: data.id } : m))
+            );
+          }
+        },
+      }
+    );
   };
 
   // Add lesson
   const handleAddLesson = (moduleId: string, title: string, contentType: Lesson['contentType'], durationMin: number) => {
+    const tempId = `les-new-${Date.now()}`;
     const newLesson: BuilderLesson = {
-      id: `les-new-${Date.now()}`,
+      id: tempId,
       moduleId,
       title,
-      slug: title.toLowerCase().replace(/\s+/g, '-'),
+      slug: slugify(title),
       contentType,
       orderIndex: 0,
       isPreview: false,
       isPublished: false,
-      videoDuration: contentType === 'video' || contentType === 'audio' ? durationMin * 60 : undefined,
+      videoDuration: (contentType === 'video' || contentType === 'audio') ? durationMin * 60 : undefined,
       content: '',
       videoUrl: '',
       resources: [],
@@ -1282,17 +1486,51 @@ function VisualCourseBuilderTab() {
     );
     setAddLessonOpen(false);
     setAddLessonModuleId(null);
-    setSelectedLessonId(newLesson.id);
+    setSelectedLessonId(tempId);
+    createLessonMutation.mutate(
+      {
+        courseId: selectedCourseId,
+        moduleId,
+        title,
+        slug: slugify(title),
+        contentType,
+        orderIndex: 0,
+        isPreview: false,
+        isPublished: false,
+        videoDuration: (contentType === 'video' || contentType === 'audio') ? durationMin * 60 : undefined,
+        content: '',
+        videoUrl: '',
+        resources: '',
+      },
+      {
+        onSuccess: (data: any) => {
+          if (data?.id && data.id !== tempId) {
+            setModules((prev) =>
+              prev.map((mod) => {
+                if (mod.id !== moduleId) return mod;
+                return {
+                  ...mod,
+                  lessons: mod.lessons.map((l) => (l.id === tempId ? { ...l, id: data.id } : l)),
+                };
+              })
+            );
+            if (selectedLessonId === tempId) setSelectedLessonId(data.id);
+          }
+        },
+      }
+    );
   };
 
   // Delete module
   const handleDeleteModule = (moduleId: string) => {
+    deleteModuleMutation.mutate({ courseId: selectedCourseId, moduleId });
     setModules((prev) => prev.filter((m) => m.id !== moduleId).map((m, i) => ({ ...m, orderIndex: i })));
     setDeleteConfirmId(null);
   };
 
   // Delete lesson
   const handleDeleteLesson = (moduleId: string, lessonId: string) => {
+    deleteLessonMutation.mutate({ courseId: selectedCourseId, moduleId, lessonId });
     setModules((prev) =>
       prev.map((mod) => {
         if (mod.id !== moduleId) return mod;
@@ -1305,6 +1543,10 @@ function VisualCourseBuilderTab() {
 
   // Toggle module published
   const toggleModulePublished = (moduleId: string) => {
+    const mod = modules.find((m) => m.id === moduleId);
+    if (mod) {
+      updateModuleMutation.mutate({ courseId: selectedCourseId, moduleId, isPublished: !mod.isPublished });
+    }
     setModules((prev) =>
       prev.map((mod) => (mod.id === moduleId ? { ...mod, isPublished: !mod.isPublished } : mod))
     );
@@ -1312,6 +1554,11 @@ function VisualCourseBuilderTab() {
 
   // Toggle lesson preview
   const toggleLessonPreview = (moduleId: string, lessonId: string) => {
+    const mod = modules.find((m) => m.id === moduleId);
+    const lesson = mod?.lessons.find((l) => l.id === lessonId);
+    if (lesson) {
+      updateLessonMutation.mutate({ courseId: selectedCourseId, moduleId, lessonId, isPreview: !lesson.isPreview });
+    }
     setModules((prev) =>
       prev.map((mod) => {
         if (mod.id !== moduleId) return mod;
@@ -1325,6 +1572,11 @@ function VisualCourseBuilderTab() {
 
   // Toggle lesson published
   const toggleLessonPublished = (moduleId: string, lessonId: string) => {
+    const mod = modules.find((m) => m.id === moduleId);
+    const lesson = mod?.lessons.find((l) => l.id === lessonId);
+    if (lesson) {
+      updateLessonMutation.mutate({ courseId: selectedCourseId, moduleId, lessonId, isPublished: !lesson.isPublished });
+    }
     setModules((prev) =>
       prev.map((mod) => {
         if (mod.id !== moduleId) return mod;
@@ -1339,6 +1591,7 @@ function VisualCourseBuilderTab() {
   // Update module title
   const updateModuleTitle = (moduleId: string, newTitle: string) => {
     if (!newTitle.trim()) { setEditingModuleTitle(null); return; }
+    updateModuleMutation.mutate({ courseId: selectedCourseId, moduleId, title: newTitle });
     setModules((prev) =>
       prev.map((mod) => (mod.id === moduleId ? { ...mod, title: newTitle } : mod))
     );
@@ -1347,6 +1600,7 @@ function VisualCourseBuilderTab() {
 
   // Update module description
   const updateModuleDesc = (moduleId: string, newDesc: string) => {
+    updateModuleMutation.mutate({ courseId: selectedCourseId, moduleId, description: newDesc });
     setModules((prev) =>
       prev.map((mod) => (mod.id === moduleId ? { ...mod, description: newDesc } : mod))
     );
@@ -1356,13 +1610,14 @@ function VisualCourseBuilderTab() {
   // Update lesson title
   const updateLessonTitle = (moduleId: string, lessonId: string, newTitle: string) => {
     if (!newTitle.trim()) { setEditingLessonTitle(null); return; }
+    updateLessonMutation.mutate({ courseId: selectedCourseId, moduleId, lessonId, title: newTitle, slug: slugify(newTitle) });
     setModules((prev) =>
       prev.map((mod) => {
         if (mod.id !== moduleId) return mod;
         return {
           ...mod,
           lessons: mod.lessons.map((l) =>
-            l.id === lessonId ? { ...l, title: newTitle, slug: newTitle.toLowerCase().replace(/\s+/g, '-') } : l
+            l.id === lessonId ? { ...l, title: newTitle, slug: slugify(newTitle) } : l
           ),
         };
       })
@@ -1372,6 +1627,7 @@ function VisualCourseBuilderTab() {
 
   // Update lesson content
   const updateLessonContent = (moduleId: string, lessonId: string, field: string, value: string | number | boolean) => {
+    updateLessonMutation.mutate({ courseId: selectedCourseId, moduleId, lessonId, [field]: value });
     setModules((prev) =>
       prev.map((mod) => {
         if (mod.id !== moduleId) return mod;
@@ -1445,7 +1701,11 @@ function VisualCourseBuilderTab() {
               variant={isCoursePublished ? 'default' : 'outline'}
               size="sm"
               className={`h-6 text-[11px] gap-1 ${isCoursePublished ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
-              onClick={() => setIsCoursePublished(!isCoursePublished)}
+              onClick={() => {
+                const newPublished = !isCoursePublished;
+                setIsCoursePublished(newPublished);
+                updateCourseMutation.mutate({ id: selectedCourseId, isPublished: newPublished });
+              }}
             >
               {isCoursePublished ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
               {isCoursePublished ? 'Published' : 'Draft'}
@@ -1455,9 +1715,16 @@ function VisualCourseBuilderTab() {
             variant="outline"
             size="sm"
             className="gap-1.5 h-8"
-            onClick={() => { setLastSaved('just now'); }}
+            disabled={updateCourseMutation.isPending}
+            onClick={() => {
+              updateCourseMutation.mutate(
+                { id: selectedCourseId, title: courseTitle, isPublished: isCoursePublished },
+                { onSuccess: () => setLastSaved('just now') }
+              );
+            }}
           >
-            <Save className="h-3.5 w-3.5" /> Save Draft
+            {updateCourseMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            {updateCourseMutation.isPending ? 'Saving...' : 'Save Draft'}
           </Button>
           <Button
             variant="ghost"
@@ -1545,7 +1812,12 @@ function VisualCourseBuilderTab() {
                 <Button
                   size="sm"
                   className={`w-full gap-1.5 h-8 text-xs ${isCoursePublished ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-amber-500 hover:bg-amber-600 text-white'}`}
-                  onClick={() => setIsCoursePublished(!isCoursePublished)}
+                  onClick={() => {
+                    const newPublished = !isCoursePublished;
+                    setIsCoursePublished(newPublished);
+                    updateCourseMutation.mutate({ id: selectedCourseId, isPublished: newPublished });
+                  }}
+                  disabled={updateCourseMutation.isPending}
                 >
                   {isCoursePublished ? (
                     <><CheckCircle2 className="h-3.5 w-3.5" /> Publish Course</>
@@ -1602,7 +1874,7 @@ function VisualCourseBuilderTab() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {demoCourses.map((c) => (
+                {courses.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.title}
                   </SelectItem>
@@ -1691,6 +1963,7 @@ function VisualCourseBuilderTab() {
             <LessonContentEditor
               lesson={selectedLessonData.lesson}
               moduleId={selectedLessonData.moduleId}
+              courseId={selectedCourseId}
               onUpdate={(field, value) => updateLessonContent(selectedLessonData.moduleId, selectedLessonData.lesson.id, field, value)}
               onTogglePreview={() => toggleLessonPreview(selectedLessonData.moduleId, selectedLessonData.lesson.id)}
               onTogglePublished={() => toggleLessonPublished(selectedLessonData.moduleId, selectedLessonData.lesson.id)}
@@ -1728,38 +2001,27 @@ function VisualCourseBuilderTab() {
       />
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={!!deleteConfirmId} onOpenChange={(open) => { if (!open) setDeleteConfirmId(null); }}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              Confirm Delete
-            </DialogTitle>
-            <DialogDescription>
-              {deleteConfirmId?.type === 'module'
-                ? 'This will delete the module and all its lessons. This action cannot be undone.'
-                : 'This will delete this lesson. This action cannot be undone.'}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (!deleteConfirmId) return;
-                if (deleteConfirmId.type === 'module') {
-                  handleDeleteModule(deleteConfirmId.id);
-                } else {
-                  const mod = modules.find((m) => m.lessons.some((l) => l.id === deleteConfirmId.id));
-                  if (mod) handleDeleteLesson(mod.id, deleteConfirmId.id);
-                }
-              }}
-            >
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={!!deleteConfirmId}
+        onOpenChange={(open) => { if (!open) setDeleteConfirmId(null); }}
+        title={`Delete ${deleteConfirmId?.type === 'module' ? 'Module' : 'Lesson'}?`}
+        description={
+          deleteConfirmId?.type === 'module'
+            ? 'This will delete the module and all its lessons. This action cannot be undone.'
+            : 'This will delete this lesson. This action cannot be undone.'
+        }
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (!deleteConfirmId) return;
+          if (deleteConfirmId.type === 'module') {
+            handleDeleteModule(deleteConfirmId.id);
+          } else {
+            const mod = modules.find((m) => m.lessons.some((l) => l.id === deleteConfirmId.id));
+            if (mod) handleDeleteLesson(mod.id, deleteConfirmId.id);
+          }
+        }}
+      />
     </div>
   );
 }
@@ -2216,6 +2478,7 @@ function BuilderModuleCard({
 function LessonContentEditor({
   lesson,
   moduleId,
+  courseId,
   onUpdate,
   onTogglePreview,
   onTogglePublished,
@@ -2223,12 +2486,14 @@ function LessonContentEditor({
 }: {
   lesson: BuilderLesson;
   moduleId: string;
+  courseId: string;
   onUpdate: (field: string, value: string | number | boolean) => void;
   onTogglePreview: () => void;
   onTogglePublished: () => void;
   onClose: () => void;
 }) {
   const [showToolbar, setShowToolbar] = useState(true);
+  const updateLessonMutation = useUpdateLesson();
   const typeColor = lessonTypeColors[lesson.contentType] || lessonTypeColors.text;
 
   return (
@@ -2411,8 +2676,27 @@ function LessonContentEditor({
           </div>
 
           {/* Save button */}
-          <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 h-9 text-xs">
-            <Save className="h-3.5 w-3.5" /> Save Changes
+          <Button
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 h-9 text-xs"
+            disabled={updateLessonMutation.isPending}
+            onClick={() => {
+              updateLessonMutation.mutate({
+                courseId,
+                moduleId,
+                lessonId: lesson.id,
+                title: lesson.title,
+                contentType: lesson.contentType,
+                content: lesson.content,
+                videoUrl: lesson.videoUrl,
+                videoDuration: lesson.videoDuration,
+                isPreview: lesson.isPreview,
+                isPublished: lesson.isPublished,
+                resources: Array.isArray(lesson.resources) ? lesson.resources.map((r: BuilderResource) => r.name).join(',') : (lesson.resources || ''),
+              });
+            }}
+          >
+            {updateLessonMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            {updateLessonMutation.isPending ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>
       </ScrollArea>
@@ -2646,6 +2930,7 @@ function EnhancedCourseSettingsDialog({
   onOpenChange: (open: boolean) => void;
   course: Course;
 }) {
+  const updateCourseMutation = useUpdateCourse();
   const [title, setTitle] = useState(course.title);
   const [description, setDescription] = useState(course.description || '');
   const [category, setCategory] = useState(course.category || '');
@@ -2660,11 +2945,29 @@ function EnhancedCourseSettingsDialog({
   const [saved, setSaved] = useState(false);
 
   const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => {
-      setSaved(false);
-      onOpenChange(false);
-    }, 1200);
+    updateCourseMutation.mutate(
+      {
+        id: course.id,
+        title,
+        description,
+        category,
+        level,
+        language,
+        isPublished,
+        price: parseFloat(price) || 0,
+        compareAtPrice: compareAtPrice ? parseFloat(compareAtPrice) : null,
+        certificateTemplateId: certificateTemplate || null,
+      },
+      {
+        onSuccess: () => {
+          setSaved(true);
+          setTimeout(() => {
+            setSaved(false);
+            onOpenChange(false);
+          }, 1200);
+        },
+      }
+    );
   };
 
   return (
@@ -2867,8 +3170,14 @@ function EnhancedCourseSettingsDialog({
                 : 'bg-emerald-600 hover:bg-emerald-700 text-white'
             }`}
             onClick={handleSave}
+            disabled={updateCourseMutation.isPending}
           >
-            {saved ? (
+            {updateCourseMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : saved ? (
               <>
                 <motion.div
                   initial={{ scale: 0 }}
@@ -2973,6 +3282,7 @@ function CoursePreviewDialog({
 // ─── Review Management Tab ──────────────────────────────────
 
 function ReviewManagementTab() {
+  const { courses } = useCoursesData();
   const [reviews, setReviews] = useState<CourseReview[]>(allMockReviews);
   const [search, setSearch] = useState('');
   const [courseFilter, setCourseFilter] = useState('all');
@@ -3064,7 +3374,7 @@ function ReviewManagementTab() {
   // Export to CSV
   const handleExportCSV = () => {
     const headers = ['Course', 'Reviewer', 'Rating', 'Title', 'Content', 'Date', 'Status', 'Helpful', 'Tags'];
-    const courseMap = Object.fromEntries(demoCourses.map((c) => [c.id, c.title]));
+    const courseMap = Object.fromEntries(courses.map((c) => [c.id, c.title]));
     const rows = filteredReviews.map((r) => [
       courseMap[r.courseId] || r.courseId,
       r.userName,
@@ -3145,7 +3455,7 @@ function ReviewManagementTab() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Courses</SelectItem>
-                {demoCourses.map((c) => (
+                {courses.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.title.length > 30 ? c.title.slice(0, 30) + '...' : c.title}
                   </SelectItem>
@@ -3195,7 +3505,7 @@ function ReviewManagementTab() {
           <div className="space-y-3 pr-4">
             {filteredReviews.length > 0 ? (
               filteredReviews.map((review) => {
-                const courseName = demoCourses.find((c) => c.id === review.courseId)?.title || 'Unknown Course';
+                const courseName = courses.find((c) => c.id === review.courseId)?.title || 'Unknown Course';
                 return (
                   <Card key={review.id} className={cn(
                     'transition-all',
@@ -3406,27 +3716,15 @@ function ReviewManagementTab() {
       </Dialog>
 
       {/* Delete Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              Delete Review
-            </DialogTitle>
-            <DialogDescription>
-              This action cannot be undone. The review will be permanently removed from the platform.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteReview}>
-              Delete Review
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete Review?"
+        description="This action cannot be undone. The review will be permanently removed from the platform."
+        confirmLabel="Delete Review"
+        variant="destructive"
+        onConfirm={handleDeleteReview}
+      />
     </div>
   );
 }
@@ -3434,69 +3732,128 @@ function ReviewManagementTab() {
 // ─── Main Component ─────────────────────────────────────────
 
 export function AdminCourses() {
+  const tenantId = useAppStore((s) => s.currentTenant?.id) || 'demo-tenant-1';
+  const { data: coursesData, isLoading: loading, refetch } = useCourses();
+  const createCourseMutation = useCreateCourse();
+  const updateCourseMutation = useUpdateCourse();
+  const deleteCourseMutation = useDeleteCourse();
   const [activeTab, setActiveTab] = useState('catalog');
 
+  const courses = coursesData || [];
+
+  const createCourse = async (data: Record<string, unknown>): Promise<Course | null> => {
+    try {
+      const course = await createCourseMutation.mutateAsync({
+        tenantId,
+        slug: slugify((data.title as string) || 'new-course'),
+        ...data,
+      });
+      return course;
+    } catch (err) {
+      console.error('Failed to create course:', err);
+      return null;
+    }
+  };
+
+  const deleteCourse = async (id: string): Promise<boolean> => {
+    try {
+      await deleteCourseMutation.mutateAsync(id);
+      return true;
+    } catch (err) {
+      console.error('Failed to delete course:', err);
+      return false;
+    }
+  };
+
+  const updateCourse = async (id: string, data: Record<string, unknown>): Promise<Course | null> => {
+    try {
+      const course = await updateCourseMutation.mutateAsync({ id, ...data });
+      return course;
+    } catch (err) {
+      console.error('Failed to update course:', err);
+      return null;
+    }
+  };
+
+  const contextValue = {
+    courses,
+    loading,
+    refetch: async () => { await refetch(); },
+    createCourse,
+    deleteCourse,
+    updateCourse,
+  };
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Course Management</h1>
-        <p className="text-muted-foreground mt-1">
-          Create, manage, and organize your course catalog and curriculum
-        </p>
+    <CoursesContext.Provider value={contextValue}>
+      <div className="p-6 space-y-6">
+        {/* Page header */}
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Course Management</h1>
+          <p className="text-muted-foreground mt-1">
+            Create, manage, and organize your course catalog and curriculum
+          </p>
+        </div>
+
+        {/* Loading state */}
+        {loading && courses.length === 0 ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+            <span className="ml-3 text-muted-foreground">Loading courses...</span>
+          </div>
+        ) : (
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="catalog" className="gap-1.5">
+              <LayoutList className="h-3.5 w-3.5" />
+              Course Catalog
+            </TabsTrigger>
+            <TabsTrigger value="builder" className="gap-1.5">
+              <Pencil className="h-3.5 w-3.5" />
+              Course Builder
+            </TabsTrigger>
+            <TabsTrigger value="curriculum" className="gap-1.5">
+              <Layers className="h-3.5 w-3.5" />
+              Curriculum Overview
+            </TabsTrigger>
+            <TabsTrigger value="visual-builder" className="gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" />
+              Visual Builder
+            </TabsTrigger>
+            <TabsTrigger value="reviews" className="gap-1.5">
+              <MessageSquare className="h-3.5 w-3.5" />
+              Reviews
+            </TabsTrigger>
+          </TabsList>
+
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.15 }}
+            >
+              <TabsContent value="catalog" forceMount={activeTab === 'catalog'} hidden={activeTab !== 'catalog'}>
+                <CourseCatalogTab />
+              </TabsContent>
+              <TabsContent value="builder" forceMount={activeTab === 'builder'} hidden={activeTab !== 'builder'}>
+                <CourseBuilderTab />
+              </TabsContent>
+              <TabsContent value="curriculum" forceMount={activeTab === 'curriculum'} hidden={activeTab !== 'curriculum'}>
+                <CurriculumOverviewTab />
+              </TabsContent>
+              <TabsContent value="visual-builder" forceMount={activeTab === 'visual-builder'} hidden={activeTab !== 'visual-builder'}>
+                <VisualCourseBuilderTab />
+              </TabsContent>
+              <TabsContent value="reviews" forceMount={activeTab === 'reviews'} hidden={activeTab !== 'reviews'}>
+                <ReviewManagementTab />
+              </TabsContent>
+            </motion.div>
+          </AnimatePresence>
+        </Tabs>
+        )}
       </div>
-
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="catalog" className="gap-1.5">
-            <LayoutList className="h-3.5 w-3.5" />
-            Course Catalog
-          </TabsTrigger>
-          <TabsTrigger value="builder" className="gap-1.5">
-            <Pencil className="h-3.5 w-3.5" />
-            Course Builder
-          </TabsTrigger>
-          <TabsTrigger value="curriculum" className="gap-1.5">
-            <Layers className="h-3.5 w-3.5" />
-            Curriculum Overview
-          </TabsTrigger>
-          <TabsTrigger value="visual-builder" className="gap-1.5">
-            <Sparkles className="h-3.5 w-3.5" />
-            Visual Builder
-          </TabsTrigger>
-          <TabsTrigger value="reviews" className="gap-1.5">
-            <MessageSquare className="h-3.5 w-3.5" />
-            Reviews
-          </TabsTrigger>
-        </TabsList>
-
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.15 }}
-          >
-            <TabsContent value="catalog" forceMount={activeTab === 'catalog'} hidden={activeTab !== 'catalog'}>
-              <CourseCatalogTab />
-            </TabsContent>
-            <TabsContent value="builder" forceMount={activeTab === 'builder'} hidden={activeTab !== 'builder'}>
-              <CourseBuilderTab />
-            </TabsContent>
-            <TabsContent value="curriculum" forceMount={activeTab === 'curriculum'} hidden={activeTab !== 'curriculum'}>
-              <CurriculumOverviewTab />
-            </TabsContent>
-            <TabsContent value="visual-builder" forceMount={activeTab === 'visual-builder'} hidden={activeTab !== 'visual-builder'}>
-              <VisualCourseBuilderTab />
-            </TabsContent>
-            <TabsContent value="reviews" forceMount={activeTab === 'reviews'} hidden={activeTab !== 'reviews'}>
-              <ReviewManagementTab />
-            </TabsContent>
-          </motion.div>
-        </AnimatePresence>
-      </Tabs>
-    </div>
+    </CoursesContext.Provider>
   );
 }

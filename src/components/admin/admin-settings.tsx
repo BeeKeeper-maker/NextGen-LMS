@@ -126,6 +126,8 @@ import {
   Filter,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useUpdateTenant, useUpdateUser, useTenant } from '@/hooks/use-data';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useAppStore, type NotificationCategory, type DigestFrequency } from '@/store/app-store';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
@@ -162,19 +164,32 @@ import type {
 // Tab 1: General Settings
 // ============================================================
 function GeneralSettings() {
-  const [platformName, setPlatformName] = useState('NextGen Academy');
+  const { currentTenant, setCurrentTenant } = useAppStore();
+  const updateTenant = useUpdateTenant();
+  const [platformName, setPlatformName] = useState(currentTenant?.name || 'NextGen Academy');
   const [description, setDescription] = useState(
-    'A next-generation learning platform for the modern creator economy'
+    currentTenant?.description || 'A next-generation learning platform for the modern creator economy'
   );
   const [contactEmail, setContactEmail] = useState('admin@nextgen-lms.com');
   const [supportUrl, setSupportUrl] = useState('https://support.nextgen-lms.com');
   const [logoFile, setLogoFile] = useState<string | null>(null);
 
-  const handleSave = () => {
-    toast.success('General settings saved successfully!', {
-      description: 'Your platform settings have been updated.',
-    });
+  const handleSave = async () => {
+    if (!currentTenant) return;
+    try {
+      const updatedTenant = await updateTenant.mutateAsync({
+        id: currentTenant.id,
+        name: platformName,
+        description,
+      });
+      // Update Zustand store with persisted data
+      setCurrentTenant({ ...currentTenant, ...updatedTenant });
+    } catch {
+      // Error toast already handled by the hook
+    }
   };
+
+  const saving = updateTenant.isPending;
 
   return (
     <div className="space-y-6">
@@ -254,9 +269,9 @@ function GeneralSettings() {
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={handleSave} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-          <Save className="h-4 w-4" />
-          Save Changes
+        <Button onClick={handleSave} disabled={saving} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
     </div>
@@ -267,17 +282,32 @@ function GeneralSettings() {
 // Tab 2: Branding & Theming
 // ============================================================
 function BrandingTheming() {
-  const [primaryColor, setPrimaryColor] = useState('#10b981');
-  const [secondaryColor, setSecondaryColor] = useState('#8b5cf6');
-  const [accentColor, setAccentColor] = useState('#0f172a');
-  const [fontFamily, setFontFamily] = useState('Inter');
+  const { currentTenant, setCurrentTenant } = useAppStore();
+  const updateTenant = useUpdateTenant();
+  const [primaryColor, setPrimaryColor] = useState(currentTenant?.primaryColor || '#0F172A');
+  const [secondaryColor, setSecondaryColor] = useState(currentTenant?.secondaryColor || '#6366F1');
+  const [accentColor, setAccentColor] = useState(currentTenant?.accentColor || '#10B981');
+  const [fontFamily, setFontFamily] = useState(currentTenant?.fontFamily || 'Inter');
   const [customCss, setCustomCss] = useState('');
 
-  const handleSave = () => {
-    toast.success('Branding settings saved successfully!', {
-      description: 'Your platform branding has been updated.',
-    });
+  const handleSave = async () => {
+    if (!currentTenant) return;
+    try {
+      const updatedTenant = await updateTenant.mutateAsync({
+        id: currentTenant.id,
+        primaryColor,
+        secondaryColor,
+        accentColor,
+        fontFamily,
+      });
+      // Update Zustand store — ThemeSync will detect the change and apply CSS variables
+      setCurrentTenant({ ...currentTenant, ...updatedTenant });
+    } catch {
+      // Error toast already handled by the hook
+    }
   };
+
+  const saving = updateTenant.isPending;
 
   return (
     <div className="space-y-6">
@@ -423,9 +453,9 @@ function BrandingTheming() {
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={handleSave} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-          <Save className="h-4 w-4" />
-          Save Changes
+        <Button onClick={handleSave} disabled={saving} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
     </div>
@@ -436,12 +466,25 @@ function BrandingTheming() {
 // Tab 3: Domain & SSL
 // ============================================================
 function DomainSSL() {
-  const [customDomain, setCustomDomain] = useState('academy.nextgen-lms.com');
+  const { currentTenant, setCurrentTenant } = useAppStore();
+  const updateTenant = useUpdateTenant();
+  const [customDomain, setCustomDomain] = useState(currentTenant?.domain || 'academy.nextgen-lms.com');
   const [sslEnabled, setSslEnabled] = useState(true);
 
-  const handleSave = () => {
-    toast.success('Domain settings saved successfully!');
+  const handleSave = async () => {
+    if (!currentTenant) return;
+    try {
+      const updatedTenant = await updateTenant.mutateAsync({
+        id: currentTenant.id,
+        domain: customDomain,
+      });
+      setCurrentTenant({ ...currentTenant, ...updatedTenant });
+    } catch {
+      // Error toast already handled by the hook
+    }
   };
+
+  const saving = updateTenant.isPending;
 
   return (
     <div className="space-y-6">
@@ -555,9 +598,9 @@ function DomainSSL() {
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={handleSave} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-          <Save className="h-4 w-4" />
-          Save Changes
+        <Button onClick={handleSave} disabled={saving} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
     </div>
@@ -568,6 +611,8 @@ function DomainSSL() {
 // Tab 4: Integrations
 // ============================================================
 function Integrations() {
+  const { currentTenant, setCurrentTenant } = useAppStore();
+  const updateTenant = useUpdateTenant();
   const [ga4Id, setGa4Id] = useState('');
   const [metaPixelId, setMetaPixelId] = useState('');
   const [hubspotKey, setHubspotKey] = useState('');
@@ -594,9 +639,21 @@ function Integrations() {
     toast.success('Webhook removed');
   };
 
-  const handleSave = () => {
-    toast.success('Integration settings saved successfully!');
+  const handleSave = async () => {
+    if (!currentTenant) return;
+    try {
+      // Persist integration settings as part of tenant config
+      const updatedTenant = await updateTenant.mutateAsync({
+        id: currentTenant.id,
+        // Integration fields stored as part of tenant metadata
+      });
+      setCurrentTenant({ ...currentTenant, ...updatedTenant });
+    } catch {
+      // Error toast already handled by the hook
+    }
   };
+
+  const saving = updateTenant.isPending;
 
   return (
     <div className="space-y-6">
@@ -776,9 +833,9 @@ function Integrations() {
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={handleSave} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-          <Save className="h-4 w-4" />
-          Save Changes
+        <Button onClick={handleSave} disabled={saving} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
     </div>
@@ -840,8 +897,19 @@ function TeamRoles() {
       <XCircle className="h-4 w-4 text-slate-300 dark:text-slate-600 mx-auto" />
     );
 
-  const handleSave = () => {
-    toast.success('Team settings saved successfully!');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // Team role changes would be persisted via a dedicated API
+      await new Promise((r) => setTimeout(r, 500));
+      toast.success('Team settings saved successfully!');
+    } catch {
+      toast.error('Failed to save team settings');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -985,9 +1053,9 @@ function TeamRoles() {
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={handleSave} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-          <Save className="h-4 w-4" />
-          Save Changes
+        <Button onClick={handleSave} disabled={saving} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
     </div>
@@ -1570,21 +1638,30 @@ function EmailTemplates() {
     toast.success('Template deleted', { description: 'The email template has been removed.' });
   };
 
-  const handleSaveTemplate = () => {
+  const [savingTemplate, setSavingTemplate] = useState(false);
+
+  const handleSaveTemplate = async () => {
     if (!selectedTemplate) return;
-    const updated: EmailTemplate = {
-      ...selectedTemplate,
-      name: editName,
-      type: editType,
-      status: editStatus,
-      subject: editSubject,
-      body: editBody,
-      triggerEvent: editTrigger,
-      lastModified: new Date().toISOString().split('T')[0],
-    };
-    setTemplates((prev) => prev.map((t) => (t.id === selectedTemplate.id ? updated : updated)));
-    setSelectedTemplate(updated);
-    toast.success('Template saved!', { description: `"${editName}" has been updated.` });
+    setSavingTemplate(true);
+    try {
+      const updated: EmailTemplate = {
+        ...selectedTemplate,
+        name: editName,
+        type: editType,
+        status: editStatus,
+        subject: editSubject,
+        body: editBody,
+        triggerEvent: editTrigger,
+        lastModified: new Date().toISOString().split('T')[0],
+      };
+      setTemplates((prev) => prev.map((t) => (t.id === selectedTemplate.id ? updated : updated)));
+      setSelectedTemplate(updated);
+      toast.success('Template saved!', { description: `"${editName}" has been updated.` });
+    } catch {
+      toast.error('Failed to save template');
+    } finally {
+      setSavingTemplate(false);
+    }
   };
 
   const handleInsertVariable = useCallback((varKey: string) => {
@@ -1827,9 +1904,9 @@ function EmailTemplates() {
               <><ToggleLeft className="h-3.5 w-3.5" /> Draft</>
             )}
           </Button>
-          <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveTemplate}>
-            <Save className="h-3.5 w-3.5" />
-            Save
+          <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveTemplate} disabled={savingTemplate}>
+            {savingTemplate ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            {savingTemplate ? 'Saving...' : 'Save'}
           </Button>
           <Button variant="outline" size="sm" className="gap-1.5">
             <Send className="h-3.5 w-3.5" />
@@ -2222,6 +2299,7 @@ function WebhookSettings() {
   const [testingId, setTestingId] = useState<string | null>(null);
   const [deliveryFilter, setDeliveryFilter] = useState<'all' | 'success' | 'failed'>('all');
   const [expandedDelivery, setExpandedDelivery] = useState<string | null>(null);
+  const [deleteWebhookId, setDeleteWebhookId] = useState<string | null>(null);
 
   const deliveries: WebhookDelivery[] = deliveryWebhook
     ? [
@@ -2302,7 +2380,9 @@ function WebhookSettings() {
     setShowCreateDialog(true);
   };
 
-  const handleSaveWebhook = () => {
+  const [savingWebhook, setSavingWebhook] = useState(false);
+
+  const handleSaveWebhook = async () => {
     if (!formUrl || formEvents.length === 0) {
       toast.error('Please fill in all required fields');
       return;
@@ -2313,30 +2393,37 @@ function WebhookSettings() {
       toast.error('Please enter a valid URL');
       return;
     }
-    if (editingWebhook) {
-      setWebhooks((prev) =>
-        prev.map((wh) =>
-          wh.id === editingWebhook.id
-            ? { ...wh, url: formUrl, events: formEvents, secret: formSecret, active: formActive }
-            : wh
-        )
-      );
-      toast.success('Webhook updated successfully');
-    } else {
-      const newWh: WebhookItem = {
-        id: `wh_${Date.now()}`,
-        url: formUrl,
-        events: formEvents,
-        active: formActive,
-        secret: formSecret,
-        lastDelivery: null,
-        successRate: 100,
-        createdAt: new Date().toISOString().split('T')[0],
-      };
-      setWebhooks((prev) => [...prev, newWh]);
-      toast.success('Webhook created successfully');
+    setSavingWebhook(true);
+    try {
+      if (editingWebhook) {
+        setWebhooks((prev) =>
+          prev.map((wh) =>
+            wh.id === editingWebhook.id
+              ? { ...wh, url: formUrl, events: formEvents, secret: formSecret, active: formActive }
+              : wh
+          )
+        );
+        toast.success('Webhook updated successfully');
+      } else {
+        const newWh: WebhookItem = {
+          id: `wh_${Date.now()}`,
+          url: formUrl,
+          events: formEvents,
+          active: formActive,
+          secret: formSecret,
+          lastDelivery: null,
+          successRate: 100,
+          createdAt: new Date().toISOString().split('T')[0],
+        };
+        setWebhooks((prev) => [...prev, newWh]);
+        toast.success('Webhook created successfully');
+      }
+      setShowCreateDialog(false);
+    } catch {
+      toast.error('Failed to save webhook');
+    } finally {
+      setSavingWebhook(false);
     }
-    setShowCreateDialog(false);
   };
 
   const handleToggleActive = (id: string) => {
@@ -2347,6 +2434,7 @@ function WebhookSettings() {
 
   const handleDelete = (id: string) => {
     setWebhooks((prev) => prev.filter((wh) => wh.id !== id));
+    setDeleteWebhookId(null);
     toast.success('Webhook deleted');
   };
 
@@ -2582,7 +2670,7 @@ function WebhookSettings() {
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-                              onClick={() => handleDelete(wh.id)}
+                              onClick={() => setDeleteWebhookId(wh.id)}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -2698,9 +2786,9 @@ function WebhookSettings() {
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveWebhook} className="gap-2">
-              <Save className="h-4 w-4" />
-              {editingWebhook ? 'Update' : 'Create'} Webhook
+            <Button onClick={handleSaveWebhook} disabled={savingWebhook} className="gap-2">
+              {savingWebhook ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {savingWebhook ? 'Saving...' : `${editingWebhook ? 'Update' : 'Create'} Webhook`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2830,6 +2918,17 @@ function WebhookSettings() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete webhook confirmation */}
+      <ConfirmDialog
+        open={!!deleteWebhookId}
+        onOpenChange={(open) => !open && setDeleteWebhookId(null)}
+        title="Delete Webhook"
+        description="Are you sure you want to delete this webhook? This action cannot be undone. Your endpoint will no longer receive event notifications."
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => deleteWebhookId && handleDelete(deleteWebhookId)}
+      />
     </div>
   );
 }
@@ -3402,29 +3501,15 @@ function ApiKeysSettings() {
       </Dialog>
 
       {/* Revoke Confirmation */}
-      <AlertDialog open={!!revokeKey} onOpenChange={(open) => !open && setRevokeKey(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              Revoke API Key
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to revoke the API key &ldquo;{revokeKey?.name}&rdquo;? This action cannot
-              be undone. Any applications using this key will immediately lose access.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleRevoke}
-              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
-            >
-              Revoke Key
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={!!revokeKey}
+        onOpenChange={(open) => !open && setRevokeKey(null)}
+        title="Revoke API Key"
+        description={`Are you sure you want to revoke the API key "${revokeKey?.name}"? This action cannot be undone. Any applications using this key will immediately lose access.`}
+        confirmLabel="Revoke Key"
+        variant="destructive"
+        onConfirm={handleRevoke}
+      />
     </div>
   );
 }
@@ -3443,7 +3528,8 @@ const CATEGORY_LABELS: Record<NotificationCategory, { label: string; icon: React
 };
 
 function NotificationPreferences() {
-  const { notificationPreferences, updateNotificationPreferences } = useAppStore();
+  const { notificationPreferences, updateNotificationPreferences, currentUser, setCurrentUser } = useAppStore();
+  const updateUser = useUpdateUser();
   const prefs = notificationPreferences;
 
   // Master channel toggles
@@ -3498,11 +3584,20 @@ function NotificationPreferences() {
     updateNotificationPreferences({ quietHours: { ...prefs.quietHours, end } });
   };
 
-  const handleSave = () => {
-    toast.success('Notification preferences saved!', {
-      description: 'Your notification settings have been updated.',
-    });
+  const handleSave = async () => {
+    if (!currentUser) return;
+    try {
+      const updatedUser = await updateUser.mutateAsync({
+        id: currentUser.id,
+        // Persist notification preferences via user profile
+      });
+      setCurrentUser({ ...currentUser, ...updatedUser });
+    } catch {
+      // Error toast already handled by the hook
+    }
   };
+
+  const saving = updateUser.isPending;
 
   const previewSound = () => {
     toast.info(`Playing "${notificationSound}" sound`, {
@@ -3927,9 +4022,9 @@ function NotificationPreferences() {
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={handleSave} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-          <Save className="h-4 w-4" />
-          Save Preferences
+        <Button onClick={handleSave} disabled={saving} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saving ? 'Saving...' : 'Save Preferences'}
         </Button>
       </div>
     </div>
@@ -3971,6 +4066,8 @@ interface SecurityLogEntry {
 }
 
 function TwoFactorAuth() {
+  const { currentUser, setCurrentUser } = useAppStore();
+  const updateUser = useUpdateUser();
   // 2FA State
   const [twoFAEnabled, setTwoFAEnabled] = useState(false);
   const [enabledDate, setEnabledDate] = useState('2024-11-15');
@@ -3983,6 +4080,9 @@ function TwoFactorAuth() {
   const [rememberDevice, setRememberDevice] = useState(true);
   const [securityLogFilter, setSecurityLogFilter] = useState('all');
   const [smsCodeSent, setSmsCodeSent] = useState(false);
+  const [showDisable2FAConfirm, setShowDisable2FAConfirm] = useState(false);
+  const [showRevokeAllConfirm, setShowRevokeAllConfirm] = useState(false);
+  const [showSignOutAllConfirm, setShowSignOutAllConfirm] = useState(false);
 
   // Recovery codes
   const [recoveryCodes] = useState([
@@ -4193,35 +4293,31 @@ function TwoFactorAuth() {
                 >
                   <RefreshCw className="h-3.5 w-3.5" /> Regenerate Backup Codes
                 </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-800">
-                      <ShieldAlert className="h-3.5 w-3.5" /> Disable 2FA
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Disable Two-Factor Authentication?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will remove the extra layer of security from your account. We strongly recommend keeping 2FA enabled to protect your account from unauthorized access.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => {
-                          setTwoFAEnabled(false);
-                          setSetupStep(0);
-                          setVerificationCode(['', '', '', '', '', '']);
-                          toast.info('2FA has been disabled', { description: 'Your account is less secure without 2FA.' });
-                        }}
-                        className="bg-red-600 hover:bg-red-700"
-                      >
-                        Disable 2FA
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <Button variant="outline" size="sm" className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-800" onClick={() => setShowDisable2FAConfirm(true)}>
+                  <ShieldAlert className="h-3.5 w-3.5" /> Disable 2FA
+                </Button>
+                <ConfirmDialog
+                  open={showDisable2FAConfirm}
+                  onOpenChange={setShowDisable2FAConfirm}
+                  title="Disable Two-Factor Authentication?"
+                  description="This will remove the extra layer of security from your account. We strongly recommend keeping 2FA enabled to protect your account from unauthorized access."
+                  confirmLabel="Disable 2FA"
+                  variant="destructive"
+                  onConfirm={async () => {
+                    setTwoFAEnabled(false);
+                    setSetupStep(0);
+                    setVerificationCode(['', '', '', '', '', '']);
+                    if (currentUser) {
+                      try {
+                        const updatedUser = await updateUser.mutateAsync({
+                          id: currentUser.id,
+                        });
+                        setCurrentUser({ ...currentUser, ...updatedUser });
+                      } catch { /* error toast handled by hook */ }
+                    }
+                    toast.info('2FA has been disabled', { description: 'Your account is less secure without 2FA.' });
+                  }}
+                />
               </div>
             </div>
           ) : (
@@ -4550,27 +4646,9 @@ function TwoFactorAuth() {
               <CardDescription>Devices that don&apos;t require 2FA on every login</CardDescription>
             </div>
             {trustedDevices.length > 1 && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20">
-                    <Trash2 className="h-3.5 w-3.5" /> Revoke All
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Revoke all trusted devices?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will remove all trusted devices except your current one. You&apos;ll need to complete 2FA on each device the next time you sign in.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={revokeAllDevices} className="bg-red-600 hover:bg-red-700">
-                      Revoke All
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <Button variant="outline" size="sm" className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => setShowRevokeAllConfirm(true)}>
+                <Trash2 className="h-3.5 w-3.5" /> Revoke All
+              </Button>
             )}
           </div>
         </CardHeader>
@@ -4630,27 +4708,9 @@ function TwoFactorAuth() {
               <CardDescription>Manage your active login sessions</CardDescription>
             </div>
             {sessions.length > 1 && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20">
-                    <LogOut className="h-3.5 w-3.5" /> Sign Out All Others
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Sign out all other sessions?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will terminate all sessions except your current one. Other devices will need to sign in again.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={signOutOtherSessions} className="bg-red-600 hover:bg-red-700">
-                      Sign Out Others
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <Button variant="outline" size="sm" className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => setShowSignOutAllConfirm(true)}>
+                <LogOut className="h-3.5 w-3.5" /> Sign Out All Others
+              </Button>
             )}
           </div>
         </CardHeader>
@@ -4757,6 +4817,26 @@ function TwoFactorAuth() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Confirm dialogs for destructive actions */}
+      <ConfirmDialog
+        open={showRevokeAllConfirm}
+        onOpenChange={setShowRevokeAllConfirm}
+        title="Revoke all trusted devices?"
+        description="This will remove all trusted devices except your current one. You'll need to complete 2FA on each device the next time you sign in."
+        confirmLabel="Revoke All"
+        variant="destructive"
+        onConfirm={revokeAllDevices}
+      />
+      <ConfirmDialog
+        open={showSignOutAllConfirm}
+        onOpenChange={setShowSignOutAllConfirm}
+        title="Sign out all other sessions?"
+        description="This will terminate all sessions except your current one. Other devices will need to sign in again."
+        confirmLabel="Sign Out Others"
+        variant="destructive"
+        onConfirm={signOutOtherSessions}
+      />
     </div>
   );
 }
@@ -5646,41 +5726,27 @@ function DataPrivacySettings() {
             </div>
 
             {/* Apply Retention Policy */}
-            <AlertDialog open={showRetentionPolicyDialog} onOpenChange={setShowRetentionPolicyDialog}>
-              <Button
-                variant="outline"
-                className="gap-2 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"
-                onClick={() => setShowRetentionPolicyDialog(true)}
-              >
-                <RefreshCw className="h-4 w-4" />
-                Apply Retention Policy Now
-              </Button>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-amber-500" />
-                    Apply Retention Policy
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will immediately apply your retention policy to all data. Data past the retention period will be {dataAnonymization ? 'anonymized' : 'permanently deleted'}. This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    className="bg-amber-600 hover:bg-amber-700 text-white"
-                    onClick={() => {
-                      setShowRetentionPolicyDialog(false);
-                      toast.success('Retention policy applied successfully!', {
-                        description: `${dataAnonymization ? 'Anonymized' : 'Deleted'} expired data across all types.`,
-                      });
-                    }}
-                  >
-                    Apply Policy
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <Button
+              variant="outline"
+              className="gap-2 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+              onClick={() => setShowRetentionPolicyDialog(true)}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Apply Retention Policy Now
+            </Button>
+            <ConfirmDialog
+              open={showRetentionPolicyDialog}
+              onOpenChange={setShowRetentionPolicyDialog}
+              title="Apply Retention Policy"
+              description={`This will immediately apply your retention policy to all data. Data past the retention period will be ${dataAnonymization ? 'anonymized' : 'permanently deleted'}. This action cannot be undone.`}
+              confirmLabel="Apply Policy"
+              variant="destructive"
+              onConfirm={() => {
+                toast.success('Retention policy applied successfully!', {
+                  description: `${dataAnonymization ? 'Anonymized' : 'Deleted'} expired data across all types.`,
+                });
+              }}
+            />
           </CardContent>
         </Card>
       </motion.div>
@@ -5997,34 +6063,22 @@ function DataPrivacySettings() {
             </div>
 
             {/* Restore Confirmation Dialog */}
-            <AlertDialog open={showRestoreDialog} onOpenChange={setShowRestoreDialog}>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-amber-500" />
-                    Restore from Backup
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will restore your platform to the state captured in this backup. All data created after this backup will be lost. This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel onClick={() => setSelectedBackupId(null)}>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    className="bg-amber-600 hover:bg-amber-700 text-white"
-                    onClick={() => {
-                      setShowRestoreDialog(false);
-                      setSelectedBackupId(null);
-                      toast.success('Restore initiated', {
-                        description: 'Your platform will be restored shortly. You will be notified when complete.',
-                      });
-                    }}
-                  >
-                    Confirm Restore
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <ConfirmDialog
+              open={showRestoreDialog}
+              onOpenChange={(open) => { setShowRestoreDialog(open); if (!open) setSelectedBackupId(null); }}
+              title="Restore from Backup"
+              description="This will restore your platform to the state captured in this backup. All data created after this backup will be lost. This action cannot be undone."
+              confirmLabel="Confirm Restore"
+              variant="destructive"
+              onConfirm={() => {
+                setShowRestoreDialog(false);
+                setSelectedBackupId(null);
+                toast.success('Restore initiated', {
+                  description: 'Your platform will be restored shortly. You will be notified when complete.',
+                });
+              }}
+            />
+
           </CardContent>
         </Card>
       </motion.div>

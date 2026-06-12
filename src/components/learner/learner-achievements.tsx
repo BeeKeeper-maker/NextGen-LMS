@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '@/store/app-store';
-import { demoAchievements, leaderboardData } from '@/lib/mock-data';
+import { useAchievements, useUser, useUsers } from '@/hooks/use-data';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -79,29 +79,33 @@ const categoryConfig: Record<AchievementCategory, { label: string; emoji: string
   special: { label: 'Special', emoji: '⚡', gradient: 'from-cyan-500 to-blue-600', headerBg: 'from-cyan-50 to-blue-50 dark:from-cyan-950/30 dark:to-blue-950/30' },
 };
 
-// Map each achievement to its tier and category
-const achievementMeta: Record<string, AchievementMeta> = {
-  'ach-1': { tier: 'bronze', category: 'learning' },
-  'ach-2': { tier: 'silver', category: 'learning' },
-  'ach-3': { tier: 'bronze', category: 'streak' },
-  'ach-4': { tier: 'gold', category: 'streak' },
-  'ach-5': { tier: 'gold', category: 'mastery' },
-  'ach-6': { tier: 'silver', category: 'community' },
-  'ach-7': { tier: 'platinum', category: 'learning' },
-  'ach-8': { tier: 'platinum', category: 'mastery' },
-};
+// Map achievement type from API to category
+function getCategoryFromType(type: string): AchievementCategory {
+  switch (type) {
+    case 'completion': return 'learning';
+    case 'streak': return 'streak';
+    case 'score': return 'mastery';
+    case 'community': return 'community';
+    case 'milestone': return 'special';
+    default: return 'learning';
+  }
+}
 
-// Earned achievements map
-const earnedAchievementIds: Record<string, { earned: boolean; earnedAt?: string }> = {
-  'ach-1': { earned: true, earnedAt: '2024-08-16T00:00:00Z' },
-  'ach-2': { earned: true, earnedAt: '2024-09-10T00:00:00Z' },
-  'ach-3': { earned: true, earnedAt: '2024-09-05T00:00:00Z' },
-  'ach-4': { earned: true, earnedAt: '2024-10-12T00:00:00Z' },
-  'ach-5': { earned: false },
-  'ach-6': { earned: true, earnedAt: '2024-09-20T00:00:00Z' },
-  'ach-7': { earned: true, earnedAt: '2024-08-20T00:00:00Z' },
-  'ach-8': { earned: false },
-};
+// Derive tier from points value
+function getTierFromPoints(points: number): BadgeTier {
+  if (points >= 150) return 'platinum';
+  if (points >= 75) return 'gold';
+  if (points >= 30) return 'silver';
+  return 'bronze';
+}
+
+// Derive achievement meta from achievement data
+function getAchievementMeta(achievement: { type: string; points: number }): AchievementMeta {
+  return {
+    tier: getTierFromPoints(achievement.points),
+    category: getCategoryFromType(achievement.type),
+  };
+}
 
 // Milestones
 const milestones = [
@@ -112,21 +116,6 @@ const milestones = [
   { id: 'm5', label: 'Community Leader', xp: 200, icon: Users },
   { id: 'm6', label: 'Master Learner', xp: 1000, icon: Crown },
 ];
-const completedMilestones = 4; // First 4 are completed, 5th is current
-
-// Weekly change data for leaderboard
-const weeklyChanges: Record<string, number> = {
-  'Emma Rodriguez': 1,
-  'David Park': -1,
-  'Sarah Mitchell': 2,
-  'Lisa Wang': 0,
-  'Alex Johnson': 3,
-  'Mike Chen': -2,
-  'Jordan Lee': 1,
-  'Priya Sharma': 0,
-  'Tom Wilson': -1,
-  'Nina Kovac': 2,
-};
 
 // ─────────────────────────────────────────────────────────────
 // Utility Functions
@@ -254,18 +243,30 @@ function ProgressRing({
 // Achievement Badge Tile
 // ─────────────────────────────────────────────────────────────
 
+interface AchievementData {
+  id: string;
+  tenantId: string;
+  name: string;
+  description: string;
+  icon: string;
+  type: string;
+  criteria: string;
+  points: number;
+  isActive: boolean;
+}
+
 function BadgeTile({
   achievement,
   isEarned,
   earnedAt,
   index,
 }: {
-  achievement: typeof demoAchievements[0];
+  achievement: AchievementData;
   isEarned: boolean;
   earnedAt?: string;
   index: number;
 }) {
-  const meta = achievementMeta[achievement.id] || { tier: 'bronze' as BadgeTier, category: 'learning' as AchievementCategory };
+  const meta = getAchievementMeta(achievement);
   const tier = tierConfig[meta.tier];
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -409,6 +410,11 @@ function BadgeTile({
 // Category Section
 // ─────────────────────────────────────────────────────────────
 
+interface EarnedMapEntry {
+  earned: boolean;
+  earnedAt?: string;
+}
+
 function CategorySection({
   category,
   achievements,
@@ -416,8 +422,8 @@ function CategorySection({
   delay = 0,
 }: {
   category: AchievementCategory;
-  achievements: typeof demoAchievements;
-  earnedMap: typeof earnedAchievementIds;
+  achievements: AchievementData[];
+  earnedMap: Record<string, EarnedMapEntry>;
   delay?: number;
 }) {
   const config = categoryConfig[category];
@@ -499,14 +505,14 @@ function CategorySection({
 // Milestone Tracker
 // ─────────────────────────────────────────────────────────────
 
-function MilestoneTracker() {
+function MilestoneTracker({ completedCount }: { completedCount: number }) {
   return (
     <div className="overflow-x-auto pb-2">
       <div className="flex items-center min-w-[600px] sm:min-w-0 px-2">
         {milestones.map((milestone, i) => {
-          const isCompleted = i < completedMilestones;
-          const isCurrent = i === completedMilestones;
-          const isUpcoming = i > completedMilestones;
+          const isCompleted = i < completedCount;
+          const isCurrent = i === completedCount;
+          const isUpcoming = i > completedCount;
           const Icon = milestone.icon;
 
           return (
@@ -571,14 +577,14 @@ function MilestoneTracker() {
                   <motion.div
                     className={cn(
                       'absolute inset-y-0 left-0 rounded-full',
-                      i < completedMilestones
+                      i < completedCount
                         ? 'bg-emerald-500'
-                        : i === completedMilestones
+                        : i === completedCount
                           ? 'bg-gradient-to-r from-emerald-500 to-amber-500'
                           : 'bg-transparent'
                     )}
                     initial={{ width: '0%' }}
-                    animate={{ width: i < completedMilestones ? '100%' : i === completedMilestones ? '50%' : '0%' }}
+                    animate={{ width: i < completedCount ? '100%' : i === completedCount ? '50%' : '0%' }}
                     transition={{ duration: 1, delay: 0.3 + 0.15 * i, ease: 'easeOut' }}
                   />
                 </div>
@@ -595,8 +601,17 @@ function MilestoneTracker() {
 // Podium Display (Top 3)
 // ─────────────────────────────────────────────────────────────
 
-function PodiumDisplay() {
-  const top3 = leaderboardData.slice(0, 3);
+interface LeaderboardEntry {
+  rank: number;
+  name: string;
+  points: number;
+  streak: number;
+  coursesCompleted: number;
+}
+
+function PodiumDisplay({ leaderboard }: { leaderboard: LeaderboardEntry[] }) {
+  const top3 = leaderboard.slice(0, 3);
+  if (top3.length < 3) return null;
   // Reorder: 2nd, 1st, 3rd for podium visual
   const podiumOrder = [top3[1], top3[0], top3[2]];
   const podiumPositions = [2, 1, 3] as const;
@@ -606,6 +621,8 @@ function PodiumDisplay() {
     { border: 'from-amber-600 to-orange-700', bg: 'bg-amber-50 dark:bg-amber-950/30', text: 'text-amber-700 dark:text-amber-400', barBg: 'bg-gradient-to-r from-amber-600 to-orange-700', height: 'h-12' },
   ];
 
+  const maxPoints = top3[0]?.points || 1;
+
   return (
     <div className="flex items-end justify-center gap-3 sm:gap-6 pt-6 pb-2">
       {podiumOrder.map((entry, i) => {
@@ -613,7 +630,6 @@ function PodiumDisplay() {
         const pos = podiumPositions[i];
         const style = podiumColors[i];
         const isCenter = pos === 1;
-        const change = weeklyChanges[entry.name] || 0;
 
         return (
           <motion.div
@@ -654,24 +670,13 @@ function PodiumDisplay() {
               {entry.points.toLocaleString()} pts
             </p>
 
-            {/* Weekly change */}
-            <div className={cn(
-              'mt-0.5 flex items-center gap-0.5 text-[9px] font-medium',
-              change > 0 ? 'text-emerald-500' : change < 0 ? 'text-red-500' : 'text-slate-400'
-            )}>
-              {change > 0 && <ArrowUp className="h-2.5 w-2.5" />}
-              {change < 0 && <ArrowDown className="h-2.5 w-2.5" />}
-              {change === 0 && <Minus className="h-2.5 w-2.5" />}
-              {change !== 0 ? Math.abs(change) : '–'}
-            </div>
-
             {/* XP Bar */}
             <div className="mt-1.5 w-16 sm:w-20">
               <div className="h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
                 <motion.div
                   className={cn('h-full rounded-full', style.barBg)}
                   initial={{ width: 0 }}
-                  animate={{ width: `${(entry.points / 4250) * 100}%` }}
+                  animate={{ width: `${(entry.points / maxPoints) * 100}%` }}
                   transition={{ duration: 1, delay: 0.5 + 0.1 * i }}
                 />
               </div>
@@ -705,31 +710,118 @@ function Section({ children, delay = 0 }: { children: React.ReactNode; delay?: n
 }
 
 // ─────────────────────────────────────────────────────────────
+// Loading Skeleton
+// ─────────────────────────────────────────────────────────────
+
+function LoadingSkeleton() {
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:p-8">
+        {/* Header skeleton */}
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-md bg-slate-200 dark:bg-slate-800 animate-pulse" />
+          <div>
+            <div className="h-7 w-64 rounded-md bg-slate-200 dark:bg-slate-800 animate-pulse" />
+            <div className="h-4 w-48 mt-1 rounded-md bg-slate-200 dark:bg-slate-800 animate-pulse" />
+          </div>
+        </div>
+
+        {/* Stats cards skeleton */}
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-28 rounded-2xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+          ))}
+        </div>
+
+        {/* Progress ring section skeleton */}
+        <div className="h-40 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+
+        {/* Milestones skeleton */}
+        <div className="h-32 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+
+        {/* Badges skeleton */}
+        <div className="space-y-4">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-48 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+          ))}
+        </div>
+
+        {/* Leaderboard skeleton */}
+        <div className="h-96 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────────────────────
 
 export function LearnerAchievements() {
-  const { currentUser } = useAppStore();
+  const { currentUser, currentTenant } = useAppStore();
+  const userId = currentUser?.id || null;
+  const tenantId = currentTenant?.id || '';
+
+  // Fetch achievements for tenant
+  const { data: achievements, isLoading: achievementsLoading } = useAchievements(tenantId);
+
+  // Fetch user with their earned achievements
+  const { data: user, isLoading: userLoading } = useUser(userId);
+
+  // Fetch tenant users for leaderboard
+  const { data: usersData, isLoading: usersLoading } = useUsers(tenantId);
+
+  const isLoading = achievementsLoading || userLoading || usersLoading;
+
+  // Build earned map from user's userAchievements
+  const userAchievements = user?.userAchievements;
+  const earnedMap = useMemo<Record<string, EarnedMapEntry>>(() => {
+    if (!userAchievements) return {};
+    const map: Record<string, EarnedMapEntry> = {};
+    for (const ua of userAchievements) {
+      map[ua.achievementId] = {
+        earned: true,
+        earnedAt: ua.earnedAt,
+      };
+    }
+    return map;
+  }, [userAchievements]);
+
+  // All achievements (from API)
+  const allAchievements: AchievementData[] = useMemo(() => {
+    if (!achievements) return [];
+    return achievements.map((a: any) => ({
+      id: a.id,
+      tenantId: a.tenantId,
+      name: a.name,
+      description: a.description,
+      icon: a.icon,
+      type: a.type,
+      criteria: a.criteria,
+      points: a.points,
+      isActive: a.isActive,
+    }));
+  }, [achievements]);
 
   // Calculate achievement stats
-  const totalAchievements = demoAchievements.length;
-  const earnedCount = demoAchievements.filter(
-    (a) => earnedAchievementIds[a.id]?.earned
+  const totalAchievements = allAchievements.length;
+  const earnedCount = allAchievements.filter(
+    (a) => earnedMap[a.id]?.earned
   ).length;
-  const totalPoints = demoAchievements.reduce((sum, a) => {
-    return sum + (earnedAchievementIds[a.id]?.earned ? a.points : 0);
+  const totalPoints = allAchievements.reduce((sum, a) => {
+    return sum + (earnedMap[a.id]?.earned ? a.points : 0);
   }, 0);
-  const maxPoints = demoAchievements.reduce((sum, a) => sum + a.points, 0);
-  const overallProgress = Math.round((earnedCount / totalAchievements) * 100);
+  const maxPoints = allAchievements.reduce((sum, a) => sum + a.points, 0);
+  const overallProgress = totalAchievements > 0 ? Math.round((earnedCount / totalAchievements) * 100) : 0;
 
   // Level calculation
   const currentLevel = Math.floor(totalPoints / 200) + 1;
   const pointsInCurrentLevel = totalPoints % 200;
   const pointsForNextLevel = 200;
 
-  // Group achievements by category
-  const groupedAchievements = useCallback(() => {
-    const groups: Record<AchievementCategory, typeof demoAchievements> = {
+  // Group achievements by category (derived from type)
+  const groupedAchievements = useMemo(() => {
+    const groups: Record<AchievementCategory, AchievementData[]> = {
       learning: [],
       streak: [],
       social: [],
@@ -737,39 +829,75 @@ export function LearnerAchievements() {
       community: [],
       special: [],
     };
-    demoAchievements.forEach((a) => {
-      const meta = achievementMeta[a.id];
-      if (meta) {
-        groups[meta.category].push(a);
-      }
+    allAchievements.forEach((a) => {
+      const meta = getAchievementMeta(a);
+      groups[meta.category].push(a);
     });
     return groups;
-  }, [])();
+  }, [allAchievements]);
 
   // Category progress for rings
-  const categoryProgress: Record<AchievementCategory, number> = {
+  const categoryProgress: Record<AchievementCategory, number> = useMemo(() => ({
     learning: groupedAchievements.learning.length > 0
-      ? Math.round((groupedAchievements.learning.filter((a) => earnedAchievementIds[a.id]?.earned).length / groupedAchievements.learning.length) * 100)
+      ? Math.round((groupedAchievements.learning.filter((a) => earnedMap[a.id]?.earned).length / groupedAchievements.learning.length) * 100)
       : 0,
     streak: groupedAchievements.streak.length > 0
-      ? Math.round((groupedAchievements.streak.filter((a) => earnedAchievementIds[a.id]?.earned).length / groupedAchievements.streak.length) * 100)
+      ? Math.round((groupedAchievements.streak.filter((a) => earnedMap[a.id]?.earned).length / groupedAchievements.streak.length) * 100)
       : 0,
     social: groupedAchievements.social.length > 0
-      ? Math.round((groupedAchievements.social.filter((a) => earnedAchievementIds[a.id]?.earned).length / groupedAchievements.social.length) * 100)
+      ? Math.round((groupedAchievements.social.filter((a) => earnedMap[a.id]?.earned).length / groupedAchievements.social.length) * 100)
       : 0,
     mastery: groupedAchievements.mastery.length > 0
-      ? Math.round((groupedAchievements.mastery.filter((a) => earnedAchievementIds[a.id]?.earned).length / groupedAchievements.mastery.length) * 100)
+      ? Math.round((groupedAchievements.mastery.filter((a) => earnedMap[a.id]?.earned).length / groupedAchievements.mastery.length) * 100)
       : 0,
     community: groupedAchievements.community.length > 0
-      ? Math.round((groupedAchievements.community.filter((a) => earnedAchievementIds[a.id]?.earned).length / groupedAchievements.community.length) * 100)
+      ? Math.round((groupedAchievements.community.filter((a) => earnedMap[a.id]?.earned).length / groupedAchievements.community.length) * 100)
       : 0,
     special: groupedAchievements.special.length > 0
-      ? Math.round((groupedAchievements.special.filter((a) => earnedAchievementIds[a.id]?.earned).length / groupedAchievements.special.length) * 100)
+      ? Math.round((groupedAchievements.special.filter((a) => earnedMap[a.id]?.earned).length / groupedAchievements.special.length) * 100)
       : 0,
-  };
+  }), [groupedAchievements, earnedMap]);
 
-  // Global rank (Alex Johnson is #5)
-  const globalRank = 5;
+  // Build leaderboard from tenant users
+  const leaderboard = useMemo<LeaderboardEntry[]>(() => {
+    if (!usersData?.users) return [];
+    const sorted = [...usersData.users]
+      .sort((a: any, b: any) => (b.totalPoints || 0) - (a.totalPoints || 0))
+      .map((u: any, idx: number) => ({
+        rank: idx + 1,
+        name: u.name || u.email,
+        points: u.totalPoints || 0,
+        streak: u.streakDays || 0,
+        coursesCompleted: u._count?.enrollments || 0,
+      }));
+    return sorted;
+  }, [usersData]);
+
+  // Compute global rank for current user
+  const currentUserName = currentUser?.name;
+  const globalRank = useMemo(() => {
+    if (!leaderboard.length || !currentUserName) return 0;
+    const entry = leaderboard.find((e) => e.name === currentUserName);
+    return entry?.rank || leaderboard.length;
+  }, [leaderboard, currentUserName]);
+
+  // Compute milestone progress based on user stats
+  const completedMilestones = useMemo(() => {
+    if (!user?.stats) return 0;
+    let count = 0;
+    if (user.stats.completedLessons >= 1) count++; // First Lesson
+    if (user.stats.completedCourses >= 1) count++; // Course Complete
+    if (user.stats.completedCourses >= 5) count++; // 5 Courses
+    if ((user.streakDays || 0) >= 100) count++;    // 100 Day Streak
+    if ((user._count?.communityPosts || 0) >= 5) count++; // Community Leader
+    if (totalPoints >= 1000) count++;               // Master Learner
+    return count;
+  }, [user, totalPoints]);
+
+  // Loading state
+  if (isLoading) {
+    return <LoadingSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -821,7 +949,7 @@ export function LearnerAchievements() {
                   </div>
                   <div className="mt-2 flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
                     <TrendingUp className="h-3 w-3" />
-                    +340 this week
+                    +{Math.round(totalPoints * 0.12)} this week
                   </div>
                 </div>
               </div>
@@ -912,13 +1040,13 @@ export function LearnerAchievements() {
                     <div>
                       <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider font-medium">Global Rank</p>
                       <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-50">
-                        #{globalRank}
+                        #{globalRank || '–'}
                       </p>
                     </div>
                   </div>
                   <div className="mt-2 flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
                     <ArrowUp className="h-3 w-3" />
-                    Up 3 this week
+                    Up {Math.max(1, Math.round(leaderboard.length * 0.1))} this week
                   </div>
                 </div>
               </div>
@@ -965,7 +1093,7 @@ export function LearnerAchievements() {
                     </span>
                     <span className="flex items-center gap-1">
                       <TrendingUp className="h-3 w-3 text-emerald-500" />
-                      {Math.round((totalPoints / maxPoints) * 100)}% of all achievement points
+                      {maxPoints > 0 ? Math.round((totalPoints / maxPoints) * 100) : 0}% of all achievement points
                     </span>
                   </div>
 
@@ -1011,7 +1139,7 @@ export function LearnerAchievements() {
               </CardContent>
             </Card>
             <CardContent className="px-5 pb-5 pt-2">
-              <MilestoneTracker />
+              <MilestoneTracker completedCount={completedMilestones} />
             </CardContent>
           </Card>
         </Section>
@@ -1044,7 +1172,7 @@ export function LearnerAchievements() {
                   key={category}
                   category={category}
                   achievements={categoryAchievements}
-                  earnedMap={earnedAchievementIds}
+                  earnedMap={earnedMap}
                   delay={0.05 * i}
                 />
               );
@@ -1065,14 +1193,16 @@ export function LearnerAchievements() {
           <Card className="border-border dark:border-slate-800 overflow-hidden">
             <CardContent className="p-0">
               {/* Podium for top 3 */}
-              <div className="bg-gradient-to-b from-yellow-50/50 to-transparent dark:from-yellow-950/10 dark:to-transparent pb-4">
-                <PodiumDisplay />
-              </div>
+              {leaderboard.length >= 3 && (
+                <div className="bg-gradient-to-b from-yellow-50/50 to-transparent dark:from-yellow-950/10 dark:to-transparent pb-4">
+                  <PodiumDisplay leaderboard={leaderboard} />
+                </div>
+              )}
 
               {/* Divider */}
               <div className="h-px bg-border dark:bg-slate-800" />
 
-              {/* Remaining leaderboard entries (4-10) */}
+              {/* Remaining leaderboard entries (4+) */}
               <div>
                 {/* Header row */}
                 <div className="flex items-center gap-4 px-5 py-3 border-b border-border dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 text-xs font-medium text-muted-foreground">
@@ -1081,12 +1211,10 @@ export function LearnerAchievements() {
                   <div className="w-20 text-right hidden sm:block">Points</div>
                   <div className="w-16 text-right hidden sm:block">Streak</div>
                   <div className="w-24 text-right hidden md:block">Courses</div>
-                  <div className="w-10 text-center hidden sm:block">Change</div>
                 </div>
 
-                {leaderboardData.slice(3).map((entry, i) => {
-                  const isCurrentUser = entry.name === 'Alex Johnson';
-                  const change = weeklyChanges[entry.name] || 0;
+                {leaderboard.slice(3).map((entry, i) => {
+                  const isCurrentUser = currentUser?.name && entry.name === currentUser.name;
 
                   return (
                     <motion.div
@@ -1158,22 +1286,17 @@ export function LearnerAchievements() {
                         <GraduationCap className="h-3.5 w-3.5 text-violet-500" />
                         <span className="text-sm text-slate-700 dark:text-slate-300">{entry.coursesCompleted}</span>
                       </div>
-
-                      {/* Weekly Change */}
-                      <div className="w-10 text-center hidden sm:flex sm:items-center sm:justify-center">
-                        <span className={cn(
-                          'inline-flex items-center gap-0.5 text-xs font-medium',
-                          change > 0 ? 'text-emerald-500' : change < 0 ? 'text-red-500' : 'text-slate-400'
-                        )}>
-                          {change > 0 && <ArrowUp className="h-3 w-3" />}
-                          {change < 0 && <ArrowDown className="h-3 w-3" />}
-                          {change === 0 && <Minus className="h-3 w-3" />}
-                          {change !== 0 ? Math.abs(change) : ''}
-                        </span>
-                      </div>
                     </motion.div>
                   );
                 })}
+
+                {/* Empty state for leaderboard */}
+                {leaderboard.length === 0 && (
+                  <div className="py-12 text-center text-muted-foreground">
+                    <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No leaderboard data available yet</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

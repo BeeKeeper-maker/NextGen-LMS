@@ -1,0 +1,502 @@
+  1030→
+  1031→  // Fetch enrollments from API
+  1032→  const { data: apiEnrollments } = useApi<any[]>(currentUser?.id ? `/api/enrollments?userId=${currentUser.id}` : null);
+  1033→  const { data: apiCourses } = useApi<any[]>('/api/courses');
+  1034→
+  1035→  // Use API data when available, fall back to mock
+  1036→  const enrollments = apiEnrollments && apiEnrollments.length > 0 ? apiEnrollments : demoEnrollments;
+  1037→  const courses = apiCourses && apiCourses.length > 0 ? apiCourses : demoCourses;
+  1038→
+  1039→  const firstName = currentUser?.name?.split(' ')[0] || 'Learner';
+  1040→  const streakDays = currentUser?.streakDays || 7;
+  1041→
+  1042→  // Compute KPIs from real data when available
+  1043→  const kpis = apiEnrollments && apiEnrollments.length > 0 ? [
+  1044→    { label: 'Courses Enrolled', value: String(enrollments.length), change: 1, changeLabel: 'new this month', icon: 'book-open' },
+  1045→    { label: 'Courses Completed', value: String(enrollments.filter((e: any) => e.status === 'completed').length), change: 1, changeLabel: 'this month', icon: 'graduation-cap' },
+  1046→    { label: 'Learning Streak', value: `${streakDays} days`, change: 2, changeLabel: 'days longer', icon: 'flame' },
+  1047→    { label: 'Total Points', value: (currentUser?.totalPoints || 1250).toLocaleString(), change: 340, changeLabel: 'earned this week', icon: 'star' },
+  1048→    { label: 'Certificates Earned', value: String(enrollments.filter((e: any) => e.status === 'completed').length), change: 1, changeLabel: 'new', icon: 'award' },
+  1049→    { label: 'Community Posts', value: '23', change: 5, changeLabel: 'this week', icon: 'message-circle' },
+  1050→  ] : learnerKPIs;
+  1051→
+  1052→  // Track dashboard view event
+  1053→  useEffect(() => {
+  1054→    if (currentTenant?.id) {
+  1055→      apiPost('/api/analytics/events', {
+  1056→        tenantId: currentTenant.id,
+  1057→        userId: currentUser?.id,
+  1058→        eventType: 'dashboard_view',
+  1059→        eventData: { view: 'learner-dashboard' },
+  1060→      }).catch(() => {/* silent */});
+  1061→    }
+  1062→  }, [currentTenant?.id, currentUser?.id]);
+  1063→
+  1064→  // Filter enrollments
+  1065→  const activeEnrollments = enrollments.filter((e: any) => e.status === 'active');
+  1066→  const completedEnrollments = enrollments.filter((e: any) => e.status === 'completed');
+  1067→
+  1068→  // Most recently accessed course
+  1069→  const mostRecentEnrollment = [...activeEnrollments].sort((a: any, b: any) => {
+  1070→    const aTime = a.lastAccessedAt ? new Date(a.lastAccessedAt).getTime() : 0;
+  1071→    const bTime = b.lastAccessedAt ? new Date(b.lastAccessedAt).getTime() : 0;
+  1072→    return bTime - aTime;
+  1073→  })[0];
+  1074→
+  1075→  // Courses not enrolled in
+  1076→  const enrolledCourseIds = new Set(enrollments.map((e: any) => e.courseId));
+  1077→  const recommendedCourses = courses.filter((c: any) => !enrolledCourseIds.has(c.id));
+  1078→
+  1079→  // Leaderboard top 5
+  1080→  const topFive = leaderboardData.slice(0, 5);
+  1081→  const maxLeaderboardPoints = topFive.length > 0 ? topFive[0].points : 1;
+  1082→
+  1083→  // Daily goal data
+  1084→  const dailyMinutes = 22;
+  1085→  const dailyGoal = 30;
+  1086→  const dailyPercent = Math.round((dailyMinutes / dailyGoal) * 100);
+  1087→  const dailyLessonsCompleted = 3;
+  1088→  const dailyLessonsGoal = 5;
+  1089→
+  1090→  const greeting = getTimeGreeting();
+  1091→  const motivationalMessage = getMotivationalMessage(streakDays);
+  1092→
+  1093→  // Estimated time to complete based on progress
+  1094→  function getEstimatedTime(enrollment: { progress: number; course?: { durationHours?: number } }) {
+  1095→    const totalHours = enrollment.course?.durationHours || 10;
+  1096→    const remainingHours = totalHours * (1 - enrollment.progress / 100);
+  1097→    if (remainingHours < 1) return `${Math.round(remainingHours * 60)}m`;
+  1098→    return `${remainingHours.toFixed(1)}h`;
+  1099→  }
+  1100→
+  1101→  return (
+  1102→    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+  1103→      <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:p-8">
+  1104→
+  1105→        {/* ============ WELCOME HERO (ENHANCED - Gradient Mesh) ============ */}
+  1106→        <Section delay={0}>
+  1107→          <div className="relative overflow-hidden rounded-2xl">
+  1108→            {/* Gradient mesh background */}
+  1109→            <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700" />
+  1110→            {/* Mesh overlay pattern */}
+  1111→            <div className="absolute inset-0 opacity-30">
+  1112→              <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top_left,rgba(255,255,255,0.15),transparent_50%)]" />
+  1113→              <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(ellipse_at_bottom_right,rgba(255,255,255,0.1),transparent_50%)]" />
+  1114→              <div className="absolute top-1/2 left-1/2 w-full h-full bg-[radial-gradient(ellipse_at_center,rgba(20,184,166,0.2),transparent_50%)]" />
+  1115→            </div>
+  1116→
+  1117→            {/* Floating geometric shapes */}
+  1118→            <FloatingShape type="circle" className="w-20 h-20 bg-white top-4 right-20" delay={0} duration={7} />
+  1119→            <FloatingShape type="square" className="w-14 h-14 bg-white top-12 right-60" delay={1} duration={8} />
+  1120→            <FloatingShape type="diamond" className="w-10 h-10 bg-white bottom-8 right-32" delay={2} duration={6} />
+  1121→            <FloatingShape type="circle" className="w-8 h-8 bg-white bottom-16 right-80" delay={0.5} duration={9} />
+  1122→            <FloatingShape type="square" className="w-6 h-6 bg-white top-20 right-96" delay={1.5} duration={7} />
+  1123→
+  1124→            {/* Content */}
+  1125→            <div className="relative z-10 p-6 sm:p-8">
+  1126→              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+  1127→                <div>
+  1128→                  <motion.h1
+  1129→                    className="text-2xl font-bold text-white sm:text-3xl"
+  1130→                    initial={{ opacity: 0, x: -20 }}
+  1131→                    animate={{ opacity: 1, x: 0 }}
+  1132→                    transition={{ duration: 0.5 }}
+  1133→                  >
+  1134→                    {greeting}, {firstName}! 👋
+  1135→                  </motion.h1>
+  1136→                  <motion.p
+  1137→                    className="mt-1 text-sm text-emerald-100/90 max-w-md"
+  1138→                    initial={{ opacity: 0 }}
+  1139→                    animate={{ opacity: 1 }}
+  1140→                    transition={{ delay: 0.3, duration: 0.5 }}
+  1141→                  >
+  1142→                    {motivationalMessage}
+  1143→                  </motion.p>
+  1144→                  <div className="mt-3 flex flex-wrap items-center gap-3">
+  1145→                    <StreakFireBadge days={streakDays} />
+  1146→                    <div className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 backdrop-blur-sm">
+  1147→                      <TrendingUp className="h-4 w-4 text-emerald-200" />
+  1148→                      <span className="text-sm font-medium text-white">
+  1149→                        340 pts this week
+  1150→                      </span>
+  1151→                    </div>
+  1152→                  </div>
+  1153→
+  1154→                  {/* XP Progress Bar */}
+  1155→                  <div className="mt-4 max-w-xs">
+  1156→                    <XPProgressBar current={1250} max={2000} />
+  1157→                  </div>
+  1158→
+  1159→                  {/* Daily Goal mini progress indicator */}
+  1160→                  <div className="mt-3 flex items-center gap-2">
+  1161→                    <div className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 backdrop-blur-sm">
+  1162→                      <Target className="h-3.5 w-3.5 text-emerald-200" />
+  1163→                      <span className="text-xs font-medium text-white">
+  1164→                        {dailyLessonsCompleted}/{dailyLessonsGoal} lessons today
+  1165→                      </span>
+  1166→                    </div>
+  1167→                  </div>
+  1168→                </div>
+  1169→
+  1170→                <div className="flex items-center gap-3">
+  1171→                  {/* Mini daily goal indicator in header */}
+  1172→                  <motion.div
+  1173→                    className="hidden sm:flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-3 py-2 backdrop-blur-sm"
+  1174→                    initial={{ opacity: 0, scale: 0.9 }}
+  1175→                    animate={{ opacity: 1, scale: 1 }}
+  1176→                    transition={{ delay: 0.4 }}
+  1177→                  >
+  1178→                    <MiniProgressRing percentage={dailyPercent} size={32} strokeWidth={3} color="#ffffff" />
+  1179→                    <div>
+  1180→                      <p className="text-xs font-medium text-white">Daily Goal</p>
+  1181→                      <p className="text-[10px] text-emerald-200/70">{dailyMinutes}/{dailyGoal} min</p>
+  1182→                    </div>
+  1183→                  </motion.div>
+  1184→                  {mostRecentEnrollment && (
+  1185→                    <Button
+  1186→                      size="lg"
+  1187→                      className="relative gap-2 bg-white text-emerald-700 hover:bg-emerald-50 shadow-lg shadow-emerald-900/30 overflow-hidden group"
+  1188→                      onClick={() => {}}
+  1189→                    >
+  1190→                      {/* Gradient glow on hover */}
+  1191→                      <motion.div
+  1192→                        className="absolute inset-0 bg-gradient-to-r from-emerald-400/20 via-teal-400/30 to-emerald-400/20 opacity-0 group-hover:opacity-100 transition-opacity"
+  1193→                      />
+  1194→                      <motion.div
+  1195→                        className="relative flex items-center gap-2"
+  1196→                        whileHover={{ x: 2 }}
+  1197→                        transition={{ type: 'spring', stiffness: 400 }}
+  1198→                      >
+  1199→                        <Play className="h-4 w-4" />
+  1200→                        Resume Learning
+  1201→                      </motion.div>
+  1202→                    </Button>
+  1203→                  )}
+  1204→                </div>
+  1205→              </div>
+  1206→            </div>
+  1207→          </div>
+  1208→        </Section>
+  1209→
+  1210→        {/* ============ KPI STATS ROW (ENHANCED - Glassmorphism) ============ */}
+  1211→        <Section delay={0.05}>
+  1212→          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+  1213→            {kpis.map((kpi: DashboardKPI, i: number) => {
+  1214→              const Icon = getKPIIcon(kpi.icon);
+  1215→              const colors = getKPIColor(kpi.icon);
+  1216→              const kpiPercent = getKPIPercentage(kpi);
+  1217→              return (
+  1218→                <motion.div
+  1219→                  key={kpi.label}
+  1220→                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+  1221→                  animate={{ opacity: 1, scale: 1, y: 0 }}
+  1222→                  transition={{ duration: 0.4, delay: 0.06 * i, type: 'spring', stiffness: 200 }}
+  1223→                  whileHover={{ y: -4, transition: { duration: 0.2 } }}
+  1224→                >
+  1225→                  <Card className={cn(
+  1226→                    'relative overflow-hidden border transition-all duration-300 group cursor-pointer',
+  1227→                    'hover:shadow-xl hover:shadow-slate-200/50 dark:hover:shadow-slate-900/50',
+  1228→                    'backdrop-blur-sm',
+  1229→                    colors.border
+  1230→                  )}>
+  1231→                    {/* Gradient mesh background */}
+  1232→                    <div className={cn('absolute inset-0 bg-gradient-to-br opacity-50 group-hover:opacity-80 transition-opacity duration-300', colors.meshGradient)} />
+  1233→                    {/* Shimmer effect */}
+  1234→                    <KPIShimmer />
+  1235→                    {/* Sparkle on icon background */}
+  1236→                    <div className="absolute top-0 right-0 w-16 h-16 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+  1237→                      <motion.div
+  1238→                        className="absolute top-2 right-2"
+  1239→                        animate={{ rotate: [0, 360], scale: [1, 1.2, 1] }}
+  1240→                        transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+  1241→                      >
+  1242→                        <Sparkles className={cn('h-4 w-4', colors.text)} />
+  1243→                      </motion.div>
+  1244→                    </div>
+  1245→                    <CardContent className="relative p-4">
+  1246→                      <div className="mb-3 flex items-center justify-between">
+  1247→                        <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg relative', colors.bg)}>
+  1248→                          <Icon className={cn('h-4 w-4', colors.text)} />
+  1249→                          {/* Icon shimmer */}
+  1250→                          <motion.div
+  1251→                            className="absolute inset-0 rounded-lg"
+  1252→                            animate={{ boxShadow: [`0 0 0px ${colors.ring}00`, `0 0 8px ${colors.ring}40`, `0 0 0px ${colors.ring}00`] }}
+  1253→                            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', delay: i * 0.3 }}
+  1254→                          />
+  1255→                        </div>
+  1256→                        {/* Circular progress indicator */}
+  1257→                        <div className="relative">
+  1258→                          <KPICircularProgress value={kpiPercent} color={colors.ring} size={40} strokeWidth={3} />
+  1259→                          <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-muted-foreground">
+  1260→                            {kpiPercent}%
+  1261→                          </span>
+  1262→                        </div>
+  1263→                      </div>
+  1264→                      <p className="text-2xl font-bold text-slate-900 dark:text-slate-50">
+  1265→                        <AnimatedCounter value={String(kpi.value)} />
+  1266→                      </p>
+  1267→                      <p className="mt-0.5 text-xs text-muted-foreground">{kpi.label}</p>
+  1268→                      <div className="mt-2 flex items-center gap-1">
+  1269→                        <motion.span
+  1270→                          className={cn(
+  1271→                            'text-xs font-medium flex items-center gap-0.5',
+  1272→                            kpi.change >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'
+  1273→                          )}
+  1274→                          initial={{ opacity: 0, x: -5 }}
+  1275→                          animate={{ opacity: 1, x: 0 }}
+  1276→                          transition={{ delay: 0.5 + i * 0.05 }}
+  1277→                        >
+  1278→                          {kpi.change >= 0 ? (
+  1279→                            <ArrowUpRight className="h-3 w-3" />
+  1280→                          ) : (
+  1281→                            <ArrowDownRight className="h-3 w-3" />
+  1282→                          )}
+  1283→                          {kpi.change >= 0 ? '+' : ''}{kpi.change}
+  1284→                        </motion.span>
+  1285→                        <span className="text-xs text-muted-foreground">{kpi.changeLabel}</span>
+  1286→                      </div>
+  1287→                    </CardContent>
+  1288→                  </Card>
+  1289→                </motion.div>
+  1290→              );
+  1291→            })}
+  1292→          </div>
+  1293→        </Section>
+  1294→
+  1295→        {/* ============ CONTINUE LEARNING SECTION (ENHANCED) ============ */}
+  1296→        {activeEnrollments.length > 0 && (
+  1297→          <Section delay={0.1}>
+  1298→            <div className="flex items-center justify-between mb-4">
+  1299→              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50 flex items-center gap-2">
+  1300→                <Play className="h-5 w-5 text-emerald-500" />
+  1301→                Continue Learning
+  1302→              </h2>
+  1303→              <div className="flex items-center gap-2">
+  1304→                <Badge variant="secondary" className="text-xs">
+  1305→                  {activeEnrollments.length} active
+  1306→                </Badge>
+  1307→                <Button variant="ghost" size="sm" className="text-xs gap-1 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 group">
+  1308→                  View All Courses
+  1309→                  <motion.span
+  1310→                    animate={{ x: [0, 4, 0] }}
+  1311→                    transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+  1312→                  >
+  1313→                    <ArrowRight className="h-3 w-3" />
+  1314→                  </motion.span>
+  1315→                </Button>
+  1316→              </div>
+  1317→            </div>
+  1318→            <div ref={scrollContainerRef} className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin">
+  1319→              {activeEnrollments.map((enrollment, i) => {
+  1320→                const nextLesson = getNextLesson(enrollment);
+  1321→                const { total, completed } = getLessonCounts(enrollment);
+  1322→                const courseColor = getCourseColor(enrollment.course?.category);
+  1323→                const isHovered = hoveredCourse === enrollment.id;
+  1324→                const estimatedTime = getEstimatedTime(enrollment);
+  1325→
+  1326→                return (
+  1327→                  <motion.div
+  1328→                    key={enrollment.id}
+  1329→                    initial={{ opacity: 0, x: 30 }}
+  1330→                    animate={{ opacity: 1, x: 0 }}
+  1331→                    transition={{ duration: 0.4, delay: 0.1 * i }}
+  1332→                    className="min-w-[300px] sm:min-w-[340px]"
+  1333→                    onMouseEnter={() => setHoveredCourse(enrollment.id)}
+  1334→                    onMouseLeave={() => setHoveredCourse(null)}
+  1335→                  >
+  1336→                    <TiltCard>
+  1337→                      <Card className="overflow-hidden border-border dark:border-slate-800 hover:shadow-xl transition-all duration-300 group relative">
+  1338→                        {/* Course colored header with gradient overlay */}
+  1339→                        <div className="relative">
+  1340→                          <div className={cn(
+  1341→                            'bg-gradient-to-r p-4 h-24 flex items-end transition-all duration-300',
+  1342→                            getCourseAccent(enrollment.course?.category)
+  1343→                          )}>
+  1344→                            {/* Gradient overlay pattern */}
+  1345→                            <div className="absolute inset-0 bg-black/10" />
+  1346→                            {/* Course icon/watermark */}
+  1347→                            <div className="absolute top-3 right-3 opacity-20">
+  1348→                              <BookOpen className="h-16 w-16 text-white" />
+  1349→                            </div>
+  1350→                            {/* Mini play button overlay on hover */}
+  1351→                            <AnimatePresence>
+  1352→                              {isHovered && (
+  1353→                                <motion.div
+  1354→                                  className="absolute inset-0 flex items-center justify-center bg-black/20 z-20"
+  1355→                                  initial={{ opacity: 0 }}
+  1356→                                  animate={{ opacity: 1 }}
+  1357→                                  exit={{ opacity: 0 }}
+  1358→                                  transition={{ duration: 0.2 }}
+  1359→                                >
+  1360→                                  <motion.div
+  1361→                                    className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg backdrop-blur-sm"
+  1362→                                    initial={{ scale: 0 }}
+  1363→                                    animate={{ scale: 1 }}
+  1364→                                    exit={{ scale: 0 }}
+  1365→                                    transition={{ type: 'spring', stiffness: 300 }}
+  1366→                                  >
+  1367→                                    <Play className="h-5 w-5 text-emerald-600 ml-0.5" />
+  1368→                                  </motion.div>
+  1369→                                </motion.div>
+  1370→                              )}
+  1371→                            </AnimatePresence>
+  1372→                            <div className="relative flex w-full items-center justify-between z-10">
+  1373→                              <div className="flex items-center gap-2">
+  1374→                                <Badge className="bg-white/20 text-white border-0 text-xs backdrop-blur-sm">
+  1375→                                  {enrollment.course?.level}
+  1376→                                </Badge>
+  1377→                                <span className="text-xs text-white/70">
+  1378→                                  {enrollment.course?.durationHours}h
+  1379→                                </span>
+  1380→                              </div>
+  1381→                              {/* Circular progress ring on card */}
+  1382→                              <div className="relative">
+  1383→                                <MiniProgressRing
+  1384→                                  percentage={enrollment.progress}
+  1385→                                  size={44}
+  1386→                                  strokeWidth={3}
+  1387→                                  color="white"
+  1388→                                />
+  1389→                                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white">
+  1390→                                  {enrollment.progress}%
+  1391→                                </span>
+  1392→                              </div>
+  1393→                            </div>
+  1394→                          </div>
+  1395→                        </div>
+  1396→                        <CardContent className="p-4 space-y-3">
+  1397→                          <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-50 line-clamp-2 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+  1398→                            {enrollment.course?.title}
+  1399→                          </h3>
+  1400→
+  1401→                          {/* Mini curriculum progress bar with shimmer */}
+  1402→                          <div className="space-y-1">
+  1403→                            <div className="flex items-center justify-between text-[11px]">
+  1404→                              <span className="text-muted-foreground">{completed} of {total} lessons</span>
+  1405→                              <span className="font-semibold text-emerald-600 dark:text-emerald-400">{enrollment.progress}%</span>
+  1406→                            </div>
+  1407→                            <AnimatedProgress value={enrollment.progress} barColor="from-emerald-500 to-teal-400" />
+  1408→                          </div>
+  1409→
+  1410→                          {/* Next lesson preview */}
+  1411→                          {nextLesson && (
+  1412→                            <div className="flex items-center gap-2 rounded-md bg-slate-50 dark:bg-slate-800/50 px-2.5 py-1.5">
+  1413→                              <Play className="h-3 w-3 text-emerald-500 shrink-0" />
+  1414→                              <div className="min-w-0">
+  1415→                                <p className="text-[10px] text-muted-foreground">Next up</p>
+  1416→                                <p className="text-xs font-medium text-foreground truncate">{nextLesson}</p>
+  1417→                              </div>
+  1418→                            </div>
+  1419→                          )}
+  1420→
+  1421→                          <div className="flex items-center justify-between">
+  1422→                            <div className="flex items-center gap-3">
+  1423→                              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+  1424→                                <Clock className="h-3 w-3" />
+  1425→                                {getRelativeTime(enrollment.lastAccessedAt)}
+  1426→                              </span>
+  1427→                              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+  1428→                                <Timer className="h-3 w-3" />
+  1429→                                ~{estimatedTime} left
+  1430→                              </span>
+  1431→                            </div>
+  1432→                            <ResumeButton />
+  1433→                          </div>
+  1434→                        </CardContent>
+  1435→                      </Card>
+  1436→                    </TiltCard>
+  1437→                  </motion.div>
+  1438→                );
+  1439→              })}
+  1440→            </div>
+  1441→          </Section>
+  1442→        )}
+  1443→
+  1444→        {/* ============ COMPLETED COURSES (ENHANCED) ============ */}
+  1445→        {completedEnrollments.length > 0 && (
+  1446→          <Section delay={0.15}>
+  1447→            <div className="flex items-center justify-between mb-4">
+  1448→              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50 flex items-center gap-2">
+  1449→                <GraduationCap className="h-5 w-5 text-violet-500" />
+  1450→                Completed Courses
+  1451→              </h2>
+  1452→              <Badge variant="secondary" className="text-xs">
+  1453→                {completedEnrollments.length} completed
+  1454→              </Badge>
+  1455→            </div>
+  1456→            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  1457→              {completedEnrollments.map((enrollment, i) => (
+  1458→                <motion.div
+  1459→                  key={enrollment.id}
+  1460→                  initial={{ opacity: 0, y: 20 }}
+  1461→                  animate={{ opacity: 1, y: 0 }}
+  1462→                  transition={{ duration: 0.4, delay: 0.1 * i }}
+  1463→                >
+  1464→                  <Card className="overflow-hidden border-border dark:border-slate-800 hover:shadow-lg transition-shadow group relative">
+  1465→                    {/* Celebration badge */}
+  1466→                    <div className="absolute top-3 right-3 z-10">
+  1467→                      <motion.div
+  1468→                        className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-lg shadow-emerald-500/30"
+  1469→                        initial={{ scale: 0, rotate: -180 }}
+  1470→                        animate={{ scale: 1, rotate: 0 }}
+  1471→                        transition={{ delay: 0.5 + i * 0.1, type: 'spring', stiffness: 200 }}
+  1472→                      >
+  1473→                        <CheckCircle2 className="h-5 w-5" />
+  1474→                      </motion.div>
+  1475→                    </div>
+  1476→                    {/* Course colored header */}
+  1477→                    <div className={cn(
+  1478→                      'bg-gradient-to-r p-4 h-20 flex items-end relative',
+  1479→                      getCourseAccent(enrollment.course?.category)
+  1480→                    )}>
+  1481→                      <div className="absolute inset-0 bg-black/10" />
+  1482→                      <div className="relative z-10">
+  1483→                        <Badge className="bg-white/20 text-white border-0 text-xs backdrop-blur-sm">
+  1484→                          {enrollment.course?.category}
+  1485→                        </Badge>
+  1486→                      </div>
+  1487→                    </div>
+  1488→                    <CardContent className="p-4 space-y-3">
+  1489→                      <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-50 pr-10 line-clamp-2">
+  1490→                        {enrollment.course?.title}
+  1491→                      </h3>
+  1492→                      {/* Star rating */}
+  1493→                      <div className="flex items-center gap-2">
+  1494→                        <StarRating rating={enrollment.course?.avgRating || 0} />
+  1495→                        <span className="text-xs text-muted-foreground">
+  1496→                          {enrollment.course?.avgRating} ({enrollment.course?.totalRatings})
+  1497→                        </span>
+  1498→                      </div>
+  1499→                      {/* Completion info */}
+  1500→                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1501→                        <span className="flex items-center gap-1">
+  1502→                          <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+  1503→                          100% complete
+  1504→                        </span>
+  1505→                        {enrollment.completedAt && (
+  1506→                          <>
+  1507→                            <span>·</span>
+  1508→                            <span className="flex items-center gap-1">
+  1509→                              <Clock className="h-3 w-3" />
+  1510→                              {new Date(enrollment.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+  1511→                            </span>
+  1512→                          </>
+  1513→                        )}
+  1514→                      </div>
+  1515→                      <div className="flex items-center gap-2">
+  1516→                        <Button size="sm" variant="outline" className="h-7 gap-1 text-xs px-3 border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40">
+  1517→                          <Award className="h-3 w-3" />
+  1518→                          View Certificate
+  1519→                        </Button>
+  1520→                        <Button size="sm" variant="ghost" className="h-7 text-xs px-3 text-muted-foreground">
+  1521→                          Review Course
+  1522→                        </Button>
+  1523→                      </div>
+  1524→                    </CardContent>
+  1525→                  </Card>
+  1526→                </motion.div>
+  1527→              ))}
+  1528→            </div>
+  1529→          </Section>
+
+[showing lines 1030-1529 of 1993; use offset=1530 with limit to continue reading]

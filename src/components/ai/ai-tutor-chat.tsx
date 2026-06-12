@@ -29,7 +29,7 @@ import {
 import { toast } from 'sonner';
 import type { ChatMessage } from '@/types';
 import { useAppStore } from '@/store/app-store';
-import { demoCourses } from '@/lib/mock-data';
+import { useCourses } from '@/hooks/use-data';
 
 // ============================================================
 // Markdown Renderer (simplified - handles code, bold, lists)
@@ -465,6 +465,8 @@ export function AITutorFullPage() {
   const [selectedCourse, setSelectedCourse] = useState<string>('all');
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { data: coursesData } = useCourses();
+  const demoCourses = coursesData || [];
 
   const activeConv = conversations.find((c) => c.id === activeConvId);
 
@@ -509,7 +511,7 @@ export function AITutorFullPage() {
 
       const courseContext =
         selectedCourse !== 'all'
-          ? demoCourses.find((c) => c.id === selectedCourse)?.title
+          ? demoCourses.find((c: any) => c.id === selectedCourse)?.title
           : undefined;
 
       try {
@@ -649,7 +651,7 @@ export function AITutorFullPage() {
                 className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 <option value="all">All Courses</option>
-                {demoCourses.map((course) => (
+                {demoCourses.map((course: any) => (
                   <option key={course.id} value={course.id}>
                     {course.title}
                   </option>
@@ -706,7 +708,7 @@ export function AITutorFullPage() {
               <h2 className="text-sm font-semibold text-foreground">AI Learning Assistant</h2>
               <p className="text-xs text-muted-foreground">
                 {selectedCourse !== 'all'
-                  ? `Focused on: ${demoCourses.find((c) => c.id === selectedCourse)?.title}`
+                  ? `Focused on: ${demoCourses.find((c: any) => c.id === selectedCourse)?.title}`
                   : 'General learning mode'}
               </p>
             </div>

@@ -51,7 +51,37 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { demoCourses, bulkUsers, type BulkUser } from '@/lib/mock-data';
+import { useCourses } from '@/hooks/use-data';
+
+// TODO: Replace with real API when available - bulk user data not yet in the API
+interface BulkUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: 'active' | 'inactive';
+  coursesEnrolled: number;
+  lastActive: string;
+}
+
+// TODO: Replace with real API when available - bulk user data not yet in the API
+const bulkUsers: BulkUser[] = [
+  { id: 'bu-1', name: 'Mike Chen', email: 'mike.chen@example.com', role: 'learner', status: 'active', coursesEnrolled: 3, lastActive: '2 hours ago' },
+  { id: 'bu-2', name: 'Emma Rodriguez', email: 'emma.r@example.com', role: 'learner', status: 'active', coursesEnrolled: 5, lastActive: '1 hour ago' },
+  { id: 'bu-3', name: 'David Park', email: 'david.park@example.com', role: 'instructor', status: 'active', coursesEnrolled: 2, lastActive: '30 min ago' },
+  { id: 'bu-4', name: 'Lisa Wang', email: 'lisa.wang@example.com', role: 'content_creator', status: 'active', coursesEnrolled: 4, lastActive: '3 hours ago' },
+  { id: 'bu-5', name: 'Jordan Lee', email: 'jordan.lee@example.com', role: 'learner', status: 'active', coursesEnrolled: 2, lastActive: '5 hours ago' },
+  { id: 'bu-6', name: 'Sophia Martinez', email: 'sophia.m@example.com', role: 'learner', status: 'active', coursesEnrolled: 6, lastActive: '15 min ago' },
+  { id: 'bu-7', name: 'Alex Kim', email: 'alex.kim@example.com', role: 'learner', status: 'inactive', coursesEnrolled: 1, lastActive: '2 weeks ago' },
+  { id: 'bu-8', name: 'Rachel Green', email: 'rachel.g@example.com', role: 'learner', status: 'active', coursesEnrolled: 3, lastActive: '4 hours ago' },
+  { id: 'bu-9', name: 'Tom Wilson', email: 'tom.w@example.com', role: 'learner', status: 'active', coursesEnrolled: 2, lastActive: '1 day ago' },
+  { id: 'bu-10', name: 'Priya Sharma', email: 'priya.s@example.com', role: 'instructor', status: 'active', coursesEnrolled: 1, lastActive: '6 hours ago' },
+  { id: 'bu-11', name: 'James Johnson', email: 'james.j@example.com', role: 'learner', status: 'active', coursesEnrolled: 4, lastActive: '45 min ago' },
+  { id: 'bu-12', name: 'Nina Patel', email: 'nina.p@example.com', role: 'learner', status: 'inactive', coursesEnrolled: 0, lastActive: '1 month ago' },
+  { id: 'bu-13', name: 'Carlos Ruiz', email: 'carlos.r@example.com', role: 'learner', status: 'active', coursesEnrolled: 3, lastActive: '2 days ago' },
+  { id: 'bu-14', name: 'Aisha Mohammed', email: 'aisha.m@example.com', role: 'learner', status: 'active', coursesEnrolled: 5, lastActive: '20 min ago' },
+  { id: 'bu-15', name: 'Ben Taylor', email: 'ben.t@example.com', role: 'content_creator', status: 'active', coursesEnrolled: 2, lastActive: '8 hours ago' },
+];
 
 interface CSVRow {
   email: string;
@@ -65,6 +95,8 @@ type EnrollmentStep = 'configure' | 'preview' | 'processing' | 'complete';
 export function BulkEnrollmentTab() {
   // Course selection
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
+  const { data: coursesData } = useCourses();
+  const demoCourses = coursesData || [];
   // User selection mode
   const [selectionMode, setSelectionMode] = useState<'manual' | 'csv'>('manual');
   // Manual selection
@@ -88,7 +120,7 @@ export function BulkEnrollmentTab() {
   const [successCount, setSuccessCount] = useState(0);
   const [failCount, setFailCount] = useState(0);
 
-  const selectedCourse = demoCourses.find((c) => c.id === selectedCourseId);
+  const selectedCourse = demoCourses.find((c: any) => c.id === selectedCourseId);
 
   const filteredUsers = bulkUsers.filter(
     (u) =>
@@ -270,12 +302,12 @@ export function BulkEnrollmentTab() {
                   <SelectValue placeholder="Search and select a course..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {demoCourses.map((course) => (
+                  {demoCourses.map((course: any) => (
                     <SelectItem key={course.id} value={course.id}>
                       <div className="flex items-center gap-2">
                         <span>{course.title}</span>
                         <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                          {course.enrollmentCount} enrolled
+                          {course.enrollmentCount || 0} enrolled
                         </Badge>
                       </div>
                     </SelectItem>

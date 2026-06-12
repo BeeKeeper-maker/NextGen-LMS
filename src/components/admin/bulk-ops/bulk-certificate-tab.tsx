@@ -53,8 +53,30 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { demoCourses, bulkCertificateRecords } from '@/lib/mock-data';
-import type { BulkCertificateRecord } from '@/lib/mock-data';
+import { useCourses } from '@/hooks/use-data';
+
+// TODO: Replace with real API when available - bulk certificate records not yet in the API
+interface BulkCertificateRecord {
+  id: string;
+  userName: string;
+  email: string;
+  courseName: string;
+  issuedDate: string;
+  verificationCode: string;
+  status: 'issued' | 'revoked' | 'pending';
+}
+
+// TODO: Replace with real API when available - bulk certificate records not yet in the API
+const bulkCertificateRecords: BulkCertificateRecord[] = [
+  { id: 'cert-r-1', userName: 'Emma Rodriguez', email: 'emma.r@example.com', courseName: 'Advanced React & Next.js Masterclass', issuedDate: '2024-10-14', verificationCode: 'CERT-2024-001', status: 'issued' },
+  { id: 'cert-r-2', userName: 'Jordan Lee', email: 'jordan.lee@example.com', courseName: 'Data Visualization & Analytics', issuedDate: '2024-10-13', verificationCode: 'CERT-2024-002', status: 'issued' },
+  { id: 'cert-r-3', userName: 'Sophia Martinez', email: 'sophia.m@example.com', courseName: 'AI-Powered Full Stack Development', issuedDate: '2024-10-12', verificationCode: 'CERT-2024-003', status: 'issued' },
+  { id: 'cert-r-4', userName: 'Rachel Green', email: 'rachel.g@example.com', courseName: 'UX/UI Design Principles', issuedDate: '2024-10-11', verificationCode: 'CERT-2024-004', status: 'revoked' },
+  { id: 'cert-r-5', userName: 'James Johnson', email: 'james.j@example.com', courseName: 'System Design for Senior Engineers', issuedDate: '2024-10-10', verificationCode: 'CERT-2024-005', status: 'issued' },
+  { id: 'cert-r-6', userName: 'Aisha Mohammed', email: 'aisha.m@example.com', courseName: 'Advanced React & Next.js Masterclass', issuedDate: '2024-10-09', verificationCode: 'CERT-2024-006', status: 'issued' },
+  { id: 'cert-r-7', userName: 'Carlos Ruiz', email: 'carlos.r@example.com', courseName: 'DevOps & Cloud Architecture', issuedDate: '2024-10-08', verificationCode: 'CERT-2024-007', status: 'pending' },
+  { id: 'cert-r-8', userName: 'Mike Chen', email: 'mike.chen@example.com', courseName: 'AI-Powered Full Stack Development', issuedDate: '2024-10-07', verificationCode: 'CERT-2024-008', status: 'issued' },
+];
 
 // Certificate templates
 const certTemplates = [
@@ -71,6 +93,8 @@ type IssueStep = 'configure' | 'confirm' | 'processing' | 'complete';
 export function BulkCertificateTab() {
   // Sub-tab
   const [subTab, setSubTab] = useState<CertSubTab>('issue');
+  const { data: coursesData } = useCourses();
+  const demoCourses = coursesData || [];
   // Issue state
   const [selectedCourseId, setSelectedCourseId] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -91,13 +115,15 @@ export function BulkCertificateTab() {
   const [actionProgress, setActionProgress] = useState(false);
   const [actionComplete, setActionComplete] = useState('');
 
-  const selectedCourse = demoCourses.find((c) => c.id === selectedCourseId);
+  const selectedCourse = demoCourses.find((c: any) => c.id === selectedCourseId);
   const selectedTemplate = certTemplates.find((t) => t.id === selectedTemplateId);
 
   // Estimate count for issuance
   const estimatedCount = useMemo(() => {
     if (!selectedCourse) return 0;
-    const completers = Math.round(selectedCourse.enrollmentCount * (selectedCourse.completionRate / 100));
+    const enrollmentCount = selectedCourse.enrollmentCount || 0;
+    const completionRate = selectedCourse.completionRate || 0;
+    const completers = Math.round(enrollmentCount * (completionRate / 100));
     if (recipientCriteria === 'all_completers') return completers;
     if (recipientCriteria === 'score_threshold') return Math.round(completers * 0.65);
     return Math.round(completers * 0.3);
@@ -221,12 +247,12 @@ export function BulkCertificateTab() {
                       <SelectValue placeholder="Choose a course..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {demoCourses.map((course) => (
+                      {demoCourses.map((course: any) => (
                         <SelectItem key={course.id} value={course.id}>
                           <div className="flex items-center gap-2">
                             <span>{course.title}</span>
                             <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                              {course.completionRate}% complete
+                              {course.completionRate || 0}% complete
                             </Badge>
                           </div>
                         </SelectItem>

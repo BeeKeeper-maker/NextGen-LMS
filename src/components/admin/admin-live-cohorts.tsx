@@ -94,8 +94,116 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { demoCalendarEvents, demoCourses } from '@/lib/mock-data';
+import { useCourses } from '@/hooks/use-data';
 import type { CalendarEvent } from '@/types';
+
+// TODO: Replace with real API when available - calendar events API not yet implemented
+const demoCalendarEvents: CalendarEvent[] = [
+  {
+    id: 'evt-1',
+    title: 'React & Next.js Live Q&A',
+    description: 'Weekly live session for React course students. Bring your questions!',
+    type: 'live_session' as const,
+    startDate: new Date(Date.now() + 86400000 * 1 + 3600000 * 10).toISOString(),
+    endDate: new Date(Date.now() + 86400000 * 1 + 3600000 * 11.5).toISOString(),
+    courseId: 'course-1',
+    instructorName: 'Sarah Mitchell',
+    meetingUrl: 'https://meet.nextgen-lms.com/react-qa',
+    color: '#6366F1',
+    attendees: 34,
+    maxAttendees: 50,
+  },
+  {
+    id: 'evt-2',
+    title: 'System Design Cohort Kickoff',
+    description: 'Orientation session for the new System Design cohort. Meet your peers and instructor.',
+    type: 'cohort_start' as const,
+    startDate: new Date(Date.now() + 86400000 * 3 + 3600000 * 18).toISOString(),
+    endDate: new Date(Date.now() + 86400000 * 3 + 3600000 * 19).toISOString(),
+    courseId: 'course-3',
+    instructorName: 'David Park',
+    meetingUrl: 'https://meet.nextgen-lms.com/system-design',
+    color: '#EF4444',
+    attendees: 18,
+    maxAttendees: 25,
+  },
+  {
+    id: 'evt-3',
+    title: 'AI Lab: Building with LLMs',
+    description: 'Hands-on workshop: Build an AI-powered chatbot from scratch using modern APIs.',
+    type: 'workshop' as const,
+    startDate: new Date(Date.now() + 86400000 * 5 + 3600000 * 14).toISOString(),
+    endDate: new Date(Date.now() + 86400000 * 5 + 3600000 * 17).toISOString(),
+    courseId: 'course-2',
+    instructorName: 'Sarah Mitchell',
+    meetingUrl: 'https://meet.nextgen-lms.com/ai-lab',
+    color: '#10B981',
+    attendees: 22,
+    maxAttendees: 30,
+  },
+  {
+    id: 'evt-4',
+    title: 'Office Hours: Data Visualization',
+    description: 'Drop-in office hours for Data Visualization students. Get help with your projects.',
+    type: 'office_hours' as const,
+    startDate: new Date(Date.now() + 86400000 * 2 + 3600000 * 15).toISOString(),
+    endDate: new Date(Date.now() + 86400000 * 2 + 3600000 * 16).toISOString(),
+    courseId: 'course-4',
+    instructorName: 'Lisa Wang',
+    meetingUrl: 'https://meet.nextgen-lms.com/data-viz-office',
+    color: '#F59E0B',
+    attendees: 8,
+    maxAttendees: 15,
+  },
+  {
+    id: 'evt-5',
+    title: 'Webinar: Future of AI in Education',
+    description: 'Special guest panel discussing the impact of AI on learning and education technology.',
+    type: 'webinar' as const,
+    startDate: new Date(Date.now() + 86400000 * 7 + 3600000 * 12).toISOString(),
+    endDate: new Date(Date.now() + 86400000 * 7 + 3600000 * 13.5).toISOString(),
+    color: '#8B5CF6',
+    attendees: 156,
+    maxAttendees: 500,
+  },
+  {
+    id: 'evt-6',
+    title: 'Assessment Deadline: React Quiz',
+    description: 'Final deadline for the React & Next.js Fundamentals Quiz.',
+    type: 'deadline' as const,
+    startDate: new Date(Date.now() + 86400000 * 4 + 3600000 * 23).toISOString(),
+    endDate: new Date(Date.now() + 86400000 * 4 + 3600000 * 23.05).toISOString(),
+    courseId: 'course-1',
+    color: '#DC2626',
+  },
+  {
+    id: 'evt-7',
+    title: 'Cohort Wrap-Up: AI Full Stack',
+    description: 'Final presentations and celebration for the AI Full Stack cohort.',
+    type: 'cohort_end' as const,
+    startDate: new Date(Date.now() + 86400000 * 10 + 3600000 * 17).toISOString(),
+    endDate: new Date(Date.now() + 86400000 * 10 + 3600000 * 19).toISOString(),
+    courseId: 'course-2',
+    instructorName: 'Sarah Mitchell',
+    color: '#10B981',
+    attendees: 20,
+    maxAttendees: 25,
+  },
+  {
+    id: 'evt-8',
+    title: 'Design Critique Session',
+    description: 'Live design review for UX/UI students. Share your work and get feedback.',
+    type: 'live_session' as const,
+    startDate: new Date(Date.now() + 86400000 * 6 + 3600000 * 16).toISOString(),
+    endDate: new Date(Date.now() + 86400000 * 6 + 3600000 * 17.5).toISOString(),
+    courseId: 'course-5',
+    instructorName: 'Lisa Wang',
+    meetingUrl: 'https://meet.nextgen-lms.com/design-crit',
+    color: '#EC4899',
+    attendees: 12,
+    maxAttendees: 20,
+  },
+];
 
 // Event type color mapping
 const eventTypeColors: Record<string, string> = {
@@ -269,6 +377,9 @@ export function AdminLiveCohorts() {
   const [filterType, setFilterType] = useState<string>('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const { data: coursesData } = useCourses();
+  const demoCourses = coursesData || [];
+  // TODO: Replace with real API when available - calendar events API not yet implemented
   const [events, setEvents] = useState<CalendarEvent[]>(demoCalendarEvents);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -840,7 +951,7 @@ export function AdminLiveCohorts() {
               const status = getSessionStatus(event);
               const statusCfg = statusConfig[status];
               const StatusIcon = statusCfg.icon;
-              const courseName = demoCourses.find((c) => c.id === event.courseId)?.title;
+              const courseName = demoCourses.find((c: any) => c.id === event.courseId)?.title;
               const canStart = isStartingWithin15(event) || isEventLive(event);
 
               return (
@@ -1028,7 +1139,7 @@ export function AdminLiveCohorts() {
                   const statusCfg = statusConfig[status];
                   const StatusIcon = statusCfg.icon;
                   const canStart = isStartingWithin15(event) || isEventLive(event);
-                  const courseName = demoCourses.find((c) => c.id === event.courseId)?.title;
+                  const courseName = demoCourses.find((c: any) => c.id === event.courseId)?.title;
 
                   return (
                     <motion.tr
@@ -1290,7 +1401,7 @@ export function AdminLiveCohorts() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">No Course</SelectItem>
-                      {demoCourses.map((course) => (
+                      {demoCourses.map((course: any) => (
                         <SelectItem key={course.id} value={course.id}>
                           {course.title}
                         </SelectItem>

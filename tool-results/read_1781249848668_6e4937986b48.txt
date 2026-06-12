@@ -1,0 +1,641 @@
+     1→'use client';
+     2→
+     3→import { useState, useCallback, useMemo } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Mail,
+     7→  Send,
+     8→  Eye,
+     9→  Clock,
+    10→  Users,
+    11→  Search,
+    12→  Bold,
+    13→  Italic,
+    14→  List,
+    15→  Link2,
+    16→  Image,
+    17→  ChevronDown,
+    18→  RefreshCw,
+    19→  Download,
+    20→  Filter,
+    21→  BarChart3,
+    22→  CheckCircle2,
+    23→  AlertCircle,
+    24→  Loader2,
+    25→  Sparkles,
+    26→  Calendar,
+    27→} from 'lucide-react';
+    28→import { Button } from '@/components/ui/button';
+    29→import { Input } from '@/components/ui/input';
+    30→import { Textarea } from '@/components/ui/textarea';
+    31→import { Badge } from '@/components/ui/badge';
+    32→import { Switch } from '@/components/ui/switch';
+    33→import { Label } from '@/components/ui/label';
+    34→import { Separator } from '@/components/ui/separator';
+    35→import { Progress } from '@/components/ui/progress';
+    36→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    37→import {
+    38→  Select,
+    39→  SelectContent,
+    40→  SelectItem,
+    41→  SelectTrigger,
+    42→  SelectValue,
+    43→} from '@/components/ui/select';
+    44→import {
+    45→  Table,
+    46→  TableBody,
+    47→  TableCell,
+    48→  TableHead,
+    49→  TableHeader,
+    50→  TableRow,
+    51→} from '@/components/ui/table';
+    52→import {
+    53→  Dialog,
+    54→  DialogContent,
+    55→  DialogDescription,
+    56→  DialogFooter,
+    57→  DialogHeader,
+    58→  DialogTitle,
+    59→} from '@/components/ui/dialog';
+    60→import { ScrollArea } from '@/components/ui/scroll-area';
+    61→import { demoCourses, bulkUsers, bulkEmailHistory } from '@/lib/mock-data';
+    62→
+    63→type RecipientType = 'all' | 'course' | 'role' | 'custom';
+    64→
+    65→interface EmailVariable {
+    66→  key: string;
+    67→  label: string;
+    68→  example: string;
+    69→}
+    70→
+    71→const emailVariables: EmailVariable[] = [
+    72→  { key: '{{user.name}}', label: 'User Name', example: 'John Doe' },
+    73→  { key: '{{user.email}}', label: 'User Email', example: 'john@example.com' },
+    74→  { key: '{{course.title}}', label: 'Course Title', example: 'Advanced React & Next.js' },
+    75→  { key: '{{platform.name}}', label: 'Platform Name', example: 'NextGen Academy' },
+    76→  { key: '{{enrollment.date}}', label: 'Enrollment Date', example: 'Oct 14, 2024' },
+    77→];
+    78→
+    79→export function BulkEmailTab() {
+    80→  // Sub-tab
+    81→  const [subTab, setSubTab] = useState<'compose' | 'history'>('compose');
+    82→  // Compose state
+    83→  const [recipientType, setRecipientType] = useState<RecipientType>('all');
+    84→  const [selectedCourse, setSelectedCourse] = useState('');
+    85→  const [selectedRole, setSelectedRole] = useState('');
+    86→  const [subject, setSubject] = useState('');
+    87→  const [body, setBody] = useState('');
+    88→  const [scheduleType, setScheduleType] = useState<'now' | 'scheduled'>('now');
+    89→  const [scheduledTime, setScheduledTime] = useState('');
+    90→  const [showPreview, setShowPreview] = useState(false);
+    91→  const [showSendConfirm, setShowSendConfirm] = useState(false);
+    92→  const [isSending, setIsSending] = useState(false);
+    93→  const [sendProgress, setSendProgress] = useState(0);
+    94→  const [sendComplete, setSendComplete] = useState(false);
+    95→  // Test email
+    96→  const [showTestDialog, setShowTestDialog] = useState(false);
+    97→  const [testEmail, setTestEmail] = useState('');
+    98→  const [testSent, setTestSent] = useState(false);
+    99→  // History filters
+   100→  const [dateFilter, setDateFilter] = useState('all');
+   101→
+   102→  // Estimate recipient count
+   103→  const recipientCount = useMemo(() => {
+   104→    switch (recipientType) {
+   105→      case 'all':
+   106→        return 3847;
+   107→      case 'course':
+   108→        return demoCourses.find((c) => c.id === selectedCourse)?.enrollmentCount || 0;
+   109→      case 'role':
+   110→        return bulkUsers.filter((u) => u.role === selectedRole).length * 257;
+   111→      case 'custom':
+   112→        return 156;
+   113→      default:
+   114→        return 0;
+   115→    }
+   116→  }, [recipientType, selectedCourse, selectedRole]);
+   117→
+   118→  // Insert variable into subject
+   119→  const insertVariable = useCallback(
+   120→    (variable: string, target: 'subject' | 'body') => {
+   121→      if (target === 'subject') {
+   122→        setSubject((prev) => prev + variable);
+   123→      } else {
+   124→        setBody((prev) => prev + variable);
+   125→      }
+   126→    },
+   127→    []
+   128→  );
+   129→
+   130→  // Toolbar actions (simulated)
+   131→  const toolbarActions = [
+   132→    { icon: Bold, label: 'Bold', action: () => setBody((b) => `**${b}**`) },
+   133→    { icon: Italic, label: 'Italic', action: () => setBody((b) => `_${b}_`) },
+   134→    { icon: List, label: 'List', action: () => setBody((b) => b + '\n- Item 1\n- Item 2') },
+   135→    { icon: Link2, label: 'Link', action: () => setBody((b) => b + ' [link text](https://)') },
+   136→    { icon: Image, label: 'Image', action: () => setBody((b) => b + ' ![alt](image-url)') },
+   137→  ];
+   138→
+   139→  const handleSendEmail = useCallback(() => {
+   140→    setShowSendConfirm(false);
+   141→    setIsSending(true);
+   142→    setSendProgress(0);
+   143→    const total = recipientCount;
+   144→    let sent = 0;
+   145→    const interval = setInterval(() => {
+   146→      sent += Math.floor(Math.random() * 200) + 50;
+   147→      if (sent >= total) sent = total;
+   148→      setSendProgress(Math.round((sent / total) * 100));
+   149→      if (sent >= total) {
+   150→        clearInterval(interval);
+   151→        setTimeout(() => {
+   152→          setSendComplete(true);
+   153→          setIsSending(false);
+   154→        }, 500);
+   155→      }
+   156→    }, 300);
+   157→  }, [recipientCount]);
+   158→
+   159→  const handleSendTest = useCallback(() => {
+   160→    setTestSent(true);
+   161→    setTimeout(() => {
+   162→      setShowTestDialog(false);
+   163→      setTestSent(false);
+   164→    }, 2000);
+   165→  }, []);
+   166→
+   167→  // Preview content with variable substitution
+   168→  const previewSubject = subject
+   169→    .replace(/\{\{user\.name\}\}/g, 'John Doe')
+   170→    .replace(/\{\{user\.email\}\}/g, 'john@example.com')
+   171→    .replace(/\{\{course\.title\}\}/g, 'Advanced React & Next.js Masterclass')
+   172→    .replace(/\{\{platform\.name\}\}/g, 'NextGen Academy')
+   173→    .replace(/\{\{enrollment\.date\}\}/g, 'Oct 14, 2024');
+   174→
+   175→  const previewBody = body
+   176→    .replace(/\{\{user\.name\}\}/g, 'John Doe')
+   177→    .replace(/\{\{user\.email\}\}/g, 'john@example.com')
+   178→    .replace(/\{\{course\.title\}\}/g, 'Advanced React & Next.js Masterclass')
+   179→    .replace(/\{\{platform\.name\}\}/g, 'NextGen Academy')
+   180→    .replace(/\{\{enrollment\.date\}\}/g, 'Oct 14, 2024');
+   181→
+   182→  const filteredHistory = bulkEmailHistory.filter((e) => {
+   183→    if (dateFilter === 'all') return true;
+   184→    if (dateFilter === 'week') {
+   185→      const d = new Date(e.sentDate);
+   186→      const now = new Date();
+   187→      return now.getTime() - d.getTime() < 7 * 86400000;
+   188→    }
+   189→    if (dateFilter === 'month') {
+   190→      const d = new Date(e.sentDate);
+   191→      const now = new Date();
+   192→      return now.getTime() - d.getTime() < 30 * 86400000;
+   193→    }
+   194→    return true;
+   195→  });
+   196→
+   197→  return (
+   198→    <div className="space-y-4">
+   199→      <Tabs value={subTab} onValueChange={(v) => setSubTab(v as 'compose' | 'history')}>
+   200→        <TabsList className="grid w-full grid-cols-2">
+   201→          <TabsTrigger value="compose" className="gap-1.5">
+   202→            <Mail className="h-3.5 w-3.5" />
+   203→            Compose
+   204→          </TabsTrigger>
+   205→          <TabsTrigger value="history" className="gap-1.5">
+   206→            <Clock className="h-3.5 w-3.5" />
+   207→            Email History
+   208→          </TabsTrigger>
+   209→        </TabsList>
+   210→
+   211→        {/* ─── COMPOSE TAB ─────────────────────────────── */}
+   212→        <TabsContent value="compose" className="space-y-4 mt-4">
+   213→          {sendComplete ? (
+   214→            <motion.div
+   215→              initial={{ opacity: 0, scale: 0.95 }}
+   216→              animate={{ opacity: 1, scale: 1 }}
+   217→              className="flex flex-col items-center py-12 space-y-4"
+   218→            >
+   219→              <motion.div
+   220→                initial={{ scale: 0 }}
+   221→                animate={{ scale: 1 }}
+   222→                transition={{ type: 'spring', stiffness: 200, delay: 0.2 }}
+   223→              >
+   224→                <CheckCircle2 className="h-16 w-16 text-emerald-500" />
+   225→              </motion.div>
+   226→              <h3 className="text-lg font-semibold">Email Sent Successfully!</h3>
+   227→              <p className="text-sm text-muted-foreground">{recipientCount} recipients notified</p>
+   228→              <Button
+   229→                onClick={() => {
+   230→                  setSendComplete(false);
+   231→                  setSubject('');
+   232→                  setBody('');
+   233→                  setRecipientType('all');
+   234→                  setSelectedCourse('');
+   235→                  setSelectedRole('');
+   236→                }}
+   237→                variant="outline"
+   238→              >
+   239→                Compose Another
+   240→              </Button>
+   241→            </motion.div>
+   242→          ) : isSending ? (
+   243→            <motion.div
+   244→              initial={{ opacity: 0 }}
+   245→              animate={{ opacity: 1 }}
+   246→              className="flex flex-col items-center py-12 space-y-6"
+   247→            >
+   248→              <motion.div
+   249→                animate={{ rotate: 360 }}
+   250→                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+   251→              >
+   252→                <Loader2 className="h-12 w-12 text-emerald-500" />
+   253→              </motion.div>
+   254→              <div className="text-center">
+   255→                <h3 className="text-lg font-semibold">Sending Emails...</h3>
+   256→                <p className="text-sm text-muted-foreground mt-1">
+   257→                  {Math.round((sendProgress / 100) * recipientCount)} / {recipientCount} sent
+   258→                </p>
+   259→              </div>
+   260→              <div className="w-full max-w-sm">
+   261→                <Progress value={sendProgress} className="h-3" />
+   262→                <p className="text-xs text-muted-foreground text-center mt-2">{sendProgress}%</p>
+   263→              </div>
+   264→            </motion.div>
+   265→          ) : (
+   266→            <>
+   267→              {/* Recipient Selector */}
+   268→              <div className="space-y-3">
+   269→                <Label className="text-sm font-semibold flex items-center gap-2">
+   270→                  <Users className="h-4 w-4 text-emerald-500" />
+   271→                  Recipients
+   272→                </Label>
+   273→                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+   274→                  {[
+   275→                    { key: 'all', label: 'All Users', count: 3847 },
+   276→                    { key: 'course', label: 'By Course', count: null },
+   277→                    { key: 'role', label: 'By Role', count: null },
+   278→                    { key: 'custom', label: 'Custom', count: 156 },
+   279→                  ].map((opt) => (
+   280→                    <button
+   281→                      key={opt.key}
+   282→                      onClick={() => setRecipientType(opt.key as RecipientType)}
+   283→                      className={`flex flex-col items-center gap-1 rounded-lg border p-3 transition-all duration-200 ${
+   284→                        recipientType === opt.key
+   285→                          ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 shadow-sm'
+   286→                          : 'border-border hover:border-emerald-300'
+   287→                      }`}
+   288→                    >
+   289→                      <span className="text-sm font-medium">{opt.label}</span>
+   290→                      {opt.count && (
+   291→                        <span className="text-xs text-muted-foreground">{opt.count.toLocaleString()} users</span>
+   292→                      )}
+   293→                    </button>
+   294→                  ))}
+   295→                </div>
+   296→
+   297→                {/* Conditional selectors */}
+   298→                {recipientType === 'course' && (
+   299→                  <Select value={selectedCourse} onValueChange={setSelectedCourse}>
+   300→                    <SelectTrigger>
+   301→                      <SelectValue placeholder="Select a course..." />
+   302→                    </SelectTrigger>
+   303→                    <SelectContent>
+   304→                      {demoCourses.map((c) => (
+   305→                        <SelectItem key={c.id} value={c.id}>
+   306→                          {c.title} ({c.enrollmentCount} students)
+   307→                        </SelectItem>
+   308→                      ))}
+   309→                    </SelectContent>
+   310→                  </Select>
+   311→                )}
+   312→
+   313→                {recipientType === 'role' && (
+   314→                  <Select value={selectedRole} onValueChange={setSelectedRole}>
+   315→                    <SelectTrigger>
+   316→                      <SelectValue placeholder="Select a role..." />
+   317→                    </SelectTrigger>
+   318→                    <SelectContent>
+   319→                      <SelectItem value="learner">Learners</SelectItem>
+   320→                      <SelectItem value="instructor">Instructors</SelectItem>
+   321→                      <SelectItem value="content_creator">Content Creators</SelectItem>
+   322→                    </SelectContent>
+   323→                  </Select>
+   324→                )}
+   325→
+   326→                <div className="flex items-center gap-2 text-sm">
+   327→                  <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+   328→                    ~{recipientCount.toLocaleString()} recipients
+   329→                  </Badge>
+   330→                </div>
+   331→              </div>
+   332→
+   333→              <Separator />
+   334→
+   335→              {/* Subject with variable support */}
+   336→              <div className="space-y-2">
+   337→                <Label className="text-sm font-semibold">Subject Line</Label>
+   338→                <div className="flex gap-2">
+   339→                  <Input
+   340→                    placeholder="Enter email subject... (use {{variables}} for personalization)"
+   341→                    value={subject}
+   342→                    onChange={(e) => setSubject(e.target.value)}
+   343→                    className="flex-1"
+   344→                  />
+   345→                </div>
+   346→                <div className="flex flex-wrap gap-1.5">
+   347→                  {emailVariables.map((v) => (
+   348→                    <button
+   349→                      key={v.key}
+   350→                      onClick={() => insertVariable(v.key, 'subject')}
+   351→                      className="rounded-md border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 px-2 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950/40 transition-colors"
+   352→                    >
+   353→                      {v.label}
+   354→                    </button>
+   355→                  ))}
+   356→                </div>
+   357→              </div>
+   358→
+   359→              {/* Body with toolbar */}
+   360→              <div className="space-y-2">
+   361→                <div className="flex items-center justify-between">
+   362→                  <Label className="text-sm font-semibold">Email Body</Label>
+   363→                  <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => setShowPreview(!showPreview)}>
+   364→                    <Eye className="h-3.5 w-3.5 mr-1" />
+   365→                    {showPreview ? 'Hide Preview' : 'Show Preview'}
+   366→                  </Button>
+   367→                </div>
+   368→
+   369→                {/* Toolbar */}
+   370→                <div className="flex items-center gap-1 rounded-t-md border border-b-0 bg-muted/30 p-1.5">
+   371→                  {toolbarActions.map((tool) => (
+   372→                    <Button key={tool.label} variant="ghost" size="icon" className="h-7 w-7" onClick={tool.action} title={tool.label}>
+   373→                      <tool.icon className="h-3.5 w-3.5" />
+   374→                    </Button>
+   375→                  ))}
+   376→                  <Separator orientation="vertical" className="h-5 mx-1" />
+   377→                  {emailVariables.map((v) => (
+   378→                    <Button
+   379→                      key={v.key}
+   380→                      variant="ghost"
+   381→                      size="sm"
+   382→                      className="h-7 text-[11px] px-1.5"
+   383→                      onClick={() => insertVariable(v.key, 'body')}
+   384→                      title={`Insert ${v.label}`}
+   385→                    >
+   386→                      {`{${v.label}}`}
+   387→                    </Button>
+   388→                  ))}
+   389→                </div>
+   390→
+   391→                <Textarea
+   392→                  placeholder="Write your email content here... Use {{user.name}}, {{course.title}}, etc. for personalization."
+   393→                  value={body}
+   394→                  onChange={(e) => setBody(e.target.value)}
+   395→                  className="min-h-[180px] rounded-t-none font-mono text-sm"
+   396→                />
+   397→
+   398→                {/* Preview */}
+   399→                <AnimatePresence>
+   400→                  {showPreview && (
+   401→                    <motion.div
+   402→                      initial={{ opacity: 0, height: 0 }}
+   403→                      animate={{ opacity: 1, height: 'auto' }}
+   404→                      exit={{ opacity: 0, height: 0 }}
+   405→                      className="overflow-hidden"
+   406→                    >
+   407→                      <div className="rounded-lg border bg-white dark:bg-slate-900 p-4 space-y-3">
+   408→                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Preview</p>
+   409→                        <div className="rounded-md border p-3 bg-muted/20">
+   410→                          <p className="text-sm font-semibold">{previewSubject || '(No subject)'}</p>
+   411→                          <Separator className="my-2" />
+   412→                          <div className="text-sm whitespace-pre-wrap">{previewBody || '(No content)'}</div>
+   413→                        </div>
+   414→                      </div>
+   415→                    </motion.div>
+   416→                  )}
+   417→                </AnimatePresence>
+   418→              </div>
+   419→
+   420→              <Separator />
+   421→
+   422→              {/* Scheduling */}
+   423→              <div className="space-y-3">
+   424→                <Label className="text-sm font-semibold flex items-center gap-2">
+   425→                  <Calendar className="h-4 w-4 text-emerald-500" />
+   426→                  Schedule
+   427→                </Label>
+   428→                <div className="flex items-center gap-4">
+   429→                  <div className="flex items-center gap-2">
+   430→                    <input
+   431→                      type="radio"
+   432→                      id="send-now"
+   433→                      name="schedule"
+   434→                      checked={scheduleType === 'now'}
+   435→                      onChange={() => setScheduleType('now')}
+   436→                      className="accent-emerald-600"
+   437→                    />
+   438→                    <Label htmlFor="send-now" className="text-sm cursor-pointer">Send Now</Label>
+   439→                  </div>
+   440→                  <div className="flex items-center gap-2">
+   441→                    <input
+   442→                      type="radio"
+   443→                      id="send-scheduled"
+   444→                      name="schedule"
+   445→                      checked={scheduleType === 'scheduled'}
+   446→                      onChange={() => setScheduleType('scheduled')}
+   447→                      className="accent-emerald-600"
+   448→                    />
+   449→                    <Label htmlFor="send-scheduled" className="text-sm cursor-pointer">Schedule</Label>
+   450→                  </div>
+   451→                  {scheduleType === 'scheduled' && (
+   452→                    <Input
+   453→                      type="datetime-local"
+   454→                      value={scheduledTime}
+   455→                      onChange={(e) => setScheduledTime(e.target.value)}
+   456→                      className="w-52 h-8 text-sm"
+   457→                    />
+   458→                  )}
+   459→                </div>
+   460→              </div>
+   461→
+   462→              {/* Actions */}
+   463→              <div className="flex items-center justify-between pt-2">
+   464→                <Button variant="outline" size="sm" onClick={() => setShowTestDialog(true)} className="text-xs">
+   465→                  <Send className="h-3.5 w-3.5 mr-1.5" />
+   466→                  Send Test Email
+   467→                </Button>
+   468→                <Button
+   469→                  onClick={() => setShowSendConfirm(true)}
+   470→                  disabled={!subject || !body || recipientCount === 0}
+   471→                  className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-lg"
+   472→                >
+   473→                  <Send className="h-4 w-4 mr-1.5" />
+   474→                  {scheduleType === 'now' ? 'Send' : 'Schedule'} Email to {recipientCount.toLocaleString()} Users
+   475→                </Button>
+   476→              </div>
+   477→            </>
+   478→          )}
+   479→        </TabsContent>
+   480→
+   481→        {/* ─── HISTORY TAB ─────────────────────────────── */}
+   482→        <TabsContent value="history" className="space-y-4 mt-4">
+   483→          {/* Filters */}
+   484→          <div className="flex items-center justify-between">
+   485→            <div className="flex items-center gap-2">
+   486→              <Filter className="h-4 w-4 text-muted-foreground" />
+   487→              <Select value={dateFilter} onValueChange={setDateFilter}>
+   488→                <SelectTrigger className="w-32 h-8 text-xs">
+   489→                  <SelectValue />
+   490→                </SelectTrigger>
+   491→                <SelectContent>
+   492→                  <SelectItem value="all">All Time</SelectItem>
+   493→                  <SelectItem value="week">Past Week</SelectItem>
+   494→                  <SelectItem value="month">Past Month</SelectItem>
+   495→                </SelectContent>
+   496→              </Select>
+   497→            </div>
+   498→            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   499→              <BarChart3 className="h-3.5 w-3.5" />
+   500→              {filteredHistory.length} emails
+   501→            </div>
+   502→          </div>
+   503→
+   504→          {/* Email History Table */}
+   505→          <div className="rounded-md border">
+   506→            <Table>
+   507→              <TableHeader>
+   508→                <TableRow>
+   509→                  <TableHead>Subject</TableHead>
+   510→                  <TableHead className="text-center">Recipients</TableHead>
+   511→                  <TableHead>Sent Date</TableHead>
+   512→                  <TableHead className="text-center">Open Rate</TableHead>
+   513→                  <TableHead className="text-center">Click Rate</TableHead>
+   514→                  <TableHead>Status</TableHead>
+   515→                  <TableHead className="w-24">Actions</TableHead>
+   516→                </TableRow>
+   517→              </TableHeader>
+   518→              <TableBody>
+   519→                {filteredHistory.map((email) => (
+   520→                  <TableRow key={email.id}>
+   521→                    <TableCell className="text-sm font-medium max-w-[200px] truncate">{email.subject}</TableCell>
+   522→                    <TableCell className="text-sm text-center">{email.recipients.toLocaleString()}</TableCell>
+   523→                    <TableCell className="text-sm text-muted-foreground">{email.sentDate}</TableCell>
+   524→                    <TableCell className="text-center">
+   525→                      <span className={`text-sm font-medium ${email.openRate > 60 ? 'text-emerald-600' : email.openRate > 40 ? 'text-amber-600' : 'text-red-600'}`}>
+   526→                        {email.openRate}%
+   527→                      </span>
+   528→                    </TableCell>
+   529→                    <TableCell className="text-center">
+   530→                      <span className={`text-sm font-medium ${email.clickRate > 25 ? 'text-emerald-600' : email.clickRate > 15 ? 'text-amber-600' : 'text-red-600'}`}>
+   531→                        {email.clickRate}%
+   532→                      </span>
+   533→                    </TableCell>
+   534→                    <TableCell>
+   535→                      <Badge
+   536→                        variant="secondary"
+   537→                        className={`text-[10px] ${
+   538→                          email.status === 'sent'
+   539→                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+   540→                            : email.status === 'partial'
+   541→                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+   542→                            : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+   543→                        }`}
+   544→                      >
+   545→                        {email.status}
+   546→                      </Badge>
+   547→                    </TableCell>
+   548→                    <TableCell>
+   549→                      <div className="flex items-center gap-1">
+   550→                        {email.status === 'partial' && (
+   551→                          <Button variant="ghost" size="icon" className="h-7 w-7" title="Resend failed">
+   552→                            <RefreshCw className="h-3.5 w-3.5 text-amber-500" />
+   553→                          </Button>
+   554→                        )}
+   555→                        <Button variant="ghost" size="icon" className="h-7 w-7" title="View details">
+   556→                          <Eye className="h-3.5 w-3.5" />
+   557→                        </Button>
+   558→                      </div>
+   559→                    </TableCell>
+   560→                  </TableRow>
+   561→                ))}
+   562→              </TableBody>
+   563→            </Table>
+   564→          </div>
+   565→        </TabsContent>
+   566→      </Tabs>
+   567→
+   568→      {/* Test Email Dialog */}
+   569→      <Dialog open={showTestDialog} onOpenChange={setShowTestDialog}>
+   570→        <DialogContent className="sm:max-w-md">
+   571→          <DialogHeader>
+   572→            <DialogTitle>Send Test Email</DialogTitle>
+   573→            <DialogDescription>
+   574→              Send a test email to preview how it will look for recipients.
+   575→            </DialogDescription>
+   576→          </DialogHeader>
+   577→          <div className="space-y-3">
+   578→            <div className="space-y-1.5">
+   579→              <Label className="text-sm">Recipient Email</Label>
+   580→              <Input
+   581→                placeholder="test@example.com"
+   582→                value={testEmail}
+   583→                onChange={(e) => setTestEmail(e.target.value)}
+   584→                type="email"
+   585→              />
+   586→            </div>
+   587→            {testSent && (
+   588→              <motion.div
+   589→                initial={{ opacity: 0, y: 5 }}
+   590→                animate={{ opacity: 1, y: 0 }}
+   591→                className="flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 p-3"
+   592→              >
+   593→                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+   594→                <p className="text-sm text-emerald-700 dark:text-emerald-300">Test email sent to {testEmail}!</p>
+   595→              </motion.div>
+   596→            )}
+   597→          </div>
+   598→          <DialogFooter>
+   599→            <Button variant="outline" onClick={() => setShowTestDialog(false)}>
+   600→              Cancel
+   601→            </Button>
+   602→            <Button onClick={handleSendTest} disabled={!testEmail} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+   603→              <Send className="h-4 w-4 mr-1.5" />
+   604→              Send Test
+   605→            </Button>
+   606→          </DialogFooter>
+   607→        </DialogContent>
+   608→      </Dialog>
+   609→
+   610→      {/* Send Confirmation Dialog */}
+   611→      <Dialog open={showSendConfirm} onOpenChange={setShowSendConfirm}>
+   612→        <DialogContent className="sm:max-w-md">
+   613→          <DialogHeader>
+   614→            <DialogTitle className="flex items-center gap-2">
+   615→              <AlertCircle className="h-5 w-5 text-amber-500" />
+   616→              Confirm Email Send
+   617→            </DialogTitle>
+   618→            <DialogDescription>
+   619→              You are about to send this email to <strong>{recipientCount.toLocaleString()} recipients</strong>.
+   620→              {scheduleType === 'scheduled' && ` Scheduled for ${scheduledTime}.`}
+   621→            </DialogDescription>
+   622→          </DialogHeader>
+   623→          <div className="space-y-2 rounded-lg bg-muted/50 p-3">
+   624→            <p className="text-sm"><strong>Subject:</strong> {subject}</p>
+   625→            <p className="text-xs text-muted-foreground line-clamp-3">{body}</p>
+   626→          </div>
+   627→          <DialogFooter className="gap-2">
+   628→            <Button variant="outline" onClick={() => setShowSendConfirm(false)}>
+   629→              Cancel
+   630→            </Button>
+   631→            <Button onClick={handleSendEmail} className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg">
+   632→              <Send className="h-4 w-4 mr-1.5" />
+   633→              {scheduleType === 'now' ? 'Send Now' : 'Schedule Send'}
+   634→            </Button>
+   635→          </DialogFooter>
+   636→        </DialogContent>
+   637→      </Dialog>
+   638→    </div>
+   639→  );
+   640→}
+   641→

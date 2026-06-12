@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { useAppStore } from '@/store/app-store';
 import { Sidebar } from '@/components/layout/sidebar';
 import { LandingPage } from '@/components/landing/landing-page';
@@ -22,6 +23,7 @@ import { AdminLearningPaths } from '@/components/admin/admin-learning-paths';
 import { CheckoutPage } from '@/components/checkout/checkout-page';
 import { AITutorFullPage, AITutorFloatingWidget } from '@/components/ai/ai-tutor-chat';
 import { AIContentGeneration } from '@/components/ai/ai-content-generation';
+import { ThemeSync } from '@/lib/theme-sync';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,6 +50,7 @@ import {
   CheckCheck,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
+import { signOut } from 'next-auth/react';
 
 // View name map for breadcrumbs
 const viewLabels: Record<string, string> = {
@@ -116,11 +119,16 @@ function MainContent() {
 
 // Top bar for admin/learner mode
 function TopBar() {
-  const { appMode, currentView, currentUser, notifications, markAllNotificationsRead, markNotificationRead, goToLanding } = useAppStore();
+  const { appMode, currentView, currentUser, notifications, markAllNotificationsRead, markNotificationRead, logout } = useAppStore();
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const breadcrumb = viewLabels[currentView] || 'Dashboard';
   const isAdmin = appMode === 'admin';
+
+  const handleSignOut = async () => {
+    logout();
+    await signOut({ redirect: false });
+  };
 
   return (
     <div className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-background/95 backdrop-blur-sm px-4 sm:px-6 h-14 shrink-0">
@@ -222,7 +230,7 @@ function TopBar() {
               Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={goToLanding}>
+            <DropdownMenuItem onClick={handleSignOut}>
               <LogOut className="mr-2 h-4 w-4" />
               Sign Out
             </DropdownMenuItem>
@@ -233,24 +241,74 @@ function TopBar() {
   );
 }
 
+// Fetch tenant data on app init and keep store in sync
+function TenantLoader({ children }: { children: React.ReactNode }) {
+  const { currentTenant, setCurrentTenant } = useAppStore();
+  const hasFetched = useRef(false);
+
+  useEffect(() => {
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+
+    const slug = currentTenant?.slug || 'nextgen-academy';
+    fetch(`/api/tenants?slug=${slug}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.id) {
+          setCurrentTenant({
+            id: data.id,
+            name: data.name,
+            slug: data.slug,
+            domain: data.domain ?? undefined,
+            logoUrl: data.logoUrl ?? undefined,
+            primaryColor: data.primaryColor,
+            secondaryColor: data.secondaryColor,
+            accentColor: data.accentColor,
+            fontFamily: data.fontFamily,
+            description: data.description ?? undefined,
+            isActive: data.isActive,
+            plan: data.plan,
+            maxUsers: data.maxUsers,
+            currency: data.currency,
+            locale: data.locale,
+            createdAt: data.createdAt,
+          });
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch tenant data:', err);
+      });
+  }, [currentTenant?.slug, setCurrentTenant]);
+
+  return <>{children}</>;
+}
+
 export function AppLayout() {
   const { appMode } = useAppStore();
 
   // Marketing mode: just the landing page (no sidebar)
   if (appMode === 'marketing') {
-    return <LandingPage />;
+    return (
+      <TenantLoader>
+        <ThemeSync />
+        <LandingPage />
+      </TenantLoader>
+    );
   }
 
   // Admin / Learner mode: sidebar + top bar + main content
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar />
-      <main className="flex-1 overflow-hidden flex flex-col relative">
-        <TopBar />
-        <MainContent />
-      </main>
-      {/* Floating AI Chat Widget - always available in learner mode */}
-      <AITutorFloatingWidget />
-    </div>
+    <TenantLoader>
+      <ThemeSync />
+      <div className="flex h-screen overflow-hidden bg-background">
+        <Sidebar />
+        <main className="flex-1 overflow-hidden flex flex-col relative">
+          <TopBar />
+          <MainContent />
+        </main>
+        {/* Floating AI Chat Widget - always available in learner mode */}
+        <AITutorFloatingWidget />
+      </div>
+    </TenantLoader>
   );
 }

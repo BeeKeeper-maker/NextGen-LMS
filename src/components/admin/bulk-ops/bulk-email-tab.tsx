@@ -58,7 +58,58 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { demoCourses, bulkUsers, bulkEmailHistory } from '@/lib/mock-data';
+import { useCourses } from '@/hooks/use-data';
+
+// TODO: Replace with real API when available - bulk user data not yet in the API
+interface BulkUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: 'active' | 'inactive';
+  coursesEnrolled: number;
+  lastActive: string;
+}
+
+// TODO: Replace with real API when available - bulk user data not yet in the API
+const bulkUsers: BulkUser[] = [
+  { id: 'bu-1', name: 'Mike Chen', email: 'mike.chen@example.com', role: 'learner', status: 'active', coursesEnrolled: 3, lastActive: '2 hours ago' },
+  { id: 'bu-2', name: 'Emma Rodriguez', email: 'emma.r@example.com', role: 'learner', status: 'active', coursesEnrolled: 5, lastActive: '1 hour ago' },
+  { id: 'bu-3', name: 'David Park', email: 'david.park@example.com', role: 'instructor', status: 'active', coursesEnrolled: 2, lastActive: '30 min ago' },
+  { id: 'bu-4', name: 'Lisa Wang', email: 'lisa.wang@example.com', role: 'content_creator', status: 'active', coursesEnrolled: 4, lastActive: '3 hours ago' },
+  { id: 'bu-5', name: 'Jordan Lee', email: 'jordan.lee@example.com', role: 'learner', status: 'active', coursesEnrolled: 2, lastActive: '5 hours ago' },
+  { id: 'bu-6', name: 'Sophia Martinez', email: 'sophia.m@example.com', role: 'learner', status: 'active', coursesEnrolled: 6, lastActive: '15 min ago' },
+  { id: 'bu-7', name: 'Alex Kim', email: 'alex.kim@example.com', role: 'learner', status: 'inactive', coursesEnrolled: 1, lastActive: '2 weeks ago' },
+  { id: 'bu-8', name: 'Rachel Green', email: 'rachel.g@example.com', role: 'learner', status: 'active', coursesEnrolled: 3, lastActive: '4 hours ago' },
+  { id: 'bu-9', name: 'Tom Wilson', email: 'tom.w@example.com', role: 'learner', status: 'active', coursesEnrolled: 2, lastActive: '1 day ago' },
+  { id: 'bu-10', name: 'Priya Sharma', email: 'priya.s@example.com', role: 'instructor', status: 'active', coursesEnrolled: 1, lastActive: '6 hours ago' },
+  { id: 'bu-11', name: 'James Johnson', email: 'james.j@example.com', role: 'learner', status: 'active', coursesEnrolled: 4, lastActive: '45 min ago' },
+  { id: 'bu-12', name: 'Nina Patel', email: 'nina.p@example.com', role: 'learner', status: 'inactive', coursesEnrolled: 0, lastActive: '1 month ago' },
+  { id: 'bu-13', name: 'Carlos Ruiz', email: 'carlos.r@example.com', role: 'learner', status: 'active', coursesEnrolled: 3, lastActive: '2 days ago' },
+  { id: 'bu-14', name: 'Aisha Mohammed', email: 'aisha.m@example.com', role: 'learner', status: 'active', coursesEnrolled: 5, lastActive: '20 min ago' },
+  { id: 'bu-15', name: 'Ben Taylor', email: 'ben.t@example.com', role: 'content_creator', status: 'active', coursesEnrolled: 2, lastActive: '8 hours ago' },
+];
+
+// TODO: Replace with real API when available - bulk email history not yet in the API
+interface BulkEmailRecord {
+  id: string;
+  subject: string;
+  recipients: number;
+  sentDate: string;
+  openRate: number;
+  clickRate: number;
+  status: 'sent' | 'partial' | 'failed';
+}
+
+// TODO: Replace with real API when available - bulk email history not yet in the API
+const bulkEmailHistory: BulkEmailRecord[] = [
+  { id: 'email-1', subject: 'Welcome to NextGen Academy!', recipients: 245, sentDate: '2024-10-14', openRate: 68.2, clickRate: 24.5, status: 'sent' },
+  { id: 'email-2', subject: 'New Course Launch: DevOps & Cloud', recipients: 1890, sentDate: '2024-10-12', openRate: 52.1, clickRate: 18.3, status: 'sent' },
+  { id: 'email-3', subject: 'Your Weekly Learning Summary', recipients: 3245, sentDate: '2024-10-10', openRate: 41.7, clickRate: 12.8, status: 'sent' },
+  { id: 'email-4', subject: 'Course Completion Reminder', recipients: 156, sentDate: '2024-10-08', openRate: 59.3, clickRate: 31.2, status: 'partial' },
+  { id: 'email-5', subject: 'Special Offer: 30% Off All Courses', recipients: 4120, sentDate: '2024-10-05', openRate: 73.4, clickRate: 28.9, status: 'sent' },
+  { id: 'email-6', subject: 'Live Cohort Starting Tomorrow', recipients: 45, sentDate: '2024-10-03', openRate: 82.1, clickRate: 44.3, status: 'sent' },
+];
 
 type RecipientType = 'all' | 'course' | 'role' | 'custom';
 
@@ -98,6 +149,8 @@ export function BulkEmailTab() {
   const [testSent, setTestSent] = useState(false);
   // History filters
   const [dateFilter, setDateFilter] = useState('all');
+  const { data: coursesData } = useCourses();
+  const demoCourses = coursesData || [];
 
   // Estimate recipient count
   const recipientCount = useMemo(() => {
@@ -105,7 +158,7 @@ export function BulkEmailTab() {
       case 'all':
         return 3847;
       case 'course':
-        return demoCourses.find((c) => c.id === selectedCourse)?.enrollmentCount || 0;
+        return demoCourses.find((c: any) => c.id === selectedCourse)?.enrollmentCount || 0;
       case 'role':
         return bulkUsers.filter((u) => u.role === selectedRole).length * 257;
       case 'custom':
@@ -113,7 +166,7 @@ export function BulkEmailTab() {
       default:
         return 0;
     }
-  }, [recipientType, selectedCourse, selectedRole]);
+  }, [recipientType, selectedCourse, selectedRole, demoCourses]);
 
   // Insert variable into subject
   const insertVariable = useCallback(
@@ -301,9 +354,9 @@ export function BulkEmailTab() {
                       <SelectValue placeholder="Select a course..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {demoCourses.map((c) => (
+                      {demoCourses.map((c: any) => (
                         <SelectItem key={c.id} value={c.id}>
-                          {c.title} ({c.enrollmentCount} students)
+                          {c.title} ({c.enrollmentCount || 0} students)
                         </SelectItem>
                       ))}
                     </SelectContent>

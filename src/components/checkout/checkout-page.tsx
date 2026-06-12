@@ -44,8 +44,29 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useAppStore } from '@/store/app-store';
-import { demoProducts, demoCourses, supportedCurrencies } from '@/lib/mock-data';
+import { useCourses } from '@/hooks/use-data';
 import type { CurrencyOption } from '@/types';
+
+// TODO: Replace with real API when available - products/bundles are not yet in the API
+const demoProducts = [
+  { id: 'prod-1', tenantId: 'demo-tenant-1', name: 'React Masterclass Bundle', type: 'bundle', price: 297, compareAtPrice: 494, currency: 'USD', isActive: true, features: ['Advanced React & Next.js Masterclass', 'AI-Powered Full Stack Development', 'System Design for Senior Engineers', 'Lifetime access & updates', 'Community access included'] },
+  { id: 'prod-2', tenantId: 'demo-tenant-1', name: 'Annual Membership', type: 'membership', price: 799, compareAtPrice: 1164, currency: 'USD', isActive: true, features: ['Access to ALL courses', 'Monthly live cohorts', 'Private community', 'Priority AI tutoring', 'Certificate for every course', 'Cancel anytime'] },
+  { id: 'prod-3', tenantId: 'demo-tenant-1', name: '1-on-1 Coaching Session', type: 'coaching', price: 149, currency: 'USD', isActive: true, features: ['60-minute session', 'Code review & feedback', 'Career guidance', 'Custom learning path'] },
+];
+
+// Static currency configuration (not user-generated data)
+const supportedCurrencies: CurrencyOption[] = [
+  { code: 'USD', symbol: '$', name: 'US Dollar', rate: 1, flag: '\uD83C\uDDFA\uD83C\uDDF8' },
+  { code: 'EUR', symbol: '\u20AC', name: 'Euro', rate: 0.92, flag: '\uD83C\uDDEA\uD83C\uDDFA' },
+  { code: 'GBP', symbol: '\u00A3', name: 'British Pound', rate: 0.79, flag: '\uD83C\uDDEC\uD83C\uDDE7' },
+  { code: 'JPY', symbol: '\u00A5', name: 'Japanese Yen', rate: 149.5, flag: '\uD83C\uDDEF\uD83C\uDDF5' },
+  { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar', rate: 1.36, flag: '\uD83C\uDDE8\uD83C\uDDE6' },
+  { code: 'AUD', symbol: 'A$', name: 'Australian Dollar', rate: 1.53, flag: '\uD83C\uDDE6\uD83C\uDDFA' },
+  { code: 'INR', symbol: '\u20B9', name: 'Indian Rupee', rate: 83.1, flag: '\uD83C\uDDEE\uD83C\uDDF3' },
+  { code: 'BRL', symbol: 'R$', name: 'Brazilian Real', rate: 4.97, flag: '\uD83C\uDDE7\uD83C\uDDF7' },
+  { code: 'MXN', symbol: 'MX$', name: 'Mexican Peso', rate: 17.15, flag: '\uD83C\uDDF2\uD83C\uDDFD' },
+  { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar', rate: 1.34, flag: '\uD83C\uDDF8\uD83C\uDDEC' },
+];
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -282,8 +303,10 @@ type PaymentMethod = 'card' | 'paypal' | 'applepay';
 
 export function CheckoutPage() {
   const { setView } = useAppStore();
+  const { data: coursesData } = useCourses();
+  const courses = coursesData || [];
   const product = demoProducts[0];
-  const course = demoCourses[0];
+  const course = courses[0];
 
   // ── State ───────────────────────────────────────────────────────────────
   const [currentStep, setCurrentStep] = useState<CheckoutStep>(1);
@@ -1276,7 +1299,7 @@ export function CheckoutPage() {
                     <div className="bg-muted/50 rounded-xl p-4 mt-2">
                       <p className="text-xs font-medium text-foreground mb-2">Courses included:</p>
                       <div className="space-y-1.5">
-                        {demoCourses.slice(0, 3).map((c) => (
+                        {courses.slice(0, 3).map((c: any) => (
                           <div key={c.id} className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Check className="h-3 w-3 text-emerald-500" />
                             <span>{c.title}</span>

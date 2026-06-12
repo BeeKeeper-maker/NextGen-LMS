@@ -1,0 +1,1207 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import { useState, useEffect, useCallback, useRef } from 'react';
+     4→     4→import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
+     5→     5→import {
+     6→     6→  Plus, Heart, MessageSquare, Share2, Bookmark, ChevronDown,
+     7→     7→  ChevronUp, Clock, Tag, Send, Flame, Trophy, TrendingUp,
+     8→     8→  Megaphone, HelpCircle, Star, MessageCircle, X, Pin,
+     9→     9→  Bold, Italic, Code, Link2, Eye, EyeOff, Smile, Sparkles,
+    10→    10→  Users, Activity, Zap
+    11→    11→} from 'lucide-react';
+    12→    12→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    13→    13→import { Button } from '@/components/ui/button';
+    14→    14→import { Badge } from '@/components/ui/badge';
+    15→    15→import { Input } from '@/components/ui/input';
+    16→    16→import { Textarea } from '@/components/ui/textarea';
+    17→    17→import { Label } from '@/components/ui/label';
+    18→    18→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    19→    19→import { Separator } from '@/components/ui/separator';
+    20→    20→import {
+    21→    21→  Dialog,
+    22→    22→  DialogContent,
+    23→    23→  DialogHeader,
+    24→    24→  DialogTitle,
+    25→    25→  DialogFooter,
+    26→    26→} from '@/components/ui/dialog';
+    27→    27→import {
+    28→    28→  Select,
+    29→    29→  SelectContent,
+    30→    30→  SelectItem,
+    31→    31→  SelectTrigger,
+    32→    32→  SelectValue,
+    33→    33→} from '@/components/ui/select';
+    34→    34→import { ScrollArea } from '@/components/ui/scroll-area';
+    35→    35→import { demoCommunityPosts, leaderboardData } from '@/lib/mock-data';
+    36→    36→import { apiGet, apiPost } from '@/lib/api';
+    37→    37→import { useAppStore } from '@/store/app-store';
+    38→    38→import type { CommunityPost } from '@/types';
+    39→    39→
+    40→    40→// ─── Constants ────────────────────────────────────────────────────────────────
+    41→    41→
+    42→    42→const EMOJI_REACTIONS = ['❤️', '👍', '🎉', '🤔', '💡', '🚀'] as const;
+    43→    43→type EmojiType = typeof EMOJI_REACTIONS[number];
+    44→    44→
+    45→    45→const EMOJI_PICKER_LIST = [
+    46→    46→  '😀', '😂', '🥳', '😎', '🤩', '😊', '🥰', '😍',
+    47→    47→  '🤔', '💡', '🔥', '⭐', '🎉', '👏', '💪', '🙌',
+    48→    48→  '👍', '❤️', '💯', '🎯', '🚀', '✨', '🌟', '💻',
+    49→    49→  '📚', '🎓', '✅', '❓', '📢', '💬', '🙏', '🤝',
+    50→    50→];
+    51→    51→
+    52→    52→const MARKDOWN_TOOLBAR = [
+    53→    53→  { icon: Bold, label: 'Bold', prefix: '**', suffix: '**' },
+    54→    54→  { icon: Italic, label: 'Italic', prefix: '_', suffix: '_' },
+    55→    55→  { icon: Code, label: 'Code', prefix: '`', suffix: '`' },
+    56→    56→  { icon: Link2, label: 'Link', prefix: '[', suffix: '](url)' },
+    57→    57→];
+    58→    58→
+    59→    59→const TOPIC_TAGS = [
+    60→    60→  'nextjs', 'react', 'ai', 'typescript', 'fullstack',
+    61→    61→  'design-system', 'authentication', 'state-management',
+    62→    62→  'tailwind', 'prisma', 'api', 'testing'
+    63→    63→];
+    64→    64→
+    65→    65→const categoryPills = [
+    66→    66→  { id: 'all', name: 'All', icon: '🏠', color: '#64748B' },
+    67→    67→  { id: 'cat-1', name: 'General Discussion', icon: '💬', color: '#10B981' },
+    68→    68→  { id: 'cat-2', name: 'Q&A Support', icon: '❓', color: '#8B5CF6' },
+    69→    69→  { id: 'cat-3', name: 'Announcements', icon: '📢', color: '#F59E0B' },
+    70→    70→  { id: 'cat-4', name: 'Show & Tell', icon: '🌟', color: '#EC4899' },
+    71→    71→];
+    72→    72→
+    73→    73→const sampleComments = [
+    74→    74→  { id: 'c1', author: 'Emma Rodriguez', content: 'Great question! I\'ve been using Zustand for client state and TanStack Query for server state. Works really well.', likeCount: 5, timeAgo: '1h ago' },
+    75→    75→  { id: 'c2', author: 'David Park', content: 'I recommend checking out Jotai if you want something lighter than Redux but more structured than Context.', likeCount: 3, timeAgo: '45m ago' },
+    76→    76→  { id: 'c3', author: 'Lisa Wang', content: 'This is exactly what I needed! The React docs on data fetching have some good patterns too.', likeCount: 2, timeAgo: '30m ago' },
+    77→    77→];
+    78→    78→
+    79→    79→const trendingTopics = [
+    80→    80→  { tag: 'nextjs', count: 42, sparkline: [20, 25, 30, 28, 35, 38, 42] },
+    81→    81→  { tag: 'react', count: 38, sparkline: [30, 28, 32, 35, 33, 36, 38] },
+    82→    82→  { tag: 'ai', count: 35, sparkline: [10, 15, 18, 22, 28, 32, 35] },
+    83→    83→  { tag: 'typescript', count: 29, sparkline: [18, 20, 22, 25, 27, 28, 29] },
+    84→    84→  { tag: 'fullstack', count: 24, sparkline: [12, 14, 18, 20, 22, 23, 24] },
+    85→    85→  { tag: 'design-system', count: 18, sparkline: [8, 10, 12, 14, 15, 17, 18] },
+    86→    86→  { tag: 'authentication', count: 15, sparkline: [5, 7, 9, 11, 12, 14, 15] },
+    87→    87→  { tag: 'state-management', count: 12, sparkline: [6, 7, 8, 9, 10, 11, 12] },
+    88→    88→];
+    89→    89→
+    90→    90→// ─── Helper Functions ─────────────────────────────────────────────────────────
+    91→    91→
+    92→    92→function getTypeEmoji(type: CommunityPost['type']) {
+    93→    93→  switch (type) {
+    94→    94→    case 'discussion': return '💬';
+    95→    95→    case 'question': return '❓';
+    96→    96→    case 'announcement': return '📢';
+    97→    97→    case 'resource': return '🌟';
+    98→    98→  }
+    99→    99→}
+   100→   100→
+   101→   101→function getTypeBadgeStyle(type: CommunityPost['type']) {
+   102→   102→  switch (type) {
+   103→   103→    case 'discussion': return 'bg-gradient-to-r from-emerald-100 to-emerald-50 text-emerald-700 border-emerald-500/30';
+   104→   104→    case 'question': return 'bg-gradient-to-r from-violet-100 to-violet-50 text-violet-700 border-violet-200';
+   105→   105→    case 'announcement': return 'bg-gradient-to-r from-amber-100 to-amber-50 text-amber-700 border-amber-200';
+   106→   106→    case 'resource': return 'bg-gradient-to-r from-pink-100 to-pink-50 text-pink-700 border-pink-200';
+   107→   107→  }
+   108→   108→}
+   109→   109→
+   110→   110→function getRoleBadge(role: string) {
+   111→   111→  switch (role) {
+   112→   112→    case 'tenant_admin': return { label: 'Admin', class: 'bg-emerald-100 text-emerald-700' };
+   113→   113→    case 'instructor': return { label: 'Instructor', class: 'bg-violet-100 text-violet-700' };
+   114→   114→    case 'content_creator': return { label: 'Creator', class: 'bg-pink-100 text-pink-700' };
+   115→   115→    default: return { label: 'Learner', class: 'bg-slate-100 text-slate-600' };
+   116→   116→  }
+   117→   117→}
+   118→   118→
+   119→   119→function timeAgo(dateStr: string) {
+   120→   120→  const now = new Date();
+   121→   121→  const date = new Date(dateStr);
+   122→   122→  const diffMs = now.getTime() - date.getTime();
+   123→   123→  const diffMins = Math.floor(diffMs / 60000);
+   124→   124→  if (diffMins < 60) return `${diffMins}m ago`;
+   125→   125→  const diffHours = Math.floor(diffMins / 60);
+   126→   126→  if (diffHours < 24) return `${diffHours}h ago`;
+   127→   127→  const diffDays = Math.floor(diffHours / 24);
+   128→   128→  if (diffDays < 30) return `${diffDays}d ago`;
+   129→   129→  return `${Math.floor(diffDays / 30)}mo ago`;
+   130→   130→}
+   131→   131→
+   132→   132→function estimateReadingTime(content: string): number {
+   133→   133→  const wordsPerMinute = 200;
+   134→   134→  const wordCount = content.split(/\s+/).length;
+   135→   135→  return Math.max(1, Math.ceil(wordCount / wordsPerMinute));
+   136→   136→}
+   137→   137→
+   138→   138→function getEngagementScore(post: CommunityPost): number {
+   139→   139→  return post.viewCount + (post.likeCount * 3) + (post.commentCount * 5);
+   140→   140→}
+   141→   141→
+   142→   142→// ─── Animated Counter Component ───────────────────────────────────────────────
+   143→   143→
+   144→   144→function AnimatedCounter({ target, duration = 1.5 }: { target: number; duration?: number }) {
+   145→   145→  const [count, setCount] = useState(0);
+   146→   146→  useEffect(() => {
+   147→   147→    let start = 0;
+   148→   148→    const increment = target / (duration * 60);
+   149→   149→    const timer = setInterval(() => {
+   150→   150→      start += increment;
+   151→   151→      if (start >= target) {
+   152→   152→        setCount(target);
+   153→   153→        clearInterval(timer);
+   154→   154→      } else {
+   155→   155→        setCount(Math.floor(start));
+   156→   156→      }
+   157→   157→    }, 1000 / 60);
+   158→   158→    return () => clearInterval(timer);
+   159→   159→  }, [target, duration]);
+   160→   160→
+   161→   161→  return <span>{count.toLocaleString()}</span>;
+   162→   162→}
+   163→   163→
+   164→   164→// ─── Sparkline Chart Component ────────────────────────────────────────────────
+   165→   165→
+   166→   166→function SparklineChart({ data, color = '#10B981', width = 48, height = 20 }: { data: number[]; color?: string; width?: number; height?: number }) {
+   167→   167→  if (data.length < 2) return null;
+   168→   168→  const max = Math.max(...data);
+   169→   169→  const min = Math.min(...data);
+   170→   170→  const range = max - min || 1;
+   171→   171→  const padding = 2;
+   172→   172→
+   173→   173→  const points = data.map((val, i) => {
+   174→   174→    const x = padding + (i / (data.length - 1)) * (width - padding * 2);
+   175→   175→    const y = height - padding - ((val - min) / range) * (height - padding * 2);
+   176→   176→    return `${x},${y}`;
+   177→   177→  }).join(' ');
+   178→   178→
+   179→   179→  const areaPoints = `${padding},${height - padding} ${points} ${width - padding},${height - padding}`;
+   180→   180→
+   181→   181→  return (
+   182→   182→    <svg width={width} height={height} className="shrink-0">
+   183→   183→      <defs>
+   184→   184→        <linearGradient id={`grad-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
+   185→   185→          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+   186→   186→          <stop offset="100%" stopColor={color} stopOpacity="0.05" />
+   187→   187→        </linearGradient>
+   188→   188→      </defs>
+   189→   189→      <polygon points={areaPoints} fill={`url(#grad-${color.replace('#', '')})`} />
+   190→   190→      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+   191→   191→    </svg>
+   192→   192→  );
+   193→   193→}
+   194→   194→
+   195→   195→// ─── Floating +1 Animation ────────────────────────────────────────────────────
+   196→   196→
+   197→   197→function FloatingPlusOne({ emoji }: { emoji: string }) {
+   198→   198→  return (
+   199→   199→    <motion.div
+   200→   200→      initial={{ opacity: 1, y: 0, scale: 0.5 }}
+   201→   201→      animate={{ opacity: 0, y: -30, scale: 1.2 }}
+   202→   202→      exit={{ opacity: 0 }}
+   203→   203→      transition={{ duration: 0.8, ease: 'easeOut' }}
+   204→   204→      className="absolute -top-2 left-1/2 -translate-x-1/2 pointer-events-none text-sm font-bold z-10"
+   205→   205→    >
+   206→   206→      {emoji}+1
+   207→   207→    </motion.div>
+   208→   208→  );
+   209→   209→}
+   210→   210→
+   211→   211→// ─── Heart Burst Animation ────────────────────────────────────────────────────
+   212→   212→
+   213→   213→function HeartBurst({ x, y }: { x: number; y: number }) {
+   214→   214→  const hearts = ['❤️', '💕', '💖', '💗', '💓'];
+   215→   215→  return (
+   216→   216→    <div className="fixed pointer-events-none z-50" style={{ left: x, top: y }}>
+   217→   217→      {hearts.map((heart, i) => {
+   218→   218→        const angle = (i / hearts.length) * Math.PI * 2;
+   219→   219→        const distance = 40 + Math.random() * 30;
+   220→   220→        return (
+   221→   221→          <motion.span
+   222→   222→            key={i}
+   223→   223→            initial={{ opacity: 1, x: 0, y: 0, scale: 0 }}
+   224→   224→            animate={{
+   225→   225→              opacity: 0,
+   226→   226→              x: Math.cos(angle) * distance,
+   227→   227→              y: Math.sin(angle) * distance - 20,
+   228→   228→              scale: 1.5,
+   229→   229→            }}
+   230→   230→            transition={{ duration: 0.7, ease: 'easeOut' }}
+   231→   231→            className="absolute text-lg"
+   232→   232→          >
+   233→   233→            {heart}
+   234→   234→          </motion.span>
+   235→   235→        );
+   236→   236→      })}
+   237→   237→    </div>
+   238→   238→  );
+   239→   239→}
+   240→   240→
+   241→   241→// ─── Main Component ───────────────────────────────────────────────────────────
+   242→   242→
+   243→   243→export function LearnerCommunity() {
+   244→   244→  const { currentUser, currentTenant } = useAppStore();
+   245→   245→  const [posts, setPosts] = useState<CommunityPost[]>(demoCommunityPosts);
+   246→   246→  const [activeCategory, setActiveCategory] = useState('all');
+   247→   247→  const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
+   248→   248→  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+   249→   249→  const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
+   250→   250→  const [showCreateDialog, setShowCreateDialog] = useState(false);
+   251→   251→  const [newPost, setNewPost] = useState({
+   252→   252→    title: '',
+   253→   253→    content: '',
+   254→   254→    type: 'discussion' as CommunityPost['type'],
+   255→   255→    categoryId: 'cat-1',
+   256→   256→    tags: '',
+   257→   257→  });
+   258→   258→
+   259→   259→  // Emoji reaction state: { postId: { emoji: count } }
+   260→   260→  const [reactions, setReactions] = useState<Record<string, Record<string, number>>>(() => {
+   261→   261→    const init: Record<string, Record<string, number>> = {};
+   262→   262→    demoCommunityPosts.forEach(post => {
+   263→   263→      const postReactions: Record<string, number> = {};
+   264→   264→      // Seed some initial reactions
+   265→   265→      const seedEmojis: EmojiType[] = ['❤️', '👍', '🎉', '💡'];
+   266→   266→      seedEmojis.forEach(emoji => {
+   267→   267→        postReactions[emoji] = Math.floor(Math.random() * (post.likeCount || 10)) + 1;
+   268→   268→      });
+   269→   269→      init[post.id] = postReactions;
+   270→   270→    });
+   271→   271→    return init;
+   272→   272→  });
+   273→   273→
+   274→   274→  // User's own reactions
+   275→   275→  const [userReactions, setUserReactions] = useState<Record<string, Set<string>>>({});
+   276→   276→
+   277→   277→  // Floating +1 animations
+   278→   278→  const [floatingEmojis, setFloatingEmojis] = useState<{ id: string; postId: string; emoji: string }[]>([]);
+   279→   279→
+   280→   280→  // Heart burst state
+   281→   281→  const [heartBursts, setHeartBursts] = useState<{ id: string; x: number; y: number }[]>([]);
+   282→   282→
+   283→   283→  // Create post dialog state
+   284→   284→  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+   285→   285→  const [isPreviewMode, setIsPreviewMode] = useState(false);
+   286→   286→  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+   287→   287→  const [composerFocused, setComposerFocused] = useState(false);
+   288→   288→
+   289→   289→  // Community stats
+   290→   290→  const totalMembers = 2847;
+   291→   291→  const postsToday = 23;
+   292→   292→  const activeNow = 142;
+   293→   293→
+   294→   294→  // Filter posts by category
+   295→   295→  const filteredPosts = posts.filter((post) => {
+   296→   296→    return activeCategory === 'all' || post.categoryId === activeCategory;
+   297→   297→  });
+   298→   298→
+   299→   299→  const toggleComments = (postId: string) => {
+   300→   300→    setExpandedComments(prev => {
+   301→   301→      const next = new Set(prev);
+   302→   302→      if (next.has(postId)) next.delete(postId);
+   303→   303→      else next.add(postId);
+   304→   304→      return next;
+   305→   305→    });
+   306→   306→  };
+   307→   307→
+   308→   308→  const toggleLike = (postId: string) => {
+   309→   309→    setLikedPosts(prev => {
+   310→   310→      const next = new Set(prev);
+   311→   311→      if (next.has(postId)) next.delete(postId);
+   312→   312→      else next.add(postId);
+   313→   313→      return next;
+   314→   314→    });
+   315→   315→    setPosts(posts.map(p => {
+   316→   316→      if (p.id === postId) {
+   317→   317→        return { ...p, likeCount: likedPosts.has(postId) ? p.likeCount - 1 : p.likeCount + 1 };
+   318→   318→      }
+   319→   319→      return p;
+   320→   320→    }));
+   321→   321→  };
+   322→   322→
+   323→   323→  const toggleBookmark = (postId: string) => {
+   324→   324→    setBookmarkedPosts(prev => {
+   325→   325→      const next = new Set(prev);
+   326→   326→      if (next.has(postId)) next.delete(postId);
+   327→   327→      else next.add(postId);
+   328→   328→      return next;
+   329→   329→    });
+   330→   330→  };
+   331→   331→
+   332→   332→  const handleEmojiReaction = (postId: string, emoji: EmojiType) => {
+   333→   333→    const userPostReactions = userReactions[postId] || new Set<string>();
+   334→   334→
+   335→   335→    setReactions(prev => {
+   336→   336→      const postReactions = { ...(prev[postId] || {}) };
+   337→   337→      if (userPostReactions.has(emoji)) {
+   338→   338→        // Remove reaction
+   339→   339→        postReactions[emoji] = Math.max(0, (postReactions[emoji] || 0) - 1);
+   340→   340→        if (postReactions[emoji] === 0) delete postReactions[emoji];
+   341→   341→      } else {
+   342→   342→        // Add reaction
+   343→   343→        postReactions[emoji] = (postReactions[emoji] || 0) + 1;
+   344→   344→        // Show floating +1
+   345→   345→        const floatId = `${postId}-${emoji}-${Date.now()}`;
+   346→   346→        setFloatingEmojis(prev => [...prev, { id: floatId, postId, emoji }]);
+   347→   347→        setTimeout(() => {
+   348→   348→          setFloatingEmojis(prev => prev.filter(f => f.id !== floatId));
+   349→   349→        }, 800);
+   350→   350→      }
+   351→   351→      return { ...prev, [postId]: postReactions };
+   352→   352→    });
+   353→   353→
+   354→   354→    setUserReactions(prev => {
+   355→   355→      const current = new Set(prev[postId] || []);
+   356→   356→      if (current.has(emoji)) {
+   357→   357→        current.delete(emoji);
+   358→   358→      } else {
+   359→   359→        current.add(emoji);
+   360→   360→      }
+   361→   361→      return { ...prev, [postId]: current };
+   362→   362→    });
+   363→   363→
+   364→   364→    // Persist reaction to API
+   365→   365→    if (currentUser?.id) {
+   366→   366→      const reactionType = emoji === '❤️' ? 'love' : emoji === '👍' ? 'like' : emoji === '🎉' ? 'celebrate' : 'insightful';
+   367→   367→      apiPost(`/api/community/${postId}/reactions`, {
+   368→   368→        userId: currentUser.id,
+   369→   369→        type: reactionType,
+   370→   370→      }).catch(() => {/* silent */});
+   371→   371→    }
+   372→   372→  };
+   373→   373→
+   374→   374→  const handleHeartBurst = (e: React.MouseEvent) => {
+   375→   375→    const rect = (e.target as HTMLElement).getBoundingClientRect();
+   376→   376→    const id = `burst-${Date.now()}`;
+   377→   377→    setHeartBursts(prev => [...prev, { id, x: rect.left + rect.width / 2, y: rect.top }]);
+   378→   378→    setTimeout(() => {
+   379→   379→      setHeartBursts(prev => prev.filter(b => b.id !== id));
+   380→   380→    }, 700);
+   381→   381→  };
+   382→   382→
+   383→   383→  const handleCreatePost = () => {
+   384→   384→    const post: CommunityPost = {
+   385→   385→      id: `post-${Date.now()}`,
+   386→   386→      tenantId: currentTenant?.id || 'demo-tenant-1',
+   387→   387→      authorId: currentUser?.id || 'demo-learner-1',
+   388→   388→      categoryId: newPost.categoryId,
+   389→   389→      title: newPost.title,
+   390→   390→      content: newPost.content,
+   391→   391→      type: newPost.type,
+   392→   392→      isPinned: false,
+   393→   393→      isLocked: false,
+   394→   394→      viewCount: 0,
+   395→   395→      likeCount: 0,
+   396→   396→      commentCount: 0,
+   397→   397→      tags: selectedTags.length > 0 ? selectedTags : (newPost.tags ? newPost.tags.split(',').map(t => t.trim()).filter(Boolean) : []),
+   398→   398→      author: currentUser || {
+   399→   399→        id: 'demo-learner-1',
+   400→   400→        tenantId: 'demo-tenant-1',
+   401→   401→        email: 'learner@example.com',
+   402→   402→        name: 'Alex Johnson',
+   403→   403→        role: 'learner',
+   404→   404→        timezone: 'America/New_York',
+   405→   405→        locale: 'en',
+   406→   406→        streakDays: 7,
+   407→   407→        totalPoints: 1250,
+   408→   408→        isActive: true,
+   409→   409→        createdAt: '2024-03-10T00:00:00Z',
+   410→   410→      },
+   411→   411→      createdAt: new Date().toISOString(),
+   412→   412→    };
+   413→   413→    // Optimistic update
+   414→   414→    setPosts([post, ...posts]);
+   415→   415→    setShowCreateDialog(false);
+   416→   416→    setNewPost({ title: '', content: '', type: 'discussion', categoryId: 'cat-1', tags: '' });
+   417→   417→    setSelectedTags([]);
+   418→   418→    // Persist to API
+   419→   419→    apiPost('/api/community', {
+   420→   420→      tenantId: currentTenant?.id || 'demo-tenant-1',
+   421→   421→      authorId: currentUser?.id || 'demo-learner-1',
+   422→   422→      title: post.title,
+   423→   423→      content: post.content,
+   424→   424→      type: post.type,
+   425→   425→      categoryId: post.categoryId,
+   426→   426→      tags: post.tags,
+   427→   427→    }).catch(() => {/* silent */});
+   428→   428→  };
+   429→   429→
+   430→   430→  const insertMarkdown = (prefix: string, suffix: string) => {
+   431→   431→    const textarea = document.getElementById('post-content-textarea') as HTMLTextAreaElement;
+   432→   432→    if (!textarea) return;
+   433→   433→    const start = textarea.selectionStart;
+   434→   434→    const end = textarea.selectionEnd;
+   435→   435→    const selected = newPost.content.substring(start, end);
+   436→   436→    const before = newPost.content.substring(0, start);
+   437→   437→    const after = newPost.content.substring(end);
+   438→   438→    const newContent = before + prefix + (selected || 'text') + suffix + after;
+   439→   439→    setNewPost({ ...newPost, content: newContent });
+   440→   440→  };
+   441→   441→
+   442→   442→  const insertEmoji = (emoji: string) => {
+   443→   443→    setNewPost({ ...newPost, content: newPost.content + emoji });
+   444→   444→    setShowEmojiPicker(false);
+   445→   445→  };
+   446→   446→
+   447→   447→  const toggleTag = (tag: string) => {
+   448→   448→    setSelectedTags(prev =>
+   449→   449→      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+   450→   450→    );
+   451→   451→  };
+   452→   452→
+   453→   453→  const charCount = newPost.content.length;
+   454→   454→  const maxChars = 2000;
+   455→   455→  const charColor = charCount > maxChars * 0.9 ? 'text-red-500' : charCount > maxChars * 0.7 ? 'text-amber-500' : 'text-emerald-500';
+   456→   456→
+   457→   457→  // Simple markdown preview
+   458→   458→  const renderMarkdownPreview = (text: string) => {
+   459→   459→    return text
+   460→   460→      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+   461→   461→      .replace(/_(.*?)_/g, '<em>$1</em>')
+   462→   462→      .replace(/`(.*?)`/g, '<code class="bg-slate-100 dark:bg-slate-800 px-1 rounded text-sm">$1</code>')
+   463→   463→      .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="text-emerald-600 underline">$1</a>')
+   464→   464→      .replace(/\n/g, '<br/>');
+   465→   465→  };
+   466→   466→
+   467→   467→  return (
+   468→   468→    <div className="p-4 md:p-6 max-w-[1600px] mx-auto">
+   469→   469→      {/* Community Stats Banner */}
+   470→   470→      <motion.div
+   471→   471→        initial={{ opacity: 0, y: -20 }}
+   472→   472→        animate={{ opacity: 1, y: 0 }}
+   473→   473→        transition={{ duration: 0.5 }}
+   474→   474→        className="mb-5"
+   475→   475→      >
+   476→   476→        <div className="rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-violet-600 p-[1px]">
+   477→   477→          <div className="rounded-xl bg-gradient-to-r from-emerald-50 to-violet-50 dark:from-slate-900 dark:to-slate-800 p-4 md:p-5">
+   478→   478→            <div className="flex items-center justify-between flex-wrap gap-4">
+   479→   479→              <div>
+   480→   480→                <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-50">Community</h1>
+   481→   481→                <p className="text-slate-500 dark:text-slate-400 mt-0.5">Connect, share, and learn together</p>
+   482→   482→              </div>
+   483→   483→              <Button
+   484→   484→                onClick={() => setShowCreateDialog(true)}
+   485→   485→                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shrink-0"
+   486→   486→              >
+   487→   487→                <Plus className="h-4 w-4" />
+   488→   488→                New Post
+   489→   489→              </Button>
+   490→   490→            </div>
+   491→   491→            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+   492→   492→              <div className="flex items-center gap-3 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-lg p-3">
+   493→   493→                <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
+   494→   494→                  <Users className="h-5 w-5 text-emerald-600" />
+   495→   495→                </div>
+   496→   496→                <div>
+   497→   497→                  <p className="text-lg font-bold text-slate-900 dark:text-slate-50"><AnimatedCounter target={totalMembers} /></p>
+   498→   498→                  <p className="text-xs text-slate-500 dark:text-slate-400">Members</p>
+   499→   499→                </div>
+   500→   500→              </div>
+   501→   501→              <div className="flex items-center gap-3 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-lg p-3">
+   502→   502→                <div className="h-10 w-10 rounded-full bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center">
+   503→   503→                  <MessageCircle className="h-5 w-5 text-violet-600" />
+   504→   504→                </div>
+   505→   505→                <div>
+   506→   506→                  <p className="text-lg font-bold text-slate-900 dark:text-slate-50"><AnimatedCounter target={postsToday} duration={0.8} /></p>
+   507→   507→                  <p className="text-xs text-slate-500 dark:text-slate-400">Posts Today</p>
+   508→   508→                </div>
+   509→   509→              </div>
+   510→   510→              <div className="flex items-center gap-3 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-lg p-3">
+   511→   511→                <div className="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center relative">
+   512→   512→                  <Activity className="h-5 w-5 text-amber-600" />
+   513→   513→                  <motion.span
+   514→   514→                    animate={{ scale: [1, 1.5, 1], opacity: [1, 0.5, 1] }}
+   515→   515→                    transition={{ duration: 2, repeat: Infinity }}
+   516→   516→                    className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 border-2 border-white dark:border-slate-800"
+   517→   517→                  />
+   518→   518→                </div>
+   519→   519→                <div>
+   520→   520→                  <p className="text-lg font-bold text-slate-900 dark:text-slate-50"><AnimatedCounter target={activeNow} duration={1} /></p>
+   521→   521→                  <p className="text-xs text-slate-500 dark:text-slate-400">Active Now</p>
+   522→   522→                </div>
+   523→   523→              </div>
+   524→   524→              <div className="flex items-center gap-3 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-lg p-3">
+   525→   525→                <div className="h-10 w-10 rounded-full bg-pink-100 dark:bg-pink-900/50 flex items-center justify-center">
+   526→   526→                  <Zap className="h-5 w-5 text-pink-600" />
+   527→   527→                </div>
+   528→   528→                <div>
+   529→   529→                  <p className="text-lg font-bold text-slate-900 dark:text-slate-50"><AnimatedCounter target={posts.reduce((s, p) => s + p.likeCount, 0)} duration={1.2} /></p>
+   530→   530→                  <p className="text-xs text-slate-500 dark:text-slate-400">Total Reactions</p>
+   531→   531→                </div>
+   532→   532→              </div>
+   533→   533→            </div>
+   534→   534→          </div>
+   535→   535→        </div>
+   536→   536→      </motion.div>
+   537→   537→
+   538→   538→      {/* Category Pills */}
+   539→   539→      <div className="mb-6">
+   540→   540→        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+   541→   541→          {categoryPills.map((cat) => (
+   542→   542→            <motion.button
+   543→   543→              key={cat.id}
+   544→   544→              onClick={() => setActiveCategory(cat.id)}
+   545→   545→              whileHover={{ scale: 1.05 }}
+   546→   546→              whileTap={{ scale: 0.95 }}
+   547→   547→              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all shrink-0 ${
+   548→   548→                activeCategory === cat.id
+   549→   549→                  ? 'text-white shadow-md'
+   550→   550→                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
+   551→   551→              }`}
+   552→   552→              style={activeCategory === cat.id ? { backgroundColor: cat.color } : undefined}
+   553→   553→            >
+   554→   554→              <span>{cat.icon}</span>
+   555→   555→              {cat.name}
+   556→   556→            </motion.button>
+   557→   557→          ))}
+   558→   558→        </div>
+   559→   559→      </div>
+   560→   560→
+   561→   561→      {/* Main Layout: Feed + Sidebar */}
+   562→   562→      <div className="flex gap-6">
+   563→   563→        {/* Activity Feed */}
+   564→   564→        <div className="flex-1 min-w-0 space-y-4">
+   565→   565→          <AnimatePresence mode="popLayout">
+   566→   566→            {filteredPosts.map((post, i) => (
+   567→   567→              <PostFeedCard
+   568→   568→                key={post.id}
+   569→   569→                post={post}
+   570→   570→                index={i}
+   571→   571→                isExpanded={expandedComments.has(post.id)}
+   572→   572→                isLiked={likedPosts.has(post.id)}
+   573→   573→                isBookmarked={bookmarkedPosts.has(post.id)}
+   574→   574→                reactions={reactions[post.id] || {}}
+   575→   575→                userReactions={userReactions[post.id] || new Set()}
+   576→   576→                floatingEmojis={floatingEmojis.filter(f => f.postId === post.id)}
+   577→   577→                onToggleComments={() => toggleComments(post.id)}
+   578→   578→                onToggleLike={() => toggleLike(post.id)}
+   579→   579→                onToggleBookmark={() => toggleBookmark(post.id)}
+   580→   580→                onEmojiReaction={(emoji) => handleEmojiReaction(post.id, emoji)}
+   581→   581→                onHeartBurst={handleHeartBurst}
+   582→   582→              />
+   583→   583→            ))}
+   584→   584→          </AnimatePresence>
+   585→   585→          {filteredPosts.length === 0 && (
+   586→   586→            <div className="text-center py-16">
+   587→   587→              <MessageCircle className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+   588→   588→              <p className="text-slate-500 text-lg">No posts in this category</p>
+   589→   589→              <p className="text-slate-400 text-sm mt-1">Be the first to start a conversation!</p>
+   590→   590→            </div>
+   591→   591→          )}
+   592→   592→        </div>
+   593→   593→
+   594→   594→        {/* Trending Sidebar - Hidden on mobile */}
+   595→   595→        <div className="hidden lg:block w-80 shrink-0 space-y-4">
+   596→   596→          {/* Trending Topics */}
+   597→   597→          <Card className="border-border overflow-hidden">
+   598→   598→            <CardHeader className="pb-3 bg-gradient-to-r from-emerald-50 to-violet-50 dark:from-emerald-950/30 dark:to-violet-950/30">
+   599→   599→              <CardTitle className="text-sm font-semibold text-slate-900 dark:text-slate-50 flex items-center gap-2">
+   600→   600→                <TrendingUp className="h-4 w-4 text-emerald-600" />
+   601→   601→                Trending Topics
+   602→   602→                <motion.span
+   603→   603→                  animate={{ rotate: [0, 10, -10, 0] }}
+   604→   604→                  transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 2 }}
+   605→   605→                  className="text-base"
+   606→   606→                >
+   607→   607→                  🔥
+   608→   608→                </motion.span>
+   609→   609→              </CardTitle>
+   610→   610→            </CardHeader>
+   611→   611→            <CardContent className="p-3">
+   612→   612→              <div className="space-y-1.5">
+   613→   613→                {trendingTopics.map((topic, idx) => (
+   614→   614→                  <motion.div
+   615→   615→                    key={topic.tag}
+   616→   616→                    whileHover={{ x: 4 }}
+   617→   617→                    className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group"
+   618→   618→                  >
+   619→   619→                    <div className="flex items-center gap-2.5">
+   620→   620→                      <span className="text-xs font-bold text-slate-400 w-5">{idx + 1}</span>
+   621→   621→                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:underline decoration-emerald-500 underline-offset-2 transition-all">
+   622→   622→                        #{topic.tag}
+   623→   623→                      </span>
+   624→   624→                      {idx < 3 && (
+   625→   625→                        <motion.span
+   626→   626→                          animate={{ scale: [1, 1.2, 1] }}
+   627→   627→                          transition={{ duration: 1, repeat: Infinity, repeatDelay: 1 }}
+   628→   628→                          className="text-xs"
+   629→   629→                        >
+   630→   630→                          🔥
+   631→   631→                        </motion.span>
+   632→   632→                      )}
+   633→   633→                    </div>
+   634→   634→                    <div className="flex items-center gap-2">
+   635→   635→                      <SparklineChart
+   636→   636→                        data={topic.sparkline}
+   637→   637→                        color={idx < 3 ? '#10B981' : '#94A3B8'}
+   638→   638→                      />
+   639→   639→                      <span className="text-xs text-slate-400 dark:text-slate-500 min-w-[42px] text-right">{topic.count}</span>
+   640→   640→                    </div>
+   641→   641→                  </motion.div>
+   642→   642→                ))}
+   643→   643→              </div>
+   644→   644→            </CardContent>
+   645→   645→          </Card>
+   646→   646→
+   647→   647→          {/* Top Contributors */}
+   648→   648→          <Card className="border-border overflow-hidden">
+   649→   649→            <CardHeader className="pb-3 bg-gradient-to-r from-violet-50 to-pink-50 dark:from-violet-950/30 dark:to-pink-950/30">
+   650→   650→              <CardTitle className="text-sm font-semibold text-slate-900 dark:text-slate-50 flex items-center gap-2">
+   651→   651→                <Trophy className="h-4 w-4 text-violet-600" />
+   652→   652→                Top Contributors
+   653→   653→              </CardTitle>
+   654→   654→            </CardHeader>
+   655→   655→            <CardContent className="p-3">
+   656→   656→              <div className="space-y-2">
+   657→   657→                {leaderboardData.slice(0, 5).map((user) => (
+   658→   658→                  <div
+   659→   659→                    key={user.name}
+   660→   660→                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+   661→   661→                  >
+   662→   662→                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${
+   663→   663→                      user.rank === 1 ? 'bg-amber-500' :
+   664→   664→                      user.rank === 2 ? 'bg-slate-400' :
+   665→   665→                      user.rank === 3 ? 'bg-amber-700' :
+   666→   666→                      'bg-slate-300'
+   667→   667→                    }`}>
+   668→   668→                      {user.rank}
+   669→   669→                    </div>
+   670→   670→                    <Avatar className="h-7 w-7">
+   671→   671→                      <AvatarFallback className="bg-violet-100 text-violet-700 text-xs">
+   672→   672→                        {user.name.charAt(0)}
+   673→   673→                      </AvatarFallback>
+   674→   674→                    </Avatar>
+   675→   675→                    <div className="flex-1 min-w-0">
+   676→   676→                      <p className="text-sm font-medium text-slate-900 dark:text-slate-50 truncate">{user.name}</p>
+   677→   677→                      <div className="flex items-center gap-2">
+   678→   678→                        <span className="text-xs text-slate-400 flex items-center gap-0.5">
+   679→   679→                          <Flame className="h-3 w-3 text-orange-400" />
+   680→   680→                          {user.streak}
+   681→   681→                        </span>
+   682→   682→                        <span className="text-xs text-slate-400 dark:text-slate-500">{user.points.toLocaleString()} pts</span>
+   683→   683→                      </div>
+   684→   684→                    </div>
+   685→   685→                  </div>
+   686→   686→                ))}
+   687→   687→              </div>
+   688→   688→            </CardContent>
+   689→   689→          </Card>
+   690→   690→
+   691→   691→          {/* Quick Stats */}
+   692→   692→          <Card className="border-border">
+   693→   693→            <CardContent className="p-4">
+   694→   694→              <div className="grid grid-cols-2 gap-3">
+   695→   695→                <div className="text-center p-3 rounded-lg bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950/30 dark:to-emerald-900/20">
+   696→   696→                  <p className="text-xl font-bold text-emerald-700"><AnimatedCounter target={posts.reduce((s, p) => s + p.likeCount, 0)} duration={0.8} /></p>
+   697→   697→                  <p className="text-xs text-emerald-600">Total Likes</p>
+   698→   698→                </div>
+   699→   699→                <div className="text-center p-3 rounded-lg bg-gradient-to-br from-violet-50 to-violet-100 dark:from-violet-950/30 dark:to-violet-900/20">
+   700→   700→                  <p className="text-xl font-bold text-violet-700"><AnimatedCounter target={posts.reduce((s, p) => s + p.commentCount, 0)} duration={0.8} /></p>
+   701→   701→                  <p className="text-xs text-violet-600">Comments</p>
+   702→   702→                </div>
+   703→   703→                <div className="text-center p-3 rounded-lg bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950/30 dark:to-amber-900/20">
+   704→   704→                  <p className="text-xl font-bold text-amber-700"><AnimatedCounter target={posts.reduce((s, p) => s + p.viewCount, 0)} duration={0.8} /></p>
+   705→   705→                  <p className="text-xs text-amber-600">Views</p>
+   706→   706→                </div>
+   707→   707→                <div className="text-center p-3 rounded-lg bg-gradient-to-br from-pink-50 to-pink-100 dark:from-pink-950/30 dark:to-pink-900/20">
+   708→   708→                  <p className="text-xl font-bold text-pink-700"><AnimatedCounter target={posts.length} duration={0.5} /></p>
+   709→   709→                  <p className="text-xs text-pink-600">Posts</p>
+   710→   710→                </div>
+   711→   711→              </div>
+   712→   712→            </CardContent>
+   713→   713→          </Card>
+   714→   714→        </div>
+   715→   715→      </div>
+   716→   716→
+   717→   717→      {/* Heart Burst Animations */}
+   718→   718→      <AnimatePresence>
+   719→   719→        {heartBursts.map(burst => (
+   720→   720→          <HeartBurst key={burst.id} x={burst.x} y={burst.y} />
+   721→   721→        ))}
+   722→   722→      </AnimatePresence>
+   723→   723→
+   724→   724→      {/* Create Post Dialog */}
+   725→   725→      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+   726→   726→        <DialogContent className="sm:max-w-lg">
+   727→   727→          <DialogHeader>
+   728→   728→            <DialogTitle className="text-slate-900 dark:text-slate-50 flex items-center gap-2">
+   729→   729→              <MessageCircle className="h-5 w-5 text-emerald-600" />
+   730→   730→              Create a Post
+   731→   731→            </DialogTitle>
+   732→   732→          </DialogHeader>
+   733→   733→          <div className="space-y-4 py-2">
+   734→   734→            <div>
+   735→   735→              <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Title</Label>
+   736→   736→              <Input
+   737→   737→                placeholder="What's on your mind?"
+   738→   738→                value={newPost.title}
+   739→   739→                onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
+   740→   740→                className="border-border focus:border-emerald-400"
+   741→   741→              />
+   742→   742→            </div>
+   743→   743→
+   744→   744→            {/* Content with Markdown Toolbar */}
+   745→   745→            <div>
+   746→   746→              <div className="flex items-center justify-between mb-1.5">
+   747→   747→                <Label className="text-slate-700 dark:text-slate-300">Content</Label>
+   748→   748→                <button
+   749→   749→                  onClick={() => setIsPreviewMode(!isPreviewMode)}
+   750→   750→                  className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-emerald-600 transition-colors"
+   751→   751→                >
+   752→   752→                  {isPreviewMode ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+   753→   753→                  {isPreviewMode ? 'Edit' : 'Preview'}
+   754→   754→                </button>
+   755→   755→              </div>
+   756→   756→
+   757→   757→              {/* Gradient border wrapper on focus */}
+   758→   758→              <div className={`rounded-lg transition-all duration-300 p-[1px] ${composerFocused ? 'bg-gradient-to-r from-emerald-500 via-violet-500 to-pink-500' : 'bg-transparent'}`}>
+   759→   759→                {isPreviewMode ? (
+   760→   760→                  <div className="min-h-[120px] p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-300">
+   761→   761→                    <div dangerouslySetInnerHTML={{ __html: renderMarkdownPreview(newPost.content) || '<span class="text-slate-400">Nothing to preview</span>' }} />
+   762→   762→                  </div>
+   763→   763→                ) : (
+   764→   764→                  <>
+   765→   765→                    {/* Markdown Toolbar */}
+   766→   766→                    <div className="flex items-center gap-1 p-2 bg-slate-50 dark:bg-slate-800 rounded-t-lg border border-b-0 border-slate-200 dark:border-slate-700">
+   767→   767→                      {MARKDOWN_TOOLBAR.map((tool) => (
+   768→   768→                        <button
+   769→   769→                          key={tool.label}
+   770→   770→                          onClick={() => insertMarkdown(tool.prefix, tool.suffix)}
+   771→   771→                          className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+   772→   772→                          title={tool.label}
+   773→   773→                        >
+   774→   774→                          <tool.icon className="h-4 w-4" />
+   775→   775→                        </button>
+   776→   776→                      ))}
+   777→   777→                      <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1" />
+   778→   778→                      <div className="relative">
+   779→   779→                        <button
+   780→   780→                          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+   781→   781→                          className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+   782→   782→                          title="Emoji"
+   783→   783→                        >
+   784→   784→                          <Smile className="h-4 w-4" />
+   785→   785→                        </button>
+   786→   786→                        <AnimatePresence>
+   787→   787→                          {showEmojiPicker && (
+   788→   788→                            <motion.div
+   789→   789→                              initial={{ opacity: 0, scale: 0.9, y: -5 }}
+   790→   790→                              animate={{ opacity: 1, scale: 1, y: 0 }}
+   791→   791→                              exit={{ opacity: 0, scale: 0.9, y: -5 }}
+   792→   792→                              className="absolute top-full left-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl p-2 z-50 w-64"
+   793→   793→                            >
+   794→   794→                              <div className="grid grid-cols-8 gap-1">
+   795→   795→                                {EMOJI_PICKER_LIST.map((emoji) => (
+   796→   796→                                  <button
+   797→   797→                                    key={emoji}
+   798→   798→                                    onClick={() => insertEmoji(emoji)}
+   799→   799→                                    className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-base"
+   800→   800→                                  >
+   801→   801→                                    {emoji}
+   802→   802→                                  </button>
+   803→   803→                                ))}
+   804→   804→                              </div>
+   805→   805→                            </motion.div>
+   806→   806→                          )}
+   807→   807→                        </AnimatePresence>
+   808→   808→                      </div>
+   809→   809→                    </div>
+   810→   810→                    <Textarea
+   811→   811→                      id="post-content-textarea"
+   812→   812→                      placeholder="Share your thoughts, questions, or resources... (Markdown supported)"
+   813→   813→                      value={newPost.content}
+   814→   814→                      onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
+   815→   815→                      onFocus={() => setComposerFocused(true)}
+   816→   816→                      onBlur={() => setComposerFocused(false)}
+   817→   817→                      rows={5}
+   818→   818→                      className="border-border focus:border-emerald-400 resize-none rounded-t-none border-t-0 focus:ring-0"
+   819→   819→                    />
+   820→   820→                  </>
+   821→   821→                )}
+   822→   822→              </div>
+   823→   823→              {/* Character Count */}
+   824→   824→              <div className="flex justify-end mt-1">
+   825→   825→                <span className={`text-xs font-medium ${charColor}`}>
+   826→   826→                  {charCount}/{maxChars}
+   827→   827→                </span>
+   828→   828→              </div>
+   829→   829→            </div>
+   830→   830→
+   831→   831→            <div className="grid grid-cols-2 gap-3">
+   832→   832→              <div>
+   833→   833→                <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Type</Label>
+   834→   834→                <Select value={newPost.type} onValueChange={(v) => setNewPost({ ...newPost, type: v as CommunityPost['type'] })}>
+   835→   835→                  <SelectTrigger className="border-border">
+   836→   836→                    <SelectValue />
+   837→   837→                  </SelectTrigger>
+   838→   838→                  <SelectContent>
+   839→   839→                    <SelectItem value="discussion">💬 Discussion</SelectItem>
+   840→   840→                    <SelectItem value="question">❓ Question</SelectItem>
+   841→   841→                    <SelectItem value="announcement">📢 Announcement</SelectItem>
+   842→   842→                    <SelectItem value="resource">🌟 Resource</SelectItem>
+   843→   843→                  </SelectContent>
+   844→   844→                </Select>
+   845→   845→              </div>
+   846→   846→              <div>
+   847→   847→                <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Category</Label>
+   848→   848→                <Select value={newPost.categoryId} onValueChange={(v) => setNewPost({ ...newPost, categoryId: v })}>
+   849→   849→                  <SelectTrigger className="border-border">
+   850→   850→                    <SelectValue />
+   851→   851→                  </SelectTrigger>
+   852→   852→                  <SelectContent>
+   853→   853→                    {categoryPills.filter(c => c.id !== 'all').map(cat => (
+   854→   854→                      <SelectItem key={cat.id} value={cat.id}>{cat.icon} {cat.name}</SelectItem>
+   855→   855→                    ))}
+   856→   856→                  </SelectContent>
+   857→   857→                </Select>
+   858→   858→              </div>
+   859→   859→            </div>
+   860→   860→
+   861→   861→            {/* Topic Tags Selector */}
+   862→   862→            <div>
+   863→   863→              <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Topic Tags</Label>
+   864→   864→              <div className="flex flex-wrap gap-2">
+   865→   865→                {TOPIC_TAGS.map(tag => (
+   866→   866→                  <button
+   867→   867→                    key={tag}
+   868→   868→                    onClick={() => toggleTag(tag)}
+   869→   869→                    className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+   870→   870→                      selectedTags.includes(tag)
+   871→   871→                        ? 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-500/30 dark:bg-emerald-900/30 dark:text-emerald-400'
+   872→   872→                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
+   873→   873→                    }`}
+   874→   874→                  >
+   875→   875→                    #{tag}
+   876→   876→                  </button>
+   877→   877→                ))}
+   878→   878→              </div>
+   879→   879→            </div>
+   880→   880→
+   881→   881→            <div>
+   882→   882→              <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Additional Tags (comma separated)</Label>
+   883→   883→              <Input
+   884→   884→                placeholder="e.g., nextjs, react, tips"
+   885→   885→                value={newPost.tags}
+   886→   886→                onChange={(e) => setNewPost({ ...newPost, tags: e.target.value })}
+   887→   887→                className="border-border focus:border-emerald-400"
+   888→   888→              />
+   889→   889→            </div>
+   890→   890→          </div>
+   891→   891→          <DialogFooter>
+   892→   892→            <Button variant="outline" onClick={() => setShowCreateDialog(false)} className="border-border">
+   893→   893→              Cancel
+   894→   894→            </Button>
+   895→   895→            <Button
+   896→   896→              onClick={handleCreatePost}
+   897→   897→              disabled={!newPost.title.trim() || !newPost.content.trim()}
+   898→   898→              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+   899→   899→            >
+   900→   900→              <Send className="h-3.5 w-3.5" />
+   901→   901→              Post
+   902→   902→            </Button>
+   903→   903→          </DialogFooter>
+   904→   904→        </DialogContent>
+   905→   905→      </Dialog>
+   906→   906→    </div>
+   907→   907→  );
+   908→   908→}
+   909→   909→
+   910→   910→// ─── Post Feed Card ───────────────────────────────────────────────────────────
+   911→   911→
+   912→   912→function PostFeedCard({
+   913→   913→  post,
+   914→   914→  index,
+   915→   915→  isExpanded,
+   916→   916→  isLiked,
+   917→   917→  isBookmarked,
+   918→   918→  reactions,
+   919→   919→  userReactions,
+   920→   920→  floatingEmojis,
+   921→   921→  onToggleComments,
+   922→   922→  onToggleLike,
+   923→   923→  onToggleBookmark,
+   924→   924→  onEmojiReaction,
+   925→   925→  onHeartBurst,
+   926→   926→}: {
+   927→   927→  post: CommunityPost;
+   928→   928→  index: number;
+   929→   929→  isExpanded: boolean;
+   930→   930→  isLiked: boolean;
+   931→   931→  isBookmarked: boolean;
+   932→   932→  reactions: Record<string, number>;
+   933→   933→  userReactions: Set<string>;
+   934→   934→  floatingEmojis: { id: string; postId: string; emoji: string }[];
+   935→   935→  onToggleComments: () => void;
+   936→   936→  onToggleLike: () => void;
+   937→   937→  onToggleBookmark: () => void;
+   938→   938→  onEmojiReaction: (emoji: EmojiType) => void;
+   939→   939→  onHeartBurst: (e: React.MouseEvent) => void;
+   940→   940→}) {
+   941→   941→  const roleBadge = getRoleBadge(post.author?.role || 'learner');
+   942→   942→  const readingTime = estimateReadingTime(post.content);
+   943→   943→  const engagementScore = getEngagementScore(post);
+   944→   944→
+   945→   945→  // Find most popular reaction
+   946→   946→  const topReaction = Object.entries(reactions).sort((a, b) => b[1] - a[1])[0];
+   947→   947→
+   948→   948→  // Gradient border state
+   949→   949→  const [isHovered, setIsHovered] = useState(false);
+   950→   950→
+   951→   951→  return (
+   952→   952→    <motion.div
+   953→   953→      layout
+   954→   954→      initial={{ opacity: 0, y: 20 }}
+   955→   955→      animate={{ opacity: 1, y: 0 }}
+   956→   956→      exit={{ opacity: 0, scale: 0.95 }}
+   957→   957→      transition={{ delay: index * 0.05 }}
+   958→   958→      onMouseEnter={() => setIsHovered(true)}
+   959→   959→      onMouseLeave={() => setIsHovered(false)}
+   960→   960→    >
+   961→   961→      {/* Gradient border on hover */}
+   962→   962→      <div className={`rounded-xl transition-all duration-300 p-[1px] ${isHovered ? 'bg-gradient-to-r from-emerald-500 via-violet-500 to-pink-500' : 'bg-transparent'}`}>
+   963→   963→        <Card className={`border-border transition-all overflow-hidden backdrop-blur-md bg-white/80 dark:bg-white/5 ${post.isPinned ? 'ring-2 ring-amber-400/50' : ''}`}>
+   964→   964→          <CardContent className="p-0">
+   965→   965→            {/* Author Header */}
+   966→   966→            <div className="p-4 pb-0">
+   967→   967→              <div className="flex items-start justify-between">
+   968→   968→                <div className="flex items-center gap-3">
+   969→   969→                  <div className="relative">
+   970→   970→                    <Avatar className="h-10 w-10 ring-2 ring-slate-100 dark:ring-slate-700">
+   971→   971→                      <AvatarFallback className="bg-gradient-to-br from-emerald-400 to-violet-500 text-white font-semibold text-sm">
+   972→   972→                        {post.author?.name?.charAt(0) || 'U'}
+   973→   973→                      </AvatarFallback>
+   974→   974→                    </Avatar>
+   975→   975→                    {/* Online status indicator */}
+   976→   976→                    {post.author?.isActive && (
+   977→   977→                      <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-green-500 border-2 border-white dark:border-slate-900" />
+   978→   978→                    )}
+   979→   979→                  </div>
+   980→   980→                  <div>
+   981→   981→                    <div className="flex items-center gap-2 flex-wrap">
+   982→   982→                      <span className="font-semibold text-slate-900 dark:text-slate-50 text-sm">{post.author?.name || 'Unknown'}</span>
+   983→   983→                      <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${roleBadge.class} border-0`}>
+   984→   984→                        {roleBadge.label}
+   985→   985→                      </Badge>
+   986→   986→                      {post.isPinned && (
+   987→   987→                        <motion.div
+   988→   988→                          initial={{ scale: 0 }}
+   989→   989→                          animate={{ scale: 1 }}
+   990→   990→                          transition={{ type: 'spring', stiffness: 500, damping: 15 }}
+   991→   991→                        >
+   992→   992→                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 border-amber-400/50 gap-1">
+   993→   993→                            <Pin className="h-2.5 w-2.5" /> Pinned
+   994→   994→                          </Badge>
+   995→   995→                        </motion.div>
+   996→   996→                      )}
+   997→   997→                    </div>
+   998→   998→                    <span className="text-xs text-slate-400 flex items-center gap-1">
+   999→   999→                      <Clock className="h-3 w-3" />
+  1000→  1000→                      {timeAgo(post.createdAt)}
+  1001→  1001→                      <span className="text-slate-300 dark:text-slate-600">·</span>
+  1002→  1002→                      <span className="flex items-center gap-0.5">
+  1003→  1003→                        <Flame className="h-3 w-3 text-amber-400" />
+  1004→  1004→                        {engagementScore}
+  1005→  1005→                      </span>
+  1006→  1006→                      <span className="text-slate-300 dark:text-slate-600">·</span>
+  1007→  1007→                      <span>{readingTime} min read</span>
+  1008→  1008→                    </span>
+  1009→  1009→                  </div>
+  1010→  1010→                </div>
+  1011→  1011→                <Badge variant="outline" className={`text-xs gap-1 ${getTypeBadgeStyle(post.type)}`}>
+  1012→  1012→                  {getTypeEmoji(post.type)} {post.type.charAt(0).toUpperCase() + post.type.slice(1)}
+  1013→  1013→                </Badge>
+  1014→  1014→              </div>
+  1015→  1015→            </div>
+  1016→  1016→
+  1017→  1017→            {/* Content */}
+  1018→  1018→            <div className="px-4 pt-3 pb-2">
+  1019→  1019→              <h3 className="font-bold text-slate-900 dark:text-slate-50 text-base leading-snug mb-1.5">{post.title}</h3>
+  1020→  1020→              <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">{post.content}</p>
+  1021→  1021→            </div>
+  1022→  1022→
+  1023→  1023→            {/* Tags */}
+  1024→  1024→            {post.tags && post.tags.length > 0 && (
+  1025→  1025→              <div className="px-4 pb-2 flex flex-wrap gap-1.5">
+  1026→  1026→                {post.tags.map(tag => (
+  1027→  1027→                  <Badge
+  1028→  1028→                    key={tag}
+  1029→  1029→                    variant="secondary"
+  1030→  1030→                    className="text-xs bg-gradient-to-r from-slate-50 to-slate-100 text-slate-600 hover:from-slate-100 hover:to-slate-200 cursor-pointer transition-all dark:from-slate-800 dark:to-slate-700 dark:text-slate-400"
+  1031→  1031→                  >
+  1032→  1032→                    <Tag className="h-2.5 w-2.5 mr-1" />
+  1033→  1033→                    {tag}
+  1034→  1034→                  </Badge>
+  1035→  1035→                ))}
+  1036→  1036→              </div>
+  1037→  1037→            )}
+  1038→  1038→
+  1039→  1039→            {/* Emoji Reaction Bar */}
+  1040→  1040→            <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-800">
+  1041→  1041→              <div className="flex items-center gap-1 flex-wrap">
+  1042→  1042→                {EMOJI_REACTIONS.map(emoji => {
+  1043→  1043→                  const count = reactions[emoji] || 0;
+  1044→  1044→                  const isUserReacted = userReactions.has(emoji);
+  1045→  1045→                  const isTop = topReaction && topReaction[0] === emoji && topReaction[1] > 0;
+  1046→  1046→                  return (
+  1047→  1047→                    <motion.button
+  1048→  1048→                      key={emoji}
+  1049→  1049→                      onClick={() => onEmojiReaction(emoji)}
+  1050→  1050→                      whileTap={{ scale: 0.85 }}
+  1051→  1051→                      className={`relative flex items-center gap-1 px-2 py-1 rounded-full text-sm transition-all ${
+  1052→  1052→                        isUserReacted
+  1053→  1053→                          ? 'bg-emerald-100 dark:bg-emerald-900/30 ring-1 ring-emerald-500/30'
+  1054→  1054→                          : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+  1055→  1055→                      } ${isTop ? 'ring-1 ring-amber-400/50 bg-amber-50 dark:bg-amber-900/20' : ''}`}
+  1056→  1056→                    >
+  1057→  1057→                      <motion.span
+  1058→  1058→                        animate={isUserReacted ? { scale: [1, 1.3, 1] } : {}}
+  1059→  1059→                        transition={{ type: 'spring', stiffness: 500, damping: 10 }}
+  1060→  1060→                        className="text-base"
+  1061→  1061→                      >
+  1062→  1062→                        {emoji}
+  1063→  1063→                      </motion.span>
+  1064→  1064→                      {count > 0 && (
+  1065→  1065→                        <span className={`text-xs font-medium ${isTop ? 'text-amber-600' : 'text-slate-500 dark:text-slate-400'}`}>
+  1066→  1066→                          {count}
+  1067→  1067→                        </span>
+  1068→  1068→                      )}
+  1069→  1069→                      {/* Floating +1 animations */}
+  1070→  1070→                      <AnimatePresence>
+  1071→  1071→                        {floatingEmojis.filter(f => f.emoji === emoji).map(f => (
+  1072→  1072→                          <FloatingPlusOne key={f.id} emoji={emoji} />
+  1073→  1073→                        ))}
+  1074→  1074→                      </AnimatePresence>
+  1075→  1075→                    </motion.button>
+  1076→  1076→                  );
+  1077→  1077→                })}
+  1078→  1078→              </div>
+  1079→  1079→            </div>
+  1080→  1080→
+  1081→  1081→            {/* Stats Row */}
+  1082→  1082→            <div className="px-4 py-1.5 border-t border-slate-100 text-xs text-slate-400 flex items-center gap-4 dark:border-slate-800">
+  1083→  1083→              <span className="flex items-center gap-1"><Flame className="h-3 w-3" />{post.viewCount} views</span>
+  1084→  1084→              <span>{post.likeCount} likes</span>
+  1085→  1085→              <span>{post.commentCount} comments</span>
+  1086→  1086→            </div>
+  1087→  1087→
+  1088→  1088→            {/* Action Bar */}
+  1089→  1089→            <div className="px-2 py-1 border-t border-slate-100 flex items-center dark:border-slate-800">
+  1090→  1090→              <Button
+  1091→  1091→                variant="ghost"
+  1092→  1092→                size="sm"
+  1093→  1093→                onClick={(e) => { onToggleLike(); onHeartBurst(e); }}
+  1094→  1094→                className={`flex-1 gap-1.5 text-sm rounded-lg ${
+  1095→  1095→                  isLiked ? 'text-red-500 hover:text-red-600 hover:bg-red-50' : 'text-slate-500 hover:text-red-500 hover:bg-red-50'
+  1096→  1096→                }`}
+  1097→  1097→              >
+  1098→  1098→                <motion.div
+  1099→  1099→                  animate={isLiked ? { scale: [1, 1.4, 1] } : {}}
+  1100→  1100→                  transition={{ type: 'spring', stiffness: 500, damping: 10 }}
+  1101→  1101→                >
+  1102→  1102→                  <Heart className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
+  1103→  1103→                </motion.div>
+  1104→  1104→                <span>{post.likeCount}</span>
+  1105→  1105→              </Button>
+  1106→  1106→              <Button
+  1107→  1107→                variant="ghost"
+  1108→  1108→                size="sm"
+  1109→  1109→                onClick={onToggleComments}
+  1110→  1110→                className="flex-1 gap-1.5 text-sm text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg"
+  1111→  1111→              >
+  1112→  1112→                <MessageSquare className="h-4 w-4" />
+  1113→  1113→                <span>{post.commentCount}</span>
+  1114→  1114→              </Button>
+  1115→  1115→              <Button
+  1116→  1116→                variant="ghost"
+  1117→  1117→                size="sm"
+  1118→  1118→                className="flex-1 gap-1.5 text-sm text-slate-500 hover:text-violet-600 hover:bg-violet-50 rounded-lg"
+  1119→  1119→              >
+  1120→  1120→                <Share2 className="h-4 w-4" />
+  1121→  1121→                <span>Share</span>
+  1122→  1122→              </Button>
+  1123→  1123→              <Button
+  1124→  1124→                variant="ghost"
+  1125→  1125→                size="sm"
+  1126→  1126→                onClick={onToggleBookmark}
+  1127→  1127→                className={`flex-1 gap-1.5 text-sm rounded-lg ${
+  1128→  1128→                  isBookmarked ? 'text-amber-500 hover:text-amber-600 hover:bg-amber-50' : 'text-slate-500 hover:text-amber-500 hover:bg-amber-50'
+  1129→  1129→                }`}
+  1130→  1130→              >
+  1131→  1131→                <motion.div
+  1132→  1132→                  animate={isBookmarked ? { scale: [1, 1.3, 1] } : {}}
+  1133→  1133→                  transition={{ type: 'spring', stiffness: 500, damping: 10 }}
+  1134→  1134→                >
+  1135→  1135→                  <Bookmark className={`h-4 w-4 ${isBookmarked ? 'fill-current' : ''}`} />
+  1136→  1136→                </motion.div>
+  1137→  1137→                <span>{isBookmarked ? 'Saved' : 'Save'}</span>
+  1138→  1138→              </Button>
+  1139→  1139→            </div>
+  1140→  1140→
+  1141→  1141→            {/* Expandable Comments Section */}
+  1142→  1142→            <AnimatePresence>
+  1143→  1143→              {isExpanded && (
+  1144→  1144→                <motion.div
+  1145→  1145→                  initial={{ height: 0, opacity: 0 }}
+  1146→  1146→                  animate={{ height: 'auto', opacity: 1 }}
+  1147→  1147→                  exit={{ height: 0, opacity: 0 }}
+  1148→  1148→                  transition={{ duration: 0.2 }}
+  1149→  1149→                  className="overflow-hidden"
+  1150→  1150→                >
+  1151→  1151→                  <div className="border-t border-border bg-slate-50/50 dark:bg-slate-900/50">
+  1152→  1152→                    <div className="p-4 space-y-3">
+  1153→  1153→                      {sampleComments.map((comment, idx) => (
+  1154→  1154→                        <motion.div
+  1155→  1155→                          key={comment.id}
+  1156→  1156→                          initial={{ opacity: 0, y: 20 }}
+  1157→  1157→                          animate={{ opacity: 1, y: 0 }}
+  1158→  1158→                          transition={{ delay: idx * 0.1, type: 'spring', stiffness: 300, damping: 20 }}
+  1159→  1159→                          className="flex gap-3"
+  1160→  1160→                        >
+  1161→  1161→                          <Avatar className="h-7 w-7 shrink-0">
+  1162→  1162→                            <AvatarFallback className="bg-slate-200 text-slate-600 text-xs">
+  1163→  1163→                              {comment.author.charAt(0)}
+  1164→  1164→                            </AvatarFallback>
+  1165→  1165→                          </Avatar>
+  1166→  1166→                          <div className="flex-1">
+  1167→  1167→                            <div className="flex items-center gap-2 mb-0.5">
+  1168→  1168→                              <span className="text-xs font-semibold text-slate-900 dark:text-slate-50">{comment.author}</span>
+  1169→  1169→                              <span className="text-[10px] text-slate-400 dark:text-slate-500">{comment.timeAgo}</span>
+  1170→  1170→                            </div>
+  1171→  1171→                            <p className="text-sm text-slate-600 leading-relaxed">{comment.content}</p>
+  1172→  1172→                            <button className="text-xs text-slate-400 hover:text-red-500 mt-1 flex items-center gap-1">
+  1173→  1173→                              <Heart className="h-3 w-3" /> {comment.likeCount}
+  1174→  1174→                            </button>
+  1175→  1175→                          </div>
+  1176→  1176→                        </motion.div>
+  1177→  1177→                      ))}
+  1178→  1178→
+  1179→  1179→                      {/* Comment Input */}
+  1180→  1180→                      <div className="flex gap-2 pt-2">
+  1181→  1181→                        <Avatar className="h-7 w-7 shrink-0">
+  1182→  1182→                          <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs font-medium">
+  1183→  1183→                            A
+  1184→  1184→                          </AvatarFallback>
+  1185→  1185→                        </Avatar>
+  1186→  1186→                        <div className="flex-1 flex gap-2">
+  1187→  1187→                          <Input
+  1188→  1188→                            placeholder="Write a comment..."
+  1189→  1189→                            className="text-sm border-border focus:border-emerald-400 h-8"
+  1190→  1190→                          />
+  1191→  1191→                          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 px-3 shrink-0">
+  1192→  1192→                            <Send className="h-3 w-3" />
+  1193→  1193→                          </Button>
+  1194→  1194→                        </div>
+  1195→  1195→                      </div>
+  1196→  1196→                    </div>
+  1197→  1197→                  </div>
+  1198→  1198→                </motion.div>
+  1199→  1199→              )}
+  1200→  1200→            </AnimatePresence>
+  1201→  1201→          </CardContent>
+  1202→  1202→        </Card>
+  1203→  1203→      </div>
+  1204→  1204→    </motion.div>
+  1205→  1205→  );
+  1206→  1206→}
+  1207→  1207→

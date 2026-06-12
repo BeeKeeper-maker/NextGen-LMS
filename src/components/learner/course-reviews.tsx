@@ -38,14 +38,70 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  courseReviews as allMockReviews,
-  reviewRatingDistribution,
-  reviewTags,
-  demoCourses,
-} from '@/lib/mock-data';
-import type { CourseReview } from '@/lib/mock-data';
+import { useCourses } from '@/hooks/use-data';
 import { cn } from '@/lib/utils';
+
+// TODO: Replace with real API when available - review API not yet implemented
+interface CourseReview {
+  id: string;
+  courseId: string;
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  rating: number;
+  title: string;
+  content: string;
+  date: string;
+  helpfulCount: number;
+  isHelpful: boolean;
+  courseProgress: number;
+  isVerifiedPurchase: boolean;
+  tags: string[];
+  status: 'published' | 'flagged' | 'hidden';
+  instructorReply?: {
+    instructorName: string;
+    content: string;
+    date: string;
+  };
+  isOwnReview?: boolean;
+}
+
+// TODO: Replace with real API when available - review data not yet in the API
+const allMockReviews: CourseReview[] = [
+  { id: 'rev-1', courseId: 'course-1', userId: 'user-2', userName: 'Emma Rodriguez', userAvatar: 'ER', rating: 5, title: 'Absolutely Incredible Course!', content: 'This course completely transformed how I think about React architecture. The Server Components section alone was worth the investment.', date: '2024-10-14T10:30:00Z', helpfulCount: 24, isHelpful: false, courseProgress: 100, isVerifiedPurchase: true, tags: ['Great Content', 'Life Changing', 'Well Structured'], status: 'published', instructorReply: { instructorName: 'Sarah Mitchell', content: 'Thank you so much, Emma!', date: '2024-10-15T08:00:00Z' } },
+  { id: 'rev-2', courseId: 'course-1', userId: 'user-1', userName: 'Mike Chen', userAvatar: 'MC', rating: 5, title: 'Best React Course I\'ve Ever Taken', content: 'I\'ve taken multiple React courses over the years, and this one stands head and shoulders above the rest.', date: '2024-10-10T15:45:00Z', helpfulCount: 18, isHelpful: true, courseProgress: 85, isVerifiedPurchase: true, tags: ['Great Content', 'Practical'], status: 'published' },
+  { id: 'rev-3', courseId: 'course-1', userId: 'user-6', userName: 'Priya Sharma', userAvatar: 'PS', rating: 4, title: 'Great Content, Minor Gaps in Testing', content: 'Great content overall. The TypeScript patterns section was excellent.', date: '2024-10-05T09:20:00Z', helpfulCount: 12, isHelpful: false, courseProgress: 72, isVerifiedPurchase: true, tags: ['Well Structured', 'Advanced'], status: 'published' },
+  { id: 'rev-4', courseId: 'course-1', userId: 'user-7', userName: 'Alex Johnson', userAvatar: 'AJ', rating: 5, title: 'Game-Changer for My Career', content: 'This course is a game-changer. I went from struggling with React concepts to building production apps confidently.', date: '2024-09-28T14:00:00Z', helpfulCount: 31, isHelpful: false, courseProgress: 100, isVerifiedPurchase: true, tags: ['Life Changing', 'Practical', 'Great Content'], status: 'published', instructorReply: { instructorName: 'Sarah Mitchell', content: 'Congratulations on the new role, Alex!', date: '2024-09-29T10:00:00Z' } },
+  { id: 'rev-5', courseId: 'course-1', userId: 'user-8', userName: 'Tom Wilson', userAvatar: 'TW', rating: 4, title: 'Comprehensive Deep Dive', content: 'Very comprehensive course. The App Router deep-dive was particularly helpful.', date: '2024-09-20T11:30:00Z', helpfulCount: 8, isHelpful: false, courseProgress: 60, isVerifiedPurchase: true, tags: ['Advanced', 'Well Structured'], status: 'published' },
+  { id: 'rev-6', courseId: 'course-2', userId: 'user-1', userName: 'Mike Chen', userAvatar: 'MC', rating: 5, title: 'AI Development Made Accessible', content: 'This course demystified AI integration for me. The section on building autonomous agents was mind-blowing.', date: '2024-10-12T16:00:00Z', helpfulCount: 22, isHelpful: true, courseProgress: 100, isVerifiedPurchase: true, tags: ['Life Changing', 'Practical', 'Great Content'], status: 'published', instructorReply: { instructorName: 'Sarah Mitchell', content: 'So glad you found the RAG implementation useful, Mike!', date: '2024-10-13T09:00:00Z' } },
+  { id: 'rev-7', courseId: 'course-2', userId: 'user-3', userName: 'David Park', userAvatar: 'DP', rating: 5, title: 'Essential for Modern Full-Stack', content: 'As an instructor myself, I appreciate the pedagogical approach here.', date: '2024-10-08T13:20:00Z', helpfulCount: 15, isHelpful: false, courseProgress: 90, isVerifiedPurchase: true, tags: ['Practical', 'Well Structured', 'Advanced'], status: 'published' },
+  { id: 'rev-8', courseId: 'course-2', userId: 'user-9', userName: 'Jordan Lee', userAvatar: 'JL', rating: 4, title: 'Solid AI Foundation', content: 'Great course for getting started with AI integration.', date: '2024-10-01T10:45:00Z', helpfulCount: 9, isHelpful: false, courseProgress: 65, isVerifiedPurchase: true, tags: ['Great Content', 'Beginner Friendly'], status: 'published' },
+  { id: 'rev-9', courseId: 'course-3', userId: 'user-7', userName: 'Alex Johnson', userAvatar: 'AJ', rating: 5, title: 'FAANG-Level Preparation', content: 'This course is exactly what you need for system design interviews.', date: '2024-10-11T08:30:00Z', helpfulCount: 28, isHelpful: true, courseProgress: 100, isVerifiedPurchase: true, tags: ['Life Changing', 'Advanced', 'Practical'], status: 'published' },
+  { id: 'rev-10', courseId: 'course-3', userId: 'user-5', userName: 'Lisa Wang', userAvatar: 'LW', rating: 4, title: 'Thorough but Demanding', content: 'Very thorough coverage of system design concepts.', date: '2024-09-25T17:15:00Z', helpfulCount: 14, isHelpful: false, courseProgress: 80, isVerifiedPurchase: true, tags: ['Advanced', 'Well Structured'], status: 'published' },
+  { id: 'rev-11', courseId: 'course-4', userId: 'user-4', userName: 'Nina Kovac', userAvatar: 'NK', rating: 5, title: 'Beautiful Visualizations Made Easy', content: 'I never thought I could create such stunning data visualizations.', date: '2024-10-09T12:00:00Z', helpfulCount: 16, isHelpful: false, courseProgress: 100, isVerifiedPurchase: true, tags: ['Great Content', 'Practical', 'Well Structured'], status: 'published' },
+  { id: 'rev-12', courseId: 'course-4', userId: 'user-8', userName: 'Tom Wilson', userAvatar: 'TW', rating: 4, title: 'Great for Dashboard Builders', content: 'Solid course for anyone building analytics dashboards.', date: '2024-10-03T09:00:00Z', helpfulCount: 7, isHelpful: false, courseProgress: 55, isVerifiedPurchase: true, tags: ['Practical', 'Beginner Friendly'], status: 'published' },
+  { id: 'rev-13', courseId: 'course-5', userId: 'user-9', userName: 'Jordan Lee', userAvatar: 'JL', rating: 5, title: 'Design Thinking Transformed', content: 'As a developer, I was skeptical about a design course. But this changed my perspective entirely.', date: '2024-10-07T14:30:00Z', helpfulCount: 19, isHelpful: true, courseProgress: 100, isVerifiedPurchase: true, tags: ['Life Changing', 'Beginner Friendly', 'Practical'], status: 'published' },
+  { id: 'rev-14', courseId: 'course-5', userId: 'user-6', userName: 'Priya Sharma', userAvatar: 'PS', rating: 4, title: 'Good Introduction to UX/UI', content: 'A well-structured introduction to UX/UI principles.', date: '2024-09-30T16:45:00Z', helpfulCount: 10, isHelpful: false, courseProgress: 70, isVerifiedPurchase: true, tags: ['Beginner Friendly', 'Well Structured'], status: 'published' },
+  { id: 'rev-15', courseId: 'course-6', userId: 'user-3', userName: 'David Park', userAvatar: 'DP', rating: 5, title: 'DevOps Mastery Achieved', content: 'The Kubernetes and Docker sections are incredibly detailed.', date: '2024-10-06T11:00:00Z', helpfulCount: 13, isHelpful: false, courseProgress: 88, isVerifiedPurchase: true, tags: ['Advanced', 'Practical', 'Great Content'], status: 'published' },
+  { id: 'rev-16', courseId: 'course-1', userId: 'user-10', userName: 'Sam Taylor', userAvatar: 'ST', rating: 3, title: 'Good but Needs Updates', content: 'The core content is strong, but some sections feel outdated.', date: '2024-09-15T08:00:00Z', helpfulCount: 5, isHelpful: false, courseProgress: 45, isVerifiedPurchase: true, tags: ['Well Structured'], status: 'published' },
+  { id: 'rev-17', courseId: 'course-2', userId: 'user-10', userName: 'Sam Taylor', userAvatar: 'ST', rating: 2, title: 'Not Enough Depth on Fine-Tuning', content: 'The course covers AI integration basics well, but I was expecting more on fine-tuning.', date: '2024-09-10T07:30:00Z', helpfulCount: 3, isHelpful: false, courseProgress: 30, isVerifiedPurchase: true, tags: ['Beginner Friendly'], status: 'published' },
+  { id: 'rev-18', courseId: 'course-3', userId: 'user-11', userName: 'Chris Adams', userAvatar: 'CA', rating: 1, title: 'Too Theoretical', content: 'I was expecting hands-on system design exercises but found the course too theoretical.', date: '2024-08-20T19:00:00Z', helpfulCount: 2, isHelpful: false, courseProgress: 20, isVerifiedPurchase: false, tags: [], status: 'flagged' },
+  { id: 'rev-19', courseId: 'course-1', userId: 'demo-learner-1', userName: 'You', userAvatar: 'YO', rating: 5, title: 'Excellent Learning Experience', content: 'I\'m still working through this course but I can already tell it\'s one of the best investments I\'ve made.', date: '2024-10-13T20:00:00Z', helpfulCount: 6, isHelpful: false, courseProgress: 68, isVerifiedPurchase: true, tags: ['Great Content', 'Well Structured'], status: 'published', isOwnReview: true },
+  { id: 'rev-20', courseId: 'course-6', userId: 'user-11', userName: 'Chris Adams', userAvatar: 'CA', rating: 4, title: 'Solid Cloud Architecture Guide', content: 'Comprehensive coverage of cloud-native patterns.', date: '2024-09-18T13:00:00Z', helpfulCount: 8, isHelpful: false, courseProgress: 75, isVerifiedPurchase: true, tags: ['Practical', 'Advanced'], status: 'published' },
+];
+
+// TODO: Replace with real API when available - rating distribution not yet in the API
+const reviewRatingDistribution: Record<string, { stars: number; count: number; percentage: number }[]> = {
+  'course-1': [{ stars: 5, count: 186, percentage: 59.6 }, { stars: 4, count: 89, percentage: 28.5 }, { stars: 3, count: 24, percentage: 7.7 }, { stars: 2, count: 9, percentage: 2.9 }, { stars: 1, count: 4, percentage: 1.3 }],
+  'course-2': [{ stars: 5, count: 128, percentage: 64.6 }, { stars: 4, count: 45, percentage: 22.7 }, { stars: 3, count: 16, percentage: 8.1 }, { stars: 2, count: 6, percentage: 3.0 }, { stars: 1, count: 3, percentage: 1.5 }],
+  'course-3': [{ stars: 5, count: 98, percentage: 62.8 }, { stars: 4, count: 38, percentage: 24.4 }, { stars: 3, count: 12, percentage: 7.7 }, { stars: 2, count: 5, percentage: 3.2 }, { stars: 1, count: 3, percentage: 1.9 }],
+  'course-4': [{ stars: 5, count: 82, percentage: 57.7 }, { stars: 4, count: 38, percentage: 26.8 }, { stars: 3, count: 14, percentage: 9.9 }, { stars: 2, count: 5, percentage: 3.5 }, { stars: 1, count: 3, percentage: 2.1 }],
+  'course-5': [{ stars: 5, count: 112, percentage: 55.2 }, { stars: 4, count: 58, percentage: 28.6 }, { stars: 3, count: 22, percentage: 10.8 }, { stars: 2, count: 8, percentage: 3.9 }, { stars: 1, count: 3, percentage: 1.5 }],
+  'course-6': [{ stars: 5, count: 52, percentage: 58.4 }, { stars: 4, count: 22, percentage: 24.7 }, { stars: 3, count: 9, percentage: 10.1 }, { stars: 2, count: 4, percentage: 4.5 }, { stars: 1, count: 2, percentage: 2.2 }],
+};
+
+// TODO: Replace with real API when available - review tags not yet in the API
+const reviewTags = ['Great Content', 'Well Structured', 'Practical', 'Beginner Friendly', 'Advanced', 'Life Changing'] as const;
 
 // ─── Animation variants ────────────────────────────────────
 const containerVariants = {
@@ -743,7 +799,9 @@ export function CourseReviews({
     setVisibleCount(5);
   }, []);
 
-  const courseName = demoCourses.find(c => c.id === courseId)?.title || 'Course';
+  const { data: coursesData } = useCourses();
+  const demoCourses = coursesData || [];
+  const courseName = demoCourses.find((c: any) => c.id === courseId)?.title || 'Course';
 
   return (
     <motion.div

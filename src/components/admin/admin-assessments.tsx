@@ -14,6 +14,7 @@ import {
   ListChecks, Timer, Award, BookOpen, Type, Hash,
   TrendingUp, TrendingDown, BarChart3, Layers, EyeOff,
   ArrowUp, ArrowDown, Database, Sparkles, Users,
+  Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -55,8 +56,52 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Progress } from '@/components/ui/progress';
-import { demoAssessments, demoCourses } from '@/lib/mock-data';
+import {
+  useAssessments,
+  useCreateAssessment,
+  useUpdateAssessment,
+  useDeleteAssessment,
+  useCourses,
+} from '@/hooks/use-data';
+import { useAppStore } from '@/store/app-store';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { slugify } from '@/lib/slugify';
 import type { Assessment, Question } from '@/types';
+
+// ---- Helper: Parse API assessment data ----
+function parseQuestions(raw: any[]): Question[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((q: any) => ({
+    id: q.id,
+    assessmentId: q.assessmentId,
+    type: q.type,
+    question: q.question,
+    options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options,
+    correctAnswer: typeof q.correctAnswer === 'string' ? JSON.parse(q.correctAnswer) : q.correctAnswer,
+    explanation: q.explanation,
+    points: q.points,
+    orderIndex: q.orderIndex,
+    poolGroup: q.poolGroup,
+    difficulty: q.difficulty,
+  }));
+}
+
+function mapAssessmentFromApi(apiData: any): Assessment {
+  return {
+    id: apiData.id,
+    courseId: apiData.courseId,
+    tenantId: apiData.tenantId,
+    title: apiData.title,
+    description: apiData.description,
+    type: apiData.type,
+    passingScore: apiData.passingScore,
+    maxAttempts: apiData.maxAttempts,
+    timeLimit: apiData.timeLimit,
+    isPublished: apiData.isPublished,
+    shuffleQuestions: apiData.shuffleQuestions,
+    questions: parseQuestions(apiData.questions),
+  };
+}
 
 // ---- Helper types ----
 type ViewMode = 'list' | 'builder' | 'preview' | 'analytics';
@@ -271,12 +316,14 @@ function StatusBadge({ isPublished }: { isPublished: boolean }) {
     : <Badge variant="outline" className="text-xs text-muted-foreground">Draft</Badge>;
 }
 
-function getCourseTitle(courseId: string) {
-  return demoCourses.find(c => c.id === courseId)?.title ?? 'Unknown Course';
+function getCourseTitle(courseId: string, courses: any[]) {
+  const course = courses.find(c => c.id === courseId);
+  return course?.title ?? 'Unknown Course';
 }
 
-function getCourseCategory(courseId: string) {
-  return demoCourses.find(c => c.id === courseId)?.category ?? '';
+function getCourseCategory(courseId: string, courses: any[]) {
+  const course = courses.find(c => c.id === courseId);
+  return course?.category ?? '';
 }
 
 // ---- Difficulty Distribution Chart ----
@@ -589,16 +636,20 @@ function QuestionDifficultyAnalysis({ assessment, onClose }: { assessment: Asses
 // ==========================
 function AssessmentList({
   assessments,
+  courses,
   onEdit,
   onPreview,
   onCreateNew,
   onViewAnalytics,
+  onDelete,
 }: {
   assessments: Assessment[];
+  courses: any[];
   onEdit: (a: Assessment) => void;
   onPreview: (a: Assessment) => void;
   onCreateNew: () => void;
   onViewAnalytics: (a: Assessment) => void;
+  onDelete: (a: Assessment) => void;
 }) {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -779,7 +830,7 @@ function AssessmentList({
             ) : (
               sorted.map((assessment, idx) => {
                 const stats = getSimStats(assessment);
-                const category = getCourseCategory(assessment.courseId);
+                const category = getCourseCategory(assessment.courseId, courses);
                 const isQuickPreview = quickPreviewId === assessment.id;
                 return (
                   <motion.div
@@ -805,7 +856,7 @@ function AssessmentList({
                               {assessment.title || 'Untitled Assessment'}
                             </CardTitle>
                             <CardDescription className="text-xs mt-0.5 line-clamp-1">
-                              {assessment.description || getCourseTitle(assessment.courseId)}
+                              {assessment.description || getCourseTitle(assessment.courseId, courses)}
                             </CardDescription>
                           </div>
                           <StatusBadge isPublished={assessment.isPublished} />
@@ -909,7 +960,7 @@ function AssessmentList({
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600">
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600" onClick={() => onDelete(assessment)}>
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </TooltipTrigger>
@@ -987,14 +1038,14 @@ function AssessmentList({
                               )}
                               <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
                                 <span>{assessment.questions?.length ?? 0} Qs</span>
-                                {getCourseCategory(assessment.courseId) && (
-                                  <Badge variant="outline" className="text-[10px] px-1 py-0">{getCourseCategory(assessment.courseId)}</Badge>
+                                {getCourseCategory(assessment.courseId, courses) && (
+                                  <Badge variant="outline" className="text-[10px] px-1 py-0">{getCourseCategory(assessment.courseId, courses)}</Badge>
                                 )}
                               </div>
                             </div>
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                            {getCourseTitle(assessment.courseId)}
+                            {getCourseTitle(assessment.courseId, courses)}
                           </TableCell>
                           <TableCell><AssessmentTypeBadge type={assessment.type} /></TableCell>
                           <TableCell className="text-center text-sm">{assessment.passingScore}%</TableCell>
@@ -1039,7 +1090,7 @@ function AssessmentList({
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600" onClick={() => onDelete(assessment)}>
                                       <Trash2 className="h-4 w-4" />
                                     </Button>
                                   </TooltipTrigger>
@@ -1067,12 +1118,16 @@ function AssessmentList({
 // ==========================
 function AssessmentBuilder({
   assessment,
+  courses,
   onBack,
   onSave,
+  isSaving,
 }: {
   assessment: Assessment;
+  courses: any[];
   onBack: () => void;
   onSave: (a: Assessment) => void;
+  isSaving: boolean;
 }) {
   const [form, setForm] = useState<Assessment>({ ...assessment });
   const [showQuestionForm, setShowQuestionForm] = useState(false);
@@ -1228,14 +1283,14 @@ function AssessmentBuilder({
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" onClick={onBack} className="gap-2">
+          <Button variant="outline" onClick={onBack} className="gap-2" disabled={isSaving}>
             <RotateCcw className="h-4 w-4" /> Cancel
           </Button>
-          <Button variant="outline" className="gap-2" onClick={() => onSave({ ...form, isPublished: false })}>
-            <Save className="h-4 w-4" /> Save Draft
+          <Button variant="outline" className="gap-2" onClick={() => onSave({ ...form, isPublished: false })} disabled={isSaving}>
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Draft
           </Button>
-          <Button className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white gap-2 shadow-lg shadow-emerald-500/20" onClick={() => onSave({ ...form, isPublished: true })}>
-            <Send className="h-4 w-4" /> Publish
+          <Button className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white gap-2 shadow-lg shadow-emerald-500/20" onClick={() => onSave({ ...form, isPublished: true })} disabled={isSaving}>
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Publish
           </Button>
         </div>
       </div>
@@ -1315,7 +1370,7 @@ function AssessmentBuilder({
                 <Select value={form.courseId} onValueChange={v => updateField('courseId', v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {demoCourses.map(c => (
+                    {courses.map(c => (
                       <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
                     ))}
                   </SelectContent>
@@ -2276,11 +2331,32 @@ function QuizPreview({
 // MAIN COMPONENT
 // ==========================
 export function AdminAssessments() {
-  const [assessments, setAssessments] = useState<Assessment[]>(demoAssessments);
+  const tenantId = useAppStore(s => s.currentTenant?.id);
+  const { data: rawAssessments = [], isLoading: assessmentsLoading } = useAssessments();
+  const { data: rawCourses = [], isLoading: coursesLoading } = useCourses();
+  const createAssessment = useCreateAssessment();
+  const updateAssessment = useUpdateAssessment();
+  const deleteAssessment = useDeleteAssessment();
+
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
   const [previewAssessment, setPreviewAssessment] = useState<Assessment | null>(null);
   const [analyticsAssessment, setAnalyticsAssessment] = useState<Assessment | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Assessment | null>(null);
+
+  // Map API data to frontend Assessment type
+  const assessments = useMemo(() => {
+    if (!Array.isArray(rawAssessments)) return [];
+    return rawAssessments.map(mapAssessmentFromApi);
+  }, [rawAssessments]);
+
+  // Map courses data
+  const courses = useMemo(() => {
+    if (!Array.isArray(rawCourses)) return [];
+    return rawCourses;
+  }, [rawCourses]);
+
+  const isSaving = createAssessment.isPending || updateAssessment.isPending;
 
   const handleEdit = (a: Assessment) => {
     setSelectedAssessment({ ...a, questions: a.questions?.map(q => ({ ...q })) });
@@ -2288,10 +2364,11 @@ export function AdminAssessments() {
   };
 
   const handleCreateNew = () => {
+    const firstCourseId = courses.length > 0 ? courses[0].id : '';
     const newAssessment: Assessment = {
-      id: `assess-${Date.now()}`,
-      courseId: demoCourses[0].id,
-      tenantId: 'demo-tenant-1',
+      id: `new-${Date.now()}`,
+      courseId: firstCourseId,
+      tenantId: tenantId ?? '',
       title: '',
       description: '',
       type: 'quiz',
@@ -2307,16 +2384,68 @@ export function AdminAssessments() {
   };
 
   const handleSave = (a: Assessment) => {
-    const idx = assessments.findIndex(x => x.id === a.id);
-    if (idx >= 0) {
-      const updated = [...assessments];
-      updated[idx] = a;
-      setAssessments(updated);
+    // Prepare questions payload for API
+    const questionsPayload = (a.questions ?? []).map((q, i) => ({
+      type: q.type,
+      question: q.question,
+      options: q.options,
+      correctAnswer: q.correctAnswer,
+      explanation: q.explanation,
+      points: q.points,
+      orderIndex: i,
+      difficulty: q.difficulty,
+      poolGroup: q.poolGroup,
+    }));
+
+    const isNew = a.id.startsWith('new-');
+
+    if (isNew) {
+      createAssessment.mutate({
+        courseId: a.courseId,
+        tenantId: a.tenantId || tenantId,
+        title: a.title || 'Untitled Assessment',
+        description: a.description,
+        type: a.type,
+        passingScore: a.passingScore,
+        maxAttempts: a.maxAttempts,
+        timeLimit: a.timeLimit,
+        isPublished: a.isPublished,
+        shuffleQuestions: a.shuffleQuestions,
+        questions: questionsPayload,
+      }, {
+        onSuccess: () => {
+          setViewMode('list');
+          setSelectedAssessment(null);
+        },
+      });
     } else {
-      setAssessments(prev => [...prev, a]);
+      updateAssessment.mutate({
+        id: a.id,
+        title: a.title,
+        description: a.description,
+        type: a.type,
+        passingScore: a.passingScore,
+        maxAttempts: a.maxAttempts,
+        timeLimit: a.timeLimit,
+        isPublished: a.isPublished,
+        shuffleQuestions: a.shuffleQuestions,
+        questions: questionsPayload,
+      }, {
+        onSuccess: () => {
+          setViewMode('list');
+          setSelectedAssessment(null);
+        },
+      });
     }
-    setViewMode('list');
-    setSelectedAssessment(null);
+  };
+
+  const handleDelete = () => {
+    if (!deleteTarget) return;
+    deleteAssessment.mutate(deleteTarget.id, {
+      onSuccess: () => {
+        setDeleteTarget(null);
+      },
+    });
   };
 
   const handleBack = () => {
@@ -2325,6 +2454,18 @@ export function AdminAssessments() {
     setAnalyticsAssessment(null);
   };
 
+  // Loading state
+  if (assessmentsLoading || coursesLoading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+          <p className="text-sm text-muted-foreground">Loading assessments...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6">
       <AnimatePresence mode="wait">
@@ -2332,10 +2473,12 @@ export function AdminAssessments() {
           <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <AssessmentList
               assessments={assessments}
+              courses={courses}
               onEdit={handleEdit}
               onPreview={a => setPreviewAssessment(a)}
               onCreateNew={handleCreateNew}
               onViewAnalytics={a => setAnalyticsAssessment(a)}
+              onDelete={a => setDeleteTarget(a)}
             />
           </motion.div>
         )}
@@ -2343,8 +2486,10 @@ export function AdminAssessments() {
           <motion.div key="builder" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
             <AssessmentBuilder
               assessment={selectedAssessment}
+              courses={courses}
               onBack={handleBack}
               onSave={handleSave}
+              isSaving={isSaving}
             />
           </motion.div>
         )}
@@ -2364,6 +2509,17 @@ export function AdminAssessments() {
           onClose={() => setPreviewAssessment(null)}
         />
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Delete Assessment"
+        description={`Are you sure you want to delete "${deleteTarget?.title || 'this assessment'}"? This action cannot be undone. All questions and submissions will be permanently removed.`}
+        confirmLabel={deleteAssessment.isPending ? 'Deleting...' : 'Delete'}
+        onConfirm={handleDelete}
+        variant="destructive"
+      />
     </div>
   );
 }

@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
 import {
   Plus, Heart, MessageSquare, Share2, Bookmark, ChevronDown,
   ChevronUp, Clock, Tag, Send, Flame, Trophy, TrendingUp,
   Megaphone, HelpCircle, Star, MessageCircle, X, Pin,
   Bold, Italic, Code, Link2, Eye, EyeOff, Smile, Sparkles,
-  Users, Activity, Zap
+  Users, Activity, Zap, Trash2, Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { demoCommunityPosts, leaderboardData } from '@/lib/mock-data';
+import {
+  useCommunityPosts,
+  useCreateCommunityPost,
+  useUpdateCommunityPost,
+  useDeleteCommunityPost,
+  useAddComment,
+  useToggleReaction,
+  useUsers,
+} from '@/hooks/use-data';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { useAppStore } from '@/store/app-store';
 import type { CommunityPost } from '@/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -60,20 +70,6 @@ const TOPIC_TAGS = [
   'tailwind', 'prisma', 'api', 'testing'
 ];
 
-const categoryPills = [
-  { id: 'all', name: 'All', icon: '🏠', color: '#64748B' },
-  { id: 'cat-1', name: 'General Discussion', icon: '💬', color: '#10B981' },
-  { id: 'cat-2', name: 'Q&A Support', icon: '❓', color: '#8B5CF6' },
-  { id: 'cat-3', name: 'Announcements', icon: '📢', color: '#F59E0B' },
-  { id: 'cat-4', name: 'Show & Tell', icon: '🌟', color: '#EC4899' },
-];
-
-const sampleComments = [
-  { id: 'c1', author: 'Emma Rodriguez', content: 'Great question! I\'ve been using Zustand for client state and TanStack Query for server state. Works really well.', likeCount: 5, timeAgo: '1h ago' },
-  { id: 'c2', author: 'David Park', content: 'I recommend checking out Jotai if you want something lighter than Redux but more structured than Context.', likeCount: 3, timeAgo: '45m ago' },
-  { id: 'c3', author: 'Lisa Wang', content: 'This is exactly what I needed! The React docs on data fetching have some good patterns too.', likeCount: 2, timeAgo: '30m ago' },
-];
-
 const trendingTopics = [
   { tag: 'nextjs', count: 42, sparkline: [20, 25, 30, 28, 35, 38, 42] },
   { tag: 'react', count: 38, sparkline: [30, 28, 32, 35, 33, 36, 38] },
@@ -85,7 +81,34 @@ const trendingTopics = [
   { tag: 'state-management', count: 12, sparkline: [6, 7, 8, 9, 10, 11, 12] },
 ];
 
+// Reaction type ↔ emoji mapping
+const reactionTypeToEmoji: Record<string, string> = {
+  'like': '👍',
+  'love': '❤️',
+  'celebrate': '🎉',
+  'insightful': '💡',
+};
+
+const emojiToReactionType: Record<string, string> = {
+  '❤️': 'love',
+  '👍': 'like',
+  '🎉': 'celebrate',
+  '🤔': 'insightful',
+  '💡': 'insightful',
+  '🚀': 'celebrate',
+};
+
 // ─── Helper Functions ─────────────────────────────────────────────────────────
+
+function normalizePost(raw: any): CommunityPost {
+  return {
+    ...raw,
+    tags: raw.tags
+      ? (typeof raw.tags === 'string' ? raw.tags.split(',').filter(Boolean) : raw.tags)
+      : [],
+    type: raw.type || 'discussion',
+  };
+}
 
 function getTypeEmoji(type: CommunityPost['type']) {
   switch (type) {
@@ -135,6 +158,12 @@ function estimateReadingTime(content: string): number {
 
 function getEngagementScore(post: CommunityPost): number {
   return post.viewCount + (post.likeCount * 3) + (post.commentCount * 5);
+}
+
+function isToday(dateStr: string) {
+  const date = new Date(dateStr);
+  const today = new Date();
+  return date.toDateString() === today.toDateString();
 }
 
 // ─── Animated Counter Component ───────────────────────────────────────────────
@@ -236,40 +265,201 @@ function HeartBurst({ x, y }: { x: number; y: number }) {
   );
 }
 
+// ─── Loading Skeleton ─────────────────────────────────────────────────────────
+
+function CommunitySkeleton() {
+  return (
+    <div className="p-4 md:p-6 max-w-[1600px] mx-auto">
+      {/* Stats Banner Skeleton */}
+      <div className="mb-5">
+        <div className="rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-violet-600 p-[1px]">
+          <div className="rounded-xl bg-gradient-to-r from-emerald-50 to-violet-50 dark:from-slate-900 dark:to-slate-800 p-4 md:p-5">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div>
+                <div className="h-8 w-40 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+                <div className="h-4 w-56 bg-slate-200 dark:bg-slate-700 rounded mt-1 animate-pulse" />
+              </div>
+              <div className="h-10 w-28 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="flex items-center gap-3 bg-white/80 dark:bg-white/5 backdrop-blur-md rounded-lg p-3">
+                  <div className="h-10 w-10 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                  <div>
+                    <div className="h-5 w-12 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+                    <div className="h-3 w-16 bg-slate-200 dark:bg-slate-700 rounded mt-1 animate-pulse" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Category Pills Skeleton */}
+      <div className="mb-6 flex gap-2">
+        {[1, 2, 3, 4, 5].map(i => (
+          <div key={i} className="h-9 w-28 bg-slate-200 dark:bg-slate-700 rounded-full animate-pulse" />
+        ))}
+      </div>
+
+      {/* Post Cards Skeleton */}
+      <div className="flex gap-6">
+        <div className="flex-1 min-w-0 space-y-4">
+          {[1, 2, 3].map(i => (
+            <Card key={i} className="border-border">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="h-10 w-10 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                  <div>
+                    <div className="h-4 w-32 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+                    <div className="h-3 w-24 bg-slate-200 dark:bg-slate-700 rounded mt-1 animate-pulse" />
+                  </div>
+                </div>
+                <div className="h-5 w-3/4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse mb-2" />
+                <div className="h-4 w-full bg-slate-200 dark:bg-slate-700 rounded animate-pulse mb-1" />
+                <div className="h-4 w-2/3 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        {/* Sidebar Skeleton */}
+        <div className="hidden lg:block w-80 shrink-0 space-y-4">
+          {[1, 2, 3].map(i => (
+            <Card key={i} className="border-border">
+              <CardContent className="p-4">
+                <div className="h-5 w-28 bg-slate-200 dark:bg-slate-700 rounded animate-pulse mb-3" />
+                {[1, 2, 3, 4, 5].map(j => (
+                  <div key={j} className="flex items-center gap-2 mb-2">
+                    <div className="h-7 w-7 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                    <div className="h-4 flex-1 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function LearnerCommunity() {
-  const [posts, setPosts] = useState<CommunityPost[]>(demoCommunityPosts);
+  const userId = useAppStore(s => s.currentUser?.id) || '';
+  const tenantId = useAppStore(s => s.currentTenant?.id) || '';
+  const { currentUser, currentTenant } = useAppStore();
+
+  // ── Data Hooks ─────────────────────────────────────────────────────────────
+  const { data: communityData, isLoading } = useCommunityPosts();
+  const { data: usersData } = useUsers(tenantId);
+
+  // ── Mutation Hooks ─────────────────────────────────────────────────────────
+  const createPostMutation = useCreateCommunityPost();
+  const deletePostMutation = useDeleteCommunityPost();
+  const addCommentMutation = useAddComment();
+  const toggleReactionMutation = useToggleReaction();
+
+  // ── Derived Data ───────────────────────────────────────────────────────────
+  const posts = useMemo<CommunityPost[]>(() => {
+    return (communityData?.posts || []).map(normalizePost);
+  }, [communityData]);
+
+  const categories = useMemo(() => {
+    const apiCats = (communityData?.categories || []).map((cat: any) => ({
+      id: cat.id,
+      name: cat.name,
+      icon: cat.icon || '💬',
+      color: cat.color || '#64748B',
+    }));
+    return [
+      { id: 'all', name: 'All', icon: '🏠', color: '#64748B' },
+      ...apiCats,
+    ];
+  }, [communityData?.categories]);
+
+  // Compute reaction counts per post from API data
+  const computedReactions = useMemo<Record<string, Record<string, number>>>(() => {
+    const result: Record<string, Record<string, number>> = {};
+    posts.forEach(post => {
+      const postReactions: Record<string, number> = {};
+      EMOJI_REACTIONS.forEach(emoji => { postReactions[emoji] = 0; });
+      (post.reactions || []).forEach((r: any) => {
+        const emoji = reactionTypeToEmoji[r.type];
+        if (emoji) postReactions[emoji] = (postReactions[emoji] || 0) + 1;
+      });
+      result[post.id] = postReactions;
+    });
+    return result;
+  }, [posts]);
+
+  // Compute user's own reactions from API data
+  const computedUserReactions = useMemo<Record<string, Set<string>>>(() => {
+    const result: Record<string, Set<string>> = {};
+    posts.forEach(post => {
+      const userEmojis = new Set<string>();
+      (post.reactions || []).forEach((r: any) => {
+        if (r.userId === userId) {
+          const emoji = reactionTypeToEmoji[r.type];
+          if (emoji) userEmojis.add(emoji);
+        }
+      });
+      result[post.id] = userEmojis;
+    });
+    return result;
+  }, [posts, userId]);
+
+  // Compute liked posts (has 'like' reaction from current user)
+  const likedPosts = useMemo<Set<string>>(() => {
+    const result = new Set<string>();
+    posts.forEach(post => {
+      const hasLike = (post.reactions || []).some(
+        (r: any) => r.userId === userId && r.type === 'like'
+      );
+      if (hasLike) result.add(post.id);
+    });
+    return result;
+  }, [posts, userId]);
+
+  // Top contributors from users data
+  const topContributors = useMemo(() => {
+    const users = (usersData?.users || [])
+      .slice()
+      .sort((a: any, b: any) => (b.totalPoints || 0) - (a.totalPoints || 0))
+      .slice(0, 5);
+    return users.map((user: any, idx: number) => ({
+      rank: idx + 1,
+      name: user.name || 'Unknown',
+      points: user.totalPoints || 0,
+      streak: user.streakDays || 0,
+    }));
+  }, [usersData?.users]);
+
+  // Community stats from real data
+  const totalMembers = usersData?.users?.length || 0;
+  const postsToday = posts.filter(p => isToday(p.createdAt)).length;
+  const activeNow = (usersData?.users || []).filter((u: any) => u.isActive).length;
+
+  // ── UI State ───────────────────────────────────────────────────────────────
   const [activeCategory, setActiveCategory] = useState('all');
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newPost, setNewPost] = useState({
     title: '',
     content: '',
     type: 'discussion' as CommunityPost['type'],
-    categoryId: 'cat-1',
+    categoryId: '',
     tags: '',
   });
 
-  // Emoji reaction state: { postId: { emoji: count } }
-  const [reactions, setReactions] = useState<Record<string, Record<string, number>>>(() => {
-    const init: Record<string, Record<string, number>> = {};
-    demoCommunityPosts.forEach(post => {
-      const postReactions: Record<string, number> = {};
-      // Seed some initial reactions
-      const seedEmojis: EmojiType[] = ['❤️', '👍', '🎉', '💡'];
-      seedEmojis.forEach(emoji => {
-        postReactions[emoji] = Math.floor(Math.random() * (post.likeCount || 10)) + 1;
-      });
-      init[post.id] = postReactions;
-    });
-    return init;
-  });
-
-  // User's own reactions
-  const [userReactions, setUserReactions] = useState<Record<string, Set<string>>>({});
+  // Set default category when categories load
+  useEffect(() => {
+    if (categories.length > 1 && !newPost.categoryId) {
+      setNewPost(prev => ({ ...prev, categoryId: categories[1].id }));
+    }
+  }, [categories]);
 
   // Floating +1 animations
   const [floatingEmojis, setFloatingEmojis] = useState<{ id: string; postId: string; emoji: string }[]>([]);
@@ -283,10 +473,8 @@ export function LearnerCommunity() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [composerFocused, setComposerFocused] = useState(false);
 
-  // Community stats
-  const totalMembers = 2847;
-  const postsToday = 23;
-  const activeNow = 142;
+  // Delete confirmation state
+  const [deletePostId, setDeletePostId] = useState<string | null>(null);
 
   // Filter posts by category
   const filteredPosts = posts.filter((post) => {
@@ -303,18 +491,7 @@ export function LearnerCommunity() {
   };
 
   const toggleLike = (postId: string) => {
-    setLikedPosts(prev => {
-      const next = new Set(prev);
-      if (next.has(postId)) next.delete(postId);
-      else next.add(postId);
-      return next;
-    });
-    setPosts(posts.map(p => {
-      if (p.id === postId) {
-        return { ...p, likeCount: likedPosts.has(postId) ? p.likeCount - 1 : p.likeCount + 1 };
-      }
-      return p;
-    }));
+    toggleReactionMutation.mutate({ postId, userId, type: 'like' });
   };
 
   const toggleBookmark = (postId: string) => {
@@ -327,36 +504,18 @@ export function LearnerCommunity() {
   };
 
   const handleEmojiReaction = (postId: string, emoji: EmojiType) => {
-    const userPostReactions = userReactions[postId] || new Set<string>();
+    const reactionType = emojiToReactionType[emoji];
+    if (!reactionType || !userId) return;
 
-    setReactions(prev => {
-      const postReactions = { ...(prev[postId] || {}) };
-      if (userPostReactions.has(emoji)) {
-        // Remove reaction
-        postReactions[emoji] = Math.max(0, (postReactions[emoji] || 0) - 1);
-        if (postReactions[emoji] === 0) delete postReactions[emoji];
-      } else {
-        // Add reaction
-        postReactions[emoji] = (postReactions[emoji] || 0) + 1;
-        // Show floating +1
-        const floatId = `${postId}-${emoji}-${Date.now()}`;
-        setFloatingEmojis(prev => [...prev, { id: floatId, postId, emoji }]);
-        setTimeout(() => {
-          setFloatingEmojis(prev => prev.filter(f => f.id !== floatId));
-        }, 800);
-      }
-      return { ...prev, [postId]: postReactions };
-    });
+    // Show floating +1 animation
+    const floatId = `${postId}-${emoji}-${Date.now()}`;
+    setFloatingEmojis(prev => [...prev, { id: floatId, postId, emoji }]);
+    setTimeout(() => {
+      setFloatingEmojis(prev => prev.filter(f => f.id !== floatId));
+    }, 800);
 
-    setUserReactions(prev => {
-      const current = new Set(prev[postId] || []);
-      if (current.has(emoji)) {
-        current.delete(emoji);
-      } else {
-        current.add(emoji);
-      }
-      return { ...prev, [postId]: current };
-    });
+    // Persist reaction toggle to API
+    toggleReactionMutation.mutate({ postId, userId, type: reactionType });
   };
 
   const handleHeartBurst = (e: React.MouseEvent) => {
@@ -369,39 +528,47 @@ export function LearnerCommunity() {
   };
 
   const handleCreatePost = () => {
-    const post: CommunityPost = {
-      id: `post-${Date.now()}`,
-      tenantId: 'demo-tenant-1',
-      authorId: 'demo-learner-1',
-      categoryId: newPost.categoryId,
-      title: newPost.title,
-      content: newPost.content,
-      type: newPost.type,
-      isPinned: false,
-      isLocked: false,
-      viewCount: 0,
-      likeCount: 0,
-      commentCount: 0,
-      tags: selectedTags.length > 0 ? selectedTags : (newPost.tags ? newPost.tags.split(',').map(t => t.trim()).filter(Boolean) : []),
-      author: {
-        id: 'demo-learner-1',
-        tenantId: 'demo-tenant-1',
-        email: 'learner@example.com',
-        name: 'Alex Johnson',
-        role: 'learner',
-        timezone: 'America/New_York',
-        locale: 'en',
-        streakDays: 7,
-        totalPoints: 1250,
-        isActive: true,
-        createdAt: '2024-03-10T00:00:00Z',
+    const tags = selectedTags.length > 0
+      ? selectedTags
+      : (newPost.tags ? newPost.tags.split(',').map(t => t.trim()).filter(Boolean) : []);
+
+    createPostMutation.mutate(
+      {
+        tenantId: tenantId || currentTenant?.id || '',
+        authorId: userId || currentUser?.id || '',
+        title: newPost.title,
+        content: newPost.content,
+        type: newPost.type,
+        categoryId: newPost.categoryId,
+        tags,
       },
-      createdAt: new Date().toISOString(),
-    };
-    setPosts([post, ...posts]);
-    setShowCreateDialog(false);
-    setNewPost({ title: '', content: '', type: 'discussion', categoryId: 'cat-1', tags: '' });
-    setSelectedTags([]);
+      {
+        onSuccess: () => {
+          setShowCreateDialog(false);
+          setNewPost({ title: '', content: '', type: 'discussion', categoryId: categories.length > 1 ? categories[1].id : '', tags: '' });
+          setSelectedTags([]);
+        },
+      }
+    );
+  };
+
+  const handleDeletePost = () => {
+    if (deletePostId) {
+      deletePostMutation.mutate(deletePostId, {
+        onSuccess: () => {
+          setDeletePostId(null);
+        },
+      });
+    }
+  };
+
+  const handleAddComment = (postId: string, content: string) => {
+    if (!content.trim() || !userId) return;
+    addCommentMutation.mutate({
+      postId,
+      authorId: userId,
+      content: content.trim(),
+    });
   };
 
   const insertMarkdown = (prefix: string, suffix: string) => {
@@ -440,6 +607,11 @@ export function LearnerCommunity() {
       .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="text-emerald-600 underline">$1</a>')
       .replace(/\n/g, '<br/>');
   };
+
+  // ── Loading State ──────────────────────────────────────────────────────────
+  if (isLoading) {
+    return <CommunitySkeleton />;
+  }
 
   return (
     <div className="p-4 md:p-6 max-w-[1600px] mx-auto">
@@ -515,7 +687,7 @@ export function LearnerCommunity() {
       {/* Category Pills */}
       <div className="mb-6">
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          {categoryPills.map((cat) => (
+          {categories.map((cat) => (
             <motion.button
               key={cat.id}
               onClick={() => setActiveCategory(cat.id)}
@@ -548,14 +720,19 @@ export function LearnerCommunity() {
                 isExpanded={expandedComments.has(post.id)}
                 isLiked={likedPosts.has(post.id)}
                 isBookmarked={bookmarkedPosts.has(post.id)}
-                reactions={reactions[post.id] || {}}
-                userReactions={userReactions[post.id] || new Set()}
+                reactions={computedReactions[post.id] || {}}
+                userReactions={computedUserReactions[post.id] || new Set()}
                 floatingEmojis={floatingEmojis.filter(f => f.postId === post.id)}
                 onToggleComments={() => toggleComments(post.id)}
                 onToggleLike={() => toggleLike(post.id)}
                 onToggleBookmark={() => toggleBookmark(post.id)}
                 onEmojiReaction={(emoji) => handleEmojiReaction(post.id, emoji)}
                 onHeartBurst={handleHeartBurst}
+                onDelete={() => setDeletePostId(post.id)}
+                onAddComment={(content) => handleAddComment(post.id, content)}
+                currentUserId={userId}
+                isDeleting={deletePostMutation.isPending}
+                isAddingComment={addCommentMutation.isPending}
               />
             ))}
           </AnimatePresence>
@@ -631,7 +808,7 @@ export function LearnerCommunity() {
             </CardHeader>
             <CardContent className="p-3">
               <div className="space-y-2">
-                {leaderboardData.slice(0, 5).map((user) => (
+                {topContributors.length > 0 ? topContributors.map((user) => (
                   <div
                     key={user.name}
                     className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
@@ -660,7 +837,11 @@ export function LearnerCommunity() {
                       </div>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="text-center py-4">
+                    <p className="text-xs text-slate-400">No contributors yet</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -697,6 +878,17 @@ export function LearnerCommunity() {
           <HeartBurst key={burst.id} x={burst.x} y={burst.y} />
         ))}
       </AnimatePresence>
+
+      {/* Delete Post Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!deletePostId}
+        onOpenChange={(open) => { if (!open) setDeletePostId(null); }}
+        title="Delete Post"
+        description="Are you sure you want to delete this post? This action cannot be undone and all comments and reactions will be removed."
+        confirmLabel="Delete"
+        onConfirm={handleDeletePost}
+        variant="destructive"
+      />
 
       {/* Create Post Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
@@ -824,10 +1016,10 @@ export function LearnerCommunity() {
                 <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Category</Label>
                 <Select value={newPost.categoryId} onValueChange={(v) => setNewPost({ ...newPost, categoryId: v })}>
                   <SelectTrigger className="border-border">
-                    <SelectValue />
+                    <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categoryPills.filter(c => c.id !== 'all').map(cat => (
+                    {categories.filter(c => c.id !== 'all').map(cat => (
                       <SelectItem key={cat.id} value={cat.id}>{cat.icon} {cat.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -871,11 +1063,15 @@ export function LearnerCommunity() {
             </Button>
             <Button
               onClick={handleCreatePost}
-              disabled={!newPost.title.trim() || !newPost.content.trim()}
+              disabled={!newPost.title.trim() || !newPost.content.trim() || createPostMutation.isPending}
               className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
             >
-              <Send className="h-3.5 w-3.5" />
-              Post
+              {createPostMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Send className="h-3.5 w-3.5" />
+              )}
+              {createPostMutation.isPending ? 'Posting...' : 'Post'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -900,6 +1096,11 @@ function PostFeedCard({
   onToggleBookmark,
   onEmojiReaction,
   onHeartBurst,
+  onDelete,
+  onAddComment,
+  currentUserId,
+  isDeleting,
+  isAddingComment,
 }: {
   post: CommunityPost;
   index: number;
@@ -914,6 +1115,11 @@ function PostFeedCard({
   onToggleBookmark: () => void;
   onEmojiReaction: (emoji: EmojiType) => void;
   onHeartBurst: (e: React.MouseEvent) => void;
+  onDelete: () => void;
+  onAddComment: (content: string) => void;
+  currentUserId: string;
+  isDeleting?: boolean;
+  isAddingComment?: boolean;
 }) {
   const roleBadge = getRoleBadge(post.author?.role || 'learner');
   const readingTime = estimateReadingTime(post.content);
@@ -924,6 +1130,18 @@ function PostFeedCard({
 
   // Gradient border state
   const [isHovered, setIsHovered] = useState(false);
+
+  // Comment input state
+  const [commentText, setCommentText] = useState('');
+
+  const isOwner = currentUserId && post.authorId === currentUserId;
+
+  const handleCommentSubmit = () => {
+    if (commentText.trim()) {
+      onAddComment(commentText);
+      setCommentText('');
+    }
+  };
 
   return (
     <motion.div
@@ -985,9 +1203,23 @@ function PostFeedCard({
                     </span>
                   </div>
                 </div>
-                <Badge variant="outline" className={`text-xs gap-1 ${getTypeBadgeStyle(post.type)}`}>
-                  {getTypeEmoji(post.type)} {post.type.charAt(0).toUpperCase() + post.type.slice(1)}
-                </Badge>
+                <div className="flex items-center gap-1.5">
+                  <Badge variant="outline" className={`text-xs gap-1 ${getTypeBadgeStyle(post.type)}`}>
+                    {getTypeEmoji(post.type)} {post.type.charAt(0).toUpperCase() + post.type.slice(1)}
+                  </Badge>
+                  {isOwner && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={onDelete}
+                      disabled={isDeleting}
+                      className="h-7 w-7 p-0 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-full"
+                      title="Delete post"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1127,7 +1359,8 @@ function PostFeedCard({
                 >
                   <div className="border-t border-border bg-slate-50/50 dark:bg-slate-900/50">
                     <div className="p-4 space-y-3">
-                      {sampleComments.map((comment, idx) => (
+                      {/* Real comments from API */}
+                      {(post.comments && post.comments.length > 0) ? post.comments.map((comment, idx) => (
                         <motion.div
                           key={comment.id}
                           initial={{ opacity: 0, y: 20 }}
@@ -1137,13 +1370,13 @@ function PostFeedCard({
                         >
                           <Avatar className="h-7 w-7 shrink-0">
                             <AvatarFallback className="bg-slate-200 text-slate-600 text-xs">
-                              {comment.author.charAt(0)}
+                              {comment.author?.name?.charAt(0) || 'U'}
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-0.5">
-                              <span className="text-xs font-semibold text-slate-900 dark:text-slate-50">{comment.author}</span>
-                              <span className="text-[10px] text-slate-400 dark:text-slate-500">{comment.timeAgo}</span>
+                              <span className="text-xs font-semibold text-slate-900 dark:text-slate-50">{comment.author?.name || 'Unknown'}</span>
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500">{timeAgo(comment.createdAt)}</span>
                             </div>
                             <p className="text-sm text-slate-600 leading-relaxed">{comment.content}</p>
                             <button className="text-xs text-slate-400 hover:text-red-500 mt-1 flex items-center gap-1">
@@ -1151,22 +1384,44 @@ function PostFeedCard({
                             </button>
                           </div>
                         </motion.div>
-                      ))}
+                      )) : (
+                        <div className="text-center py-3">
+                          <p className="text-xs text-slate-400">No comments yet. Be the first to comment!</p>
+                        </div>
+                      )}
 
                       {/* Comment Input */}
                       <div className="flex gap-2 pt-2">
                         <Avatar className="h-7 w-7 shrink-0">
                           <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs font-medium">
-                            A
+                            {currentUserId ? 'U' : '?'}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 flex gap-2">
                           <Input
                             placeholder="Write a comment..."
+                            value={commentText}
+                            onChange={(e) => setCommentText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleCommentSubmit();
+                              }
+                            }}
                             className="text-sm border-border focus:border-emerald-400 h-8"
+                            disabled={isAddingComment}
                           />
-                          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 px-3 shrink-0">
-                            <Send className="h-3 w-3" />
+                          <Button
+                            size="sm"
+                            onClick={handleCommentSubmit}
+                            disabled={!commentText.trim() || isAddingComment}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 px-3 shrink-0"
+                          >
+                            {isAddingComment ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Send className="h-3 w-3" />
+                            )}
                           </Button>
                         </div>
                       </div>

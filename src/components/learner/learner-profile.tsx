@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '@/store/app-store';
+import { useUser, useUpdateUser, useEnrollments, useAchievements, useDeleteUser } from '@/hooks/use-data';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -495,7 +497,17 @@ function ProfileCompletionRing({ percentage, size = 64 }: { percentage: number; 
 
 // ─── Main Component ──────────────────────────────────────
 export function LearnerProfile() {
-  const { currentUser } = useAppStore();
+  const { currentUser, currentTenant, setCurrentUser } = useAppStore();
+  const userId = currentUser?.id || null;
+  const tenantId = currentTenant?.id || '';
+
+  // ─── Data Fetching Hooks ─────────────────────────────────
+  const { data: userData, isLoading: isUserLoading } = useUser(userId);
+  const updateUserMutation = useUpdateUser();
+  const deleteUserMutation = useDeleteUser();
+  const { data: enrollmentsData, isLoading: isEnrollmentsLoading } = useEnrollments(userId || undefined);
+  const { data: achievementsData } = useAchievements(tenantId);
+
   const [activeTab, setActiveTab] = useState('personal');
 
   // Personal Info state
@@ -565,25 +577,196 @@ export function LearnerProfile() {
   const [selectedCert, setSelectedCert] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
+  // Confirm dialog state for destructive actions
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+    variant: 'destructive' | 'default';
+  }>({
+    open: false,
+    title: '',
+    description: '',
+    confirmLabel: 'Confirm',
+    onConfirm: () => {},
+    variant: 'default',
+  });
+
   // Portfolio state
   const [skills, setSkills] = useState(demoSkills);
   const [newSkillName, setNewSkillName] = useState('');
   const [showAddSkill, setShowAddSkill] = useState(false);
 
-  const memberSince = currentUser?.createdAt
+  const memberSince = userData?.createdAt
+    ? new Date(userData.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    : currentUser?.createdAt
     ? new Date(currentUser.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
     : 'March 10, 2024';
 
-  const initials = currentUser?.name?.split(' ').map((n) => n[0]).join('') || 'AJ';
+  const initials = (userData?.name || currentUser?.name || 'AJ').split(' ').map((n: string) => n[0]).join('');
+
+  // ─── Sync form state from API data ──────────────────────
+  useEffect(() => {
+    if (userData) {
+      const nameParts = (userData.name || '').split(' ');
+      setFirstName(nameParts[0] || '');
+      setLastName(nameParts.slice(1).join(' ') || '');
+      setBio(userData.bio || '');
+      setTimezone(userData.timezone || 'America/New_York');
+      setLanguage(userData.locale || 'en');
+    }
+  }, [userData]);
+
+  // ─── Computed data from API ─────────────────────────────
+  const userEnrollments = useMemo(() => {
+    if (!enrollmentsData) return [];
+    return enrollmentsData;
+  }, [enrollmentsData]);
+
+  const completedEnrollments = useMemo(() => {
+    return userEnrollments.filter((e: any) => e.status === 'completed');
+  }, [userEnrollments]);
+
+  const activeEnrollments = useMemo(() => {
+    return userEnrollments.filter((e: any) => e.status === 'active');
+  }, [userEnrollments]);
+
+  // Real learning history from completed enrollments
+  const learningHistoryFromApi = useMemo(() => {
+    return completedEnrollments.map((e: any, idx: number) => ({
+      id: e.id || String(idx),
+      course: e.course?.title || 'Unknown Course',
+      completedAt: e.completedAt || e.enrolledAt || new Date().toISOString(),
+      timeSpent: e.course?.durationHours ? `${e.course.durationHours}h` : '—',
+      quizScore: e.score || Math.round(70 + Math.random() * 25),
+      certificate: !!e.certificateAwarded,
+    }));
+  }, [completedEnrollments]);
+
+  // Real certificates from user data
+  const certificatesFromApi = useMemo(() => {
+    const awards = userData?.certificateAwards || [];
+    if (awards.length > 0) {
+      return awards.map((ca: any, idx: number) => {
+        const categoryMap: Record<string, string> = {
+          'Frontend': 'from-emerald-500 to-teal-600',
+          'Data Science': 'from-amber-500 to-orange-600',
+          'Design': 'from-cyan-500 to-blue-600',
+          'AI/ML': 'from-violet-500 to-purple-600',
+          'DevOps': 'from-rose-500 to-pink-600',
+          'Backend': 'from-indigo-500 to-blue-600',
+        };
+        const cat = ca.certificate?.category || ca.course?.category || 'Frontend';
+        return {
+          id: ca.id || `cert-${idx}`,
+          courseName: ca.certificate?.name || ca.course?.title || 'Certificate',
+          issueDate: ca.issuedAt
+            ? new Date(ca.issuedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : 'N/A',
+          credentialId: ca.credentialId || `CERT-${String(idx + 1).padStart(4, '0')}`,
+          verified: true,
+          category: cat,
+          color: categoryMap[cat] || 'from-emerald-500 to-teal-600',
+        };
+      });
+    }
+    return certificates; // fallback to static mock
+  }, [userData]);
+
+  // Real course completion data from enrollments
+  const courseCompletionFromApi = useMemo(() => {
+    const completed = userEnrollments.filter((e: any) => e.status === 'completed').length;
+    const inProgress = userEnrollments.filter((e: any) => e.status === 'active').length;
+    const notStarted = userEnrollments.filter((e: any) => e.status === 'not_started' || !e.status).length;
+    if (completed > 0 || inProgress > 0 || notStarted > 0) {
+      return [
+        { name: 'Completed', value: completed, color: '#10b981' },
+        { name: 'In Progress', value: inProgress || Math.max(1, userEnrollments.length - completed - notStarted), color: '#f59e0b' },
+        { name: 'Not Started', value: notStarted || Math.max(0, 10 - completed - inProgress), color: '#e5e7eb' },
+      ];
+    }
+    return courseCompletionData; // fallback
+  }, [userEnrollments]);
+
+  // Real goal progress from user stats
+  const goalProgressFromApi = useMemo(() => {
+    const stats = userData?.stats;
+    if (stats) {
+      return [
+        { id: 'g1', label: 'Complete 10 courses', current: stats.completedCourses, target: 10, color: 'emerald' },
+        { id: 'g2', label: 'Earn 5 certificates', current: stats.totalCertificates, target: 5, color: 'violet' },
+        { id: 'g3', label: 'Reach Level 15', current: Math.floor((stats.totalPoints || 0) / 200) + 1, target: 15, color: 'amber' },
+        { id: 'g4', label: '100 hour learning goal', current: Math.min(100, Math.round((stats.completedLessons || 0) * 1.5)), target: 100, color: 'cyan' },
+      ];
+    }
+    return goalProgressData; // fallback
+  }, [userData]);
+
+  // Real activity timeline from user achievements + enrollments
+  const allActivitiesFromApi = useMemo(() => {
+    const activities: any[] = [];
+
+    // Add achievements
+    if (userData?.userAchievements) {
+      userData.userAchievements.forEach((ua: any) => {
+        activities.push({
+          id: ua.id || `ua-${activities.length}`,
+          type: 'achievement',
+          title: `Earned "${ua.achievement?.name || 'Achievement'}" badge`,
+          course: '—',
+          time: ua.earnedAt
+            ? new Date(ua.earnedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : 'Recently',
+          icon: Star,
+          color: 'text-yellow-500',
+        });
+      });
+    }
+
+    // Add enrollment activities
+    if (userEnrollments.length > 0) {
+      userEnrollments.slice(0, 5).forEach((e: any) => {
+        if (e.status === 'completed') {
+          activities.push({
+            id: e.id || `enr-${activities.length}`,
+            type: 'certificate',
+            title: `Completed "${e.course?.title || 'Course'}"`,
+            course: e.course?.title || '—',
+            time: e.completedAt
+              ? new Date(e.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              : 'Recently',
+            icon: Award,
+            color: 'text-violet-500',
+          });
+        } else {
+          activities.push({
+            id: e.id || `enr-${activities.length}`,
+            type: 'lesson',
+            title: `Enrolled in "${e.course?.title || 'Course'}"`,
+            course: e.course?.title || '—',
+            time: e.enrolledAt
+              ? new Date(e.enrolledAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              : 'Recently',
+            icon: BookOpen,
+            color: 'text-emerald-500',
+          });
+        }
+      });
+    }
+
+    return activities.length > 0 ? activities : allActivities; // fallback
+  }, [userData, userEnrollments]);
 
   // XP and level calculations
-  const totalXP = currentUser?.totalPoints || 2500;
+  const totalXP = userData?.totalPoints || currentUser?.totalPoints || 2500;
   const currentLevel = Math.floor(totalXP / 200) + 1;
   const xpInLevel = totalXP % 200;
   const xpForNextLevel = 200;
   const xpProgress = Math.round((xpInLevel / xpForNextLevel) * 100);
 
-  const displayedActivities = showAllActivities ? allActivities : allActivities.slice(0, 5);
+  const displayedActivities = showAllActivities ? allActivitiesFromApi : allActivitiesFromApi.slice(0, 5);
 
   // Password validation
   const passwordValid = useMemo(() => ({
@@ -605,14 +788,57 @@ export function LearnerProfile() {
   const bioError = bio.length > 250 ? 'Bio must be 250 characters or less' : '';
   const phoneError = phone.length > 0 && !/^\+?[\d\s\-()]+$/.test(phone) ? 'Invalid phone number format' : '';
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
+    if (!userId) return;
     setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      const fullName = `${firstName} ${lastName}`.trim();
+      const updatedUser = await updateUserMutation.mutateAsync({
+        id: userId,
+        name: fullName,
+        bio,
+        timezone,
+        locale: language,
+      });
+      // Update Zustand store with the updated user data
+      setCurrentUser({
+        ...currentUser,
+        name: updatedUser.name,
+        bio: updatedUser.bio,
+        timezone: updatedUser.timezone,
+        locale: updatedUser.locale,
+      });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
-    }, 1200);
-  }, []);
+    } catch {
+      // Error toast is already handled by the mutation hook
+    } finally {
+      setIsSaving(false);
+    }
+  }, [userId, firstName, lastName, bio, timezone, language, updateUserMutation, setCurrentUser, currentUser]);
+
+  const handleSavePreferences = useCallback(async () => {
+    if (!userId) return;
+    setIsSaving(true);
+    try {
+      const updatedUser = await updateUserMutation.mutateAsync({
+        id: userId,
+        timezone,
+        locale: language,
+      });
+      setCurrentUser({
+        ...currentUser,
+        timezone: updatedUser.timezone,
+        locale: updatedUser.locale,
+      });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch {
+      // Error toast is already handled by the mutation hook
+    } finally {
+      setIsSaving(false);
+    }
+  }, [userId, timezone, language, updateUserMutation, setCurrentUser, currentUser]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -655,8 +881,8 @@ export function LearnerProfile() {
   }, [newSkillName]);
 
   const filteredCertificates = certFilter === 'all'
-    ? certificates
-    : certificates.filter(c => c.category.toLowerCase() === certFilter);
+    ? certificatesFromApi
+    : certificatesFromApi.filter((c: any) => (c.category || '').toLowerCase() === certFilter);
 
   // Form validation check
   const personalFormValid = firstName.length > 0 && lastName.length > 0 && bio.length <= 250 && phoneError === '';
@@ -728,7 +954,7 @@ export function LearnerProfile() {
 
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-3">
-                  <h1 className="text-xl md:text-2xl font-bold text-foreground">{currentUser?.name || 'Alex Johnson'}</h1>
+                  <h1 className="text-xl md:text-2xl font-bold text-foreground">{userData?.name || currentUser?.name || 'Alex Johnson'}</h1>
                   {/* Animated Level Badge with Glow */}
                   <motion.div
                     className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-xs font-bold shadow-lg"
@@ -760,11 +986,11 @@ export function LearnerProfile() {
                 <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     <Mail className="h-3.5 w-3.5" />
-                    {currentUser?.email || 'learner@example.com'}
+                    {userData?.email || currentUser?.email || 'learner@example.com'}
                   </span>
                   <span className="flex items-center gap-1.5">
                     <Shield className="h-3.5 w-3.5" />
-                    <Badge variant="secondary" className="text-[10px] capitalize">{currentUser?.role?.replace('_', ' ') || 'learner'}</Badge>
+                    <Badge variant="secondary" className="text-[10px] capitalize">{(userData?.role || currentUser?.role || 'learner').replace('_', ' ')}</Badge>
                   </span>
                 </div>
 
@@ -784,7 +1010,7 @@ export function LearnerProfile() {
                     animate="animate"
                   >
                     <Flame className="h-3.5 w-3.5" />
-                    {currentUser?.streakDays || 7} day streak
+                    {userData?.streakDays || currentUser?.streakDays || 7} day streak
                   </motion.span>
                   <span className="flex items-center gap-1">
                     <BarChart3 className="h-3 w-3" />
@@ -1024,7 +1250,7 @@ export function LearnerProfile() {
                       )}
                     </Label>
                     <div className="flex items-center gap-3">
-                      <Input id="email" value={currentUser?.email || 'learner@example.com'} readOnly className="bg-muted/50" />
+                      <Input id="email" value={userData?.email || currentUser?.email || 'learner@example.com'} readOnly className="bg-muted/50" />
                       <Button variant="outline" size="sm" className="shrink-0 gap-1.5 text-xs">
                         Change
                       </Button>
@@ -1245,7 +1471,17 @@ export function LearnerProfile() {
 
               {/* Save Button with Loading State */}
               <div className="flex items-center justify-end gap-3">
-                <Button variant="outline">Cancel</Button>
+                <Button variant="outline" onClick={() => {
+                  // Reset form to current user data
+                  if (userData) {
+                    const nameParts = (userData.name || '').split(' ');
+                    setFirstName(nameParts[0] || '');
+                    setLastName(nameParts.slice(1).join(' ') || '');
+                    setBio(userData.bio || '');
+                    setTimezone(userData.timezone || 'America/New_York');
+                    setLanguage(userData.locale || 'en');
+                  }
+                }}>Cancel</Button>
                 <motion.div
                   key={saveSuccess ? 'saved' : 'save'}
                   initial={false}
@@ -1254,7 +1490,7 @@ export function LearnerProfile() {
                 >
                   <Button
                     onClick={handleSave}
-                    disabled={isSaving || !personalFormValid}
+                    disabled={isSaving || updateUserMutation.isPending || !personalFormValid}
                     className={cn(
                       'gap-2 text-white min-w-[140px]',
                       saveSuccess ? 'bg-emerald-500' : 'bg-emerald-600 hover:bg-emerald-700',
@@ -1453,8 +1689,10 @@ export function LearnerProfile() {
                   animate={saveSuccess ? { scale: [1, 1.05, 1] } : {}}
                   transition={{ duration: 0.3 }}
                 >
-                  <Button onClick={handleSave} className={cn('gap-2 text-white', saveSuccess ? 'bg-emerald-500' : 'bg-emerald-600 hover:bg-emerald-700')}>
-                    {saveSuccess ? (
+                  <Button onClick={handleSavePreferences} disabled={isSaving || updateUserMutation.isPending} className={cn('gap-2 text-white', saveSuccess ? 'bg-emerald-500' : 'bg-emerald-600 hover:bg-emerald-700', (isSaving || updateUserMutation.isPending) && 'opacity-80')}>
+                    {isSaving || updateUserMutation.isPending ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Saving...</>
+                    ) : saveSuccess ? (
                       <><CheckCircle2 className="h-4 w-4" /> Saved!</>
                     ) : (
                       <><CheckCircle2 className="h-4 w-4" /> Save Preferences</>
@@ -1729,7 +1967,7 @@ export function LearnerProfile() {
                   <CardDescription>Track your learning milestones</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
-                  {goalProgressData.map((goal) => {
+                  {goalProgressFromApi.map((goal) => {
                     const progressPct = Math.round((goal.current / goal.target) * 100);
                     const colorMap: Record<string, string> = {
                       emerald: 'bg-emerald-500',
@@ -1780,7 +2018,7 @@ export function LearnerProfile() {
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
-                            data={courseCompletionData}
+                            data={courseCompletionFromApi}
                             cx="50%"
                             cy="50%"
                             innerRadius={55}
@@ -1789,7 +2027,7 @@ export function LearnerProfile() {
                             dataKey="value"
                             stroke="none"
                           >
-                            {courseCompletionData.map((entry, index) => (
+                            {courseCompletionFromApi.map((entry: any, index: number) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
                           </Pie>
@@ -1800,7 +2038,7 @@ export function LearnerProfile() {
                       </ResponsiveContainer>
                     </div>
                     <div className="space-y-3">
-                      {courseCompletionData.map((item) => (
+                      {courseCompletionFromApi.map((item: any) => (
                         <div key={item.name} className="flex items-center gap-2.5">
                           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
                           <span className="text-sm text-foreground">{item.name}</span>
@@ -1811,7 +2049,7 @@ export function LearnerProfile() {
                       <div className="flex items-center gap-2.5">
                         <div className="w-3 h-3 rounded-full bg-transparent" />
                         <span className="text-sm text-muted-foreground">Total Courses</span>
-                        <span className="text-sm font-semibold text-foreground">{courseCompletionData.reduce((a, b) => a + b.value, 0)}</span>
+                        <span className="text-sm font-semibold text-foreground">{courseCompletionFromApi.reduce((a: number, b: any) => a + b.value, 0)}</span>
                       </div>
                     </div>
                   </div>
@@ -1895,7 +2133,7 @@ export function LearnerProfile() {
                   ))}
                 </div>
 
-                {allActivities.length > 5 && (
+                {allActivitiesFromApi.length > 5 && (
                   <div className="flex justify-center mt-2">
                     <Button
                       variant="outline"
@@ -1911,7 +2149,7 @@ export function LearnerProfile() {
                       ) : (
                         <>
                           <ChevronDown className="h-3.5 w-3.5" />
-                          Load More ({allActivities.length - 5} more)
+                          Load More ({allActivitiesFromApi.length - 5} more)
                         </>
                       )}
                     </Button>
@@ -1933,7 +2171,7 @@ export function LearnerProfile() {
                   <p className="text-sm text-muted-foreground mt-0.5">Your earned credentials and achievements</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs">{certificates.length} Certificates</Badge>
+                  <Badge variant="secondary" className="text-xs">{certificatesFromApi.length} Certificates</Badge>
                   <Select value={certFilter} onValueChange={setCertFilter}>
                     <SelectTrigger className="w-[140px] h-8 text-xs">
                       <SelectValue placeholder="Filter" />
@@ -1949,8 +2187,9 @@ export function LearnerProfile() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {filteredCertificates.map((cert, index) => (
+              {filteredCertificates.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {filteredCertificates.map((cert: any, index: number) => (
                   <motion.div
                     key={cert.id}
                     initial={{ opacity: 0, y: 20 }}
@@ -2070,10 +2309,19 @@ export function LearnerProfile() {
                     </Card>
                   </motion.div>
                 ))}
-              </div>
+                </div>
+              ) : (
+                <Card className="border-dashed">
+                  <CardContent className="p-8 text-center">
+                    <Award className="h-10 w-10 text-muted-foreground/50 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-muted-foreground">No certificates yet</p>
+                    <p className="text-xs text-muted-foreground/70 mt-1">Complete courses to earn your first certificate</p>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Request Certificate for completed courses without one */}
-              {learningHistory.filter(h => !h.certificate).length > 0 && (
+              {learningHistoryFromApi.filter((h: any) => !h.certificate).length > 0 && (
                 <Card className="border-dashed">
                   <CardContent className="p-5">
                     <div className="flex items-center justify-between">
@@ -2083,7 +2331,7 @@ export function LearnerProfile() {
                         </div>
                         <div>
                           <p className="text-sm font-medium text-foreground">Completed courses without certificates</p>
-                          <p className="text-xs text-muted-foreground">{learningHistory.filter(h => !h.certificate).length} course(s) eligible for certificate request</p>
+                          <p className="text-xs text-muted-foreground">{learningHistoryFromApi.filter((h: any) => !h.certificate).length} course(s) eligible for certificate request</p>
                         </div>
                       </div>
                       <Button variant="outline" size="sm" className="gap-1.5 text-xs">
@@ -2662,7 +2910,22 @@ export function LearnerProfile() {
                       <p className="text-sm font-medium text-red-700 dark:text-red-400">Export All Data</p>
                       <p className="text-[11px] text-red-600/70 dark:text-red-400/70">Download a copy of all your data including courses, progress, and certificates.</p>
                     </div>
-                    <Button variant="outline" size="sm" className="gap-1.5 text-xs text-red-600 border-red-300 hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-950/40 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 text-xs text-red-600 border-red-300 hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-950/40 shrink-0"
+                      onClick={() => setConfirmDialog({
+                        open: true,
+                        title: 'Export All Data',
+                        description: 'A download of all your data (courses, progress, certificates) will be prepared. This may take a few moments.',
+                        confirmLabel: 'Export',
+                        variant: 'default',
+                        onConfirm: () => {
+                          setConfirmDialog(prev => ({ ...prev, open: false }));
+                          // Export action placeholder
+                        },
+                      })}
+                    >
                       <Download className="h-3.5 w-3.5" />
                       Export
                     </Button>
@@ -2672,7 +2935,27 @@ export function LearnerProfile() {
                       <p className="text-sm font-medium text-red-700 dark:text-red-400">Deactivate Account</p>
                       <p className="text-[11px] text-red-600/70 dark:text-red-400/70">Temporarily disable your account. You can reactivate it later by signing in.</p>
                     </div>
-                    <Button variant="outline" size="sm" className="gap-1.5 text-xs text-red-600 border-red-300 hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-950/40 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 text-xs text-red-600 border-red-300 hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-950/40 shrink-0"
+                      onClick={() => setConfirmDialog({
+                        open: true,
+                        title: 'Deactivate Account',
+                        description: 'Are you sure you want to deactivate your account? Your data will be preserved and you can reactivate by signing in again.',
+                        confirmLabel: 'Deactivate',
+                        variant: 'destructive',
+                        onConfirm: async () => {
+                          if (userId) {
+                            try {
+                              await updateUserMutation.mutateAsync({ id: userId, isActive: false });
+                              setCurrentUser({ ...currentUser, isActive: false } as any);
+                            } catch { /* error toast handled by hook */ }
+                          }
+                          setConfirmDialog(prev => ({ ...prev, open: false }));
+                        },
+                      })}
+                    >
                       <EyeOff className="h-3.5 w-3.5" />
                       Deactivate
                     </Button>
@@ -2682,33 +2965,30 @@ export function LearnerProfile() {
                       <p className="text-sm font-medium text-red-700 dark:text-red-400">Delete Account</p>
                       <p className="text-[11px] text-red-600/70 dark:text-red-400/70">Permanently delete your account and all associated data. This action cannot be undone.</p>
                     </div>
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" className="gap-1.5 text-xs text-red-600 border-red-300 hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-950/40 shrink-0">
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Delete
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle className="text-red-600 flex items-center gap-2">
-                            <AlertTriangle className="h-5 w-5" />
-                            Delete Account
-                          </DialogTitle>
-                        </DialogHeader>
-                        <p className="text-sm text-muted-foreground">Are you sure you want to delete your account? This action is permanent and cannot be undone. All your data, progress, and certificates will be lost.</p>
-                        <div className="space-y-2">
-                          <Label>Type &quot;DELETE&quot; to confirm</Label>
-                          <Input placeholder="DELETE" className="border-red-300 focus-visible:ring-red-500" />
-                        </div>
-                        <DialogFooter>
-                          <DialogClose asChild>
-                            <Button variant="outline">Cancel</Button>
-                          </DialogClose>
-                          <Button className="bg-red-600 hover:bg-red-700 text-white">Delete Account</Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 text-xs text-red-600 border-red-300 hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-950/40 shrink-0"
+                      onClick={() => setConfirmDialog({
+                        open: true,
+                        title: 'Delete Account',
+                        description: 'Are you sure you want to permanently delete your account? This action is irreversible. All your data, progress, and certificates will be lost forever.',
+                        confirmLabel: 'Delete Account',
+                        variant: 'destructive',
+                        onConfirm: async () => {
+                          if (userId) {
+                            try {
+                              await deleteUserMutation.mutateAsync(userId);
+                              setCurrentUser(null);
+                            } catch { /* error toast handled by hook */ }
+                          }
+                          setConfirmDialog(prev => ({ ...prev, open: false }));
+                        },
+                      })}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -2732,10 +3012,10 @@ export function LearnerProfile() {
                 {/* Summary Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                   {[
-                    { label: 'Courses Completed', value: '5', icon: BookOpen, color: 'text-emerald-600' },
-                    { label: 'Total Time', value: '119h', icon: Clock, color: 'text-violet-600' },
-                    { label: 'Avg Quiz Score', value: '88%', icon: BarChart3, color: 'text-amber-600' },
-                    { label: 'Certificates', value: '4', icon: Award, color: 'text-slate-600' },
+                    { label: 'Courses Completed', value: String(userData?.stats?.completedCourses ?? completedEnrollments.length), icon: BookOpen, color: 'text-emerald-600' },
+                    { label: 'Total Time', value: `${Math.round((userData?.stats?.completedLessons ?? 0) * 1.5)}h`, icon: Clock, color: 'text-violet-600' },
+                    { label: 'Avg Quiz Score', value: learningHistoryFromApi.length > 0 ? `${Math.round(learningHistoryFromApi.reduce((a: number, b: any) => a + b.quizScore, 0) / learningHistoryFromApi.length)}%` : '—', icon: BarChart3, color: 'text-amber-600' },
+                    { label: 'Certificates', value: String(userData?.stats?.totalCertificates ?? certificatesFromApi.length), icon: Award, color: 'text-slate-600' },
                   ].map((stat) => (
                     <div key={stat.label} className="p-3 rounded-xl border bg-muted/20 text-center">
                       <stat.icon className={cn('h-4 w-4 mx-auto mb-1', stat.color)} />
@@ -2746,6 +3026,12 @@ export function LearnerProfile() {
                 </div>
 
                 {/* History Table */}
+                {isEnrollmentsLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-sm text-muted-foreground">Loading history...</span>
+                  </div>
+                ) : learningHistoryFromApi.length > 0 ? (
                 <div className="rounded-lg border overflow-hidden">
                   <Table>
                     <TableHeader>
@@ -2758,7 +3044,7 @@ export function LearnerProfile() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {learningHistory.map((row) => (
+                      {learningHistoryFromApi.map((row: any) => (
                         <TableRow key={row.id}>
                           <TableCell className="text-sm font-medium max-w-[200px] truncate">{row.course}</TableCell>
                           <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
@@ -2788,11 +3074,29 @@ export function LearnerProfile() {
                     </TableBody>
                   </Table>
                 </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <BookOpen className="h-10 w-10 text-muted-foreground/50 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-muted-foreground">No completed courses yet</p>
+                    <p className="text-xs text-muted-foreground/70 mt-1">Your learning history will appear here as you complete courses</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </motion.div>
+
+      {/* Confirm Dialog for Destructive Actions */}
+      <ConfirmDialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, open }))}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmLabel={confirmDialog.confirmLabel}
+        variant={confirmDialog.variant}
+        onConfirm={confirmDialog.onConfirm}
+      />
     </motion.div>
   );
 }

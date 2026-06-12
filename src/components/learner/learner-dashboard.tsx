@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '@/store/app-store';
-import { learnerKPIs, demoEnrollments, demoCourses, leaderboardData } from '@/lib/mock-data';
+import { apiPost } from '@/lib/api';
+import { useEnrollments, useCourses, useUser, useUsers, useAchievements } from '@/hooks/use-data';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -1019,7 +1020,9 @@ function KPIShimmer({ className }: { className?: string }) {
 }
 
 export function LearnerDashboard() {
-  const { currentUser } = useAppStore();
+  const userId = useAppStore(s => s.currentUser?.id) || '';
+  const tenantId = useAppStore(s => s.currentTenant?.id) || '';
+  const { currentUser, currentTenant } = useAppStore();
   const [showAllActivities, setShowAllActivities] = useState(false);
   const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
   const [hoveredRecommendation, setHoveredRecommendation] = useState<string | null>(null);
@@ -1027,26 +1030,88 @@ export function LearnerDashboard() {
   const [leaderboardPeriod, setLeaderboardPeriod] = useState<'weekly' | 'monthly'>('weekly');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  // Fetch real data from API via React Query hooks
+  const { data: enrollmentsData, isLoading: enrollmentsLoading } = useEnrollments(userId || undefined);
+  const { data: coursesData, isLoading: coursesLoading } = useCourses();
+  const { data: userData, isLoading: userLoading } = useUser(userId || null);
+  const { data: usersData, isLoading: usersLoading } = useUsers(tenantId || undefined);
+  const { data: achievementsData, isLoading: achievementsLoading } = useAchievements(tenantId || undefined);
+
+  // Derived data from API responses
+  const enrollments = useMemo(() => (Array.isArray(enrollmentsData) ? enrollmentsData : []), [enrollmentsData]);
+  const courses = useMemo(() => (Array.isArray(coursesData) ? coursesData : []), [coursesData]);
+  const user = userData as any;
+  const tenantUsers = useMemo(() => {
+    if (!usersData?.users) return [];
+    return usersData.users;
+  }, [usersData]);
+  const achievements = useMemo(() => (Array.isArray(achievementsData) ? achievementsData : []), [achievementsData]);
+
+  // Loading state
+  const isLoading = enrollmentsLoading || coursesLoading || userLoading;
+
   const firstName = currentUser?.name?.split(' ')[0] || 'Learner';
-  const streakDays = currentUser?.streakDays || 7;
+  const streakDays = user?.streakDays ?? currentUser?.streakDays ?? 0;
+  const totalPoints = user?.totalPoints ?? currentUser?.totalPoints ?? 0;
+  const completedCourses = useMemo(() => enrollments.filter((e: any) => e.status === 'completed').length, [enrollments]);
+  const totalCertificates = user?.stats?.totalCertificates ?? completedCourses;
+  const communityPosts = user?._count?.communityPosts ?? 0;
+
+  // Compute KPIs from real data
+  const kpis = useMemo<DashboardKPI[]>(() => [
+    { label: 'Courses Enrolled', value: String(enrollments.length), change: enrollments.length > 0 ? 1 : 0, changeLabel: 'new this month', icon: 'book-open' },
+    { label: 'Courses Completed', value: String(completedCourses), change: completedCourses > 0 ? 1 : 0, changeLabel: 'this month', icon: 'graduation-cap' },
+    { label: 'Learning Streak', value: `${streakDays} days`, change: streakDays > 0 ? 2 : 0, changeLabel: 'days longer', icon: 'flame' },
+    { label: 'Total Points', value: totalPoints.toLocaleString(), change: totalPoints > 0 ? 340 : 0, changeLabel: 'earned this week', icon: 'star' },
+    { label: 'Certificates Earned', value: String(totalCertificates), change: totalCertificates > 0 ? 1 : 0, changeLabel: 'new', icon: 'award' },
+    { label: 'Community Posts', value: String(communityPosts), change: communityPosts > 0 ? 5 : 0, changeLabel: 'this week', icon: 'message-circle' },
+  ], [enrollments.length, completedCourses, streakDays, totalPoints, totalCertificates, communityPosts]);
+
+  // Track dashboard view event
+  useEffect(() => {
+    if (currentTenant?.id) {
+      apiPost('/analytics/events', {
+        tenantId: currentTenant.id,
+        userId: currentUser?.id,
+        eventType: 'dashboard_view',
+        eventData: { view: 'learner-dashboard' },
+      }).catch(() => {/* silent */});
+    }
+  }, [currentTenant?.id, currentUser?.id]);
 
   // Filter enrollments
-  const activeEnrollments = demoEnrollments.filter((e) => e.status === 'active');
-  const completedEnrollments = demoEnrollments.filter((e) => e.status === 'completed');
+  const activeEnrollments = useMemo(() => enrollments.filter((e: any) => e.status === 'active'), [enrollments]);
+  const completedEnrollments = useMemo(() => enrollments.filter((e: any) => e.status === 'completed'), [enrollments]);
 
   // Most recently accessed course
-  const mostRecentEnrollment = [...activeEnrollments].sort((a, b) => {
-    const aTime = a.lastAccessedAt ? new Date(a.lastAccessedAt).getTime() : 0;
-    const bTime = b.lastAccessedAt ? new Date(b.lastAccessedAt).getTime() : 0;
-    return bTime - aTime;
-  })[0];
+  const mostRecentEnrollment = useMemo(() => {
+    return [...activeEnrollments].sort((a: any, b: any) => {
+      const aTime = a.lastAccessedAt ? new Date(a.lastAccessedAt).getTime() : 0;
+      const bTime = b.lastAccessedAt ? new Date(b.lastAccessedAt).getTime() : 0;
+      return bTime - aTime;
+    })[0];
+  }, [activeEnrollments]);
 
   // Courses not enrolled in
-  const enrolledCourseIds = new Set(demoEnrollments.map((e) => e.courseId));
-  const recommendedCourses = demoCourses.filter((c) => !enrolledCourseIds.has(c.id));
+  const enrolledCourseIds = useMemo(() => new Set(enrollments.map((e: any) => e.courseId)), [enrollments]);
+  const recommendedCourses = useMemo(() => courses.filter((c: any) => !enrolledCourseIds.has(c.id)), [courses, enrolledCourseIds]);
 
-  // Leaderboard top 5
-  const topFive = leaderboardData.slice(0, 5);
+  // Leaderboard: top 5 users by totalPoints from tenant
+  const leaderboardEntries = useMemo(() => {
+    return tenantUsers
+      .map((u: any, idx: number) => ({
+        rank: idx + 1,
+        name: u.name || 'Anonymous',
+        points: u.totalPoints || 0,
+        streak: u.streakDays || 0,
+        coursesCompleted: u._count?.enrollments ?? 0,
+        avatar: u.avatarUrl || '',
+      }))
+      .sort((a: any, b: any) => b.points - a.points)
+      .slice(0, 5)
+      .map((entry: any, idx: number) => ({ ...entry, rank: idx + 1 }));
+  }, [tenantUsers]);
+  const topFive = leaderboardEntries;
   const maxLeaderboardPoints = topFive.length > 0 ? topFive[0].points : 1;
 
   // Daily goal data
@@ -1065,6 +1130,34 @@ export function LearnerDashboard() {
     const remainingHours = totalHours * (1 - enrollment.progress / 100);
     if (remainingHours < 1) return `${Math.round(remainingHours * 60)}m`;
     return `${remainingHours.toFixed(1)}h`;
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:p-8">
+          {/* Welcome hero skeleton */}
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 h-52 animate-pulse" />
+          {/* KPI skeleton */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-32 rounded-lg bg-slate-200 dark:bg-slate-800 animate-pulse" />
+            ))}
+          </div>
+          {/* Content skeleton */}
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2 space-y-4">
+              <div className="h-80 rounded-lg bg-slate-200 dark:bg-slate-800 animate-pulse" />
+            </div>
+            <div className="space-y-4">
+              <div className="h-60 rounded-lg bg-slate-200 dark:bg-slate-800 animate-pulse" />
+              <div className="h-60 rounded-lg bg-slate-200 dark:bg-slate-800 animate-pulse" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -1179,7 +1272,7 @@ export function LearnerDashboard() {
         {/* ============ KPI STATS ROW (ENHANCED - Glassmorphism) ============ */}
         <Section delay={0.05}>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {learnerKPIs.map((kpi: DashboardKPI, i: number) => {
+            {kpis.map((kpi: DashboardKPI, i: number) => {
               const Icon = getKPIIcon(kpi.icon);
               const colors = getKPIColor(kpi.icon);
               const kpiPercent = getKPIPercentage(kpi);
@@ -1669,8 +1762,15 @@ export function LearnerDashboard() {
               </CardHeader>
               <CardContent className="space-y-0">
                 <div className="space-y-1">
-                  {topFive.map((entry, i) => {
-                    const isCurrentUser = entry.name === 'Alex Johnson';
+                  {topFive.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <Trophy className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                      <p className="text-sm text-muted-foreground">No leaderboard data yet</p>
+                      <p className="text-xs text-muted-foreground/60 mt-1">Complete lessons to appear here!</p>
+                    </div>
+                  ) : (
+                  topFive.map((entry, i) => {
+                    const isCurrentUser = entry.name === currentUser?.name;
                     const rankStyle = getRankBadgeStyle(entry.rank);
                     const avatarGradient = getAvatarColor(entry.name);
                     const initials = getInitials(entry.name);
@@ -1771,7 +1871,8 @@ export function LearnerDashboard() {
                         </div>
                       </motion.div>
                     );
-                  })}
+                  })
+                  )}
                 </div>
                 <Button
                   variant="outline"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Plus, LayoutGrid, List, Pin, Lock, Unlock, Trash2, Eye,
@@ -8,7 +8,7 @@ import {
   Edit3, X, Filter, Flag, CheckCircle2, XCircle, ChevronUp, ChevronDown,
   Shield, Image as ImageIcon, Bold, Italic, Heading, ListOrdered, Code,
   Link2, Flame, Users, TrendingUp, BarChart3, AlertTriangle, BookOpen,
-  Calendar, ArrowUpDown, CheckSquare, Square
+  Calendar, ArrowUpDown, CheckSquare, Square, Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -35,10 +35,21 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
-import { demoCommunityPosts } from '@/lib/mock-data';
+import {
+  useCommunityPosts,
+  useCreateCommunityPost,
+  useUpdateCommunityPost,
+  useDeleteCommunityPost,
+} from '@/hooks/use-data';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { useAppStore } from '@/store/app-store';
 import type { CommunityPost, CommunityCategory } from '@/types';
 
 // ─── Mock Review Data ──────────────────────────────────────────────────────────
+// TODO: Replace with real API hooks once a review/rating moderation API is available.
+// Currently there is no /api/reviews endpoint, so this mock data is kept for the
+// Review Moderation tab UI only. When the API is ready, create useReviews() and
+// useModerateReview() hooks in @/hooks/use-data and replace the local state below.
 
 type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'flagged';
 
@@ -151,9 +162,9 @@ const mockReviews: CourseReview[] = [
   },
 ];
 
-// ─── Category Data ──────────────────────────────────────────────────────────────
+// ─── Category Fallback Data ──────────────────────────────────────────────────────
 
-const communityCategories: CommunityCategory[] = [
+const fallbackCategories: CommunityCategory[] = [
   { id: 'cat-1', tenantId: 'demo-tenant-1', name: 'General Discussion', description: 'Open discussions about anything related to learning', icon: '💬', color: '#10B981', orderIndex: 0, isDefault: true },
   { id: 'cat-2', tenantId: 'demo-tenant-1', name: 'Q&A Support', description: 'Get help and ask questions about courses', icon: '❓', color: '#8B5CF6', orderIndex: 1, isDefault: false },
   { id: 'cat-3', tenantId: 'demo-tenant-1', name: 'Announcements', description: 'Official announcements from the team', icon: '📢', color: '#F59E0B', orderIndex: 2, isDefault: false },
@@ -225,8 +236,21 @@ function getRoleBadge(role: string) {
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
 export function AdminCommunity() {
-  // Post state
-  const [posts, setPosts] = useState<CommunityPost[]>(demoCommunityPosts);
+  const currentTenant = useAppStore((s) => s.currentTenant);
+  const currentUser = useAppStore((s) => s.currentUser);
+  const tenantId = currentTenant?.id || '';
+  const userId = currentUser?.id || '';
+
+  // ── Real API data hooks ──
+  const { data: communityData, isLoading: postsLoading, refetch: refetchPosts } = useCommunityPosts();
+  const posts = useMemo(() => communityData?.posts || [], [communityData?.posts]);
+  const apiCategories = useMemo(() => communityData?.categories || [], [communityData?.categories]);
+
+  const createPostMutation = useCreateCommunityPost();
+  const updatePostMutation = useUpdateCommunityPost();
+  const deletePostMutation = useDeleteCommunityPost();
+
+  // UI state
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -243,7 +267,18 @@ export function AdminCommunity() {
   const [postDialogTab, setPostDialogTab] = useState<'compose' | 'preview'>('compose');
   const [activeMainTab, setActiveMainTab] = useState('posts');
 
+  // Delete confirmation state
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; postId: string; postTitle: string }>({
+    open: false, postId: '', postTitle: ''
+  });
+
+  // Category list: derive from API data, fall back to defaults
+  // Local additions are tracked separately so they merge with API categories
+  const [localCategories, setLocalCategories] = useState<CommunityCategory[]>([]);
+  const categories = apiCategories.length > 0 ? [...apiCategories, ...localCategories] : [...fallbackCategories, ...localCategories];
+
   // Review moderation state
+  // TODO: Replace mockReviews with real API data when review API is available
   const [reviews, setReviews] = useState<CourseReview[]>(mockReviews);
   const [reviewStatusFilter, setReviewStatusFilter] = useState<string>('all');
   const [reviewCourseFilter, setReviewCourseFilter] = useState<string>('all');
@@ -254,9 +289,6 @@ export function AdminCommunity() {
   const [selectedReview, setSelectedReview] = useState<CourseReview | null>(null);
   const [rejectReason, setRejectReason] = useState<string>('');
   const [adminResponse, setAdminResponse] = useState('');
-
-  // Category reorder state
-  const [categories, setCategories] = useState<CommunityCategory[]>([...communityCategories]);
 
   // Filter posts
   const filteredPosts = posts.filter((post) => {
@@ -306,58 +338,64 @@ export function AdminCommunity() {
   const activeDiscussions = posts.filter(p => !p.isLocked).length;
   const engagementRate = Math.round((posts.reduce((sum, p) => sum + p.likeCount + p.commentCount, 0) / (posts.reduce((sum, p) => sum + p.viewCount, 0) || 1)) * 100);
 
-  const handleCreatePost = () => {
-    const post: CommunityPost = {
-      id: `post-${Date.now()}`,
-      tenantId: 'demo-tenant-1',
-      authorId: 'demo-admin-1',
-      categoryId: newPost.categoryId,
+  // ── CRUD handlers using real API mutations ──
+
+  const handleCreatePost = useCallback(() => {
+    const tags = newPost.tags ? newPost.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+    createPostMutation.mutate({
+      tenantId,
+      authorId: userId,
       title: newPost.title,
       content: newPost.content,
       type: newPost.type,
+      categoryId: newPost.categoryId,
+      tags,
       isPinned: newPost.isPinned,
       isLocked: newPost.isLocked,
-      viewCount: 0,
-      likeCount: 0,
-      commentCount: 0,
-      tags: newPost.tags ? newPost.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
-      author: {
-        id: 'demo-admin-1',
-        tenantId: 'demo-tenant-1',
-        email: 'admin@nextgen-lms.com',
-        name: 'Sarah Mitchell',
-        role: 'tenant_admin',
-        timezone: 'America/New_York',
-        locale: 'en',
-        streakDays: 14,
-        totalPoints: 2850,
-        isActive: true,
-        createdAt: '2024-01-15T00:00:00Z',
+    }, {
+      onSuccess: () => {
+        setShowCreateDialog(false);
+        setNewPost({ title: '', content: '', type: 'discussion', categoryId: 'cat-1', tags: '', isPinned: false, isLocked: false, scheduledDate: '', featuredImage: '' });
+        setPostDialogTab('compose');
       },
-      createdAt: new Date().toISOString(),
-    };
-    setPosts([post, ...posts]);
-    setShowCreateDialog(false);
-    setNewPost({ title: '', content: '', type: 'discussion', categoryId: 'cat-1', tags: '', isPinned: false, isLocked: false, scheduledDate: '', featuredImage: '' });
-    setPostDialogTab('compose');
-  };
+    });
+  }, [createPostMutation, newPost, tenantId, userId]);
 
-  const handleTogglePin = (postId: string) => {
-    setPosts(posts.map(p => p.id === postId ? { ...p, isPinned: !p.isPinned } : p));
-  };
+  const handleTogglePin = useCallback((postId: string) => {
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+    updatePostMutation.mutate({ id: postId, isPinned: !post.isPinned });
+  }, [posts, updatePostMutation]);
 
-  const handleToggleLock = (postId: string) => {
-    setPosts(posts.map(p => p.id === postId ? { ...p, isLocked: !p.isLocked } : p));
-  };
+  const handleToggleLock = useCallback((postId: string) => {
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+    updatePostMutation.mutate({ id: postId, isLocked: !post.isLocked });
+  }, [posts, updatePostMutation]);
 
-  const handleDeletePost = (postId: string) => {
-    setPosts(posts.filter(p => p.id !== postId));
-  };
+  const handleDeleteRequest = useCallback((postId: string) => {
+    const post = posts.find(p => p.id === postId);
+    setDeleteConfirm({
+      open: true,
+      postId,
+      postTitle: post?.title || 'this post',
+    });
+  }, [posts]);
+
+  const handleDeleteConfirm = useCallback(() => {
+    if (deleteConfirm.postId) {
+      deletePostMutation.mutate(deleteConfirm.postId, {
+        onSuccess: () => {
+          setDeleteConfirm({ open: false, postId: '', postTitle: '' });
+        },
+      });
+    }
+  }, [deleteConfirm.postId, deletePostMutation]);
 
   const handleAddCategory = () => {
     const category: CommunityCategory = {
       id: `cat-${Date.now()}`,
-      tenantId: 'demo-tenant-1',
+      tenantId: tenantId || 'demo-tenant-1',
       name: newCategory.name,
       description: newCategory.description,
       icon: newCategory.icon,
@@ -365,7 +403,7 @@ export function AdminCommunity() {
       orderIndex: categories.length,
       isDefault: newCategory.isDefault,
     };
-    setCategories([...categories, category]);
+    setLocalCategories([...localCategories, category]);
     categoryPostCounts[category.id] = 0;
     setShowCategoryDialog(false);
     setNewCategory({ name: '', description: '', icon: '💬', color: '#10B981', isDefault: false });
@@ -374,13 +412,16 @@ export function AdminCommunity() {
   const handleMoveCategory = (index: number, direction: 'up' | 'down') => {
     const newIndex = direction === 'up' ? index - 1 : index + 1;
     if (newIndex < 0 || newIndex >= categories.length) return;
+    // For reorder, we rebuild the full list as a local override
     const updated = [...categories];
     [updated[index], updated[newIndex]] = [updated[newIndex], updated[index]];
     updated.forEach((c, i) => c.orderIndex = i);
-    setCategories(updated);
+    // Store the reordered list as the new local categories (replacing API order)
+    setLocalCategories(updated);
   };
 
   // Review moderation handlers
+  // TODO: Replace with real API calls when review API is available
   const handleReviewAction = (reviewId: string, action: 'approved' | 'rejected' | 'flagged', reason?: string) => {
     setReviews(reviews.map(r => {
       if (r.id !== reviewId) return r;
@@ -415,6 +456,9 @@ export function AdminCommunity() {
       setSelectedReviews(filteredReviews.map(r => r.id));
     }
   };
+
+  // Determine if any mutation is in progress
+  const isMutating = createPostMutation.isPending || updatePostMutation.isPending || deletePostMutation.isPending;
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
@@ -561,34 +605,44 @@ export function AdminCommunity() {
             ))}
           </div>
 
-          {/* Posts Grid/List */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Posts ({filteredPosts.length})</h2>
+          {/* Loading State */}
+          {postsLoading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+              <span className="ml-3 text-slate-500">Loading posts...</span>
             </div>
-            <AnimatePresence mode="popLayout">
-              {viewMode === 'grid' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {filteredPosts.map((post, i) => (
-                    <PostCard key={post.id} post={post} index={i} onTogglePin={handleTogglePin} onToggleLock={handleToggleLock} onDelete={handleDeletePost} />
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {filteredPosts.map((post, i) => (
-                    <PostListItem key={post.id} post={post} index={i} onTogglePin={handleTogglePin} onToggleLock={handleToggleLock} onDelete={handleDeletePost} />
-                  ))}
+          )}
+
+          {/* Posts Grid/List */}
+          {!postsLoading && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Posts ({filteredPosts.length})</h2>
+              </div>
+              <AnimatePresence mode="popLayout">
+                {viewMode === 'grid' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {filteredPosts.map((post, i) => (
+                      <PostCard key={post.id} post={post} index={i} categories={categories} onTogglePin={handleTogglePin} onToggleLock={handleToggleLock} onDelete={handleDeleteRequest} isMutating={isMutating} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredPosts.map((post, i) => (
+                      <PostListItem key={post.id} post={post} index={i} categories={categories} onTogglePin={handleTogglePin} onToggleLock={handleToggleLock} onDelete={handleDeleteRequest} isMutating={isMutating} />
+                    ))}
+                  </div>
+                )}
+              </AnimatePresence>
+              {filteredPosts.length === 0 && (
+                <div className="text-center py-12">
+                  <MessageSquare className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-slate-500 text-lg">No posts match your filters</p>
+                  <p className="text-slate-400 text-sm mt-1">Try adjusting your search or filters</p>
                 </div>
               )}
-            </AnimatePresence>
-            {filteredPosts.length === 0 && (
-              <div className="text-center py-12">
-                <MessageSquare className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500 text-lg">No posts match your filters</p>
-                <p className="text-slate-400 text-sm mt-1">Try adjusting your search or filters</p>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </TabsContent>
 
         {/* ─── Categories Tab ────────────────────────────────────────────────── */}
@@ -1009,7 +1063,8 @@ export function AdminCommunity() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowCreateDialog(false); setPostDialogTab('compose'); }} className="border-border">Cancel</Button>
-            <Button onClick={handleCreatePost} disabled={!newPost.title.trim() || !newPost.content.trim()} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Button onClick={handleCreatePost} disabled={!newPost.title.trim() || !newPost.content.trim() || createPostMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              {createPostMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {newPost.scheduledDate ? 'Schedule Post' : 'Create Post'}
             </Button>
           </DialogFooter>
@@ -1209,6 +1264,17 @@ export function AdminCommunity() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ─── Delete Post Confirmation Dialog ─────────────────────────────────── */}
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => setDeleteConfirm({ open, postId: '', postTitle: '' })}
+        title="Delete Post"
+        description={`Are you sure you want to delete "${deleteConfirm.postTitle}"? This action cannot be undone. All comments and reactions on this post will also be permanently removed.`}
+        confirmLabel={deletePostMutation.isPending ? 'Deleting...' : 'Delete Post'}
+        onConfirm={handleDeleteConfirm}
+        variant="destructive"
+      />
     </div>
   );
 }
@@ -1216,12 +1282,13 @@ export function AdminCommunity() {
 // ─── Enhanced Post Card (Grid View) ────────────────────────────────────────────
 
 function PostCard({
-  post, index, onTogglePin, onToggleLock, onDelete,
+  post, index, categories, onTogglePin, onToggleLock, onDelete, isMutating,
 }: {
-  post: CommunityPost; index: number;
+  post: CommunityPost; index: number; categories: CommunityCategory[];
   onTogglePin: (id: string) => void; onToggleLock: (id: string) => void; onDelete: (id: string) => void;
+  isMutating?: boolean;
 }) {
-  const cat = communityCategories.find(c => c.id === post.categoryId);
+  const cat = categories.find(c => c.id === post.categoryId);
   const role = post.author?.role || 'learner';
   const roleBadge = getRoleBadge(role);
   const isHot = (post.likeCount + (post.reactions?.length || 0)) >= 10;
@@ -1310,11 +1377,11 @@ function PostCard({
 
           {/* Actions */}
           <div className="flex items-center gap-1 mt-3 pt-2 border-t border-border/50">
-            <Button variant="ghost" size="sm" onClick={() => onTogglePin(post.id)}
+            <Button variant="ghost" size="sm" onClick={() => onTogglePin(post.id)} disabled={isMutating}
               className={`h-8 text-xs gap-1 ${post.isPinned ? 'text-emerald-600 hover:text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}>
               <Pin className="h-3 w-3" />{post.isPinned ? 'Unpin' : 'Pin'}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => onToggleLock(post.id)}
+            <Button variant="ghost" size="sm" onClick={() => onToggleLock(post.id)} disabled={isMutating}
               className={`h-8 text-xs gap-1 ${post.isLocked ? 'text-red-600 hover:text-red-700' : 'text-slate-500 hover:text-slate-700'}`}>
               {post.isLocked ? <Unlock className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
               {post.isLocked ? 'Unlock' : 'Lock'}
@@ -1323,7 +1390,7 @@ function PostCard({
               <Eye className="h-3 w-3" /> View
             </Button>
             <div className="flex-1" />
-            <Button variant="ghost" size="sm" onClick={() => onDelete(post.id)} className="h-8 text-xs gap-1 text-slate-400 hover:text-red-600">
+            <Button variant="ghost" size="sm" onClick={() => onDelete(post.id)} disabled={isMutating} className="h-8 text-xs gap-1 text-slate-400 hover:text-red-600">
               <Trash2 className="h-3 w-3" />
             </Button>
           </div>
@@ -1336,12 +1403,13 @@ function PostCard({
 // ─── Enhanced Post List Item ───────────────────────────────────────────────────
 
 function PostListItem({
-  post, index, onTogglePin, onToggleLock, onDelete,
+  post, index, categories, onTogglePin, onToggleLock, onDelete, isMutating,
 }: {
-  post: CommunityPost; index: number;
+  post: CommunityPost; index: number; categories: CommunityCategory[];
   onTogglePin: (id: string) => void; onToggleLock: (id: string) => void; onDelete: (id: string) => void;
+  isMutating?: boolean;
 }) {
-  const cat = communityCategories.find(c => c.id === post.categoryId);
+  const cat = categories.find(c => c.id === post.categoryId);
   const role = post.author?.role || 'learner';
   const roleBadge = getRoleBadge(role);
   const isHot = (post.likeCount + (post.reactions?.length || 0)) >= 10;
@@ -1415,18 +1483,18 @@ function PostListItem({
                 <span className="flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{post.commentCount}</span>
               </div>
               <div className="flex items-center gap-1 mt-2">
-                <Button variant="ghost" size="sm" onClick={() => onTogglePin(post.id)}
+                <Button variant="ghost" size="sm" onClick={() => onTogglePin(post.id)} disabled={isMutating}
                   className={`h-7 w-7 p-0 ${post.isPinned ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}>
                   <Pin className="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => onToggleLock(post.id)}
+                <Button variant="ghost" size="sm" onClick={() => onToggleLock(post.id)} disabled={isMutating}
                   className={`h-7 w-7 p-0 ${post.isLocked ? 'text-red-500' : 'text-slate-400 hover:text-slate-600'}`}>
                   {post.isLocked ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
                 </Button>
                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600">
                   <Eye className="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => onDelete(post.id)} className="h-7 w-7 p-0 text-slate-400 hover:text-red-600">
+                <Button variant="ghost" size="sm" onClick={() => onDelete(post.id)} disabled={isMutating} className="h-7 w-7 p-0 text-slate-400 hover:text-red-600">
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </div>

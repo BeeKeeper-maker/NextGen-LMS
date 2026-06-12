@@ -51,6 +51,9 @@ interface AppState {
   setActiveModal: (modal: string | null) => void;
   enterAdminMode: () => void;
   enterLearnerMode: () => void;
+  loginAsAdmin: (user: User) => void;
+  loginAsLearner: (user: User) => void;
+  logout: () => void;
   goToLanding: () => void;
   toggleNotifications: () => void;
   markNotificationRead: (id: string) => void;
@@ -173,22 +176,6 @@ export const useAppStore = create<AppState>((set) => ({
     currentView: 'admin-dashboard',
     sidebarOpen: true,
     userRole: 'tenant_admin',
-    currentUser: {
-      id: 'demo-admin-1',
-      tenantId: 'demo-tenant-1',
-      email: 'admin@nextgen-lms.com',
-      name: 'Sarah Mitchell',
-      avatarUrl: '',
-      role: 'tenant_admin',
-      bio: 'Platform administrator and course creator',
-      timezone: 'America/New_York',
-      locale: 'en',
-      streakDays: 14,
-      totalPoints: 2850,
-      isActive: true,
-      lastLoginAt: new Date().toISOString(),
-      createdAt: '2024-01-15T00:00:00Z',
-    },
   }),
   
   enterLearnerMode: () => set({ 
@@ -196,22 +183,30 @@ export const useAppStore = create<AppState>((set) => ({
     currentView: 'learner-dashboard',
     sidebarOpen: true,
     userRole: 'learner',
-    currentUser: {
-      id: 'demo-learner-1',
-      tenantId: 'demo-tenant-1',
-      email: 'learner@example.com',
-      name: 'Alex Johnson',
-      avatarUrl: '',
-      role: 'learner',
-      bio: 'Passionate lifelong learner',
-      timezone: 'America/New_York',
-      locale: 'en',
-      streakDays: 7,
-      totalPoints: 1250,
-      isActive: true,
-      lastLoginAt: new Date().toISOString(),
-      createdAt: '2024-03-10T00:00:00Z',
-    },
+  }),
+
+  loginAsAdmin: (user) => set({
+    appMode: 'admin',
+    currentView: 'admin-dashboard',
+    sidebarOpen: true,
+    userRole: 'tenant_admin',
+    currentUser: user,
+  }),
+
+  loginAsLearner: (user) => set({
+    appMode: 'learner',
+    currentView: 'learner-dashboard',
+    sidebarOpen: true,
+    userRole: 'learner',
+    currentUser: user,
+  }),
+
+  logout: () => set({
+    appMode: 'marketing',
+    currentView: 'landing',
+    sidebarOpen: false,
+    currentUser: null,
+    userRole: 'learner',
   }),
   
   goToLanding: () => set({ 

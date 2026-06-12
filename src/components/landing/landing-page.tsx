@@ -1,12 +1,36 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/store/app-store';
-import { pricingPlans, competitorComparison } from '@/lib/mock-data';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+
+// Static marketing data - pricing plans are not user-generated, kept inline
+const pricingPlans = [
+  { id: 'starter', name: 'Starter', price: 49, currency: 'USD', period: '/month', description: 'Perfect for individual creators just getting started', features: ['Up to 3 courses', 'Up to 500 students', 'Basic community features', 'Email support', 'Standard certificates', '1 admin user'], highlighted: false, ctaText: 'Start Free Trial' },
+  { id: 'professional', name: 'Professional', price: 97, currency: 'USD', period: '/month', description: 'For growing creators and small businesses', features: ['Unlimited courses', 'Up to 5,000 students', 'Advanced community & live cohorts', 'AI content generation', 'AI tutoring assistant', 'Custom certificates & branding', '0% transaction fees', 'Priority support', '5 admin/team users', 'Advanced analytics'], highlighted: true, ctaText: 'Start Free Trial' },
+  { id: 'enterprise', name: 'Enterprise', price: 249, currency: 'USD', period: '/month', description: 'For organizations requiring full control and scale', features: ['Everything in Professional', 'Unlimited students', 'SSO / SAML authentication', 'Custom domain & full white-label', 'API access & webhooks', 'CRM integrations (Salesforce, HubSpot)', 'Dedicated account manager', 'SLA guarantee (99.99%)', 'Unlimited team users', 'Audit logs & compliance reports'], highlighted: false, ctaText: 'Contact Sales' },
+];
+
+// Static marketing data - competitor comparison is not user-generated, kept inline
+const competitorComparison = [
+  { feature: 'Transaction Fees', nextgen: '0% on all plans', kajabi: '0%', teachable: 'Up to 10%', skool: '10% on Hobby', mightyNetworks: 'Up to 3%' },
+  { feature: 'AI Content Generation', nextgen: true, kajabi: false, teachable: false, skool: false, mightyNetworks: false },
+  { feature: 'AI Tutoring Assistant', nextgen: true, kajabi: false, teachable: false, skool: false, mightyNetworks: false },
+  { feature: 'Native Community', nextgen: true, kajabi: true, teachable: false, skool: true, mightyNetworks: true },
+  { feature: 'Assessment Engine', nextgen: true, kajabi: false, teachable: true, skool: false, mightyNetworks: false },
+  { feature: 'Auto Certificates', nextgen: true, kajabi: false, teachable: true, skool: false, mightyNetworks: true },
+  { feature: 'Multi-Currency', nextgen: true, kajabi: false, teachable: false, skool: false, mightyNetworks: false },
+  { feature: 'White-Label Branding', nextgen: true, kajabi: 'Limited', teachable: false, skool: false, mightyNetworks: 'Partial' },
+  { feature: 'Live Cohorts', nextgen: true, kajabi: true, teachable: false, skool: false, mightyNetworks: true },
+  { feature: 'SSO / SAML', nextgen: true, kajabi: false, teachable: false, skool: false, mightyNetworks: false },
+  { feature: 'Intrinsic Gamification', nextgen: true, kajabi: false, teachable: false, skool: 'Toxic mechanics', mightyNetworks: false },
+  { feature: 'Entry Price', nextgen: '$49/mo', kajabi: '$149/mo', teachable: '$39/mo + fees', skool: '$99/mo', mightyNetworks: '$39/mo' },
+];
+
 import {
   Sparkles,
   Bot,
@@ -1258,7 +1282,7 @@ function LiveDashboardPreview() {
             transition={{ delay: 0.8 }}
             className="text-center mt-8"
           >
-            <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={() => useAppStore.getState().enterAdminMode()}>
+            <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={() => goToLogin('admin')}>
               Try it yourself
               <ArrowRight className="h-4 w-4" />
             </Button>
@@ -1343,7 +1367,7 @@ function CommunityPreview() {
             transition={{ delay: 0.8 }}
             className="text-center pt-4"
           >
-            <Button size="lg" className="bg-violet-600 hover:bg-violet-700 text-white gap-2" onClick={() => useAppStore.getState().enterLearnerMode()}>
+            <Button size="lg" className="bg-violet-600 hover:bg-violet-700 text-white gap-2" onClick={() => goToLogin('learner')}>
               Join the Community
               <ArrowRight className="h-4 w-4" />
             </Button>
@@ -2077,7 +2101,13 @@ function BackToTopButton() {
 // Landing Page Component
 // ============================================================
 export function LandingPage() {
-  const { enterAdminMode, enterLearnerMode, setView, setAppMode } = useAppStore();
+  const { setView, setAppMode } = useAppStore();
+  const router = useRouter();
+
+  const goToLogin = (mode?: string) => {
+    const url = mode ? `/login?mode=${mode}` : '/login';
+    router.push(url);
+  };
 
   const goToCheckout = () => {
     setAppMode('admin');
@@ -2136,10 +2166,10 @@ export function LandingPage() {
 
             {/* Desktop CTAs */}
             <div className="hidden md:flex items-center gap-3">
-              <Button variant="outline" size="sm" onClick={enterLearnerMode}>
+              <Button variant="outline" size="sm" onClick={() => goToLogin('learner')}>
                 Learner View
               </Button>
-              <Button size="sm" onClick={enterAdminMode} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              <Button size="sm" onClick={() => goToLogin('admin')} className="bg-emerald-600 hover:bg-emerald-700 text-white">
                 Enter Admin Dashboard
               </Button>
             </div>
@@ -2170,8 +2200,8 @@ export function LandingPage() {
                 <button onClick={() => scrollTo('comparison')} className="block w-full text-left text-sm text-muted-foreground hover:text-foreground py-2">Comparison</button>
                 <button onClick={() => scrollTo('testimonials')} className="block w-full text-left text-sm text-muted-foreground hover:text-foreground py-2">Community</button>
                 <div className="pt-2 space-y-2">
-                  <Button variant="outline" size="sm" className="w-full" onClick={enterLearnerMode}>Learner View</Button>
-                  <Button size="sm" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={enterAdminMode}>Enter Admin Dashboard</Button>
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => goToLogin('learner')}>Learner View</Button>
+                  <Button size="sm" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => goToLogin('admin')}>Enter Admin Dashboard</Button>
                 </div>
               </div>
             </motion.div>
@@ -2265,11 +2295,11 @@ export function LandingPage() {
                 variants={fadeInUp}
                 className="mt-10 flex flex-col sm:flex-row gap-4 justify-center"
               >
-                <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white text-base px-8 h-12" onClick={enterAdminMode}>
+                <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white text-base px-8 h-12" onClick={() => goToLogin('admin')}>
                   Start Free Trial
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
-                <Button size="lg" variant="outline" className="text-base px-8 h-12" onClick={enterLearnerMode}>
+                <Button size="lg" variant="outline" className="text-base px-8 h-12" onClick={() => goToLogin('learner')}>
                   <Play className="mr-2 h-4 w-4" />
                   View Demo Dashboard
                 </Button>
@@ -2560,7 +2590,7 @@ export function LandingPage() {
                                   <Button
                                     className={`w-full ${plan.highlighted ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
                                     variant={plan.highlighted ? 'default' : 'outline'}
-                                    onClick={plan.ctaText === 'Contact Sales' ? enterAdminMode : goToCheckout}
+                                    onClick={plan.ctaText === 'Contact Sales' ? () => goToLogin('admin') : goToCheckout}
                                   >
                                     {plan.ctaText}
                                   </Button>
@@ -2916,7 +2946,7 @@ export function LandingPage() {
               >
                 {/* Liquid glow behind button */}
                 <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-600 opacity-0 group-hover/btn:opacity-60 blur-md transition-opacity duration-500" />
-                <Button size="lg" className="relative bg-emerald-600 hover:bg-emerald-500 text-white text-base px-8 h-12 transition-all duration-300" onClick={enterAdminMode}>
+                <Button size="lg" className="relative bg-emerald-600 hover:bg-emerald-500 text-white text-base px-8 h-12 transition-all duration-300" onClick={() => goToLogin('admin')}>
                   Start Free Trial
                   <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -2927,7 +2957,7 @@ export function LandingPage() {
                 className="relative group/btn2"
               >
                 <div className="absolute -inset-1 rounded-lg bg-white/10 opacity-0 group-hover/btn2:opacity-100 blur-md transition-opacity duration-500" />
-                <Button size="lg" variant="outline" className="relative text-base px-8 h-12 border-slate-500 text-white hover:bg-white/10 transition-all duration-300" onClick={enterLearnerMode}>
+                <Button size="lg" variant="outline" className="relative text-base px-8 h-12 border-slate-500 text-white hover:bg-white/10 transition-all duration-300" onClick={() => goToLogin('learner')}>
                   Explore as Learner
                 </Button>
               </motion.div>

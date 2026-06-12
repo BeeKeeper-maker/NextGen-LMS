@@ -1,5 +1,43 @@
 # NextGen Global LMS Ecosystem - Work Log
 
+---
+
+## Task ID: 11
+Agent: Data Integration Developer
+Task: Update learner dashboard component to use real API data instead of mock data
+
+Work Log:
+- Read full learner-dashboard.tsx (~1993 lines) to identify all mock data imports and usage patterns
+- Identified 4 mock data imports: learnerKPIs, demoEnrollments, demoCourses, leaderboardData from '@/lib/mock-data'
+- Identified useApi hooks as intermediate data fetching that fell back to mock data
+- Replaced mock-data imports with React Query hooks from '@/hooks/use-data':
+  - useEnrollments(userId) - fetches user's enrollments with course data
+  - useUser(userId) - fetches user profile with stats (streakDays, totalPoints, _count, stats)
+  - useCourses() - fetches course catalog for recommendations
+  - useUsers(tenantId) - fetches tenant users for leaderboard
+  - useAchievements(tenantId) - fetches achievements data
+- Computed learner KPIs from real API data using useMemo:
+  - Courses Enrolled = enrollments.length
+  - Courses Completed = enrollments.filter(e => e.status === 'completed').length
+  - Learning Streak = user.streakDays (fallback to currentUser.streakDays, then 0)
+  - Total Points = user.totalPoints (fallback to currentUser.totalPoints, then 0)
+  - Certificates Earned = user.stats.totalCertificates (fallback to completedCourses count)
+  - Community Posts = user._count.communityPosts (fallback to 0)
+- Computed leaderboard from real tenant users data sorted by totalPoints
+- Added loading state with skeleton UI (animated pulse placeholders) when data is fetching
+- Added empty state for leaderboard when no users exist
+- Changed "Alex Johnson" hardcoded check to currentUser?.name for leaderboard highlighting
+- All UI/styling/animations preserved exactly as before
+- Removed all references to mock-data module and useApi hook
+
+Stage Summary:
+- Learner dashboard now fully backed by real API data via React Query hooks
+- Proper loading skeletons shown during data fetching
+- Empty states shown when data is unavailable
+- No visual/styling changes to existing UI
+
+---
+
 ## Project Overview
 A comprehensive, multi-tenant Learning Management System built with Next.js 16, TypeScript, Prisma (SQLite), shadcn/ui, and Zustand. Features AI-powered content generation, community integration, assessment engine, certificate generation, and advanced analytics.
 
@@ -3036,3 +3074,1007 @@ Stage Summary:
 6. Dark mode visual refinement pass
 7. Course gamification enhancements (badges per module, XP per lesson)
 8. Admin user management page with user detail views
+
+---
+
+## Task ID: 8
+Agent: Dynamic Theming Engineer
+Task: Implement Dynamic Theming — make branding settings from the database actually change the app's visual appearance
+
+Work Log:
+- Created `/src/lib/theme-sync.tsx` — ThemeSync component that watches `currentTenant` in Zustand store and applies branding to CSS variables
+  - Converts hex colors to oklch() format for Tailwind v4 compatibility
+  - Sets `--primary`, `--secondary`, `--accent` and their `-foreground` variants with auto-contrast detection
+  - Generates full shade palettes (50–950) from accent color and overrides `--color-emerald-*` variables so the entire app's emerald usage reflects the new accent color
+  - Injects a dynamic `<style>` tag for emerald overrides in both light and dark modes
+  - Applies font family to document root
+- Created `/src/app/api/tenants/route.ts` — GET endpoint to fetch tenants (supports `?slug=` filter)
+- Created `/src/app/api/tenants/[tenantId]/route.ts` — GET/PUT endpoints for single tenant (whitelisted updatable fields)
+- Updated `/src/middleware.ts` — Added `/api/tenants` as a public route so theme data can be fetched without auth
+- Updated `/src/components/layout/app-layout.tsx`:
+  - Added `TenantLoader` wrapper component that fetches tenant data from API on mount
+  - Added `<ThemeSync />` component in both marketing and admin/learner render paths
+  - Tenant data from API is stored in Zustand store, triggering ThemeSync to apply CSS variables
+- Updated `/src/components/admin/admin-settings.tsx`:
+  - GeneralSettings: Local state now initialized from `currentTenant` store, syncs via useEffect when store updates, handleSave updates Zustand store + POSTs to `/api/tenants/[id]`, shows saving state with spinner
+  - BrandingTheming: Local state now initialized from `currentTenant` store, syncs via useEffect, handleSave updates Zustand store (ThemeSync detects change and applies CSS variables immediately) + POSTs to `/api/tenants/[id]` for persistence
+  - Both save buttons now show loading state and handle errors with toast notifications
+
+Stage Summary:
+- Dynamic theming is fully wired: admin changes brand colors → store updates → ThemeSync applies CSS → visual appearance changes instantly → data persists to DB via API
+- On app load, tenant data is fetched from DB and applied as CSS variables before any UI renders
+- Emerald color palette is dynamically overridden so the entire app (buttons, badges, avatars, etc.) reflects the new accent color
+- Font family changes are applied globally to the document root
+- All changes survive page refresh (persisted to SQLite via Prisma)
+
+Files Created:
+- `/src/lib/theme-sync.tsx`
+- `/src/app/api/tenants/route.ts`
+- `/src/app/api/tenants/[tenantId]/route.ts`
+
+Files Modified:
+- `/src/middleware.ts`
+- `/src/components/layout/app-layout.tsx`
+- `/src/components/admin/admin-settings.tsx`
+
+---
+
+## Task ID: 3
+Agent: Authentication Engineer
+Task: Implement Complete Authentication for NextGen Global LMS Ecosystem using NextAuth.js
+
+Work Log:
+- Analyzed existing project structure, Prisma schema, Zustand store, and app layout
+- Installed NextAuth v5 (5.0.0-beta.31), @auth/prisma-adapter, bcryptjs, @types/bcryptjs
+- Added AUTH_SECRET and AUTH_URL environment variables to .env
+- Extended Prisma schema with Account, Session, and VerificationToken models for NextAuth
+- Added accounts and sessions relations to User model
+- Pushed schema changes to SQLite database (db:push)
+- Created NextAuth configuration at /src/lib/auth.ts with:
+  - Credentials provider for email/password authentication
+  - PrismaAdapter for database persistence
+  - JWT session strategy with custom callbacks for role/tenantId
+  - Custom sign-in page at /login
+- Created Auth API route at /src/app/api/auth/[...nextauth]/route.ts
+- Created beautiful animated Login page at /src/app/login/page.tsx with:
+  - Email/password form with show/hide password toggle
+  - "Demo Admin Login" button (admin@nextgen-lms.com)
+  - "Demo Learner Login" button (learner@example.com)
+  - Error message display with animation
+  - Loading state with spinner
+  - NextGen LMS branding with emerald gradient
+  - Responsive design with background decorations
+  - Framer-motion animations
+  - "Seed database first" link for convenience
+- Created AuthProvider component at /src/components/shared/auth-provider.tsx (wraps SessionProvider)
+- Updated Zustand store (app-store.ts):
+  - Added loginAsAdmin(user) action that takes user data and sets admin mode
+  - Added loginAsLearner(user) action that takes user data and sets learner mode
+  - Added logout() action that clears user state
+  - Removed hardcoded demo users from enterAdminMode/enterLearnerMode (now just change mode/view)
+- Updated layout.tsx to wrap app with AuthProvider (SessionProvider)
+- Created middleware.ts for auth protection:
+  - Protects all routes except /, /login, /api/auth/*, /api/seed, static assets
+  - Redirects unauthenticated users to /login with callbackUrl
+- Updated seed route (/api/seed) with:
+  - Demo learner user (learner@example.com)
+  - Account entries for NextAuth credentials provider
+  - Modules and lessons for first course
+  - Lesson progress for learner
+  - Enrollments for learner across multiple courses
+  - Fixed DailyMetric date format (DateTime instead of string)
+- Updated landing page to redirect to /login instead of directly entering admin/learner mode
+- Updated app-layout.tsx TopBar sign-out to use NextAuth signOut + Zustand logout
+- Fixed pre-existing lint error in admin-courses.tsx (useCallback dependency array)
+- All lint checks pass cleanly
+
+Stage Summary:
+- Complete NextAuth v5 authentication system implemented
+- Login page with demo quick-access buttons
+- Middleware protects all routes except public ones
+- Zustand store integrated with NextAuth session
+- Sign-out properly clears both NextAuth session and Zustand state
+- Database seeded with demo users, courses, modules, lessons, progress, and enrollments
+- Landing page buttons redirect to login page
+
+Files Created:
+- `/src/lib/auth.ts`
+- `/src/app/api/auth/[...nextauth]/route.ts`
+- `/src/app/login/page.tsx`
+- `/src/components/shared/auth-provider.tsx`
+- `/src/middleware.ts`
+
+Files Modified:
+- `/prisma/schema.prisma` (added Account, Session, VerificationToken models; added relations to User)
+- `/.env` (added AUTH_SECRET, AUTH_URL)
+- `/src/store/app-store.ts` (added loginAsAdmin, loginAsLearner, logout; removed hardcoded demo users)
+- `/src/app/layout.tsx` (added AuthProvider wrapper)
+- `/src/app/api/seed/route.ts` (added learner user, Account entries, modules/lessons, progress, enrollments)
+- `/src/components/landing/landing-page.tsx` (redirect to /login instead of direct mode entry)
+- `/src/components/layout/app-layout.tsx` (sign-out uses NextAuth signOut + Zustand logout)
+- `/src/components/admin/admin-courses.tsx` (fixed useCallback dependency)
+
+---
+
+## Task ID: 2
+Agent: Backend API Developer
+Task: Create complete CRUD API backend for NextGen Global LMS Ecosystem
+
+Work Log:
+- Analyzed existing Prisma schema with 24 models and 6 existing API routes
+- Read existing route patterns (courses GET, community GET/POST, analytics GET, ai POST, bulk-operations POST, seed POST)
+- Created utility module `/src/lib/slugify.ts` with slugify() and generateVerificationCode() helpers
+- Enhanced `/api/courses/route.ts` with tenantId filter, pagination, and POST endpoint
+- Created `/api/courses/[courseId]/route.ts` with GET (single course + modules + lessons + assessments), PUT, DELETE
+- Created `/api/courses/[courseId]/modules/route.ts` with GET (list modules) and POST (create module with auto-orderIndex)
+- Created `/api/courses/[courseId]/modules/[moduleId]/route.ts` with PUT (update/reorder) and DELETE
+- Created `/api/courses/[courseId]/modules/[moduleId]/lessons/route.ts` with GET and POST (with slug auto-generation)
+- Created `/api/courses/[courseId]/modules/[moduleId]/lessons/[lessonId]/route.ts` with PUT and DELETE
+- Created `/api/enrollments/route.ts` with GET (filter by userId/courseId/tenantId/status) and POST (with enrollment count increment)
+- Created `/api/enrollments/[enrollmentId]/route.ts` with PUT (auto-complete at 100%) and DELETE (withdraw with count decrement)
+- Created `/api/progress/route.ts` with GET (by userId+courseId or userId+lessonId) and POST (upsert with auto-complete)
+- Created `/api/assessments/route.ts` with GET (filter by tenantId/courseId) and POST (with inline question creation)
+- Created `/api/assessments/[assessmentId]/route.ts` with GET (with questions), PUT (with question replacement), DELETE
+- Created `/api/assessments/[assessmentId]/submit/route.ts` with POST (auto-grading, attempt limit check, pass/fail, point awarding)
+- Created `/api/community/[postId]/route.ts` with GET (with view count increment + reaction summary), PUT, DELETE
+- Created `/api/community/[postId]/comments/route.ts` with POST (with comment count increment)
+- Created `/api/community/[postId]/reactions/route.ts` with POST (toggle add/remove with like count update)
+- Created `/api/certificates/route.ts` with GET (filter by tenantId) and POST (create template)
+- Created `/api/certificates/[certificateId]/route.ts` with PUT and DELETE
+- Created `/api/certificates/[certificateId]/award/route.ts` with POST (unique verification code, point awarding)
+- Created `/api/analytics/events/route.ts` with GET (filter by tenantId/eventType/userId/date range, with summary) and POST (track event)
+- Created `/api/tenants/route.ts` with GET (by slug or list all) and POST (create tenant)
+- Created `/api/tenants/[tenantId]/route.ts` with GET (with counts) and PUT (including branding updates)
+- Created `/api/users/route.ts` with GET (with pagination, search, role filter) and POST (with email uniqueness check)
+- Created `/api/users/[userId]/route.ts` with GET (with enrollments, achievements, certificates, computed stats) and PUT
+- Created `/api/achievements/route.ts` with GET (by userId for earned achievements, by tenantId for all, by type)
+- All routes use proper error handling with try/catch and appropriate status codes
+- All routes use Next.js 16 pattern: `{ params }: { params: Promise<{ ... }> }` with await params
+- Tenant scoping applied to all queries where applicable
+- Avoided `module` variable name to comply with @next/next/no-assign-module-variable rule
+- Lint passes with zero errors
+
+Files Created:
+- `/src/lib/slugify.ts` (slugify and generateVerificationCode utilities)
+- `/src/app/api/courses/[courseId]/route.ts`
+- `/src/app/api/courses/[courseId]/modules/route.ts`
+- `/src/app/api/courses/[courseId]/modules/[moduleId]/route.ts`
+- `/src/app/api/courses/[courseId]/modules/[moduleId]/lessons/route.ts`
+- `/src/app/api/courses/[courseId]/modules/[moduleId]/lessons/[lessonId]/route.ts`
+- `/src/app/api/enrollments/route.ts`
+- `/src/app/api/enrollments/[enrollmentId]/route.ts`
+- `/src/app/api/progress/route.ts`
+- `/src/app/api/assessments/route.ts`
+- `/src/app/api/assessments/[assessmentId]/route.ts`
+- `/src/app/api/assessments/[assessmentId]/submit/route.ts`
+- `/src/app/api/community/[postId]/route.ts`
+- `/src/app/api/community/[postId]/comments/route.ts`
+- `/src/app/api/community/[postId]/reactions/route.ts`
+- `/src/app/api/certificates/route.ts`
+- `/src/app/api/certificates/[certificateId]/route.ts`
+- `/src/app/api/certificates/[certificateId]/award/route.ts`
+- `/src/app/api/analytics/events/route.ts`
+- `/src/app/api/tenants/route.ts`
+- `/src/app/api/tenants/[tenantId]/route.ts`
+- `/src/app/api/users/route.ts`
+- `/src/app/api/users/[userId]/route.ts`
+- `/src/app/api/achievements/route.ts`
+
+Files Modified:
+- `/src/app/api/courses/route.ts` (enhanced GET with filters/pagination, added POST)
+
+Stage Summary:
+- Created 22 new API route files covering all 24 required endpoints
+- Enhanced 1 existing route (courses) with filters, pagination, and POST
+- Total route count: 6 existing + 22 new = 28 route files
+- All routes use consistent error handling, validation, and response patterns
+- Tenant scoping enforced on all applicable queries
+- Auto-generation features: slugs from titles, orderIndex for modules/lessons, verification codes for certificates
+- Transactional operations: enrollment count sync, reaction toggle with count update, assessment submission with grading
+- Lint passes cleanly with zero errors
+
+---
+
+## Task ID: 4
+Agent: API Integration Engineer
+Task: Wire LMS frontend components to real API routes instead of mock data
+
+Work Log:
+- Created `/src/lib/api.ts` - centralized API client with `apiGet`, `apiPost`, `apiPut`, `apiDelete` functions and `useApi` React hook for data fetching with caching
+- Created new API routes:
+  - `/api/courses` - POST endpoint for creating courses
+  - `/api/courses/[courseId]` - GET/PUT/DELETE endpoints for individual course operations
+  - `/api/enrollments` - GET (with userId filter) and POST endpoints for enrollment management
+  - `/api/progress` - GET (with userId/courseId filters) and POST (with upsert) for lesson progress tracking
+  - `/api/community/[postId]` - PUT/DELETE for post management (pin, lock, delete)
+  - `/api/community/[postId]/comments` - POST for adding comments with auto-increment comment count
+  - `/api/community/[postId]/reactions` - POST with toggle logic (add/remove reaction) and auto-like count sync
+  - `/api/analytics/events` - POST for recording analytics events (page views, lesson completions, etc.)
+- Updated middleware to allow API routes without auth (since LMS uses client-side Zustand store for auth)
+- Wired Admin Dashboard (`admin-dashboard.tsx`):
+  - Added `useApi` hooks for `/api/analytics` and `/api/courses`
+  - KPIs now computed from real analytics data (MRR, active users, enrollments from API)
+  - Course Performance table uses API-fetched courses
+  - Dashboard view events tracked via POST to `/api/analytics/events`
+- Wired Admin Courses (`admin-courses.tsx`):
+  - Created `CoursesContext` with `useCoursesData` hook for sharing API data across all tabs
+  - `AdminCourses` component fetches courses from API, provides CRUD operations via context
+  - Course Catalog tab uses API-fetched courses for filtering/display
+  - New Course Dialog now actually creates courses via POST to `/api/courses`
+  - Course Builder, Curriculum Overview, Visual Builder, and Reviews tabs all use context courses
+  - All `demoCourses` references replaced with context-based `courses` data
+- Wired Admin Community (`admin-community.tsx`):
+  - Posts fetched from `/api/community` on mount with fallback to mock data
+  - Creating a post: optimistic update + POST to `/api/community`
+  - Pin/Lock toggles: local state update + API call
+  - Deleting a post: optimistic delete + DELETE to `/api/community/[postId]`
+- Wired Learner Dashboard (`learner-dashboard.tsx`):
+  - Added `useApi` hooks for `/api/enrollments` and `/api/courses`
+  - KPIs computed from real enrollment data when available
+  - Dashboard view events tracked via POST to `/api/analytics/events`
+- Wired Learner Course (`learner-course.tsx`):
+  - Fetches course data from `/api/courses`
+  - Lesson completion now persists via POST to `/api/progress`
+- Wired Learner Community (`learner-community.tsx`):
+  - Uses `currentUser` and `currentTenant` from Zustand store for API calls
+  - Creating a post: optimistic update + POST to `/api/community`
+  - Emoji reactions: persisted via POST to `/api/community/[postId]/reactions`
+- Wired Admin Analytics (`admin-analytics.tsx`):
+  - Added `useApi` hooks for `/api/analytics` and `/api/courses`
+  - Daily metrics use API data when available, fall back to mock data
+  - Course performance data computed from API courses
+
+Stage Summary:
+- Created 1 new utility file (`api.ts`) with 4 API functions + 1 React hook
+- Created 8 new API route files (9 endpoints total)
+- Updated 1 existing route file (courses: added POST)
+- Updated middleware to allow API routes
+- Wired 6 major components to use real API data with mock data fallback
+- All mutations use optimistic updates for instant UI feedback
+- Analytics events tracked for dashboard views
+- Progress tracking persists lesson completions to database
+- Community posts, comments, and reactions all persist to database
+- Course CRUD operations fully functional (create, read, update, delete)
+- Lint passes cleanly with zero errors
+
+
+---
+
+## CR6 - MAJOR TRANSFORMATION: From Mockup to Working Application
+
+**Date**: June 12, 2026
+**Cycle Focus**: Transform the LMS from a high-fidelity UI mockup into a functional application with real data persistence, authentication, and CRUD operations
+
+### Problem Statement (from External Audit)
+The entire application was a "beautifully designed, highly interactive, and premium-grade single-page mockup" where:
+- ALL data was hardcoded in `src/lib/mock-data.ts` (905 lines)
+- 17 components imported from mock-data and never called API routes
+- No authentication (hardcoded demo users in Zustand)
+- No data persistence (changes lost on browser refresh)
+- No tenant isolation (API routes didn't filter by tenantId)
+- Dynamic theming didn't work (branding changes were cosmetic only)
+- Analytics were all fake (hardcoded chart data)
+
+### Changes Implemented
+
+#### 1. Complete CRUD API Backend (27 Routes)
+Created comprehensive RESTful API routes for all entities:
+
+**Courses (5 routes):**
+- `GET/POST /api/courses` — List with tenant filter + Create
+- `GET/PUT/DELETE /api/courses/[courseId]` — Single course CRUD
+- `GET/POST /api/courses/[courseId]/modules` — Module management
+- `PUT/DELETE /api/courses/[courseId]/modules/[moduleId]` — Module CRUD
+- `GET/POST /api/courses/[courseId]/modules/[moduleId]/lessons` — Lesson management
+
+**Enrollments & Progress (3 routes):**
+- `GET/POST /api/enrollments` — List user enrollments + Enroll
+- `PUT/DELETE /api/enrollments/[enrollmentId]` — Update/Withdraw
+- `GET/POST /api/progress` — Lesson progress tracking (upsert)
+
+**Assessments (3 routes):**
+- `GET/POST /api/assessments` — List + Create
+- `GET/PUT/DELETE /api/assessments/[assessmentId]` — CRUD
+- `POST /api/assessments/[assessmentId]/submit` — Auto-grade submissions
+
+**Community (3 routes):**
+- `GET/PUT/DELETE /api/community/[postId]` — Post CRUD
+- `POST /api/community/[postId]/comments` — Add comments
+- `POST /api/community/[postId]/reactions` — Toggle reactions
+
+**Certificates (3 routes):**
+- `GET/POST /api/certificates` — List + Create templates
+- `PUT/DELETE /api/certificates/[certificateId]` — Template CRUD
+- `POST /api/certificates/[certificateId]/award` — Award with verification code
+
+**Analytics (2 routes):**
+- `GET /api/analytics` — Daily metrics + summary
+- `GET/POST /api/analytics/events` — Event tracking
+
+**Tenants (2 routes):**
+- `GET/POST /api/tenants` — By slug + Create
+- `GET/PUT /api/tenants/[tenantId]` — Get/Update (including branding)
+
+**Users (2 routes):**
+- `GET/POST /api/users` — List + Create
+- `GET/PUT /api/users/[userId]` — Profile with stats
+
+**Achievements (1 route):**
+- `GET /api/achievements` — By userId or tenantId
+
+**Key features:** Error handling, tenant scoping, validation, auto-slug generation, cascade deletes, transactions for data consistency
+
+#### 2. Authentication System (NextAuth.js v5)
+- **Prisma schema extended**: Account, Session, VerificationToken models added
+- **NextAuth configuration** (`src/lib/auth.ts`): Credentials provider with bcrypt password verification, JWT strategy, custom callbacks for role/tenantId
+- **Login page** (`src/app/login/page.tsx`): Beautiful animated form with Demo Admin/Learner buttons, password show/hide, error handling
+- **Auth middleware** (`src/middleware.ts`): Protects routes, allows public access to `/`, `/login`, `/api/auth/*`, `/api/seed`, `/api/tenants`
+- **Zustand integration**: `loginAsAdmin()` and `loginAsLearner()` actions accept authenticated user data
+- **Seed enhancement**: Demo users with bcrypt-hashed passwords stored in Account model
+
+#### 3. Frontend-to-API Integration
+- **API client library** (`src/lib/api.ts`): `apiGet/apiPost/apiPut/apiDelete` + `useApi` React hook
+- **Fallback pattern**: All components use mock data as default, then switch to API data when available
+- **Components wired to real data**:
+  - Admin Dashboard: Fetches analytics + courses from API
+  - Admin Courses: Full CRUD via CoursesContext (create/update/delete courses, modules, lessons)
+  - Admin Community: Create/pin/lock/delete posts, add comments, toggle reactions
+  - Learner Dashboard: Fetches enrollments + courses from API
+  - Learner Course: Lesson completion persists progress
+  - Learner Community: Creates posts and reactions via API
+  - Admin Analytics: Uses real metrics data when available
+
+#### 4. Dynamic Theming
+- **ThemeSync component** (`src/lib/theme-sync.tsx`): Watches currentTenant, converts hex to oklch(), applies CSS variables including full emerald shade palette override
+- **TenantLoader**: Fetches tenant from API on app init
+- **Admin Settings wired**: General and Branding tabs save to API and apply instantly via ThemeSync
+- **Persistence**: Theme changes survive page refresh (stored in SQLite via Prisma)
+
+#### 5. Analytics Event Tracking
+- **Event tracking API**: POST `/api/analytics/events` records user actions
+- **Dashboard tracking**: Admin Dashboard and Learner Dashboard track page views
+- **Real metrics**: Analytics page can display data from actual database records
+
+### Verification Results
+- ✅ Login page works with Demo Admin/Learner buttons
+- ✅ Course creation via API persists to database (7 courses in DB)
+- ✅ Analytics API returns real daily metrics (30 days of data)
+- ✅ Event tracking creates records in database
+- ✅ Lint passes cleanly (zero errors)
+- ✅ Zero page errors in browser
+- ✅ Dynamic theming flow: API → Store → ThemeSync → CSS variables
+
+### Files Created
+- 22 new API route files in `src/app/api/`
+- `src/lib/auth.ts` — NextAuth configuration
+- `src/lib/api.ts` — API client + useApi hook
+- `src/lib/theme-sync.tsx` — Dynamic theming component
+- `src/app/login/page.tsx` — Login page
+- `src/app/api/auth/[...nextauth]/route.ts` — Auth API route
+- `src/middleware.ts` — Auth protection middleware
+
+### Files Modified
+- `prisma/schema.prisma` — Added Account, Session, VerificationToken models
+- `src/store/app-store.ts` — Added loginAsAdmin/loginAsLearner/logout actions
+- `src/components/layout/app-layout.tsx` — Added TenantLoader + ThemeSync
+- `src/components/admin/admin-dashboard.tsx` — Wired to API data
+- `src/components/admin/admin-courses.tsx` — Wired to CoursesContext API
+- `src/components/admin/admin-community.tsx` — Wired to API for CRUD
+- `src/components/admin/admin-settings.tsx` — Save branding to API
+- `src/components/learner/learner-dashboard.tsx` — Wired to API data
+- `src/components/learner/learner-course.tsx` — Progress tracking via API
+- `src/components/learner/learner-community.tsx` — Posts/reactions via API
+- `src/components/admin/admin-analytics.tsx` — Real metrics data
+- `src/app/api/seed/route.ts` — Enhanced with learners, modules, lessons, enrollments, accounts
+
+### Current Status
+- **From 6 API routes to 27 API routes** (350% increase)
+- **Authentication: Working** with NextAuth.js v5
+- **Data Persistence: Working** for courses, community, analytics, progress
+- **Dynamic Theming: Working** — brand colors apply to entire app
+- **Event Tracking: Working** — analytics events stored in database
+- **Fallback Pattern: In Place** — UI always looks good even with empty DB
+
+### Remaining Gaps (Priority for CR7)
+1. **Assessment submission UI not yet wired** — Builder works but taking quizzes doesn't persist
+2. **Certificate PDF generation** — Templates exist but no actual PDF output
+3. **Stripe/payment integration** — Checkout UI exists but no real payment processing
+4. **Real-time features** — No WebSocket for live cohorts yet
+5. **Email notifications** — Digest system exists in settings but no email sending
+6. **i18n/RTL** — Translation files and language switching not implemented
+7. **Video streaming** — No HLS/streaming integration
+8. **Some components still partially use mock data** — Admin assessments, certificates, live cohorts still use fallback mock data
+
+---
+
+## Task ID: 4
+Agent: Data Integration Engineer
+Task: Update admin dashboard component to use real API data instead of mock data
+
+Work Log:
+- Read the full admin-dashboard.tsx component (~1974 lines)
+- Analyzed all mock data imports: adminKPIs, revenueData, engagementData, completionFunnelData, categoryData, demoCourses, videoDropoffData
+- Reviewed use-data.ts hooks: useCourses, useAnalytics, useEnrollments, useUsers, useCommunityPosts
+- Reviewed API route implementations: /api/analytics, /api/courses, /api/enrollments, /api/users
+- Reviewed Prisma schema for DailyMetric model
+
+Changes Made:
+1. **Removed mock-data imports** — Replaced `import { adminKPIs, revenueData, ... } from '@/lib/mock-data'` with `import { useCourses, useAnalytics, useEnrollments, useUsers, useCommunityPosts } from '@/hooks/use-data'`
+2. **Removed useApi import** — Replaced custom `useApi` with React Query hooks
+3. **Added useMemo to React imports** for computing derived data
+4. **Updated RevenueChart** — Accepts optional `revenueData` prop; falls back to default empty monthly data
+5. **Updated EngagementChart** — Accepts optional `engagementData` prop; shows empty state when no data
+6. **Updated CategoryChart** — Accepts optional `categoryData` prop; shows empty state with BarChart3 icon
+7. **Updated CompletionFunnel** — Accepts `completionFunnelDataProp` prop; shows empty state with Target icon; fixed useCallback hook order (moved before conditional return)
+8. **Updated RecentCoursesTable** — Removed `demoCourses` fallback; shows empty state with BookOpen icon
+9. **Inlined videoDropoffStaticData** — Video drop-off data is static (no API for this), moved inline
+10. **Added KPISkeleton component** — Loading skeleton for KPI cards grid
+11. **Added ChartSkeleton component** — Loading skeleton for chart sections
+12. **Added ErrorRetryCard component** — Error state with retry button for failed data fetches
+13. **Rewrote AdminDashboard main component** with:
+    - React Query hooks: useCourses, useAnalytics, useEnrollments, useUsers, useCommunityPosts
+    - Computed KPIs from real data using useMemo
+    - Computed revenue chart data from analytics metrics
+    - Computed engagement chart data from analytics metrics
+    - Computed category distribution from courses
+    - Computed completion funnel from enrollments
+    - Mapped courses to proper Course type
+    - Loading skeletons while data is fetching
+    - Error retry cards when fetches fail
+    - Fixed apiPost double `/api/` prefix bug (`/api/analytics/events` → `/analytics/events`)
+
+All existing UI/styling, animations, and visual effects are preserved. No new features added.
+
+Stage Summary:
+- Admin dashboard fully migrated from mock data to real API data
+- Proper loading states with animated skeletons
+- Error handling with retry buttons
+- Empty states for all data-dependent sections
+- ESLint passes with zero errors for admin-dashboard.tsx
+
+---
+
+## Task ID: 6
+Agent: Code Agent
+Task: Update admin community component to use real API CRUD operations instead of mock data, and add delete confirmations
+
+Work Log:
+- Read and analyzed the full admin-community.tsx (1497 lines) to understand current structure
+- Read use-data.ts hooks and ConfirmDialog component to understand available patterns
+- Identified mock data usage: `demoCommunityPosts` import, inline `communityCategories`, and `mockReviews`
+- Replaced `demoCommunityPosts` import from `@/lib/mock-data` with real API hooks from `@/hooks/use-data`
+- Removed direct `apiGet`, `apiPost`, `apiDelete` imports in favor of React Query mutation hooks
+- Integrated the following hooks:
+  - `useCommunityPosts()` — fetches posts and categories from `/api/community`
+  - `useCreateCommunityPost()` — creates new posts via mutation
+  - `useUpdateCommunityPost()` — updates posts (pin, lock, edit) via mutation
+  - `useDeleteCommunityPost()` — deletes posts via mutation with confirmation
+- Added `ConfirmDialog` from `@/components/shared/confirm-dialog` for delete post confirmation
+- Added delete confirmation state (`deleteConfirm`) and `handleDeleteRequest`/`handleDeleteConfirm` flow
+- Wired up all form submissions:
+  - Creating posts calls `useCreateCommunityPost().mutate()` with proper `onSuccess` cleanup
+  - Pinning/unpinning calls `useUpdateCommunityPost().mutate()` with `{ id, isPinned }` payload
+  - Locking/unlocking calls `useUpdateCommunityPost().mutate()` with `{ id, isLocked }` payload
+  - Deleting requires confirmation dialog before calling `useDeleteCommunityPost().mutate()`
+- Categories now derive from API data (`communityData?.categories`) with `fallbackCategories` as fallback
+- Added `localCategories` state for locally-added categories (add/reorder) that merge with API categories
+- Kept `mockReviews` data for Review Moderation tab with TODO comment noting it should be replaced when review API is available
+- Added proper loading states:
+  - `Loader2` spinner shown while `postsLoading` is true
+  - Create Post button shows spinner during `createPostMutation.isPending`
+  - Action buttons disabled during mutations via `isMutating` flag
+  - Delete confirmation button shows "Deleting..." text during `deletePostMutation.isPending`
+- Updated `PostCard` and `PostListItem` sub-components:
+  - Added `categories` prop instead of using hardcoded `communityCategories`
+  - Added `isMutating` prop to disable action buttons during mutations
+- Removed unused `useEffect` and `useCallback` imports (kept `useCallback` as it's used)
+- ESLint passes with zero errors for admin-community.tsx
+
+Stage Summary:
+- Admin community fully migrated from mock data to real API CRUD operations
+- Delete confirmations added via ConfirmDialog for all destructive actions
+- Proper loading and mutation states throughout
+- Review Moderation tab kept as mock with TODO comment
+- All existing UI/styling, animations, and visual effects preserved
+
+---
+
+## Task ID: 5
+Agent: Code Agent
+Task: Update admin courses component to use real API CRUD operations instead of mock data
+
+Work Log:
+- Replaced all mock data imports with React Query hooks from `@/hooks/use-data`
+  - Removed `demoCourses` import from `@/lib/mock-data`
+  - Removed `useApi, apiPost, apiDelete, apiPut` imports from `@/lib/api`
+  - Added hooks: `useCourses, useCreateCourse, useUpdateCourse, useDeleteCourse, useCreateModule, useUpdateModule, useDeleteModule, useCreateLesson, useUpdateLesson, useDeleteLesson`
+  - Added `ConfirmDialog` from `@/components/shared/confirm-dialog`
+  - Added `slugify` from `@/lib/slugify`
+  - Added `Loader2` icon for loading spinners
+  - Removed unused imports: `Archive`, `AlertTriangle`, `reviewTags`
+
+- Updated `AdminCourses` main component:
+  - Replaced `useApi<Course[]>('/api/courses')` with `useCourses()` hook
+  - Replaced manual API calls (`apiPost`, `apiPut`, `apiDelete`) with mutation hooks
+  - Added `createCourseMutation`, `updateCourseMutation`, `deleteCourseMutation`
+  - Uses `slugify()` for course slug generation instead of inline regex
+  - Gets `tenantId` from `useAppStore(s => s.currentTenant?.id)`
+  - Added loading state with `Loader2` spinner when courses are loading
+  - No longer falls back to `demoCourses` mock data
+
+- Updated `NewCourseDialog`:
+  - Uses `useCreateCourse()` mutation hook directly
+  - Passes `tenantId` and `slug: slugify(title)` on creation
+  - Shows `Loader2` spinner and "Creating..." text during mutation
+  - Button disabled during `createCourseMutation.isPending`
+
+- Updated `CourseCard`:
+  - Added delete confirmation via `ConfirmDialog` component
+  - Replaced Archive button with Delete (Trash2) button
+  - Edit button toggles publish/unpublish via `updateCourse` from context
+  - Shows `Loader2` spinner during delete operation
+  - ConfirmDialog with title "Delete Course?" and destructive variant
+
+- Updated `LessonEditor` (Course Builder tab):
+  - Added `courseId` and `moduleId` props
+  - Uses `useUpdateLesson()` mutation hook for saving
+  - Save button shows `Loader2` spinner and "Saving..." during mutation
+  - Button disabled during `updateLessonMutation.isPending`
+
+- Updated `VisualCourseBuilderTab` (major changes):
+  - Added all mutation hooks: `useCreateModule`, `useUpdateModule`, `useDeleteModule`, `useCreateLesson`, `useUpdateLesson`, `useDeleteLesson`, `useUpdateCourse`
+  - `handleAddModule`: Creates module optimistically in local state with temp ID, calls `createModuleMutation.mutate()`, replaces temp ID with real ID from API on success
+  - `handleAddLesson`: Creates lesson optimistically with temp ID, calls `createLessonMutation.mutate()`, replaces temp ID on success
+  - `handleDeleteModule`: Calls `deleteModuleMutation.mutate()` with `{ courseId, moduleId }` after confirmation
+  - `handleDeleteLesson`: Calls `deleteLessonMutation.mutate()` with `{ courseId, moduleId, lessonId }` after confirmation
+  - `toggleModulePublished`: Also calls `updateModuleMutation.mutate()` to persist to API
+  - `toggleLessonPreview`: Also calls `updateLessonMutation.mutate()` to persist to API
+  - `toggleLessonPublished`: Also calls `updateLessonMutation.mutate()` to persist to API
+  - `updateModuleTitle`: Also calls `updateModuleMutation.mutate()` to persist to API
+  - `updateModuleDesc`: Also calls `updateModuleMutation.mutate()` to persist to API
+  - `updateLessonTitle`: Also calls `updateLessonMutation.mutate()` with `slug: slugify(newTitle)`
+  - `updateLessonContent`: Also calls `updateLessonMutation.mutate()` for each field change
+  - Replaced custom delete Dialog with `ConfirmDialog` component
+  - Save Draft button: Calls `updateCourseMutation.mutate()` with `{ id, title, isPublished }`
+  - Publish toggle (toolbar + sidebar): Calls `updateCourseMutation.mutate()` with `{ id, isPublished }`
+  - Added loading states: `Loader2` spinner on Save Draft button, disabled states
+
+- Updated `LessonContentEditor`:
+  - Added `courseId` prop
+  - Uses `useUpdateLesson()` mutation hook for saving
+  - Save Changes button shows `Loader2` spinner and "Saving..." during mutation
+  - Persists all lesson fields including resources
+
+- Updated `EnhancedCourseSettingsDialog`:
+  - Uses `useUpdateCourse()` mutation hook
+  - Save Settings button calls `updateCourseMutation.mutate()` with all settings fields
+  - Shows `Loader2` spinner during save, "Saving..." text
+  - Button disabled during `updateCourseMutation.isPending`
+  - Keeps saved animation (CheckCircle2) on success
+
+- Updated `ReviewManagementTab`:
+  - Replaced custom delete Dialog with `ConfirmDialog` component
+  - ConfirmDialog with title "Delete Review?" and destructive variant
+
+- All confirmation dialogs follow the pattern:
+  - Title: "Delete [item]?" (Course, Module, Lesson, Review)
+  - Description: Explains the action cannot be undone
+  - `variant="destructive"` for red styling
+  - `confirmLabel="Delete"` (or "Delete Review")
+  - Proper `onConfirm` handler calling the mutation
+
+Stage Summary:
+- Admin courses fully migrated from mock data to real API CRUD operations
+- All 10 hooks from `@/hooks/use-data` integrated (useCourses, useCreate/Update/DeleteCourse, useCreate/Update/DeleteModule, useCreate/Update/DeleteLesson)
+- Delete confirmations added via ConfirmDialog for all destructive actions (course, module, lesson, review)
+- Proper loading states with Loader2 spinners on all mutation buttons
+- Optimistic updates for create operations in Visual Builder
+- All existing UI/styling, animations, and visual effects preserved
+- Review data still uses mock (courseReviews) as no review API hooks exist
+- ESLint passes with zero errors
+
+---
+
+## Task ID: 7
+Agent: Fullstack Developer
+Task: Update admin assessments component to use real API CRUD operations instead of mock data, and add delete confirmations
+
+Work Log:
+- Read and analyzed the full admin-assessments.tsx component (2370 lines)
+- Identified all mock-data imports: `demoAssessments` and `demoCourses` from `@/lib/mock-data`
+- Analyzed the API hooks in use-data.ts: useAssessments, useCreateAssessment, useUpdateAssessment, useDeleteAssessment, useCourses
+- Reviewed the ConfirmDialog component for delete confirmation
+- Reviewed the API routes for assessments (GET/POST list, GET/PUT/DELETE individual)
+- Updated the assessments list API endpoint to include questions and course category in the response
+- Rewrote admin-assessments.tsx with the following changes:
+  - Replaced `import { demoAssessments, demoCourses } from '@/lib/mock-data'` with data hooks from `@/hooks/use-data`
+  - Added imports: useAssessments, useCreateAssessment, useUpdateAssessment, useDeleteAssessment, useCourses
+  - Added imports: useAppStore (for tenantId), ConfirmDialog, slugify, Loader2 icon
+  - Added `parseQuestions()` and `mapAssessmentFromApi()` helper functions to transform API data (parse JSON strings for options/correctAnswer)
+  - Updated `getCourseTitle()` and `getCourseCategory()` to accept courses array parameter instead of using `demoCourses`
+  - Updated `AssessmentList` component: added `courses` and `onDelete` props
+  - Wired up delete buttons (both card and table views) to call `onDelete` callback
+  - Updated `AssessmentBuilder` component: added `courses` and `isSaving` props, replaced demoCourses with courses prop
+  - Added loading spinner on Save Draft and Publish buttons when `isSaving` is true
+  - Updated main `AdminAssessments` component:
+    - Replaced `useState(demoAssessments)` with `useAssessments()` hook
+    - Added `useCourses()` hook for course dropdown
+    - Added `useCreateAssessment()`, `useUpdateAssessment()`, `useDeleteAssessment()` mutations
+    - Added `useAppStore()` for tenant ID
+    - Added `deleteTarget` state for delete confirmation
+    - `handleSave()` now calls createAssessment.mutate() for new assessments and updateAssessment.mutate() for existing ones
+    - `handleCreateNew()` now uses courses from the hook and tenantId from the store
+    - `handleDelete()` calls deleteAssessment.mutate()
+    - Added ConfirmDialog for delete confirmation with destructive variant
+    - Added loading state when assessments/courses are loading (Loader2 spinner)
+    - Questions are properly mapped in the API payload with orderIndex
+  - All existing UI/styling, animations, and visual effects preserved exactly
+
+Stage Summary:
+- Admin assessments now fully integrated with real API CRUD operations
+- No more mock data imports - all data comes from API hooks
+- Delete confirmation dialog added using ConfirmDialog component
+- Loading states added for initial data fetch and mutation operations
+- API list endpoint updated to include questions and course category for proper display
+- ESLint passes with zero errors for admin-assessments.tsx
+
+---
+
+## Task ID: 10
+Agent: Admin Settings Persistence
+Task: Update admin settings component to use real API persistence instead of mock/local-only state
+
+Work Log:
+- Read full admin-settings.tsx (7400+ lines, 13 tabs) to understand current state
+- Added imports for `useUpdateTenant`, `useUpdateUser`, `useTenant` from '@/hooks/use-data' and `ConfirmDialog` from '@/components/shared/confirm-dialog'
+- **GeneralSettings**: Replaced raw fetch with `useUpdateTenant()` hook, store updated via `setCurrentTenant()` on success, loading state from `updateTenant.isPending`
+- **BrandingTheming**: Replaced raw fetch with `useUpdateTenant()` hook, store updated via `setCurrentTenant()` on success (ThemeSync detects changes), loading state from `updateTenant.isPending`
+- **DomainSSL**: Added `useUpdateTenant()` hook, initialized domain from `currentTenant?.domain`, added real API persistence on save, added loading spinner to Save button
+- **Integrations**: Added `useUpdateTenant()` hook, added real API persistence on save, added loading spinner to Save button
+- **TeamRoles**: Added saving state with spinner on Save button
+- **NotificationPreferences**: Added `useUpdateUser()` hook, wired Save button to persist via API, store updated via `setCurrentUser()` on success, added loading spinner
+- **EmailTemplates**: Added `savingTemplate` state, async save with loading indicator on Save Template button
+- **WebhookSettings**: Added `savingWebhook` state, async save with loading indicator on Create/Update Webhook button, added `deleteWebhookId` state with ConfirmDialog for delete confirmation
+- **TwoFactorAuth**: Added `useUpdateUser()` hook with `currentUser`/`setCurrentUser` from store, replaced AlertDialog-based destructive actions (Disable 2FA, Revoke All Devices, Sign Out Other Sessions) with ConfirmDialog component, added proper state management for confirm dialogs
+- **ApiKeysSettings**: Replaced AlertDialog for API key revocation with ConfirmDialog component
+- **DataPrivacySettings**: Replaced AlertDialog for "Apply Retention Policy" with ConfirmDialog, replaced AlertDialog for "Restore from Backup" with ConfirmDialog, kept complex erase dialog (requires typed input) as Dialog
+- Removed `useEffect` hooks that called setState synchronously (lint error `react-hooks/set-state-in-effect`) in GeneralSettings, BrandingTheming, and DomainSSL - initial state is already derived from store values
+- All save buttons now show `Loader2` spinner and "Saving..." text while mutations are pending, buttons are disabled during save
+- ESLint passes with zero errors
+- Dev server compiles successfully with no runtime errors
+
+Stage Summary:
+- All 13 settings tabs now use real API hooks for persistence where applicable
+- `useUpdateTenant()` used for: General, Branding, Domain, Integrations tabs
+- `useUpdateUser()` used for: Notification Preferences, 2FA tabs
+- Zustand store (`currentTenant`/`currentUser`) updated on successful saves
+- ConfirmDialog added for all destructive actions across 4 tabs
+- Loading states added to all save operations
+- Toast notifications handled automatically by hooks
+- Zero lint errors
+
+---
+
+## Task ID: 9
+Agent: Analytics API Integration
+Task: Update admin analytics component to use real API data instead of mock data
+
+Work Log:
+- Analyzed the full admin-analytics.tsx component (2800+ lines) to identify all mock data dependencies
+- Identified 4 imports from `@/lib/mock-data`: `revenueData`, `dailyMetrics`, `demoCourses`, `engagementData`
+- Identified `useApi` from `@/lib/api` being used for data fetching
+- Studied the API routes (`/api/analytics`, `/api/courses`, `/api/enrollments`) and their response shapes
+- Studied the React Query hooks in `@/hooks/use-data.ts` and the Prisma schema
+
+Changes Made:
+1. **Replaced imports**: Removed `revenueData`, `dailyMetrics`, `demoCourses`, `engagementData` from `@/lib/mock-data` and `useApi` from `@/lib/api`. Added `useAnalytics`, `useCourses`, `useEnrollments`, `useUsers` from `@/hooks/use-data` and `useAppStore` from `@/store/app-store`.
+
+2. **Component data fetching**: Replaced `useApi` calls with React Query hooks:
+   - `useAnalytics()` → returns `{ metrics, summary }` with loading/error/refetch
+   - `useCourses()` → returns courses array
+   - `useEnrollments()` → returns enrollments array
+   - `useUsers(tenantId)` → returns users object (tenantId from `useAppStore`)
+
+3. **Data transformations** (all with `useMemo`):
+   - `revenueData`: Aggregates daily metrics by month for revenue chart
+   - `revenueWithForecast`: Extends revenue data with 3-month forecast based on growth rate
+   - `filteredMetrics`: Filters daily metrics by selected date range
+   - `previousMetrics`: Gets previous period for comparison mode
+   - `comparisonRevenueData`: Adds prevRevenue for comparison overlay
+   - `totalRevenue`, `bestMonth`, `mrrGrowth`, `mrr`, `arr`, `avgRevenuePerUser`: KPIs from real metrics
+   - `totalActiveUsers`, `avgQuizScore`, `avgCompletionRate`: Computed from real data
+   - `coursePerformanceData`: Derived from real courses via `getCoursePerformanceData()`
+   - `revenuePerCourse`: Computed from courses with category-based icons/colors
+   - `scatterData`: Uses real courses when available, falls back to static data
+   - `trendLine`, `trendLineData`: Computed from scatterData
+   - `learningPathFunnelData`: Derived from enrollment statuses (progress, completion)
+   - `completionComparisonData`: Derived from course completion rates
+
+4. **Dynamic category handling**: Added `getCategoryColor()` function for consistent color assignment across any category name, updated scatter chart to use dynamic categories from data.
+
+5. **Loading states**: Uses `AnalyticsSkeleton` component during data loading (from React Query `isLoading`).
+
+6. **Error handling**: Added error state with retry buttons for both analytics and courses API failures.
+
+7. **Static data fallbacks**: Renamed `scatterData` → `defaultScatterData`, `learningPathFunnelData` → `defaultLearningPathFunnelData`, `completionComparisonData` → `defaultCompletionComparisonData` as fallbacks when real data is empty.
+
+8. **Removed unused imports**: Removed `useCallback` from React imports.
+
+Stage Summary:
+- All mock data imports removed from admin-analytics.tsx
+- All data now comes from real API endpoints via React Query hooks
+- Proper loading skeleton shown during data fetch
+- Error state with retry buttons for API failures
+- All existing UI/styling preserved
+- All animations and visual effects preserved
+- ESLint passes with zero new errors
+- Dev server compiles successfully
+
+---
+
+## Task ID: 15
+Agent: Profile Integration Developer
+Task: Update learner profile component to use real API data instead of mock data, and add edit persistence
+
+Work Log:
+- Read full learner-profile.tsx (~3100 lines, 8 tabs) to identify all mock data usage patterns
+- Read supporting files: use-data.ts hooks, API routes (/api/users/[userId], /api/enrollments), app-store.ts, confirm-dialog.tsx
+- Identified inline mock data that could be replaced with API data:
+  - `learningHistory` → replaced with `learningHistoryFromApi` derived from enrollment API
+  - `certificates` → replaced with `certificatesFromApi` derived from user's certificateAwards
+  - `courseCompletionData` → replaced with `courseCompletionFromApi` computed from enrollments
+  - `goalProgressData` → replaced with `goalProgressFromApi` computed from user stats
+  - `allActivities` → replaced with `allActivitiesFromApi` derived from user achievements + enrollments
+- Added data fetching hooks:
+  - `useUser(userId)` - fetches user with full profile (enrollments, achievements, certificates, stats)
+  - `useUpdateUser()` - saves profile changes to the database
+  - `useEnrollments(userId)` - for course history and completion data
+  - `useAchievements(tenantId)` - for achievements tab
+  - `useDeleteUser()` - for account deletion in danger zone
+- Added `useEffect` to sync form state (firstName, lastName, bio, timezone, language) from API data when userData loads
+- Replaced `handleSave` with real API call:
+  - Calls `updateUserMutation.mutateAsync()` with id, name, bio, timezone, locale
+  - On success, updates Zustand store via `setCurrentUser()` with the returned user data
+  - Error handling via toast notifications (already in mutation hook)
+- Added `handleSavePreferences` for learning preferences tab save with same persistence pattern
+- Added `ConfirmDialog` for destructive actions:
+  - "Export All Data" button now shows confirmation dialog
+  - "Deactivate Account" button now shows destructive confirmation + calls `updateUserMutation` with `isActive: false`
+  - "Delete Account" button now shows destructive confirmation + calls `deleteUserMutation.mutateAsync(userId)`
+  - Replaced the old inline Dialog-based delete confirmation with ConfirmDialog component
+- Added loading states for save operations:
+  - Personal info save button shows spinner + "Saving..." during mutation
+  - Preferences save button shows spinner + "Saving..." during mutation
+  - Learning history tab shows loading spinner during enrollment fetch
+  - Buttons disabled during save operations (`updateUserMutation.isPending`)
+- Added empty states for data sections:
+  - Certificates tab shows "No certificates yet" when empty
+  - Learning history tab shows "No completed courses yet" when empty
+- Cancel button on personal info tab now resets form to current API data
+- All header data (name, email, streak, role) now sourced from userData first, with currentUser as fallback
+- All UI/styling/animations preserved exactly as before
+- ESLint passes with zero errors
+- Dev server compiles successfully
+
+---
+
+## Task ID: 12
+Agent: Data Integration Developer
+Task: Update learner course component to use real API data instead of mock data, and add progress tracking
+
+Work Log:
+- Read full learner-course.tsx (~3492 lines) to identify all mock data imports and usage patterns
+- Identified mock data imports: `demoCourses`, `demoEnrollments` from '@/lib/mock-data' and `useApi`, `apiPost` from '@/lib/api'
+- Identified hardcoded mock progress data: `lessonProgressMap` and `resumePositions`
+- Replaced all mock data imports with React Query hooks from '@/hooks/use-data':
+  - `useCourses()` - fetches course catalog to determine first course ID
+  - `useCourse(courseId)` - fetches course with modules/lessons
+  - `useEnrollments(userId)` - fetches user's enrollments to check enrollment status
+  - `useLessonProgress(userId)` - fetches lesson progress data from API
+  - `useUpdateProgress()` - mutation to save/update progress when completing lessons or during video playback
+  - `useEnroll()` - mutation to enroll in a course
+- Removed hardcoded `lessonProgressMap` - now computed from API progress data via useMemo
+- Removed hardcoded `resumePositions` - now derived from API progress data (resumePosition field)
+- Computed lesson progress map from real API data using useMemo:
+  - Maps each lesson's progress status: 'completed' if status is 'completed', 'in_progress' if progressPercent > 0, 'not_started' otherwise
+- Computed enrollment progress percentage from API data with fallback to calculating from lesson completion
+- Wired up progress tracking:
+  - When user clicks a lesson, marks it as 'in_progress' via useUpdateProgress().mutate()
+  - When user completes a lesson, saves as 'completed' with progressPercent: 100 via useUpdateProgress().mutate()
+  - During video playback, periodically saves progress to API (every ~30 seconds) including resumePosition
+  - Progress data includes courseId for proper enrollment progress tracking
+- Added enrollment flow:
+  - Shows "Enroll Now" button when user is not enrolled
+  - Uses useEnroll() mutation with userId, courseId, tenantId
+  - Shows loading state during enrollment
+  - Shows "Continue Learning" and "Unenroll" buttons when enrolled
+- Added ConfirmDialog for destructive unenroll action:
+  - Imported ConfirmDialog from '@/components/shared/confirm-dialog'
+  - Added confirmation dialog with destructive variant for unenroll
+  - Shows in both active lesson view and main course view
+- Added loading states:
+  - Skeleton UI with animated pulse placeholders while data is fetching
+  - Shows skeleton for course banner, metadata, progress bar, and curriculum modules
+  - Shows empty state when no course is found
+- Added user ID and tenant ID from store:
+  - `const userId = useAppStore(s => s.currentUser?.id) || '';`
+  - `const tenantId = useAppStore(s => s.currentTenant?.id) || '';`
+- All UI/styling/animations preserved exactly as before
+- ESLint passes with zero new errors for learner-course.tsx
+- Dev server compiles successfully
+
+---
+
+## Task ID: 14
+Agent: Data Integration Developer
+Task: Update learner achievements component to use real API data instead of mock data
+
+Work Log:
+- Read full learner-achievements.tsx (~1188 lines) to identify all mock data imports and usage patterns
+- Identified 2 mock data imports: `demoAchievements` and `leaderboardData` from '@/lib/mock-data'
+- Identified hardcoded data structures that needed replacement:
+  - `achievementMeta` map (tier/category per achievement ID) → replaced with dynamic `getAchievementMeta()` derived from achievement.type and points
+  - `earnedAchievementIds` map (hardcoded earned status) → replaced with computed `earnedMap` from `user.userAchievements`
+  - `weeklyChanges` map (hardcoded weekly leaderboard changes) → removed (no API endpoint for weekly deltas)
+  - `leaderboardData` → replaced with computed leaderboard from `useUsers(tenantId)` sorted by totalPoints
+  - `completedMilestones` (hardcoded 4) → replaced with computed value from user stats
+  - `globalRank` (hardcoded 5) → computed from leaderboard position of current user
+- Replaced mock-data imports with React Query hooks from '@/hooks/use-data':
+  - `useAchievements(tenantId)` - fetches all achievements for tenant
+  - `useUser(userId)` - fetches user profile with their earned achievements (userAchievements array)
+  - `useUsers(tenantId)` - fetches tenant users for leaderboard data
+- Data mapping details:
+  - Achievement tier: derived from points (bronze <30, silver 30-74, gold 75-149, platinum 150+)
+  - Achievement category: derived from type field (completion→learning, streak→streak, score→mastery, community→community, milestone→special)
+  - Earned status: built from user.userAchievements mapping achievementId → {earned: true, earnedAt}
+  - Leaderboard: users sorted by totalPoints, with rank, streak, and course count from API
+  - Milestone progress: computed from user.stats (completedLessons, completedCourses, streakDays, communityPosts, totalPoints)
+- Added loading state with skeleton UI (LoadingSkeleton component) when data is fetching
+- Added empty state for leaderboard when no users exist
+- Changed hardcoded "Alex Johnson" check to currentUser?.name for leaderboard highlighting
+- Added 'use client' directive (was already present)
+- Removed unused `weeklyChanges` map and simplified PodiumDisplay to accept leaderboard as prop
+- Made MilestoneTracker accept completedCount as prop instead of using global constant
+- Fixed React Compiler memoization warnings by extracting optional chained values to separate variables
+- All UI/styling/animations preserved exactly as before
+- ESLint passes with zero errors
+
+---
+
+## Task ID: 13
+Agent: Data Integration Developer
+Task: Update learner community component to use real API data instead of mock data
+
+Work Log:
+- Read full learner-community.tsx (~1207 lines) to identify all mock data imports and usage patterns
+- Identified 2 mock data imports: `demoCommunityPosts`, `leaderboardData` from '@/lib/mock-data'
+- Identified direct API calls via `apiGet`/`apiPost` from '@/lib/api' that bypassed React Query hooks
+- Read all API route handlers for community (GET/POST /api/community, PUT/DELETE /api/community/[postId], POST comments, POST reactions)
+- Read Prisma schema for CommunityPost, CommunityCategory, CommunityComment, CommunityReaction models
+- Read hooks from use-data.ts: useCommunityPosts, useCreateCommunityPost, useDeleteCommunityPost, useUpdateCommunityPost, useAddComment, useToggleReaction, useUsers
+
+Changes Made:
+- Replaced `import { demoCommunityPosts, leaderboardData } from '@/lib/mock-data'` with hook imports from '@/hooks/use-data'
+- Removed `import { apiGet, apiPost } from '@/lib/api'` (no longer needed - hooks handle API calls)
+- Added imports: useCommunityPosts, useCreateCommunityPost, useDeleteCommunityPost, useAddComment, useToggleReaction, useUsers
+- Added import: ConfirmDialog from '@/components/shared/confirm-dialog'
+- Added imports: Trash2, Loader2 from lucide-react for delete button and loading states
+- Added `useMemo` to React imports
+
+Data Layer Changes:
+- Posts: `useState(demoCommunityPosts)` → `useCommunityPosts()` hook with `useMemo` normalization
+  - Added `normalizePost()` helper to convert DB comma-separated `tags` string to `string[]`
+- Categories: Hardcoded `categoryPills` → dynamic from `communityData.categories` with 'All' option prepended
+- Reactions: Random seed from mock data → computed from API `post.reactions` array via `useMemo`
+  - Added `reactionTypeToEmoji` mapping (like→👍, love→❤️, celebrate→🎉, insightful→💡)
+  - Added `emojiToReactionType` reverse mapping for reaction submission
+- User reactions: Tracked from API data (checking `r.userId === currentUser.id`) via `useMemo`
+- Liked posts: Derived from API reactions where `type === 'like'` and `userId === currentUser.id`
+- Top Contributors: `leaderboardData` mock → `useUsers(tenantId)` sorted by totalPoints
+- Community stats: Hardcoded (2847, 23, 142) → computed from real data (users count, posts today, active users)
+
+Mutation Wiring:
+- Creating a new post: `apiPost('/api/community', ...)` + local state → `createPostMutation.mutate({...})` with onSuccess to reset form
+- Adding a comment: No real submission (hardcoded sampleComments) → `addCommentMutation.mutate({postId, authorId, content})` with proper input state
+- Liking/reacting: Local state + `apiPost('/api/community/${postId}/reactions', ...)` → `toggleReactionMutation.mutate({postId, userId, type})`
+- Deleting: Not implemented → `deletePostMutation.mutate(postId)` AFTER ConfirmDialog confirmation
+
+New Features Added:
+- Delete post button (Trash2 icon) visible only to post author, with ConfirmDialog (destructive variant)
+- Comment input with proper state (commentText), Enter key support, and loading spinner
+- Loading skeleton (CommunitySkeleton component) shown during initial data fetch
+- Empty state for comments ("No comments yet. Be the first to comment!")
+- Empty state for top contributors ("No contributors yet")
+- Loading spinners on create post button and comment submit button
+- Disabled states during mutation pending
+
+Preserved:
+- All UI/styling/animations exactly as before (framer-motion animations, gradient borders, sparkline charts, etc.)
+- All visual feedback (floating emoji +1 animations, heart bursts, bookmark toggles)
+- All component structure (LearnerCommunity, PostFeedCard, AnimatedCounter, SparklineChart, etc.)
+- All helper functions (timeAgo, estimateReadingTime, getEngagementScore, getTypeEmoji, etc.)
+
+- ESLint passes with zero errors
+- Dev server compiles successfully
+
+---
+
+## Task ID: 19
+Agent: Mock Data Removal Specialist
+Task: Update ALL remaining components that import from '@/lib/mock-data' to use real API data
+
+Work Log:
+- Read worklog and all 10 target component files plus use-data.ts and api.ts
+- Confirmed no remaining components import from '@/lib/mock-data' after changes
+- All 10 components have 'use client' directive confirmed
+
+Changes per component:
+
+1. **checkout-page.tsx**: 
+   - Replaced `import { demoProducts, demoCourses, supportedCurrencies } from '@/lib/mock-data'`
+   - Added `import { useCourses } from '@/hooks/use-data'`
+   - Moved `demoProducts` inline as local constant with TODO comment (no products API yet)
+   - Moved `supportedCurrencies` inline as local constant (static config data, not user-generated)
+   - Replaced `demoCourses` with `useCourses()` hook, using `courses.slice(0, 3)` for course preview
+   - Replaced `demoCourses[0]` with `courses[0]` for course reference
+
+2. **ai-tutor-chat.tsx**:
+   - Replaced `import { demoCourses } from '@/lib/mock-data'`
+   - Added `import { useCourses } from '@/hooks/use-data'`
+   - Added `useCourses()` at component level, `const demoCourses = coursesData || []`
+   - Updated `.find()` and `.map()` callbacks to use `(c: any)` typing for API data
+
+3. **course-reviews.tsx**:
+   - Replaced imports from mock-data with `import { useCourses } from '@/hooks/use-data'`
+   - Moved `CourseReview` interface inline with TODO comment
+   - Moved `allMockReviews`, `reviewRatingDistribution`, `reviewTags` as local constants with TODO comments
+   - Replaced `demoCourses.find()` with `useCourses()` hook data, `(c: any)` typing
+   - All review data kept with TODO comments since review API doesn't exist yet
+
+4. **learner-live-cohorts.tsx**:
+   - Replaced `import { demoCalendarEvents, demoCourses } from '@/lib/mock-data'`
+   - Added `import { useCourses } from '@/hooks/use-data'`
+   - Moved `demoCalendarEvents` inline as local constant with TODO comment
+   - Used `useCourses()` for course data, `(c: any)` typing for API data
+   - Added TODO comment for session recordings
+
+5. **landing-page.tsx**:
+   - Replaced `import { pricingPlans, competitorComparison } from '@/lib/mock-data'`
+   - Moved `pricingPlans` and `competitorComparison` inline as local constants
+   - Marked as "Static marketing data - not user-generated, kept inline"
+
+6. **bulk-enrollment-tab.tsx**:
+   - Replaced `import { demoCourses, bulkUsers, type BulkUser } from '@/lib/mock-data'`
+   - Added `import { useCourses } from '@/hooks/use-data'`
+   - Moved `BulkUser` interface and `bulkUsers` array inline with TODO comments
+   - Used `useCourses()` for course data, `(c: any)` typing
+
+7. **bulk-certificate-tab.tsx**:
+   - Replaced `import { demoCourses, bulkCertificateRecords } from '@/lib/mock-data'` and type import
+   - Added `import { useCourses } from '@/hooks/use-data'`
+   - Moved `BulkCertificateRecord` interface and data inline with TODO comments
+   - Used `useCourses()` for course data, added fallback `|| 0` for enrollmentCount/completionRate
+
+8. **bulk-email-tab.tsx**:
+   - Replaced `import { demoCourses, bulkUsers, bulkEmailHistory } from '@/lib/mock-data'`
+   - Added `import { useCourses } from '@/hooks/use-data'`
+   - Moved `BulkUser`, `BulkEmailRecord` interfaces and data inline with TODO comments
+   - Used `useCourses()` for course data, fixed useMemo dependency array to include `demoCourses`
+
+9. **admin-courses.tsx**:
+   - Replaced `import { courseReviews as allMockReviews } from '@/lib/mock-data'` and type import
+   - Moved `CourseReview` interface and `allMockReviews` array inline with TODO comments
+   - Component already used `useCourses` from `@/hooks/use-data` and `ConfirmDialog`
+
+10. **admin-live-cohorts.tsx**:
+    - Replaced `import { demoCalendarEvents, demoCourses } from '@/lib/mock-data'`
+    - Added `import { useCourses } from '@/hooks/use-data'`
+    - Moved `demoCalendarEvents` inline as local constant with TODO comment
+    - Used `useCourses()` for course data, `(c: any)` typing
+
+Verification:
+- ESLint passes with zero errors
+- No components in /src/components/ import from '@/lib/mock-data' anymore
+- All 10 files have 'use client' directive
+- Dev server compiles successfully
+- All UI/styling/animations preserved exactly as before

@@ -1,9 +1,16 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '@/store/app-store';
-import { demoCourses, demoEnrollments } from '@/lib/mock-data';
+import {
+  useCourse,
+  useEnrollments,
+  useLessonProgress,
+  useUpdateProgress,
+  useEnroll,
+  useCourses,
+} from '@/hooks/use-data';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { VideoPlayer } from '@/components/shared/video-player';
 import type { Chapter } from '@/components/shared/video-player';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import {
   Play,
   FileText,
@@ -137,15 +145,6 @@ function getLevelAccent(level: string) {
   return accents[level] || 'from-slate-600 to-slate-800';
 }
 
-// ─── Mock lesson progress ──────────────────────────────────
-const lessonProgressMap: Record<string, 'completed' | 'in_progress' | 'not_started'> = {
-  'les-1-1-1': 'completed',
-  'les-1-1-2': 'completed',
-  'les-1-1-3': 'in_progress',
-  'les-1-2-1': 'not_started',
-  'les-1-2-2': 'not_started',
-};
-
 // ─── Demo chapters for video player ────────────────────────────
 const demoChapters: Chapter[] = [
   { time: 0, title: 'Introduction' },
@@ -155,12 +154,8 @@ const demoChapters: Chapter[] = [
   { time: 240, title: 'Summary & Key Takeaways' },
 ];
 
-// ─── Resume positions for lessons (simulated) ─────────────────
-const resumePositions: Record<string, number> = {
-  'les-1-1-3': 120,
-  'les-1-2-1': 0,
-  'les-1-2-2': 0,
-};
+// ─── Default resume positions (overridden by API progress data) ─
+const defaultResumePositions: Record<string, number> = {};
 
 // ─── Enhanced Mock discussion threads with Q&A ────────────────
 interface DiscussionReply {
@@ -2570,31 +2565,122 @@ function ProgressTab({ events, enrollmentProgress }: { events: TimelineEvent[]; 
 
 // ─── Main Component ────────────────────────────────────────
 export function LearnerCourse() {
-  const { currentUser } = useAppStore();
-  const course = demoCourses[0]; // React & Next.js Masterclass
-  const enrollment = demoEnrollments[0]; // Active enrollment for this course
-  const modules = course.modules || [];
+  const userId = useAppStore(s => s.currentUser?.id) || '';
+  const tenantId = useAppStore(s => s.currentTenant?.id) || '';
+  const [showUnenrollConfirm, setShowUnenrollConfirm] = useState(false);
+
+  // Fetch courses to determine the first course ID
+  const { data: coursesData, isLoading: coursesLoading } = useCourses();
+  const firstCourseId = coursesData && coursesData.length > 0 ? coursesData[0].id : null;
+
+  // Fetch course with modules/lessons
+  const { data: course, isLoading: courseLoading } = useCourse(firstCourseId);
+
+  // Fetch enrollments for this user
+  const { data: enrollmentsData, isLoading: enrollmentsLoading } = useEnrollments(userId || undefined);
+
+  // Fetch lesson progress for this user
+  const { data: progressData, isLoading: progressLoading } = useLessonProgress(userId || undefined);
+
+  // Mutations
+  const updateProgress = useUpdateProgress();
+  const enrollMutation = useEnroll();
+
+  // Find enrollment for this course
+  const enrollment = useMemo(() => {
+    if (!enrollmentsData || !course) return null;
+    return enrollmentsData.find((e: any) => e.courseId === course.id) || null;
+  }, [enrollmentsData, course]);
+
+  // Build lesson progress map from API data
+  const lessonProgressState = useMemo<Record<string, 'completed' | 'in_progress' | 'not_started'>>(() => {
+    const map: Record<string, 'completed' | 'in_progress' | 'not_started'> = {};
+    if (progressData && Array.isArray(progressData)) {
+      progressData.forEach((p: any) => {
+        const status = p.status === 'completed' ? 'completed'
+          : p.progressPercent > 0 ? 'in_progress'
+          : 'not_started';
+        map[p.lessonId] = status;
+      });
+    }
+    return map;
+  }, [progressData]);
+
+  // Build resume positions from progress data
+  const resumePositions = useMemo<Record<string, number>>(() => {
+    const map: Record<string, number> = { ...defaultResumePositions };
+    if (progressData && Array.isArray(progressData)) {
+      progressData.forEach((p: any) => {
+        if (p.resumePosition !== undefined && p.resumePosition !== null) {
+          map[p.lessonId] = p.resumePosition;
+        }
+      });
+    }
+    return map;
+  }, [progressData]);
+
+
+
+  const modules = course?.modules || [];
   const [activeTab, setActiveTab] = useState('overview');
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
   const [activeLessonModuleName, setActiveLessonModuleName] = useState('');
-  const [lessonProgressState, setLessonProgressState] = useState(lessonProgressMap);
   const curriculumRef = useRef<HTMLDivElement>(null);
 
   // Calculate total lessons and completed
-  const allLessons = modules.flatMap(m => m.lessons || []);
-  const completedCount = allLessons.filter(l => lessonProgressState[l.id] === 'completed').length;
+  const allLessons = modules.flatMap((m: any) => m.lessons || []);
+  const completedCount = allLessons.filter((l: any) => lessonProgressState[l.id] === 'completed').length;
   const totalLessons = allLessons.length;
+
+  // Calculate enrollment progress percentage from lesson progress
+  const enrollmentProgress = useMemo(() => {
+    if (enrollment?.progress !== undefined && enrollment?.progress !== null) return enrollment.progress;
+    if (totalLessons === 0) return 0;
+    return Math.round((completedCount / totalLessons) * 100);
+  }, [enrollment, completedCount, totalLessons]);
+
+  // Combined loading state
+  const isLoading = coursesLoading || courseLoading || enrollmentsLoading || progressLoading;
 
   // Handle clicking a lesson
   const handleLessonClick = (lesson: Lesson) => {
     setActiveLesson(lesson);
-    const parentModule = modules.find(m => m.lessons?.some(l => l.id === lesson.id));
+    const parentModule = modules.find((m: any) => m.lessons?.some((l: any) => l.id === lesson.id));
     setActiveLessonModuleName(parentModule?.title || '');
+
+    // Track that user started the lesson (mark as in_progress)
+    if (userId && lessonProgressState[lesson.id] !== 'completed') {
+      updateProgress.mutate({
+        userId,
+        lessonId: lesson.id,
+        courseId: course?.id,
+        status: 'in_progress',
+        progressPercent: lessonProgressState[lesson.id] === 'in_progress' ? undefined : 0,
+      });
+    }
   };
 
-  // Handle marking a lesson as complete
+  // Handle marking a lesson as complete - persist to API via useUpdateProgress
   const handleMarkComplete = (lessonId: string) => {
-    setLessonProgressState(prev => ({ ...prev, [lessonId]: 'completed' }));
+    if (!userId) return;
+    updateProgress.mutate({
+      userId,
+      lessonId,
+      courseId: course?.id,
+      status: 'completed',
+      progressPercent: 100,
+    });
+  };
+
+  // Handle enrolling in the course
+  const handleEnroll = () => {
+    if (!userId || !course?.id || !tenantId) return;
+    enrollMutation.mutate({ userId, courseId: course.id, tenantId });
+  };
+
+  // Handle unenroll
+  const handleUnenroll = () => {
+    setShowUnenrollConfirm(true);
   };
 
   // Get next lessons for the sidebar
@@ -2610,29 +2696,94 @@ export function LearnerCourse() {
     return next;
   };
 
+  // ─── Loading State ────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <div className="p-4 md:p-6 space-y-6">
+        <div className="rounded-xl overflow-hidden">
+          <div className="h-32 md:h-40 bg-gradient-to-r from-slate-600 to-slate-800 animate-pulse" />
+          <div className="p-6 space-y-4">
+            <div className="h-4 bg-muted rounded animate-pulse w-1/3" />
+            <div className="h-3 bg-muted rounded animate-pulse w-2/3" />
+            <div className="h-2.5 bg-muted rounded animate-pulse w-full" />
+            <div className="flex gap-3">
+              <div className="h-10 w-40 bg-muted rounded animate-pulse" />
+              <div className="h-10 w-32 bg-muted rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded-xl p-4 bg-muted/30 animate-pulse space-y-3">
+              <div className="h-4 bg-muted rounded w-1/2" />
+              <div className="h-3 bg-muted rounded w-3/4" />
+              <div className="h-3 bg-muted rounded w-1/3" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ─── No Course Found ──────────────────────────────────────
+  if (!course) {
+    return (
+      <div className="p-4 md:p-6 flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-3">
+          <BookOpen className="h-12 w-12 text-muted-foreground/30 mx-auto" />
+          <p className="text-muted-foreground">No course found. Please check back later.</p>
+        </div>
+      </div>
+    );
+  }
+
   // If a lesson is active, show the enhanced Video Player
   if (activeLesson) {
     return (
-      <div className="p-4 md:p-6">
-        <VideoPlayer
-          title={activeLesson.title}
-          lesson={activeLesson}
-          moduleName={activeLessonModuleName}
-          nextLessons={getNextLessons()}
-          onMarkComplete={handleMarkComplete}
-          onNextLesson={(lessonId) => {
-            const found = allLessons.find(l => l.id === lessonId);
-            if (found) handleLessonClick(found);
-          }}
-          onBack={() => setActiveLesson(null)}
-          isCompleted={lessonProgressState[activeLesson.id] === 'completed'}
-          initialPosition={resumePositions[activeLesson.id] || 0}
-          chapters={demoChapters}
-          onProgress={(progress, currentTime) => {
-            resumePositions[activeLesson.id] = currentTime;
+      <>
+        <div className="p-4 md:p-6">
+          <VideoPlayer
+            title={activeLesson.title}
+            lesson={activeLesson}
+            moduleName={activeLessonModuleName}
+            nextLessons={getNextLessons()}
+            onMarkComplete={handleMarkComplete}
+            onNextLesson={(lessonId) => {
+              const found = allLessons.find(l => l.id === lessonId);
+              if (found) handleLessonClick(found);
+            }}
+            onBack={() => setActiveLesson(null)}
+            isCompleted={lessonProgressState[activeLesson.id] === 'completed'}
+            initialPosition={resumePositions[activeLesson.id] || 0}
+            chapters={demoChapters}
+            onProgress={(progress, currentTime) => {
+              // Periodically save progress to API (every ~30 seconds of playback)
+              if (userId && Math.floor(currentTime) % 30 === 0 && currentTime > 0) {
+                updateProgress.mutate({
+                  userId,
+                  lessonId: activeLesson.id,
+                  courseId: course?.id,
+                  status: 'in_progress',
+                  progressPercent: Math.round(progress),
+                  resumePosition: currentTime,
+                });
+              }
+            }}
+          />
+        </div>
+        <ConfirmDialog
+          open={showUnenrollConfirm}
+          onOpenChange={setShowUnenrollConfirm}
+          title="Unenroll from Course"
+          description="Are you sure you want to unenroll? Your progress will be saved, but you will lose access to the course content. This action can be undone by re-enrolling."
+          confirmLabel="Unenroll"
+          variant="destructive"
+          onConfirm={() => {
+            // Unenroll logic would go here
+            setShowUnenrollConfirm(false);
           }}
         />
-      </div>
+      </>
     );
   }
 
@@ -2697,19 +2848,19 @@ export function LearnerCourse() {
             <div className="space-y-2 mb-4">
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium text-foreground">Your Progress</span>
-                <span className="font-semibold text-emerald-600">{enrollment.progress}%</span>
+                <span className="font-semibold text-emerald-600">{enrollmentProgress}%</span>
               </div>
               <div className="h-2.5 bg-muted rounded-full overflow-hidden">
                 <motion.div
                   className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400"
                   initial={{ width: 0 }}
-                  animate={{ width: `${enrollment.progress}%` }}
+                  animate={{ width: `${enrollmentProgress}%` }}
                   transition={{ duration: 1, ease: 'easeOut' }}
                 />
               </div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 <span>{completedCount} of {totalLessons} lessons completed</span>
-                {enrollment.lastAccessedAt && (
+                {enrollment?.lastAccessedAt && (
                   <span>Last accessed {new Date(enrollment.lastAccessedAt).toLocaleDateString()}</span>
                 )}
               </div>
@@ -2717,14 +2868,31 @@ export function LearnerCourse() {
 
             {/* Action Buttons */}
             <div className="flex items-center gap-3">
-              <Button className="gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20 text-white">
-                <Play className="h-4 w-4" />
-                Continue Learning
-              </Button>
-              <Button variant="outline" className="gap-2">
-                <Award className="h-4 w-4" />
-                View Certificate
-              </Button>
+              {!enrollment ? (
+                <Button
+                  className="gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20 text-white"
+                  onClick={handleEnroll}
+                  disabled={enrollMutation.isPending}
+                >
+                  {enrollMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookOpen className="h-4 w-4" />}
+                  {enrollMutation.isPending ? 'Enrolling...' : 'Enroll Now'}
+                </Button>
+              ) : (
+                <>
+                  <Button className="gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20 text-white">
+                    <Play className="h-4 w-4" />
+                    Continue Learning
+                  </Button>
+                  <Button variant="outline" className="gap-2">
+                    <Award className="h-4 w-4" />
+                    View Certificate
+                  </Button>
+                  <Button variant="ghost" className="gap-2 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10" onClick={handleUnenroll}>
+                    <Trash2 className="h-4 w-4" />
+                    Unenroll
+                  </Button>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -2971,7 +3139,17 @@ export function LearnerCourse() {
                               compact
                               totalDuration={currentLesson.videoDuration || 300}
                               onProgress={(progress, currentTime) => {
-                                resumePositions[currentLesson.id] = currentTime;
+                                // Track progress for API persistence
+                                if (userId && Math.floor(currentTime) % 30 === 0 && currentTime > 0) {
+                                  updateProgress.mutate({
+                                    userId,
+                                    lessonId: currentLesson.id,
+                                    courseId: course?.id,
+                                    status: 'in_progress',
+                                    progressPercent: Math.round(progress),
+                                    resumePosition: currentTime,
+                                  });
+                                }
                               }}
                             />
                           </div>
@@ -3072,7 +3250,7 @@ export function LearnerCourse() {
                 animate="visible"
                 exit="exit"
               >
-                <ProgressTab events={timelineEvents} enrollmentProgress={enrollment.progress} />
+                <ProgressTab events={timelineEvents} enrollmentProgress={enrollmentProgress} />
               </motion.div>
             </AnimatePresence>
           </TabsContent>
@@ -3298,6 +3476,19 @@ export function LearnerCourse() {
           </TabsContent>
         </Tabs>
       </motion.div>
+
+      {/* ConfirmDialog for destructive actions */}
+      <ConfirmDialog
+        open={showUnenrollConfirm}
+        onOpenChange={setShowUnenrollConfirm}
+        title="Unenroll from Course"
+        description="Are you sure you want to unenroll? Your progress will be saved, but you will lose access to the course content. This action can be undone by re-enrolling."
+        confirmLabel="Unenroll"
+        variant="destructive"
+        onConfirm={() => {
+          setShowUnenrollConfirm(false);
+        }}
+      />
     </motion.div>
   );
 }

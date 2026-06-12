@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import bcrypt from 'bcryptjs';
 
 export async function POST() {
   try {
+    // Hash passwords for demo users
+    const adminPasswordHash = await bcrypt.hash('demo123', 12);
+    const learnerPasswordHash = await bcrypt.hash('demo123', 12);
+
     // Create demo tenant
     const tenant = await db.tenant.upsert({
       where: { slug: 'nextgen-academy' },
@@ -33,6 +38,49 @@ export async function POST() {
         timezone: 'America/New_York',
         streakDays: 14,
         totalPoints: 2850,
+      },
+    });
+
+    // Create demo learner user
+    const learner = await db.user.upsert({
+      where: { id: 'demo-learner-1' },
+      update: {},
+      create: {
+        id: 'demo-learner-1',
+        tenantId: tenant.id,
+        email: 'learner@example.com',
+        name: 'Alex Johnson',
+        role: 'learner',
+        bio: 'Passionate lifelong learner',
+        timezone: 'America/New_York',
+        streakDays: 7,
+        totalPoints: 1250,
+      },
+    });
+
+    // Create or update Account entries for credentials auth
+    // Store hashed password in access_token field for bcrypt verification
+    await db.account.upsert({
+      where: { provider_providerAccountId: { provider: 'credentials', providerAccountId: admin.id } },
+      update: { access_token: adminPasswordHash },
+      create: {
+        userId: admin.id,
+        type: 'credentials',
+        provider: 'credentials',
+        providerAccountId: admin.id,
+        access_token: adminPasswordHash,
+      },
+    });
+
+    await db.account.upsert({
+      where: { provider_providerAccountId: { provider: 'credentials', providerAccountId: learner.id } },
+      update: { access_token: learnerPasswordHash },
+      create: {
+        userId: learner.id,
+        type: 'credentials',
+        provider: 'credentials',
+        providerAccountId: learner.id,
+        access_token: learnerPasswordHash,
       },
     });
 
@@ -95,16 +143,155 @@ export async function POST() {
         totalRatings: 142,
         completionRate: 71,
       },
+      {
+        title: 'Python for Data Science',
+        slug: 'python-data-science',
+        description: 'Learn Python fundamentals for data analysis, machine learning, and scientific computing.',
+        category: 'Data Science',
+        level: 'beginner',
+        durationHours: 30,
+        price: 99,
+        compareAtPrice: 149,
+        isFeatured: false,
+        enrollmentCount: 1056,
+        avgRating: 4.5,
+        totalRatings: 478,
+        completionRate: 68,
+      },
+      {
+        title: 'UX Design Fundamentals',
+        slug: 'ux-design-fundamentals',
+        description: 'Master user experience design principles, wireframing, prototyping, and usability testing.',
+        category: 'Design',
+        level: 'beginner',
+        durationHours: 18,
+        price: 79,
+        compareAtPrice: 129,
+        isFeatured: false,
+        enrollmentCount: 567,
+        avgRating: 4.4,
+        totalRatings: 223,
+        completionRate: 74,
+      },
     ];
 
+    const courses: { id: string }[] = [];
     for (const course of courseData) {
-      await db.course.upsert({
+      const created = await db.course.upsert({
         where: { tenantId_slug: { tenantId: tenant.id, slug: course.slug } },
         update: {},
         create: {
           tenantId: tenant.id,
           ...course,
           isPublished: true,
+        },
+      });
+      courses.push(created);
+    }
+
+    // Create modules and lessons for the first course
+    if (courses[0]) {
+      const module1 = await db.module.upsert({
+        where: { id: 'mod-1-1' },
+        update: {},
+        create: {
+          id: 'mod-1-1',
+          courseId: courses[0].id,
+          title: 'Getting Started with React 19',
+          description: 'Introduction to React 19 and its new features',
+          orderIndex: 0,
+          isPublished: true,
+        },
+      });
+
+      const module2 = await db.module.upsert({
+        where: { id: 'mod-1-2' },
+        update: {},
+        create: {
+          id: 'mod-1-2',
+          courseId: courses[0].id,
+          title: 'Server Components Deep Dive',
+          description: 'Understanding React Server Components architecture',
+          orderIndex: 1,
+          isPublished: true,
+        },
+      });
+
+      const lessons = [
+        { id: 'lesson-1-1', moduleId: module1.id, title: 'Welcome to React 19', slug: 'welcome-react-19', contentType: 'video', orderIndex: 0, isPreview: true, isPublished: true },
+        { id: 'lesson-1-2', moduleId: module1.id, title: 'Setting Up Your Environment', slug: 'setup-environment', contentType: 'video', orderIndex: 1, isPreview: true, isPublished: true },
+        { id: 'lesson-1-3', moduleId: module1.id, title: 'JSX & Component Basics', slug: 'jsx-component-basics', contentType: 'video', orderIndex: 2, isPublished: true },
+        { id: 'lesson-2-1', moduleId: module2.id, title: 'What Are Server Components?', slug: 'what-are-server-components', contentType: 'video', orderIndex: 0, isPublished: true },
+        { id: 'lesson-2-2', moduleId: module2.id, title: 'Server vs Client Components', slug: 'server-vs-client-components', contentType: 'text', orderIndex: 1, isPublished: true },
+      ];
+
+      for (const lesson of lessons) {
+        await db.lesson.upsert({
+          where: { id: lesson.id },
+          update: {},
+          create: lesson,
+        });
+      }
+
+      // Create lesson progress for learner
+      const progressData = [
+        { userId: learner.id, lessonId: 'lesson-1-1', status: 'completed', progressPercent: 100, timeSpent: 1200 },
+        { userId: learner.id, lessonId: 'lesson-1-2', status: 'completed', progressPercent: 100, timeSpent: 1800 },
+        { userId: learner.id, lessonId: 'lesson-1-3', status: 'in_progress', progressPercent: 45, timeSpent: 600, lastPosition: 320 },
+        { userId: learner.id, lessonId: 'lesson-2-1', status: 'not_started', progressPercent: 0, timeSpent: 0 },
+      ];
+
+      for (const p of progressData) {
+        await db.lessonProgress.upsert({
+          where: { userId_lessonId: { userId: p.userId, lessonId: p.lessonId } },
+          update: {},
+          create: p,
+        });
+      }
+    }
+
+    // Create enrollments for the learner
+    if (courses[0]) {
+      await db.enrollment.upsert({
+        where: { userId_courseId: { userId: learner.id, courseId: courses[0].id } },
+        update: {},
+        create: {
+          userId: learner.id,
+          courseId: courses[0].id,
+          tenantId: tenant.id,
+          status: 'active',
+          progress: 35,
+          lastAccessedAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    if (courses[1]) {
+      await db.enrollment.upsert({
+        where: { userId_courseId: { userId: learner.id, courseId: courses[1].id } },
+        update: {},
+        create: {
+          userId: learner.id,
+          courseId: courses[1].id,
+          tenantId: tenant.id,
+          status: 'active',
+          progress: 12,
+          lastAccessedAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    if (courses[3]) {
+      await db.enrollment.upsert({
+        where: { userId_courseId: { userId: learner.id, courseId: courses[3].id } },
+        update: {},
+        create: {
+          userId: learner.id,
+          courseId: courses[3].id,
+          tenantId: tenant.id,
+          status: 'completed',
+          progress: 100,
+          completedAt: new Date(Date.now() - 86400000 * 7).toISOString(),
         },
       });
     }
@@ -146,25 +333,34 @@ export async function POST() {
     for (let i = 0; i < 30; i++) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      
-      await db.dailyMetric.upsert({
-        where: { tenantId_date: { tenantId: tenant.id, date: dateStr } },
-        update: {},
-        create: {
-          tenantId: tenant.id,
-          date: dateStr,
-          activeUsers: Math.floor(800 + Math.random() * 600),
-          newEnrollments: Math.floor(5 + Math.random() * 20),
-          completions: Math.floor(3 + Math.random() * 15),
-          revenue: Math.floor(1200 + Math.random() * 800),
-          quizAttempts: Math.floor(20 + Math.random() * 50),
-          avgSessionDuration: Math.floor(15 + Math.random() * 30),
-        },
-      });
+      date.setHours(0, 0, 0, 0);
+
+      // Use date as id-based approach since date is DateTime in schema
+      try {
+        await db.dailyMetric.create({
+          data: {
+            tenantId: tenant.id,
+            date: date,
+            activeUsers: Math.floor(800 + Math.random() * 600),
+            newEnrollments: Math.floor(5 + Math.random() * 20),
+            completions: Math.floor(3 + Math.random() * 15),
+            revenue: Math.floor(1200 + Math.random() * 800),
+            quizAttempts: Math.floor(20 + Math.random() * 50),
+            avgSessionDuration: Math.floor(15 + Math.random() * 30),
+          },
+        });
+      } catch {
+        // Skip if already exists (unique constraint)
+      }
     }
 
-    return NextResponse.json({ success: true, message: 'Database seeded successfully', tenantId: tenant.id });
+    return NextResponse.json({
+      success: true,
+      message: 'Database seeded successfully',
+      tenantId: tenant.id,
+      users: { admin: admin.id, learner: learner.id },
+      note: 'Demo accounts: admin@nextgen-lms.com / learner@example.com (password: demo123)',
+    });
   } catch (error) {
     console.error('Seed error:', error);
     return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
