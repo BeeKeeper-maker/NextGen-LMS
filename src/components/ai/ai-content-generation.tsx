@@ -35,6 +35,7 @@ import {
   GraduationCap,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAppStore } from '@/store/app-store';
 
 // ============================================================
 // Types
@@ -196,8 +197,32 @@ export function AIContentGeneration() {
   };
 
   const handleUseContent = () => {
-    toast.success('Content ready to use in Course Builder!', {
-      description: 'The generated content has been prepared for your course.',
+    const contentToUse = isEditing ? editedContent : generatedContent || '';
+    const { setView, setSelectedCourseId } = useAppStore.getState();
+
+    // Save the generated content to localStorage for pre-populating forms
+    try {
+      localStorage.setItem('nextgen-lms-ai-generated-content', JSON.stringify({
+        type: selectedType,
+        content: contentToUse,
+        topic,
+        timestamp: new Date().toISOString(),
+      }));
+    } catch {
+      // Ignore storage errors
+    }
+
+    // Navigate to the relevant admin view based on content type
+    if (selectedType === 'outline' || selectedType === 'transcript') {
+      setView('admin-courses');
+    } else if (selectedType === 'quiz' || selectedType === 'assessment') {
+      setView('admin-assessments');
+    } else if (selectedType === 'email') {
+      setView('admin-courses');
+    }
+
+    toast.success('Content ready to use!', {
+      description: `Navigating to ${selectedType === 'quiz' || selectedType === 'assessment' ? 'Assessment Builder' : 'Course Builder'}. Your generated content has been saved and will be pre-populated.`,
     });
   };
 

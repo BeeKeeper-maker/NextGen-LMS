@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -152,6 +152,7 @@ import { cn } from '@/lib/utils';
 import { validateFields, required, minLength, maxLength, numeric, min } from '@/lib/validations';
 import { useAppStore } from '@/store/app-store';
 import { slugify } from '@/lib/slugify';
+import { toast } from 'sonner';
 import {
   useCourses,
   useCreateCourse,
@@ -1386,13 +1387,24 @@ function VisualCourseBuilderTab() {
     [selectedCourseId, courses]
   );
 
-  // Auto-save simulation
+  // Auto-save: actually save changes to the API
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
-    const interval = setInterval(() => {
-      setLastSaved(`${Math.floor(Math.random() * 5) + 1} min ago`);
-    }, 60000);
-    return () => clearInterval(interval);
-  }, []);
+    // Clear any existing timer
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    // Set a new timer to save after 30 seconds of inactivity
+    autoSaveTimerRef.current = setTimeout(() => {
+      if (selectedCourseId && courses.length > 0) {
+        updateCourseMutation.mutate(
+          { id: selectedCourseId, title: courseTitle, isPublished: isCoursePublished },
+          { onSuccess: () => setLastSaved('just now') }
+        );
+      }
+    }, 30000);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [selectedCourseId, courseTitle, isCoursePublished, courses.length]);
 
   // Sync modules when course changes
   const handleCourseChange = useCallback((courseId: string) => {
@@ -3079,10 +3091,41 @@ function EnhancedCourseSettingsDialog({
             {/* Thumbnail upload area */}
             <div className="grid gap-2">
               <Label>Course Thumbnail</Label>
-              <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors cursor-pointer">
-                <div className="h-20 w-28 mx-auto bg-muted/50 rounded-lg flex items-center justify-center mb-3">
-                  <ImageIcon className="h-8 w-8 text-muted-foreground/40" />
-                </div>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                id="thumbnail-upload"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (file.size > 2 * 1024 * 1024) {
+                    toast.error('File too large', { description: 'Thumbnail must be under 2MB.' });
+                    return;
+                  }
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    const dataUrl = ev.target?.result as string;
+                    updateCourseMutation.mutate(
+                      { id: course.id, thumbnailUrl: dataUrl },
+                      { onSuccess: () => toast.success('Thumbnail uploaded!') }
+                    );
+                  };
+                  reader.readAsDataURL(file);
+                  e.target.value = '';
+                }}
+              />
+              <div
+                className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors cursor-pointer"
+                onClick={() => document.getElementById('thumbnail-upload')?.click()}
+              >
+                {course.thumbnailUrl ? (
+                  <img src={course.thumbnailUrl} alt="Thumbnail preview" className="h-20 w-28 mx-auto rounded-lg object-cover mb-3" />
+                ) : (
+                  <div className="h-20 w-28 mx-auto bg-muted/50 rounded-lg flex items-center justify-center mb-3">
+                    <ImageIcon className="h-8 w-8 text-muted-foreground/40" />
+                  </div>
+                )}
                 <p className="text-sm text-muted-foreground">Click or drag to upload thumbnail</p>
                 <p className="text-xs text-muted-foreground mt-1">Recommended: 1280×720, max 2MB</p>
               </div>

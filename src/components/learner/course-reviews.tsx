@@ -87,8 +87,13 @@ function mapApiReviewToCourseReview(apiReview: any, currentUserId?: string): Cou
     title: apiReview.content ? apiReview.content.split(/[.!?]/)[0].slice(0, 80) : 'Review',
     content: apiReview.content || '',
     date: apiReview.createdAt,
-    helpfulCount: 0,
-    isHelpful: false,
+    helpfulCount: apiReview.helpfulCount || 0,
+    isHelpful: (() => {
+      try {
+        const stored = localStorage.getItem('nextgen-lms-review-helpful');
+        return stored ? new Set(JSON.parse(stored)).has(apiReview.id) : false;
+      } catch { return false; }
+    })(),
     courseProgress: Math.round((author._count?.enrollments || 0) * 20),
     isVerifiedPurchase: (author._count?.enrollments || 0) > 0,
     tags: [],
@@ -129,7 +134,7 @@ function AnimatedCounter({ value, decimals = 1 }: { value: number; decimals?: nu
   const [displayValue, setDisplayValue] = useState(0);
   const duration = 800;
 
-  useState(() => {
+  useEffect(() => {
     const startTime = Date.now();
     const animate = () => {
       const elapsed = Date.now() - startTime;
@@ -140,7 +145,7 @@ function AnimatedCounter({ value, decimals = 1 }: { value: number; decimals?: nu
       if (progress < 1) requestAnimationFrame(animate);
     };
     requestAnimationFrame(animate);
-  });
+  }, [value]);
 
   return <span>{displayValue.toFixed(decimals)}</span>;
 }
@@ -786,6 +791,14 @@ export function CourseReviews({
           : r
       )
     );
+    // Persist helpful state to localStorage
+    try {
+      const stored = localStorage.getItem('nextgen-lms-review-helpful');
+      const helpfulSet: Set<string> = stored ? new Set(JSON.parse(stored)) : new Set();
+      if (helpfulSet.has(id)) helpfulSet.delete(id);
+      else helpfulSet.add(id);
+      localStorage.setItem('nextgen-lms-review-helpful', JSON.stringify([...helpfulSet]));
+    } catch {}
   }, []);
 
   // Handle write/edit review submit

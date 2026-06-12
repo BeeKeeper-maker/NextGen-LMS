@@ -137,7 +137,7 @@ function mapApiPathToAvailablePath(apiPath: any): AvailablePath {
     courseCount: apiPath.courseCount || 0,
     enrolledCount: apiPath.enrolledCount || 0,
     estimatedDuration: apiPath.estimatedDuration || 0,
-    rating: 4.5, // Default rating since API doesn't provide this
+    rating: apiPath.avgRating || (apiPath.courses || []).reduce((acc: number, c: any) => acc + (c.avgRating || 0), 0) / Math.max(1, (apiPath.courses || []).length) || 4.5,
   };
 }
 
@@ -185,6 +185,7 @@ function ProgressRing({ progress, size = 48, strokeWidth = 4 }: { progress: numb
 }
 
 function RoadmapNode({ course, index, total }: { course: LearnerCourse; index: number; total: number }) {
+  const { setSelectedCourseId, setView } = useAppStore();
   const statusConfig = {
     completed: {
       bg: 'bg-emerald-100 dark:bg-emerald-900/50',
@@ -299,6 +300,10 @@ function RoadmapNode({ course, index, total }: { course: LearnerCourse; index: n
                   'shrink-0 h-7 text-xs gap-1',
                   course.status === 'current' && 'bg-amber-500 hover:bg-amber-600 text-white'
                 )}
+                onClick={() => {
+                  setSelectedCourseId(course.id);
+                  setView('learner-course');
+                }}
               >
                 {course.status === 'current' ? (
                   <><Play className="h-3 w-3" /> Continue</>
@@ -421,6 +426,7 @@ function AvailablePathCard({ path, onEnroll }: { path: AvailablePath; onEnroll: 
 }
 
 function PathDetailView({ path, onBack }: { path: LearnerPath; onBack: () => void }) {
+  const { setSelectedCourseId, setView } = useAppStore();
   const completedCourses = path.courses.filter((c) => c.status === 'completed').length;
   const currentCourse = path.courses.find((c) => c.status === 'current');
   const earnedMilestones = path.courses.filter((c) => c.milestone && c.status === 'completed');
@@ -475,7 +481,12 @@ function PathDetailView({ path, onBack }: { path: LearnerPath; onBack: () => voi
                   )}
                 </div>
               </div>
-              <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white gap-1">
+              <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white gap-1" onClick={() => {
+                if (currentCourse) {
+                  setSelectedCourseId(currentCourse.id);
+                  setView('learner-course');
+                }
+              }}>
                 <Play className="h-3.5 w-3.5" /> Resume
               </Button>
             </div>
@@ -569,8 +580,8 @@ function PathDetailView({ path, onBack }: { path: LearnerPath; onBack: () => voi
                 <div className="text-center p-4 bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950/30 dark:to-amber-900/20 rounded-xl">
                   <Award className="h-10 w-10 mx-auto text-amber-500 mb-2" />
                   <p className="text-sm font-semibold">Certificate Earned!</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">Full-Stack Web Developer</p>
-                  <Button variant="outline" size="sm" className="mt-3 h-7 text-xs gap-1">
+                  <p className="text-[10px] text-muted-foreground mt-1">{path.name}</p>
+                  <Button variant="outline" size="sm" className="mt-3 h-7 text-xs gap-1" onClick={() => setView('learner-achievements')}>
                     View Certificate
                   </Button>
                 </div>

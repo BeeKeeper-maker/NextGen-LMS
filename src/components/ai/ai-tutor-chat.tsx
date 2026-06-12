@@ -282,11 +282,16 @@ function usePersistentConversations(storageKey: string) {
 
 export function AITutorFloatingWidget() {
   const [isOpen, setIsOpen] = useState(false);
-  const { messages, setMessages } = usePersistentChat('nextgen-lms-floating-chat');
+  // Sync with full-page chat by using the same localStorage key
+  const { conversations, setConversations } = usePersistentConversations('nextgen-lms-ai-tutor');
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Use the first conversation for the floating widget
+  const activeConv = conversations.length > 0 ? conversations[0] : null;
+  const messages = activeConv?.messages || [];
 
   const scrollToBottom = useCallback(() => {
     if (scrollRef.current) {
@@ -304,6 +309,18 @@ export function AITutorFloatingWidget() {
     }
   }, [isOpen]);
 
+  const updateFirstConversation = useCallback((updater: (msgs: ChatMessage[]) => ChatMessage[]) => {
+    setConversations((prev) => {
+      if (prev.length === 0) {
+        const newMsgs = updater([WELCOME_MESSAGE]);
+        return [{ id: 'conv-1', title: 'Chat', messages: newMsgs, createdAt: new Date().toISOString() }];
+      }
+      return prev.map((conv, idx) =>
+        idx === 0 ? { ...conv, messages: updater(conv.messages) } : conv
+      );
+    });
+  }, [setConversations]);
+
   const sendMessage = useCallback(
     async (messageText?: string) => {
       const text = messageText || input.trim();
@@ -316,7 +333,7 @@ export function AITutorFloatingWidget() {
         timestamp: new Date().toISOString(),
       };
 
-      setMessages((prev) => [...prev, userMsg]);
+      updateFirstConversation((prev) => [...prev, userMsg]);
       setInput('');
       setIsLoading(true);
 
@@ -326,7 +343,7 @@ export function AITutorFloatingWidget() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             message: text,
-            sessionId: 'floating-chat',
+            sessionId: 'ai-tutor-synced',
           }),
         });
 
@@ -341,10 +358,10 @@ export function AITutorFloatingWidget() {
           timestamp: new Date().toISOString(),
         };
 
-        setMessages((prev) => [...prev, aiMsg]);
+        updateFirstConversation((prev) => [...prev, aiMsg]);
       } catch {
         toast.error('Failed to get AI response. Please try again.');
-        setMessages((prev) => [
+        updateFirstConversation((prev) => [
           ...prev,
           {
             id: `error-${Date.now()}`,
@@ -357,7 +374,7 @@ export function AITutorFloatingWidget() {
         setIsLoading(false);
       }
     },
-    [input, isLoading]
+    [input, isLoading, updateFirstConversation]
   );
 
   return (
@@ -530,7 +547,7 @@ export function AITutorFloatingWidget() {
 // Full-Page AI Tutor
 // ============================================================
 export function AITutorFullPage() {
-  const { conversations, setConversations } = usePersistentConversations('nextgen-lms-full-chat');
+  const { conversations, setConversations } = usePersistentConversations('nextgen-lms-ai-tutor');
   const [activeConvId, setActiveConvId] = useState('conv-1');
   const [confirmDeleteConv, setConfirmDeleteConv] = useState<string | null>(null);
   const [input, setInput] = useState('');

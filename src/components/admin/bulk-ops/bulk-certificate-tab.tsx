@@ -55,6 +55,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCourses, useCertificateAwards } from '@/hooks/use-data';
 import { useAppStore } from '@/store/app-store';
+import { toast } from 'sonner';
 
 interface BulkCertificateRecord {
   id: string;
@@ -142,7 +143,7 @@ export function BulkCertificateTab() {
       const matchesStatus = statusFilter === 'all' || cert.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
-  }, [searchQuery, statusFilter]);
+  }, [searchQuery, statusFilter, bulkCertificateRecords]);
 
   const toggleCertSelect = useCallback((id: string) => {
     setSelectedCertIds((prev) => {
@@ -151,7 +152,7 @@ export function BulkCertificateTab() {
       else next.add(id);
       return next;
     });
-  }, []);
+  }, [setSelectedCertIds]);
 
   const toggleAllCerts = useCallback(() => {
     if (selectedCertIds.size === filteredCerts.length) {
@@ -159,25 +160,61 @@ export function BulkCertificateTab() {
     } else {
       setSelectedCertIds(new Set(filteredCerts.map((c) => c.id)));
     }
-  }, [filteredCerts, selectedCertIds]);
+  }, [filteredCerts, selectedCertIds, setSelectedCertIds]);
 
-  const handleIssue = useCallback(() => {
+  const handleIssue = useCallback(async () => {
     setShowIssueConfirm(false);
     setIssueStep('processing');
     setIssueProgress(0);
-    const total = estimatedCount;
-    let processed = 0;
-    const interval = setInterval(() => {
-      processed++;
-      setIssueProgress(Math.round((processed / total) * 100));
-      if (processed >= total) {
-        clearInterval(interval);
-        setIssuedCount(Math.round(total * 0.95));
-        setIssueFailCount(total - Math.round(total * 0.95));
+
+    try {
+      // Call the real bulk-operations API
+      const response = await fetch('/api/bulk-operations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          operation: 'bulk-certificates-issue',
+          data: {
+            courseId: selectedCourseId,
+            templateId: selectedTemplateId,
+            criteria: recipientCriteria,
+            count: estimatedCount,
+            sendNotification,
+          },
+        }),
+      });
+      const result = await response.json();
+
+      // Animate progress
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+        progress += 8;
+        if (progress >= 100) {
+          progress = 100;
+          clearInterval(progressInterval);
+        }
+        setIssueProgress(progress);
+      }, 100);
+
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      if (result.success) {
+        setIssuedCount(result.issuedCount || 0);
+        setIssueFailCount(result.failCount || 0);
         setIssueStep('complete');
+      } else {
+        setIssuedCount(0);
+        setIssueFailCount(estimatedCount);
+        setIssueStep('complete');
+        toast.error('Certificate issuance failed', { description: result.error || 'Unknown error' });
       }
-    }, 150);
-  }, [estimatedCount]);
+    } catch (error) {
+      setIssuedCount(0);
+      setIssueFailCount(estimatedCount);
+      setIssueStep('complete');
+      toast.error('Certificate issuance failed', { description: 'Network error occurred.' });
+    }
+  }, [selectedCourseId, selectedTemplateId, recipientCriteria, estimatedCount, sendNotification]);
 
   const resetIssueForm = useCallback(() => {
     setSelectedCourseId('');
@@ -188,16 +225,40 @@ export function BulkCertificateTab() {
     setIssueProgress(0);
   }, []);
 
-  const handleBulkAction = useCallback((action: string) => {
+  const handleBulkAction = useCallback(async (action: string) => {
     setActionProgress(true);
     setActionComplete('');
-    setTimeout(() => {
-      setActionProgress(false);
-      setActionComplete(action);
-      setSelectedCertIds(new Set());
-      setTimeout(() => setActionComplete(''), 3000);
-    }, 1500);
-  }, []);
+
+    try {
+      let operation = '';
+      if (action === 'revoke') operation = 'bulk-certificates-revoke';
+      else if (action === 'resend') operation = 'bulk-certificates-resend';
+
+      if (operation && selectedCertIds.size > 0) {
+        const response = await fetch('/api/bulk-operations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            operation,
+            data: { certificateIds: Array.from(selectedCertIds) },
+          }),
+        });
+        const result = await response.json();
+        if (result.success) {
+          toast.success(result.message || `${action} completed successfully`);
+        } else {
+          toast.error(`${action} failed`, { description: result.error });
+        }
+      }
+    } catch {
+      toast.error(`${action} failed`, { description: 'Network error occurred.' });
+    }
+
+    setActionProgress(false);
+    setActionComplete(action);
+    setSelectedCertIds(new Set());
+    setTimeout(() => setActionComplete(''), 3000);
+  }, [selectedCertIds]);
 
   const exportCertificates = useCallback(() => {
     const headers = 'Name,Email,Course,Issued Date,Verification Code,Status\n';

@@ -1,0 +1,2002 @@
+     1→'use client';
+     2→
+     3→import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { useAppStore } from '@/store/app-store';
+     6→import {
+     7→  useCourse,
+     8→  useEnrollments,
+     9→  useLessonProgress,
+    10→  useUpdateProgress,
+    11→  useEnroll,
+    12→  useCourses,
+    13→  useCommunityPosts,
+    14→  useAddComment,
+    15→  useToggleReaction,
+    16→  useCommunityReviews,
+    17→  useLessonDiscussions,
+    18→  useCreateDiscussion,
+    19→  useAssessments,
+    20→  useQuizSubmissions,
+    21→} from '@/hooks/use-data';
+    22→import { validateFields, required, minLength } from '@/lib/validations';
+    23→import { apiDelete } from '@/lib/api';
+    24→import { toast } from 'sonner';
+    25→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    26→import { Button } from '@/components/ui/button';
+    27→import { Badge } from '@/components/ui/badge';
+    28→import { Progress } from '@/components/ui/progress';
+    29→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    30→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    31→import { Separator } from '@/components/ui/separator';
+    32→import { Input } from '@/components/ui/input';
+    33→import { Textarea } from '@/components/ui/textarea';
+    34→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+    35→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    36→import { VideoPlayer } from '@/components/shared/video-player';
+    37→import type { Chapter } from '@/components/shared/video-player';
+    38→import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+    39→import { AssessmentPlayer } from '@/components/learner/assessment-player';
+    40→import {
+    41→  Play,
+    42→  FileText,
+    43→  Headphones,
+    44→  Video,
+    45→  Monitor,
+    46→  Clock,
+    47→  Star,
+    48→  Users,
+    49→  ChevronDown,
+    50→  ChevronRight,
+    51→  CheckCircle2,
+    52→  Circle,
+    53→  Eye,
+    54→  MessageSquare,
+    55→  Download,
+    56→  ExternalLink,
+    57→  GitBranch,
+    58→  ThumbsUp,
+    59→  ThumbsDown,
+    60→  Send,
+    61→  BookOpen,
+    62→  Award,
+    63→  Search,
+    64→  Filter,
+    65→  Pin,
+    66→  Tag,
+    67→  Flame,
+    68→  TrendingUp,
+    69→  TrendingDown,
+    70→  Minus,
+    71→  BarChart3,
+    72→  Calendar,
+    73→  Zap,
+    74→  Target,
+    75→  Trophy,
+    76→  ArrowRight,
+    77→  Copy,
+    78→  Sparkles,
+    79→  StickyNote,
+    80→  Code2,
+    81→  HelpCircle,
+    82→  Bookmark,
+    83→  Edit3,
+    84→  Check,
+    85→  X,
+    86→  ChevronUp,
+    87→  MessageCircle,
+    88→  GraduationCap,
+    89→  Globe,
+    90→  Briefcase,
+    91→  Heart,
+    92→  Share2,
+    93→  MoreHorizontal,
+    94→  ArrowUpRight,
+    95→  Loader2,
+    96→  FileCode,
+    97→  Notebook,
+    98→  Timer,
+    99→  Activity,
+   100→  Milestone,
+   101→  MessageCircleQuestion,
+   102→  Plus,
+   103→  FileCheck,
+   104→  ClipboardCheck,
+   105→  RotateCcw,
+   106→  Bold,
+   107→  Italic,
+   108→  Link2,
+   109→  Trash2,
+   110→} from 'lucide-react';
+   111→import { cn } from '@/lib/utils';
+   112→import type { Lesson, Module } from '@/types';
+   113→
+   114→// ─── Content type icon mapping ─────────────────────────────
+   115→function ContentTypeIcon({ type, className }: { type: Lesson['contentType']; className?: string }) {
+   116→  switch (type) {
+   117→    case 'video':
+   118→      return <Video className={className} />;
+   119→    case 'text':
+   120→      return <FileText className={className} />;
+   121→    case 'audio':
+   122→      return <Headphones className={className} />;
+   123→    case 'document':
+   124→      return <FileText className={className} />;
+   125→    case 'live_session':
+   126→      return <Monitor className={className} />;
+   127→    default:
+   128→      return <FileText className={className} />;
+   129→  }
+   130→}
+   131→
+   132→// ─── Format duration ───────────────────────────────────────
+   133→function formatDuration(seconds?: number): string {
+   134→  if (!seconds) return '';
+   135→  const mins = Math.floor(seconds / 60);
+   136→  if (mins < 60) return `${mins} min`;
+   137→  const hours = Math.floor(mins / 60);
+   138→  const remainMins = mins % 60;
+   139→  return `${hours}h ${remainMins}m`;
+   140→}
+   141→
+   142→// ─── Level color mapping ───────────────────────────────────
+   143→function getLevelColor(level: string) {
+   144→  const colors: Record<string, string> = {
+   145→    beginner: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+   146→    intermediate: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+   147→    advanced: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+   148→    expert: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+   149→  };
+   150→  return colors[level] || 'bg-slate-100 text-slate-700';
+   151→}
+   152→
+   153→function getLevelAccent(level: string) {
+   154→  const accents: Record<string, string> = {
+   155→    beginner: 'from-emerald-600 to-emerald-800',
+   156→    intermediate: 'from-amber-600 to-amber-800',
+   157→    advanced: 'from-orange-600 to-orange-800',
+   158→    expert: 'from-red-600 to-red-800',
+   159→  };
+   160→  return accents[level] || 'from-slate-600 to-slate-800';
+   161→}
+   162→
+   163→// ─── LocalStorage Notes Hook ─────────────────────────────────
+   164→interface Note {
+   165→  id: string;
+   166→  lessonId: string;
+   167→  lessonTitle: string;
+   168→  content: string;
+   169→  category: 'personal' | 'study_guide' | 'code_snippet' | 'question';
+   170→  timestamp?: number;
+   171→  createdAt: string;
+   172→  updatedAt: string;
+   173→}
+   174→
+   175→function useLessonNotes(courseId: string | undefined) {
+   176→  const storageKey = `lms-notes-${courseId || 'default'}`;
+   177→
+   178→  const [notes, setNotes] = useState<Note[]>(() => {
+   179→    if (typeof window === 'undefined') return [];
+   180→    try {
+   181→      const stored = localStorage.getItem(storageKey);
+   182→      return stored ? JSON.parse(stored) : [];
+   183→    } catch {
+   184→      return [];
+   185→    }
+   186→  });
+   187→
+   188→  const persistNotes = useCallback((updated: Note[]) => {
+   189→    setNotes(updated);
+   190→    if (typeof window !== 'undefined') {
+   191→      try {
+   192→        localStorage.setItem(storageKey, JSON.stringify(updated));
+   193→      } catch {
+   194→        // ignore quota errors
+   195→      }
+   196→    }
+   197→  }, [storageKey]);
+   198→
+   199→  const addNote = useCallback((note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => {
+   200→    const newNote: Note = {
+   201→      ...note,
+   202→      id: `note-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+   203→      createdAt: new Date().toISOString(),
+   204→      updatedAt: new Date().toISOString(),
+   205→    };
+   206→    persistNotes([...notes, newNote]);
+   207→    return newNote;
+   208→  }, [notes, persistNotes]);
+   209→
+   210→  const updateNote = useCallback((id: string, updates: Partial<Note>) => {
+   211→    const updated = notes.map(n =>
+   212→      n.id === id ? { ...n, ...updates, updatedAt: new Date().toISOString() } : n
+   213→    );
+   214→    persistNotes(updated);
+   215→  }, [notes, persistNotes]);
+   216→
+   217→  const deleteNote = useCallback((id: string) => {
+   218→    persistNotes(notes.filter(n => n.id !== id));
+   219→  }, [notes, persistNotes]);
+   220→
+   221→  return { notes, addNote, updateNote, deleteNote };
+   222→}
+   223→
+   224→// ─── Animation variants ────────────────────────────────────
+   225→const containerVariants = {
+   226→  hidden: { opacity: 0 },
+   227→  visible: { opacity: 1, transition: { staggerChildren: 0.05 } },
+   228→};
+   229→
+   230→const itemVariants = {
+   231→  hidden: { opacity: 0, y: 12 },
+   232→  visible: { opacity: 1, y: 0, transition: { duration: 0.35 } },
+   233→};
+   234→
+   235→const tabContentVariants = {
+   236→  hidden: { opacity: 0, x: 10 },
+   237→  visible: { opacity: 1, x: 0, transition: { duration: 0.3 } },
+   238→  exit: { opacity: 0, x: -10, transition: { duration: 0.2 } },
+   239→};
+   240→
+   241→// ─── Glassmorphism card class ─────────────────────────────
+   242→const glassCard = 'backdrop-blur-xl bg-white/70 dark:bg-slate-900/70 border border-white/20 dark:border-slate-700/30';
+   243→
+   244→// ─── Note Category Config ──────────────────────────────────
+   245→const noteCategoryConfig: Record<Note['category'], { label: string; icon: React.ReactNode; color: string }> = {
+   246→  personal: { label: 'Personal', icon: <StickyNote className="h-3.5 w-3.5" />, color: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
+   247→  study_guide: { label: 'Study Guide', icon: <BookOpen className="h-3.5 w-3.5" />, color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+   248→  code_snippet: { label: 'Code Snippet', icon: <Code2 className="h-3.5 w-3.5" />, color: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
+   249→  question: { label: 'Question', icon: <HelpCircle className="h-3.5 w-3.5" />, color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+   250→};
+   251→
+   252→// ─── Time ago helper ──────────────────────────────────────
+   253→function timeAgo(dateStr: string): string {
+   254→  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+   255→  if (seconds < 60) return 'just now';
+   256→  const minutes = Math.floor(seconds / 60);
+   257→  if (minutes < 60) return `${minutes}m ago`;
+   258→  const hours = Math.floor(minutes / 60);
+   259→  if (hours < 24) return `${hours}h ago`;
+   260→  const days = Math.floor(hours / 24);
+   261→  if (days < 30) return `${days}d ago`;
+   262→  const months = Math.floor(days / 30);
+   263→  return `${months}mo ago`;
+   264→}
+   265→
+   266→// ─── Difficulty Meter Component ────────────────────────────
+   267→function DifficultyMeter({ level }: { level: string }) {
+   268→  const levelValues: Record<string, number> = {
+   269→    beginner: 25,
+   270→    intermediate: 50,
+   271→    advanced: 75,
+   272→    expert: 100,
+   273→  };
+   274→  const value = levelValues[level] || 25;
+   275→  const gradientClass = level === 'beginner' ? 'from-emerald-400 to-emerald-600'
+   276→    : level === 'intermediate' ? 'from-amber-400 to-amber-600'
+   277→    : level === 'advanced' ? 'from-orange-400 to-orange-600'
+   278→    : 'from-red-400 to-red-600';
+   279→
+   280→  return (
+   281→    <div className="space-y-1.5">
+   282→      <div className="flex items-center justify-between text-xs">
+   283→        <span className="text-muted-foreground">Difficulty</span>
+   284→        <span className={cn('font-semibold capitalize', getLevelColor(level).replace('bg-', 'text-').split(' ')[0])}>{level}</span>
+   285→      </div>
+   286→      <div className="h-2 rounded-full bg-muted overflow-hidden">
+   287→        <motion.div
+   288→          className={cn('h-full rounded-full bg-gradient-to-r', gradientClass)}
+   289→          initial={{ width: 0 }}
+   290→          animate={{ width: `${value}%` }}
+   291→          transition={{ duration: 1, ease: 'easeOut' }}
+   292→        />
+   293→      </div>
+   294→      <div className="flex justify-between text-[10px] text-muted-foreground">
+   295→        <span>Easy</span>
+   296→        <span>Expert</span>
+   297→      </div>
+   298→    </div>
+   299→  );
+   300→}
+   301→
+   302→// ─── Module Section Component (Enhanced) ───────────────────
+   303→function ModuleSection({ module: mod, moduleIndex, onLessonClick, progressMap }: { module: Module; moduleIndex: number; onLessonClick: (lesson: Lesson) => void; progressMap: Record<string, 'completed' | 'in_progress' | 'not_started'> }) {
+   304→  const [isOpen, setIsOpen] = useState(moduleIndex === 0);
+   305→  const lessons = mod.lessons || [];
+   306→  const completedLessons = lessons.filter(
+   307→    (l) => progressMap[l.id] === 'completed'
+   308→  ).length;
+   309→  const totalDuration = lessons.reduce((sum, l) => sum + (l.videoDuration || 0), 0);
+   310→  const moduleProgress = lessons.length > 0 ? Math.round((completedLessons / lessons.length) * 100) : 0;
+   311→
+   312→  return (
+   313→    <motion.div
+   314→      className={cn('rounded-xl overflow-hidden', glassCard)}
+   315→      whileHover={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
+   316→      transition={{ duration: 0.2 }}
+   317→    >
+   318→      {/* Module Header */}
+   319→      <button
+   320→        onClick={() => setIsOpen(!isOpen)}
+   321→        className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors text-left"
+   322→      >
+   323→        <div className="flex items-center gap-3">
+   324→          <motion.div
+   325→            animate={{ rotate: isOpen ? 0 : 0 }}
+   326→            transition={{ duration: 0.2 }}
+   327→            className="text-muted-foreground"
+   328→          >
+   329→            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+   330→          </motion.div>
+   331→          <div>
+   332→            <div className="flex items-center gap-2">
+   333→              <span className="text-xs font-medium text-muted-foreground">Module {moduleIndex + 1}</span>
+   334→              {mod.isPublished ? (
+   335→                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Published</Badge>
+   336→              ) : (
+   337→                <Badge variant="outline" className="text-[10px] px-1.5 py-0">Draft</Badge>
+   338→              )}
+   339→            </div>
+   340→            <h4 className="font-semibold text-foreground text-sm mt-0.5">{mod.title}</h4>
+   341→          </div>
+   342→        </div>
+   343→        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+   344→          <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {lessons.length} lessons</span>
+   345→          {totalDuration > 0 && <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatDuration(totalDuration)}</span>}
+   346→          {/* Module progress percentage */}
+   347→          <div className="flex items-center gap-2">
+   348→            <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+   349→              <div
+   350→                className={cn(
+   351→                  'h-full rounded-full transition-all duration-500',
+   352→                  moduleProgress === 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-400 to-amber-600'
+   353→                )}
+   354→                style={{ width: `${moduleProgress}%` }}
+   355→              />
+   356→            </div>
+   357→            <span className="text-[10px] font-medium">{moduleProgress}%</span>
+   358→          </div>
+   359→          {completedLessons > 0 && (
+   360→            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
+   361→              {completedLessons}/{lessons.length} done
+   362→            </Badge>
+   363→          )}
+   364→        </div>
+   365→      </button>
+   366→
+   367→      {/* Module Lessons */}
+   368→      <AnimatePresence>
+   369→        {isOpen && (
+   370→          <motion.div
+   371→            initial={{ height: 0, opacity: 0 }}
+   372→            animate={{ height: 'auto', opacity: 1 }}
+   373→            exit={{ height: 0, opacity: 0 }}
+   374→            transition={{ duration: 0.2 }}
+   375→            className="overflow-hidden"
+   376→          >
+   377→            <div className="border-t border-white/10 dark:border-slate-700/20 bg-muted/10">
+   378→              {lessons.map((lesson, lessonIdx) => {
+   379→                const status = progressMap[lesson.id] || 'not_started';
+   380→                const isNextUp = status === 'in_progress';
+   381→                return (
+   382→                  <div
+   383→                    key={lesson.id}
+   384→                    className={cn(
+   385→                      'flex items-center justify-between p-3 pl-12 hover:bg-muted/30 transition-all duration-200',
+   386→                      lessonIdx < lessons.length - 1 && 'border-b border-border/30',
+   387→                      isNextUp && 'bg-amber-50/50 dark:bg-amber-900/10 border-l-2 border-l-amber-500'
+   388→                    )}
+   389→                  >
+   390→                    <div className="flex items-center gap-3">
+   391→                      {/* Status Icon with animated fill */}
+   392→                      {status === 'completed' ? (
+   393→                        <motion.div
+   394→                          initial={{ scale: 0 }}
+   395→                          animate={{ scale: 1 }}
+   396→                          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+   397→                        >
+   398→                          <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+   399→                        </motion.div>
+   400→                      ) : status === 'in_progress' ? (
+   401→                        <div className="h-5 w-5 rounded-full border-2 border-amber-500 border-t-transparent animate-spin shrink-0" />
+   402→                      ) : (
+   403→                        <Circle className="h-5 w-5 text-muted-foreground/40 shrink-0" />
+   404→                      )}
+   405→
+   406→                      {/* Content Type Icon */}
+   407→                      <ContentTypeIcon type={lesson.contentType} className="h-4 w-4 text-muted-foreground shrink-0" />
+   408→
+   409→                      {/* Lesson Info */}
+   410→                      <div>
+   411→                        <div className="flex items-center gap-2">
+   412→                          <p className={cn(
+   413→                            'text-sm font-medium',
+   414→                            status === 'completed' ? 'text-muted-foreground line-through' : 'text-foreground'
+   415→                          )}>
+   416→                            {lesson.title}
+   417→                          </p>
+   418→                          {isNextUp && (
+   419→                            <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[9px] px-1.5 py-0 gap-0.5">
+   420→                              <Play className="h-2.5 w-2.5" /> Next Up
+   421→                            </Badge>
+   422→                          )}
+   423→                        </div>
+   424→                        <div className="flex items-center gap-2 mt-0.5">
+   425→                          {lesson.videoDuration && (
+   426→                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+   427→                              <Clock className="h-3 w-3" /> {formatDuration(lesson.videoDuration)}
+   428→                            </span>
+   429→                          )}
+   430→                          {lesson.isPreview && (
+   431→                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-0.5">
+   432→                              <Eye className="h-2.5 w-2.5" /> Preview
+   433→                            </Badge>
+   434→                          )}
+   435→                          {/* Download icon for downloadable resources */}
+   436→                          {lesson.resources && <Download className="h-3 w-3 text-muted-foreground/50 hover:text-muted-foreground cursor-pointer transition-colors" />}
+   437→                        </div>
+   438→                      </div>
+   439→                    </div>
+   440→
+   441→                    {/* Action Button */}
+   442→                    <div>
+   443→                      {status === 'completed' ? (
+   444→                        <div className="flex items-center gap-2">
+   445→                          <Badge variant="outline" className="text-emerald-600 border-emerald-500/30 dark:border-emerald-800 text-xs">
+   446→                            Completed
+   447→                          </Badge>
+   448→                          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-emerald-600 hover:text-emerald-700" onClick={() => onLessonClick(lesson)}>
+   449→                            <Play className="h-3 w-3" /> Rewatch
+   450→                          </Button>
+   451→                        </div>
+   452→                      ) : status === 'in_progress' ? (
+   453→                        <Button size="sm" className="h-8 text-xs gap-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-md shadow-amber-500/20" onClick={() => onLessonClick(lesson)}>
+   454→                          <Play className="h-3 w-3" fill="currentColor" /> Resume
+   455→                        </Button>
+   456→                      ) : lesson.isPreview ? (
+   457→                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onLessonClick(lesson)}>
+   458→                          <Play className="h-3 w-3" /> Preview
+   459→                        </Button>
+   460→                      ) : (
+   461→                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onLessonClick(lesson)}>
+   462→                          <Play className="h-3 w-3" /> Start
+   463→                        </Button>
+   464→                      )}
+   465→                    </div>
+   466→                  </div>
+   467→                );
+   468→              })}
+   469→            </div>
+   470→          </motion.div>
+   471→        )}
+   472→      </AnimatePresence>
+   473→    </motion.div>
+   474→  );
+   475→}
+   476→
+   477→// ─── Discussion Q&A Tab ────────────────────────────────────
+   478→function DiscussionTab({ courseId, userId }: { courseId: string; userId: string }) {
+   479→  const { data: discussionsData, isLoading } = useLessonDiscussions({ courseId });
+   480→  const createDiscussion = useCreateDiscussion();
+   481→
+   482→  const [sortBy, setSortBy] = useState<'recent' | 'upvoted' | 'unanswered'>('recent');
+   483→  const [searchQuery, setSearchQuery] = useState('');
+   484→  const [expandedQuestion, setExpandedQuestion] = useState<string | null>(null);
+   485→  const [showAskForm, setShowAskForm] = useState(false);
+   486→  const [askTitle, setAskTitle] = useState('');
+   487→  const [askContent, setAskContent] = useState('');
+   488→  const [replyContent, setReplyContent] = useState('');
+   489→  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+   490→  const [discussionErrors, setDiscussionErrors] = useState<Record<string, string>>({});
+   491→
+   492→  const discussions = discussionsData?.discussions || [];
+   493→
+   494→  // Separate top-level questions from replies & build reply map
+   495→  const { topLevelDiscussions, repliesMap } = useMemo(() => {
+   496→    const top: any[] = [];
+   497→    const map: Record<string, any[]> = {};
+   498→    discussions.forEach((d: any) => {
+   499→      if (d.parentId) {
+   500→        if (!map[d.parentId]) map[d.parentId] = [];
+   501→        map[d.parentId].push(d);
+   502→      } else {
+   503→        top.push(d);
+   504→      }
+   505→    });
+   506→    return { topLevelDiscussions: top, repliesMap: map };
+   507→  }, [discussions]);
+   508→
+   509→  const unansweredCount = topLevelDiscussions.filter((q: any) => !(repliesMap[q.id]?.length > 0)).length;
+   510→
+   511→  const sortedQuestions = [...topLevelDiscussions].sort((a: any, b: any) => {
+   512→    if (sortBy === 'recent') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+   513→    if (sortBy === 'upvoted') return 0;
+   514→    if (sortBy === 'unanswered') {
+   515→      const aReplies = repliesMap[a.id]?.length || 0;
+   516→      const bReplies = repliesMap[b.id]?.length || 0;
+   517→      return aReplies === bReplies ? 0 : aReplies > bReplies ? 1 : -1;
+   518→    }
+   519→    return 0;
+   520→  });
+   521→
+   522→  const filteredQuestions = sortedQuestions.filter((q: any) =>
+   523→    q.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+   524→    (q.lesson?.title || '').toLowerCase().includes(searchQuery.toLowerCase())
+   525→  );
+   526→
+   527→  const handlePostQuestion = () => {
+   528→    const errs = validateFields({
+   529→      askContent: [required(askContent, 'Content'), minLength(askContent, 5, 'Content')],
+   530→    });
+   531→    setDiscussionErrors(errs);
+   532→    if (Object.keys(errs).length > 0) return;
+   533→    createDiscussion.mutate({
+   534→      lessonId: discussions[0]?.lessonId || '',
+   535→      userId,
+   536→      content: askTitle ? `**${askTitle}**\n\n${askContent}` : askContent,
+   537→    }, {
+   538→      onSuccess: () => {
+   539→        setAskTitle('');
+   540→        setAskContent('');
+   541→        setShowAskForm(false);
+   542→        setDiscussionErrors({});
+   543→      },
+   544→    });
+   545→  };
+   546→
+   547→  const handleReply = (parentId: string) => {
+   548→    const errs = validateFields({
+   549→      replyContent: [required(replyContent, 'Reply'), minLength(replyContent, 5, 'Reply')],
+   550→    });
+   551→    setDiscussionErrors(errs);
+   552→    if (Object.keys(errs).length > 0) return;
+   553→    const parent = discussions.find((d: any) => d.id === parentId);
+   554→    createDiscussion.mutate({
+   555→      lessonId: parent?.lessonId || '',
+   556→      userId,
+   557→      content: replyContent,
+   558→      parentId,
+   559→    }, {
+   560→      onSuccess: () => {
+   561→        setReplyContent('');
+   562→        setReplyingTo(null);
+   563→        setDiscussionErrors({});
+   564→      },
+   565→    });
+   566→  };
+   567→
+   568→  if (isLoading) {
+   569→    return (
+   570→      <div className="space-y-3">
+   571→        {Array.from({ length: 3 }).map((_, i) => (
+   572→          <div key={i} className="rounded-xl p-4 bg-muted/30 animate-pulse space-y-3">
+   573→            <div className="h-4 bg-muted rounded w-1/2" />
+   574→            <div className="h-3 bg-muted rounded w-3/4" />
+   575→            <div className="h-3 bg-muted rounded w-1/3" />
+   576→          </div>
+   577→        ))}
+   578→      </div>
+   579→    );
+   580→  }
+   581→
+   582→  return (
+   583→    <div className="space-y-4">
+   584→      {/* Header */}
+   585→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+   586→        <div>
+   587→          <div className="flex items-center gap-2">
+   588→            <h3 className="font-semibold text-foreground">Lesson Discussions</h3>
+   589→            {unansweredCount > 0 && (
+   590→              <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px]">
+   591→                {unansweredCount} unanswered
+   592→              </Badge>
+   593→            )}
+   594→          </div>
+   595→          <p className="text-sm text-muted-foreground">Ask questions and share insights with fellow learners</p>
+   596→        </div>
+   597→        <Button size="sm" className="gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20" onClick={() => setShowAskForm(!showAskForm)}>
+   598→          <Send className="h-3.5 w-3.5" />
+   599→          Ask a Question
+   600→        </Button>
+   601→      </div>
+   602→
+   603→      {/* Search and Sort */}
+   604→      <div className="flex flex-col sm:flex-row gap-3">
+   605→        <div className="relative flex-1">
+   606→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   607→          <Input
+   608→            placeholder="Search discussions..."
+   609→            value={searchQuery}
+   610→            onChange={(e) => setSearchQuery(e.target.value)}
+   611→            className="pl-9 h-9"
+   612→          />
+   613→        </div>
+   614→        <div className="flex gap-1.5">
+   615→          {[
+   616→            { key: 'recent' as const, label: 'Most Recent' },
+   617→            { key: 'upvoted' as const, label: 'Most Upvoted' },
+   618→            { key: 'unanswered' as const, label: 'Unanswered' },
+   619→          ].map((opt) => (
+   620→            <Button
+   621→              key={opt.key}
+   622→              size="sm"
+   623→              variant={sortBy === opt.key ? 'default' : 'outline'}
+   624→              className={cn('text-xs h-9', sortBy === opt.key && 'bg-gradient-to-r from-slate-700 to-slate-800 dark:from-slate-600 dark:to-slate-700')}
+   625→              onClick={() => setSortBy(opt.key)}
+   626→            >
+   627→              {opt.label}
+   628→            </Button>
+   629→          ))}
+   630→        </div>
+   631→      </div>
+   632→
+   633→      {/* Ask Question Form */}
+   634→      <AnimatePresence>
+   635→        {showAskForm && (
+   636→          <motion.div
+   637→            initial={{ height: 0, opacity: 0 }}
+   638→            animate={{ height: 'auto', opacity: 1 }}
+   639→            exit={{ height: 0, opacity: 0 }}
+   640→            transition={{ duration: 0.2 }}
+   641→            className="overflow-hidden"
+   642→          >
+   643→            <Card className={cn('border-emerald-200 dark:border-emerald-800/50', glassCard)}>
+   644→              <CardContent className="p-4 space-y-3">
+   645→                <Input
+   646→                  placeholder="What's your question? (optional title)"
+   647→                  value={askTitle}
+   648→                  onChange={(e) => setAskTitle(e.target.value)}
+   649→                  className="font-medium"
+   650→                />
+   651→                <Textarea
+   652→                  placeholder="Provide more details about your question... (Supports **bold**, *italic*, `code`)"
+   653→                  value={askContent}
+   654→                  onChange={(e) => { setAskContent(e.target.value); if (discussionErrors.askContent) setDiscussionErrors({}); }}
+   655→                  rows={4}
+   656→                  className={`resize-none ${discussionErrors.askContent ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+   657→                />
+   658→                {discussionErrors.askContent && <p className="text-sm text-destructive mt-1">{discussionErrors.askContent}</p>}
+   659→                <div className="flex items-center justify-between">
+   660→                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   661→                    <Tag className="h-3 w-3" />
+   662→                    <span>Supports Markdown formatting</span>
+   663→                  </div>
+   664→                  <div className="flex items-center gap-2">
+   665→                    <Button size="sm" variant="outline" onClick={() => setShowAskForm(false)}>Cancel</Button>
+   666→                    <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" onClick={handlePostQuestion} disabled={createDiscussion.isPending}>
+   667→                      {createDiscussion.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} Post Question
+   668→                    </Button>
+   669→                  </div>
+   670→                </div>
+   671→              </CardContent>
+   672→            </Card>
+   673→          </motion.div>
+   674→        )}
+   675→      </AnimatePresence>
+   676→
+   677→      {/* Questions List */}
+   678→      <div className="space-y-3">
+   679→        <AnimatePresence mode="popLayout">
+   680→          {filteredQuestions.map((question: any) => {
+   681→            const qReplies = repliesMap[question.id] || [];
+   682→            const isAnswered = qReplies.length > 0;
+   683→            return (
+   684→              <motion.div
+   685→                key={question.id}
+   686→                layout
+   687→                initial={{ opacity: 0, y: 10 }}
+   688→                animate={{ opacity: 1, y: 0 }}
+   689→                exit={{ opacity: 0, y: -10 }}
+   690→              >
+   691→                <Card className={cn(
+   692→                  'hover:shadow-md transition-all duration-200 cursor-pointer',
+   693→                  glassCard,
+   694→                  isAnswered && 'border-emerald-200 dark:border-emerald-800/40'
+   695→                )}>
+   696→                  <CardContent className="p-4">
+   697→                    <div className="flex items-start gap-3">
+   698→                      {/* Vote column */}
+   699→                      <div className="flex flex-col items-center gap-1 pt-1">
+   700→                        <button className="p-1 rounded hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+   701→                          <ChevronUp className="h-4 w-4" />
+   702→                        </button>
+   703→                        <span className="text-sm font-semibold text-foreground">{qReplies.length}</span>
+   704→                        <button className="p-1 rounded hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+   705→                          <ChevronDown className="h-4 w-4" />
+   706→                        </button>
+   707→                      </div>
+   708→
+   709→                      {/* Content */}
+   710→                      <div className="flex-1 min-w-0" onClick={() => setExpandedQuestion(expandedQuestion === question.id ? null : question.id)}>
+   711→                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+   712→                          {isAnswered && (
+   713→                            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] gap-0.5">
+   714→                              <CheckCircle2 className="h-3 w-3" /> Answered
+   715→                            </Badge>
+   716→                          )}
+   717→                          {question.lesson?.title && (
+   718→                            <Badge variant="outline" className="text-[10px] gap-0.5">
+   719→                              <BookOpen className="h-2.5 w-2.5" /> {question.lesson.title}
+   720→                            </Badge>
+   721→                          )}
+   722→                          {question.isPinned && (
+   723→                            <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] gap-0.5">
+   724→                              <Pin className="h-2.5 w-2.5" /> Pinned
+   725→                            </Badge>
+   726→                          )}
+   727→                        </div>
+   728→                        <p className="text-sm text-muted-foreground line-clamp-3">{question.content}</p>
+   729→                        <div className="flex items-center gap-3 mt-2">
+   730→                          <span className="text-xs text-muted-foreground">· {timeAgo(question.createdAt)}</span>
+   731→                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+   732→                            <MessageCircle className="h-3 w-3" /> {qReplies.length}
+   733→                          </span>
+   734→                        </div>
+   735→                      </div>
+   736→                    </div>
+   737→
+   738→                    {/* Expanded Replies */}
+   739→                    <AnimatePresence>
+   740→                      {expandedQuestion === question.id && (
+   741→                        <motion.div
+   742→                          initial={{ height: 0, opacity: 0 }}
+   743→                          animate={{ height: 'auto', opacity: 1 }}
+   744→                          exit={{ height: 0, opacity: 0 }}
+   745→                          transition={{ duration: 0.2 }}
+   746→                          className="overflow-hidden"
+   747→                        >
+   748→                          <div className="mt-4 pt-4 border-t border-border/50 space-y-3">
+   749→                            {qReplies.map((reply: any) => (
+   750→                              <div key={reply.id} className={cn('ml-8 p-3 rounded-lg bg-muted/30')}>
+   751→                                <p className="text-xs text-muted-foreground leading-relaxed">{reply.content}</p>
+   752→                                <div className="flex items-center gap-3 mt-2">
+   753→                                  <span className="text-[10px] text-muted-foreground">{timeAgo(reply.createdAt)}</span>
+   754→                                  <button className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+   755→                                    <ThumbsUp className="h-3 w-3" />
+   756→                                  </button>
+   757→                                </div>
+   758→                              </div>
+   759→                            ))}
+   760→
+   761→                            {/* Reply input */}
+   762→                            <div className="ml-8 flex gap-2">
+   763→                              <div className="flex-1">
+   764→                                <Input
+   765→                                  placeholder="Write a reply..."
+   766→                                  value={replyingTo === question.id ? replyContent : ''}
+   767→                                  onChange={(e) => { setReplyingTo(question.id); setReplyContent(e.target.value); if (discussionErrors.replyContent) setDiscussionErrors({}); }}
+   768→                                  className={`h-8 text-xs ${discussionErrors.replyContent && replyingTo === question.id ? 'border-destructive' : ''}`}
+   769→                                  onFocus={() => setReplyingTo(question.id)}
+   770→                                />
+   771→                                {discussionErrors.replyContent && replyingTo === question.id && <p className="text-xs text-destructive mt-0.5">{discussionErrors.replyContent}</p>}
+   772→                              </div>
+   773→                              <Button
+   774→                                size="sm"
+   775→                                className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-700 shrink-0"
+   776→                                onClick={() => handleReply(question.id)}
+   777→                                disabled={createDiscussion.isPending}
+   778→                              >
+   779→                                {createDiscussion.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+   780→                              </Button>
+   781→                            </div>
+   782→                          </div>
+   783→                        </motion.div>
+   784→                      )}
+   785→                    </AnimatePresence>
+   786→                  </CardContent>
+   787→                </Card>
+   788→              </motion.div>
+   789→            );
+   790→          })}
+   791→        </AnimatePresence>
+   792→      </div>
+   793→
+   794→      {filteredQuestions.length === 0 && (
+   795→        <div className="text-center py-8">
+   796→          <MessageCircleQuestion className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+   797→          <p className="text-sm text-muted-foreground">No discussions yet. Be the first to ask a question!</p>
+   798→        </div>
+   799→      )}
+   800→
+   801→      <Button variant="outline" className="w-full">View All Discussions</Button>
+   802→    </div>
+   803→  );
+   804→}
+   805→
+   806→// ─── Q&A Discussion Tab ────────────────────────────────────
+   807→function QADiscussionTab({ courseId, userId, modules }: { courseId: string; userId: string; modules: Module[] }) {
+   808→  const { data: discussionsData, isLoading } = useLessonDiscussions({ courseId });
+   809→  const createDiscussion = useCreateDiscussion();
+   810→
+   811→  const [selectedLessonId, setSelectedLessonId] = useState<string>('all');
+   812→  const [searchQuery, setSearchQuery] = useState('');
+   813→  const [sortBy, setSortBy] = useState<'newest' | 'voted' | 'unresolved' | 'resolved'>('newest');
+   814→  const [filterBy, setFilterBy] = useState<'all' | 'my' | 'unresolved' | 'resolved'>('all');
+   815→  const [selectedQuestion, setSelectedQuestion] = useState<any | null>(null);
+   816→  const [showAskDialog, setShowAskDialog] = useState(false);
+   817→  const [askContent, setAskContent] = useState('');
+   818→  const [askLessonId, setAskLessonId] = useState<string>(selectedLessonId === 'all' ? '' : selectedLessonId);
+   819→  const [answerContent, setAnswerContent] = useState('');
+   820→  const [qaErrors, setQaErrors] = useState<Record<string, string>>({});
+   821→  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set(modules.map(m => m.id)));
+   822→
+   823→  const discussions = discussionsData?.discussions || [];
+   824→
+   825→  // Separate top-level from replies & build reply map
+   826→  const { qaTopLevel, repliesMap } = useMemo(() => {
+   827→    const top: any[] = [];
+   828→    const map: Record<string, any[]> = {};
+   829→    discussions.forEach((d: any) => {
+   830→      if (d.parentId) {
+   831→        if (!map[d.parentId]) map[d.parentId] = [];
+   832→        map[d.parentId].push(d);
+   833→      } else {
+   834→        top.push(d);
+   835→      }
+   836→    });
+   837→    return { qaTopLevel: top, repliesMap: map };
+   838→  }, [discussions]);
+   839→
+   840→  // Build lesson map from modules
+   841→  const lessonMap = new Map<string, { title: string; moduleId: string; moduleTitle: string }>();
+   842→  modules.forEach(mod => {
+   843→    (mod.lessons || []).forEach(lesson => {
+   844→      lessonMap.set(lesson.id, { title: lesson.title, moduleId: mod.id, moduleTitle: mod.title });
+   845→    });
+   846→  });
+   847→
+   848→  // Filter questions
+   849→  const filteredQuestions = qaTopLevel.filter((q: any) => {
+   850→    if (selectedLessonId !== 'all' && q.lessonId !== selectedLessonId) return false;
+   851→    if (filterBy === 'my' && q.userId !== userId) return false;
+   852→    const qReplies = repliesMap[q.id] || [];
+   853→    const isResolved = qReplies.length > 0;
+   854→    if (filterBy === 'unresolved' && isResolved) return false;
+   855→    if (filterBy === 'resolved' && !isResolved) return false;
+   856→    if (searchQuery) {
+   857→      const lq = searchQuery.toLowerCase();
+   858→      if (!q.content.toLowerCase().includes(lq)) return false;
+   859→    }
+   860→    return true;
+   861→  });
+   862→
+   863→  // Sort questions
+   864→  const sortedQuestions = [...filteredQuestions].sort((a: any, b: any) => {
+   865→    if (sortBy === 'newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+   866→    if (sortBy === 'voted') return (repliesMap[b.id]?.length || 0) - (repliesMap[a.id]?.length || 0);
+   867→    if (sortBy === 'unresolved') {
+   868→      const aResolved = (repliesMap[a.id]?.length || 0) > 0;
+   869→      const bResolved = (repliesMap[b.id]?.length || 0) > 0;
+   870→      return aResolved === bResolved ? 0 : aResolved ? 1 : -1;
+   871→    }
+   872→    if (sortBy === 'resolved') {
+   873→      const aResolved = (repliesMap[a.id]?.length || 0) > 0;
+   874→      const bResolved = (repliesMap[b.id]?.length || 0) > 0;
+   875→      return aResolved === bResolved ? 0 : aResolved ? -1 : 1;
+   876→    }
+   877→    return 0;
+   878→  });
+   879→
+   880→  const toggleModule = (moduleId: string) => {
+   881→    setExpandedModules(prev => {
+   882→      const next = new Set(prev);
+   883→      if (next.has(moduleId)) next.delete(moduleId);
+   884→      else next.add(moduleId);
+   885→      return next;
+   886→    });
+   887→  };
+   888→
+   889→  // Count questions per lesson
+   890→  const questionCountsByLesson = new Map<string, number>();
+   891→  const unresolvedCountsByLesson = new Map<string, number>();
+   892→  qaTopLevel.forEach((q: any) => {
+   893→    questionCountsByLesson.set(q.lessonId, (questionCountsByLesson.get(q.lessonId) || 0) + 1);
+   894→    if (!(repliesMap[q.id]?.length > 0)) unresolvedCountsByLesson.set(q.lessonId, (unresolvedCountsByLesson.get(q.lessonId) || 0) + 1);
+   895→  });
+   896→
+   897→  const unresolvedTotal = qaTopLevel.filter((q: any) => !(repliesMap[q.id]?.length > 0)).length;
+   898→
+   899→  // Render content with markdown
+   900→  const renderContent = (content: string) => {
+   901→    const parts = content.split(/(```[\s\S]*?```)/g);
+   902→    return parts.map((part, i) => {
+   903→      if (part.startsWith('```') && part.endsWith('```')) {
+   904→        const codeContent = part.slice(3, -3).replace(/^\w+\n/, '');
+   905→        return (
+   906→          <pre key={i} className="bg-slate-900 dark:bg-slate-950 text-green-400 p-3 rounded-lg text-xs font-mono overflow-x-auto my-2 leading-relaxed">
+   907→            <code>{codeContent}</code>
+   908→          </pre>
+   909→        );
+   910→      }
+   911→      const inlineParts = part.split(/(`[^`]+`)/g);
+   912→      return (
+   913→        <span key={i}>
+   914→          {inlineParts.map((ip, j) => {
+   915→            if (ip.startsWith('`') && ip.endsWith('`')) {
+   916→              return <code key={j} className="bg-slate-100 dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded text-xs font-mono">{ip.slice(1, -1)}</code>;
+   917→            }
+   918→            const boldParts = ip.split(/(\*\*[^*]+\*\*)/g);
+   919→            return boldParts.map((bp, k) => {
+   920→              if (bp.startsWith('**') && bp.endsWith('**')) {
+   921→                return <strong key={`${j}-${k}`} className="font-semibold text-foreground">{bp.slice(2, -2)}</strong>;
+   922→              }
+   923→              return <span key={`${j}-${k}`}>{bp}</span>;
+   924→            });
+   925→          })}
+   926→        </span>
+   927→      );
+   928→    });
+   929→  };
+   930→
+   931→  // Handle submit question
+   932→  const handleSubmitQuestion = () => {
+   933→    const errs = validateFields({
+   934→      askContent: [required(askContent, 'Question'), minLength(askContent, 5, 'Question')],
+   935→    });
+   936→    if (!askLessonId) errs.askLessonId = 'Please select a lesson';
+   937→    setQaErrors(errs);
+   938→    if (Object.keys(errs).length > 0) return;
+   939→    createDiscussion.mutate({
+   940→      lessonId: askLessonId,
+   941→      userId,
+   942→      content: askContent,
+   943→    }, {
+   944→      onSuccess: () => {
+   945→        setAskContent('');
+   946→        setShowAskDialog(false);
+   947→        setQaErrors({});
+   948→      },
+   949→    });
+   950→  };
+   951→
+   952→  // Handle submit answer
+   953→  const handleSubmitAnswer = () => {
+   954→    const errs = validateFields({
+   955→      answerContent: [required(answerContent, 'Answer'), minLength(answerContent, 5, 'Answer')],
+   956→    });
+   957→    setQaErrors(errs);
+   958→    if (Object.keys(errs).length > 0) return;
+   959→    if (!selectedQuestion) return;
+   960→    createDiscussion.mutate({
+   961→      lessonId: selectedQuestion.lessonId,
+   962→      userId,
+   963→      content: answerContent,
+   964→      parentId: selectedQuestion.id,
+   965→    }, {
+   966→      onSuccess: () => {
+   967→        setAnswerContent('');
+   968→        setQaErrors({});
+   969→      },
+   970→    });
+   971→  };
+   972→
+   973→  if (isLoading) {
+   974→    return (
+   975→      <div className="space-y-3">
+   976→        {Array.from({ length: 3 }).map((_, i) => (
+   977→          <div key={i} className="rounded-xl p-4 bg-muted/30 animate-pulse space-y-3">
+   978→            <div className="h-4 bg-muted rounded w-1/2" />
+   979→            <div className="h-3 bg-muted rounded w-3/4" />
+   980→          </div>
+   981→        ))}
+   982→      </div>
+   983→    );
+   984→  }
+   985→
+   986→  // ─── Thread Detail View ─────────────────────────────────
+   987→  if (selectedQuestion) {
+   988→    const q = selectedQuestion;
+   989→    const qReplies = repliesMap[q.id] || [];
+   990→    const isResolved = qReplies.length > 0;
+   991→
+   992→    return (
+   993→      <div className="space-y-4">
+   994→        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => setSelectedQuestion(null)}>
+   995→          <ChevronDown className="h-4 w-4 rotate-90" />
+   996→          Back to Questions
+   997→        </Button>
+   998→
+   999→        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+  1000→          <Card className={cn(glassCard, 'border-orange-200/50 dark:border-orange-800/30')}>
+  1001→            <CardContent className="p-6">
+  1002→              <div className="flex-1 min-w-0">
+  1003→                <div className="flex items-center gap-2 mb-2 flex-wrap">
+  1004→                  {isResolved ? (
+  1005→                    <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] gap-0.5">
+  1006→                      <CheckCircle2 className="h-3 w-3" /> Resolved
+  1007→                    </Badge>
+  1008→                  ) : (
+  1009→                    <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px] gap-0.5">
+  1010→                      <Circle className="h-3 w-3" /> Unresolved
+  1011→                    </Badge>
+  1012→                  )}
+  1013→                  {q.lesson?.title && (
+  1014→                    <Badge variant="outline" className="text-[10px] gap-0.5">
+  1015→                      <BookOpen className="h-2.5 w-2.5" /> {q.lesson.title}
+  1016→                    </Badge>
+  1017→                  )}
+  1018→                </div>
+  1019→                <div className="text-sm text-muted-foreground leading-relaxed mb-3">
+  1020→                  {renderContent(q.content)}
+  1021→                </div>
+  1022→                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1023→                  <span>{timeAgo(q.createdAt)}</span>
+  1024→                  <span>· {qReplies.length} {qReplies.length === 1 ? 'reply' : 'replies'}</span>
+  1025→                </div>
+  1026→              </div>
+  1027→            </CardContent>
+  1028→          </Card>
+  1029→        </motion.div>
+  1030→
+  1031→        {/* Replies */}
+  1032→        <div className="space-y-3">
+  1033→          <h4 className="font-semibold text-foreground text-sm">
+  1034→            {qReplies.length} {qReplies.length === 1 ? 'Reply' : 'Replies'}
+  1035→          </h4>
+  1036→
+  1037→          {qReplies.map((reply: any) => (
+  1038→            <motion.div key={reply.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+  1039→              <Card className={cn(glassCard)}>
+  1040→                <CardContent className="p-4">
+  1041→                  <div className="text-sm text-muted-foreground leading-relaxed">
+  1042→                    {renderContent(reply.content)}
+  1043→                  </div>
+  1044→                  <div className="flex items-center gap-3 mt-2">
+  1045→                    <span className="text-[10px] text-muted-foreground">{timeAgo(reply.createdAt)}</span>
+  1046→                  </div>
+  1047→                </CardContent>
+  1048→              </Card>
+  1049→            </motion.div>
+  1050→          ))}
+  1051→
+  1052→          {qReplies.length === 0 && (
+  1053→            <div className="text-center py-8">
+  1054→              <MessageCircleQuestion className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+  1055→              <p className="text-sm text-muted-foreground">No replies yet. Be the first to help!</p>
+  1056→            </div>
+  1057→          )}
+  1058→        </div>
+  1059→
+  1060→        {/* Add Answer Form */}
+  1061→        <Card className={cn(glassCard, 'border-dashed')}>
+  1062→          <CardContent className="p-4 space-y-3">
+  1063→            <div className="flex items-center gap-2">
+  1064→              <Edit3 className="h-4 w-4 text-muted-foreground" />
+  1065→              <span className="text-sm font-medium text-foreground">Your Answer</span>
+  1066→            </div>
+  1067→            <Textarea
+  1068→              placeholder="Write your answer... Supports **bold**, *italic*, and `code`"
+  1069→              value={answerContent}
+  1070→              onChange={e => { setAnswerContent(e.target.value); if (qaErrors.answerContent) setQaErrors({}); }}
+  1071→              rows={4}
+  1072→              className={`resize-none ${qaErrors.answerContent ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+  1073→            />
+  1074→            {qaErrors.answerContent && <p className="text-sm text-destructive mt-1">{qaErrors.answerContent}</p>}
+  1075→            <div className="flex items-center justify-end">
+  1076→              <Button size="sm" className="gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20" onClick={handleSubmitAnswer} disabled={createDiscussion.isPending}>
+  1077→                {createDiscussion.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} Submit Answer
+  1078→              </Button>
+  1079→            </div>
+  1080→          </CardContent>
+  1081→        </Card>
+  1082→      </div>
+  1083→    );
+  1084→  }
+  1085→
+  1086→  // ─── Question List View ─────────────────────────────────
+  1087→  return (
+  1088→    <div className="space-y-4">
+  1089→      {/* Header */}
+  1090→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+  1091→        <div>
+  1092→          <div className="flex items-center gap-2">
+  1093→            <h3 className="font-semibold text-foreground">Q&amp;A Discussion</h3>
+  1094→            {unresolvedTotal > 0 && (
+  1095→              <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px]">
+  1096→                {unresolvedTotal} unresolved
+  1097→              </Badge>
+  1098→            )}
+  1099→          </div>
+  1100→          <p className="text-sm text-muted-foreground">Ask questions and get answers from peers and instructors</p>
+  1101→        </div>
+  1102→        <Dialog open={showAskDialog} onOpenChange={setShowAskDialog}>
+  1103→          <DialogTrigger asChild>
+  1104→            <Button size="sm" className="gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20">
+  1105→              <Plus className="h-3.5 w-3.5" />
+  1106→              Ask Question
+  1107→            </Button>
+  1108→          </DialogTrigger>
+  1109→          <DialogContent className="sm:max-w-lg">
+  1110→            <DialogHeader>
+  1111→              <DialogTitle className="flex items-center gap-2">
+  1112→                <MessageCircleQuestion className="h-5 w-5 text-emerald-600" />
+  1113→                Ask a Question
+  1114→              </DialogTitle>
+  1115→            </DialogHeader>
+  1116→            <div className="space-y-4">
+  1117→              <div>
+  1118→                <label className="text-sm font-medium text-foreground mb-1.5 block">Details</label>
+  1119→                <div className="flex items-center gap-1 mb-2 p-1 rounded-lg border bg-muted/30">
+  1120→                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Bold className="h-3.5 w-3.5" /></Button>
+  1121→                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Italic className="h-3.5 w-3.5" /></Button>
+  1122→                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Code2 className="h-3.5 w-3.5" /></Button>
+  1123→                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Link2 className="h-3.5 w-3.5" /></Button>
+  1124→                </div>
+  1125→                <Textarea
+  1126→                  placeholder="Provide more details about your question... Supports **bold**, *italic*, `code`"
+  1127→                  value={askContent}
+  1128→                  onChange={e => { setAskContent(e.target.value); if (qaErrors.askContent) setQaErrors({}); }}
+  1129→                  rows={5}
+  1130→                  className={`resize-none ${qaErrors.askContent ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+  1131→                />
+  1132→                {qaErrors.askContent && <p className="text-sm text-destructive mt-1">{qaErrors.askContent}</p>}
+  1133→              </div>
+  1134→              <div>
+  1135→                <label className="text-sm font-medium text-foreground mb-1.5 block">Related Lesson</label>
+  1136→                <Select value={askLessonId} onValueChange={(v) => { setAskLessonId(v); if (qaErrors.askLessonId) setQaErrors({}); }}>
+  1137→                  <SelectTrigger className={`h-9 ${qaErrors.askLessonId ? 'border-destructive' : ''}`}>
+  1138→                    <SelectValue placeholder="Select a lesson" />
+  1139→                  </SelectTrigger>
+  1140→                  <SelectContent>
+  1141→                    {modules.map(mod => (
+  1142→                      (mod.lessons || []).map(lesson => (
+  1143→                        <SelectItem key={lesson.id} value={lesson.id}>
+  1144→                          {mod.title} → {lesson.title}
+  1145→                        </SelectItem>
+  1146→                      ))
+  1147→                    ))}
+  1148→                  </SelectContent>
+  1149→                </Select>
+  1150→                {qaErrors.askLessonId && <p className="text-sm text-destructive mt-1">{qaErrors.askLessonId}</p>}
+  1151→              </div>
+  1152→            </div>
+  1153→            <DialogFooter className="gap-2">
+  1154→              <DialogClose asChild>
+  1155→                <Button variant="outline">Cancel</Button>
+  1156→              </DialogClose>
+  1157→              <Button className="gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20" onClick={handleSubmitQuestion} disabled={createDiscussion.isPending}>
+  1158→                {createDiscussion.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Submit Question
+  1159→              </Button>
+  1160→            </DialogFooter>
+  1161→          </DialogContent>
+  1162→        </Dialog>
+  1163→      </div>
+  1164→
+  1165→      <div className="flex flex-col lg:flex-row gap-4">
+  1166→        {/* Left Panel - Lesson Selector */}
+  1167→        <div className="lg:w-64 shrink-0">
+  1168→          <Card className={cn(glassCard, 'sticky top-4')}>
+  1169→            <CardContent className="p-3">
+  1170→              <h4 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Filter by Lesson</h4>
+  1171→              <div className="space-y-1 max-h-96 overflow-y-auto">
+  1172→                <button
+  1173→                  className={cn(
+  1174→                    'w-full text-left p-2 rounded-lg text-xs transition-all duration-200',
+  1175→                    selectedLessonId === 'all' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium' : 'hover:bg-muted/50 text-muted-foreground'
+  1176→                  )}
+  1177→                  onClick={() => setSelectedLessonId('all')}
+  1178→                >
+  1179→                  <div className="flex items-center justify-between">
+  1180→                    <span>All Questions</span>
+  1181→                    <Badge variant="secondary" className="text-[9px] h-4 px-1">{qaTopLevel.length}</Badge>
+  1182→                  </div>
+  1183→                </button>
+  1184→                {modules.map(mod => {
+  1185→                  const isExpanded = expandedModules.has(mod.id);
+  1186→                  const lessons = mod.lessons || [];
+  1187→                  return (
+  1188→                    <div key={mod.id}>
+  1189→                      <button
+  1190→                        className="w-full flex items-center gap-1.5 p-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+  1191→                        onClick={() => toggleModule(mod.id)}
+  1192→                      >
+  1193→                        {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+  1194→                        <span className="line-clamp-1">{mod.title}</span>
+  1195→                      </button>
+  1196→                      {isExpanded && (
+  1197→                        <div className="ml-4 space-y-0.5">
+  1198→                          {lessons.map(lesson => {
+  1199→                            const qCount = questionCountsByLesson.get(lesson.id) || 0;
+  1200→                            const unresolved = unresolvedCountsByLesson.get(lesson.id) || 0;
+  1201→                            const isActive = selectedLessonId === lesson.id;
+  1202→                            return (
+  1203→                              <button
+  1204→                                key={lesson.id}
+  1205→                                className={cn(
+  1206→                                  'w-full text-left p-2 rounded-lg text-xs transition-all duration-200',
+  1207→                                  isActive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium' : 'hover:bg-muted/50 text-muted-foreground'
+  1208→                                )}
+  1209→                                onClick={() => setSelectedLessonId(lesson.id)}
+  1210→                              >
+  1211→                                <div className="flex items-center gap-1.5">
+  1212→                                  {unresolved > 0 && <span className="h-1.5 w-1.5 rounded-full bg-orange-500 shrink-0" />}
+  1213→                                  <span className="line-clamp-1 flex-1">{lesson.title}</span>
+  1214→                                  {qCount > 0 && (
+  1215→                                    <Badge variant="secondary" className="text-[9px] h-4 px-1 ml-auto shrink-0">{qCount}</Badge>
+  1216→                                  )}
+  1217→                                </div>
+  1218→                              </button>
+  1219→                            );
+  1220→                          })}
+  1221→                        </div>
+  1222→                      )}
+  1223→                    </div>
+  1224→                  );
+  1225→                })}
+  1226→              </div>
+  1227→            </CardContent>
+  1228→          </Card>
+  1229→        </div>
+  1230→
+  1231→        {/* Right Panel - Q&A Threads */}
+  1232→        <div className="flex-1 space-y-3">
+  1233→          {/* Search and Sort */}
+  1234→          <div className="flex flex-col sm:flex-row gap-3">
+  1235→            <div className="relative flex-1">
+  1236→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1237→              <Input
+  1238→                placeholder="Search questions..."
+  1239→                value={searchQuery}
+  1240→                onChange={e => setSearchQuery(e.target.value)}
+  1241→                className="pl-9 h-9"
+  1242→              />
+  1243→            </div>
+  1244→            <div className="flex gap-1.5 overflow-x-auto">
+  1245→              {([
+  1246→                { key: 'newest' as const, label: 'Newest' },
+  1247→                { key: 'voted' as const, label: 'Most Voted' },
+  1248→                { key: 'unresolved' as const, label: 'Unresolved' },
+  1249→                { key: 'resolved' as const, label: 'Resolved' },
+  1250→              ]).map(opt => (
+  1251→                <Button
+  1252→                  key={opt.key}
+  1253→                  size="sm"
+  1254→                  variant={sortBy === opt.key ? 'default' : 'outline'}
+  1255→                  className={cn('text-xs h-9 shrink-0', sortBy === opt.key && 'bg-gradient-to-r from-slate-700 to-slate-800 dark:from-slate-600 dark:to-slate-700')}
+  1256→                  onClick={() => setSortBy(opt.key)}
+  1257→                >
+  1258→                  {opt.label}
+  1259→                </Button>
+  1260→              ))}
+  1261→            </div>
+  1262→          </div>
+  1263→
+  1264→          {/* Filter Row */}
+  1265→          <div className="flex gap-1.5 overflow-x-auto">
+  1266→            {([
+  1267→              { key: 'all' as const, label: 'All' },
+  1268→              { key: 'my' as const, label: 'My Questions' },
+  1269→              { key: 'unresolved' as const, label: 'Unresolved' },
+  1270→              { key: 'resolved' as const, label: 'Resolved' },
+  1271→            ]).map(opt => (
+  1272→              <Button
+  1273→                key={opt.key}
+  1274→                size="sm"
+  1275→                variant={filterBy === opt.key ? 'secondary' : 'ghost'}
+  1276→                className={cn('text-xs h-7 shrink-0', filterBy === opt.key && 'font-medium')}
+  1277→                onClick={() => setFilterBy(opt.key)}
+  1278→              >
+  1279→                {opt.label}
+  1280→              </Button>
+  1281→            ))}
+  1282→          </div>
+  1283→
+  1284→          {/* Thread Cards */}
+  1285→          <AnimatePresence mode="popLayout">
+  1286→            {sortedQuestions.map((question: any, idx: number) => {
+  1287→              const qReplies = repliesMap[question.id] || [];
+  1288→              const isResolved = qReplies.length > 0;
+  1289→              return (
+  1290→                <motion.div
+  1291→                  key={question.id}
+  1292→                  layout
+  1293→                  initial={{ opacity: 0, y: 10 }}
+  1294→                  animate={{ opacity: 1, y: 0 }}
+  1295→                  exit={{ opacity: 0, y: -10 }}
+  1296→                  transition={{ delay: idx * 0.05 }}
+  1297→                >
+  1298→                  <Card
+  1299→                    className={cn(
+  1300→                      'hover:shadow-md transition-all duration-200 cursor-pointer',
+  1301→                      glassCard,
+  1302→                      isResolved ? 'border-emerald-200/50 dark:border-emerald-800/30' : 'border-orange-100/50 dark:border-orange-800/20'
+  1303→                    )}
+  1304→                    onClick={() => setSelectedQuestion(question)}
+  1305→                  >
+  1306→                    <CardContent className="p-4">
+  1307→                      <div className="flex items-start gap-3">
+  1308→                        {/* Vote column */}
+  1309→                        <div className="flex flex-col items-center gap-1 pt-1" onClick={e => e.stopPropagation()}>
+  1310→                          <button className="p-1 rounded transition-all duration-200 hover:bg-muted/50 text-muted-foreground hover:text-foreground">
+  1311→                            <ChevronUp className="h-4 w-4" />
+  1312→                          </button>
+  1313→                          <span className="text-sm font-semibold text-foreground">{qReplies.length}</span>
+  1314→                        </div>
+  1315→
+  1316→                        {/* Content */}
+  1317→                        <div className="flex-1 min-w-0">
+  1318→                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+  1319→                            {isResolved ? (
+  1320→                              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] gap-0.5">
+  1321→                                <Check className="h-3 w-3" /> Resolved
+  1322→                              </Badge>
+  1323→                            ) : (
+  1324→                              <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px] gap-0.5">
+  1325→                                <Circle className="h-2.5 w-2.5" /> Unresolved
+  1326→                              </Badge>
+  1327→                            )}
+  1328→                            {question.lesson?.title && (
+  1329→                              <Badge variant="outline" className="text-[10px] gap-0.5">
+  1330→                                <BookOpen className="h-2.5 w-2.5" /> {question.lesson.title}
+  1331→                              </Badge>
+  1332→                            )}
+  1333→                          </div>
+  1334→                          <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{question.content}</p>
+  1335→
+  1336→                          {/* Meta row */}
+  1337→                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+  1338→                            <span className="flex items-center gap-1">
+  1339→                              <Clock className="h-3 w-3" /> {timeAgo(question.createdAt)}
+  1340→                            </span>
+  1341→                            <span className={cn('flex items-center gap-1', isResolved ? 'text-emerald-600' : '')}>
+  1342→                              {isResolved ? <Check className="h-3 w-3" /> : <MessageCircle className="h-3 w-3" />}
+  1343→                              {qReplies.length} {qReplies.length === 1 ? 'reply' : 'replies'}
+  1344→                            </span>
+  1345→                          </div>
+  1346→                        </div>
+  1347→                      </div>
+  1348→                    </CardContent>
+  1349→                  </Card>
+  1350→                </motion.div>
+  1351→              );
+  1352→            })}
+  1353→          </AnimatePresence>
+  1354→
+  1355→          {sortedQuestions.length === 0 && (
+  1356→            <div className="text-center py-12">
+  1357→              <MessageCircleQuestion className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+  1358→              <p className="text-sm text-muted-foreground">No questions found. Be the first to ask!</p>
+  1359→            </div>
+  1360→          )}
+  1361→        </div>
+  1362→      </div>
+  1363→    </div>
+  1364→  );
+  1365→}
+  1366→
+  1367→// ─── Notes Tab ─────────────────────────────────────────────
+  1368→function NotesTab({ notes, onAddNote, onUpdateNote, onDeleteNote, allLessons, onJumpToTimestamp }: {
+  1369→  notes: Note[];
+  1370→  onAddNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  1371→  onUpdateNote: (id: string, updates: Partial<Note>) => void;
+  1372→  onDeleteNote: (id: string) => void;
+  1373→  allLessons: { id: string; title: string }[];
+  1374→  onJumpToTimestamp?: (time: number) => void;
+  1375→}) {
+  1376→  const [selectedLesson, setSelectedLesson] = useState<string>('all');
+  1377→  const [searchQuery, setSearchQuery] = useState('');
+  1378→  const [selectedCategory, setSelectedCategory] = useState<Note['category'] | 'all'>('all');
+  1379→  const [editingNote, setEditingNote] = useState<string | null>(null);
+  1380→  const [editContent, setEditContent] = useState('');
+  1381→  const [newNoteContent, setNewNoteContent] = useState('');
+  1382→  const [newNoteCategory, setNewNoteCategory] = useState<Note['category']>('personal');
+  1383→  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  1384→  const [showAiSummary, setShowAiSummary] = useState(false);
+  1385→
+  1386→  // Group notes by lesson
+  1387→  const lessonsWithNotes = Array.from(new Set(notes.map(n => n.lessonId)));
+  1388→
+  1389→  const filteredNotes = notes.filter(n => {
+  1390→    if (selectedLesson !== 'all' && n.lessonId !== selectedLesson) return false;
+  1391→    if (selectedCategory !== 'all' && n.category !== selectedCategory) return false;
+  1392→    if (searchQuery && !n.content.toLowerCase().includes(searchQuery.toLowerCase()) && !n.lessonTitle.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+  1393→    return true;
+  1394→  });
+  1395→
+  1396→  const handleSaveNote = useCallback(() => {
+  1397→    setSaveStatus('saving');
+  1398→    setTimeout(() => {
+  1399→      setSaveStatus('saved');
+  1400→      setTimeout(() => setSaveStatus('idle'), 2000);
+  1401→    }, 400);
+  1402→  }, []);
+  1403→
+  1404→  const handleExportNotes = () => {
+  1405→    const text = filteredNotes.map(n =>
+  1406→      `--- ${n.lessonTitle} [${noteCategoryConfig[n.category].label}] ---\n${n.content}\n`
+  1407→    ).join('\n');
+  1408→    navigator.clipboard.writeText(text).catch(() => {});
+  1409→    setSaveStatus('saved');
+  1410→    setTimeout(() => setSaveStatus('idle'), 2000);
+  1411→  };
+  1412→
+  1413→  const handleAddNote = () => {
+  1414→    if (!newNoteContent.trim()) return;
+  1415→    // Find the current lesson for context
+  1416→    const currentLesson = selectedLesson !== 'all'
+  1417→      ? allLessons.find(l => l.id === selectedLesson)
+  1418→      : allLessons[0];
+  1419→    onAddNote({
+  1420→      lessonId: currentLesson?.id || '',
+  1421→      lessonTitle: currentLesson?.title || 'Unknown Lesson',
+  1422→      content: newNoteContent,
+  1423→      category: newNoteCategory,
+  1424→    });
+  1425→    setNewNoteContent('');
+  1426→    handleSaveNote();
+  1427→  };
+  1428→
+  1429→  return (
+  1430→    <div className="space-y-4">
+  1431→      {/* Header */}
+  1432→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+  1433→        <div>
+  1434→          <h3 className="font-semibold text-foreground">My Notes</h3>
+  1435→          <p className="text-sm text-muted-foreground">{notes.length} notes across {lessonsWithNotes.length} lessons</p>
+  1436→        </div>
+  1437→        <div className="flex items-center gap-2">
+  1438→          {saveStatus === 'saving' && (
+  1439→            <motion.div
+  1440→              initial={{ opacity: 0, x: 10 }}
+  1441→              animate={{ opacity: 1, x: 0 }}
+  1442→              className="flex items-center gap-1 text-xs text-amber-600"
+  1443→            >
+  1444→              <Loader2 className="h-3 w-3 animate-spin" /> Saving...
+  1445→            </motion.div>
+  1446→          )}
+  1447→          {saveStatus === 'saved' && (
+  1448→            <motion.div
+  1449→              initial={{ opacity: 0, scale: 0.8 }}
+  1450→              animate={{ opacity: 1, scale: 1 }}
+  1451→              className="flex items-center gap-1 text-xs text-emerald-600"
+  1452→            >
+  1453→              <Check className="h-3 w-3" /> Saved
+  1454→            </motion.div>
+  1455→          )}
+  1456→          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowAiSummary(!showAiSummary)}>
+  1457→            <Sparkles className="h-3.5 w-3.5" /> AI Summarize
+  1458→          </Button>
+  1459→          <Button size="sm" variant="outline" className="gap-1.5" onClick={handleExportNotes}>
+  1460→            <Copy className="h-3.5 w-3.5" /> Export
+  1461→          </Button>
+  1462→        </div>
+  1463→      </div>
+  1464→
+  1465→      {/* AI Summary */}
+  1466→      <AnimatePresence>
+  1467→        {showAiSummary && (
+  1468→          <motion.div
+  1469→            initial={{ height: 0, opacity: 0 }}
+  1470→            animate={{ height: 'auto', opacity: 1 }}
+  1471→            exit={{ height: 0, opacity: 0 }}
+  1472→            transition={{ duration: 0.3 }}
+  1473→            className="overflow-hidden"
+  1474→          >
+  1475→            <Card className={cn('border-violet-200 dark:border-violet-800/40', glassCard)}>
+  1476→              <CardContent className="p-4">
+  1477→                <div className="flex items-center gap-2 mb-2">
+  1478→                  <Sparkles className="h-4 w-4 text-violet-600" />
+  1479→                  <span className="text-sm font-semibold text-foreground">AI Summary of Your Notes</span>
+  1480→                </div>
+  1481→                <div className="text-sm text-muted-foreground leading-relaxed space-y-2">
+  1482→                  {notes.length > 0 ? (
+  1483→                    <>
+  1484→                      <p><strong>Total Notes:</strong> {notes.length} across {lessonsWithNotes.length} lessons</p>
+  1485→                      <p><strong>Categories:</strong> {Object.entries(
+  1486→                        notes.reduce((acc, n) => { acc[n.category] = (acc[n.category] || 0) + 1; return acc; }, {} as Record<string, number>)
+  1487→                      ).map(([k, v]) => `${noteCategoryConfig[k as Note['category']].label} (${v})`).join(', ')}</p>
+  1488→                      <p><strong>Tip:</strong> Consider adding more code snippets for hands-on practice!</p>
+  1489→                    </>
+  1490→                  ) : (
+  1491→                    <p>Start taking notes to get personalized AI summaries and study insights.</p>
+  1492→                  )}
+  1493→                </div>
+  1494→              </CardContent>
+  1495→            </Card>
+  1496→          </motion.div>
+  1497→        )}
+  1498→      </AnimatePresence>
+  1499→
+  1500→      {/* Search and Filters */}
+  1501→      <div className="flex flex-col sm:flex-row gap-3">
+  1502→        <div className="relative flex-1">
+  1503→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1504→          <Input
+  1505→            placeholder="Search notes..."
+  1506→            value={searchQuery}
+  1507→            onChange={(e) => setSearchQuery(e.target.value)}
+  1508→            className="pl-9 h-9"
+  1509→          />
+  1510→        </div>
+  1511→        <div className="flex gap-1.5 overflow-x-auto">
+  1512→          <Button
+  1513→            size="sm"
+  1514→            variant={selectedCategory === 'all' ? 'default' : 'outline'}
+  1515→            className="text-xs h-9 shrink-0"
+  1516→            onClick={() => setSelectedCategory('all')}
+  1517→          >
+  1518→            All
+  1519→          </Button>
+  1520→          {Object.entries(noteCategoryConfig).map(([key, config]) => (
+  1521→            <Button
+  1522→              key={key}
+  1523→              size="sm"
+  1524→              variant={selectedCategory === key ? 'default' : 'outline'}
+  1525→              className="text-xs h-9 gap-1 shrink-0"
+  1526→              onClick={() => setSelectedCategory(key as Note['category'])}
+  1527→            >
+  1528→              {config.icon} {config.label}
+  1529→            </Button>
+  1530→          ))}
+  1531→        </div>
+  1532→      </div>
+  1533→
+  1534→      <div className="flex flex-col lg:flex-row gap-4">
+  1535→        {/* Sidebar - Lesson Navigation */}
+  1536→        <div className="lg:w-56 shrink-0">
+  1537→          <Card className={glassCard}>
+  1538→            <CardContent className="p-3">
+  1539→              <h4 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Lessons</h4>
+  1540→              <div className="space-y-1 max-h-96 overflow-y-auto">
+  1541→                <button
+  1542→                  className={cn(
+  1543→                    'w-full text-left p-2 rounded-lg text-xs transition-colors',
+  1544→                    selectedLesson === 'all' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/50 text-muted-foreground'
+  1545→                  )}
+  1546→                  onClick={() => setSelectedLesson('all')}
+  1547→                >
+  1548→                  All Notes ({notes.length})
+  1549→                </button>
+  1550→                {lessonsWithNotes.map((lessonId) => {
+  1551→                  const lessonNotes = notes.filter(n => n.lessonId === lessonId);
+  1552→                  const lessonTitle = lessonNotes[0]?.lessonTitle || allLessons.find(l => l.id === lessonId)?.title || lessonId;
+  1553→                  return (
+  1554→                    <button
+  1555→                      key={lessonId}
+  1556→                      className={cn(
+  1557→                        'w-full text-left p-2 rounded-lg text-xs transition-colors',
+  1558→                        selectedLesson === lessonId ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/50 text-muted-foreground'
+  1559→                      )}
+  1560→                      onClick={() => setSelectedLesson(lessonId)}
+  1561→                    >
+  1562→                      <span className="line-clamp-1">{lessonTitle}</span>
+  1563→                      <span className="text-[10px] text-muted-foreground">{lessonNotes.length} notes</span>
+  1564→                    </button>
+  1565→                  );
+  1566→                })}
+  1567→              </div>
+  1568→            </CardContent>
+  1569→          </Card>
+  1570→        </div>
+  1571→
+  1572→        {/* Notes Content */}
+  1573→        <div className="flex-1 space-y-3">
+  1574→          {/* New Note Input */}
+  1575→          <Card className={cn('border-dashed', glassCard)}>
+  1576→            <CardContent className="p-4 space-y-3">
+  1577→              <div className="flex items-center gap-2">
+  1578→                <Edit3 className="h-4 w-4 text-muted-foreground" />
+  1579→                <span className="text-sm font-medium text-foreground">Add a Note</span>
+  1580→              </div>
+  1581→              <Textarea
+  1582→                placeholder="Write your note here... Supports **bold**, *italic*, and `code`"
+  1583→                value={newNoteContent}
+  1584→                onChange={(e) => setNewNoteContent(e.target.value)}
+  1585→                rows={3}
+  1586→                className="resize-none"
+  1587→              />
+  1588→              <div className="flex items-center justify-between">
+  1589→                <div className="flex gap-1.5">
+  1590→                  {Object.entries(noteCategoryConfig).map(([key, config]) => (
+  1591→                    <Button
+  1592→                      key={key}
+  1593→                      size="sm"
+  1594→                      variant={newNoteCategory === key ? 'default' : 'outline'}
+  1595→                      className="text-[10px] h-6 gap-1 px-2"
+  1596→                      onClick={() => setNewNoteCategory(key as Note['category'])}
+  1597→                    >
+  1598→                      {config.icon} {config.label}
+  1599→                    </Button>
+  1600→                  ))}
+  1601→                </div>
+  1602→                <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" onClick={handleAddNote}>
+  1603→                  <Bookmark className="h-3 w-3" /> Save Note
+  1604→                </Button>
+  1605→              </div>
+  1606→            </CardContent>
+  1607→          </Card>
+  1608→
+  1609→          {/* Notes List */}
+  1610→          <AnimatePresence mode="popLayout">
+  1611→            {filteredNotes.map((note) => (
+  1612→              <motion.div
+  1613→                key={note.id}
+  1614→                layout
+  1615→                initial={{ opacity: 0, y: 10 }}
+  1616→                animate={{ opacity: 1, y: 0 }}
+  1617→                exit={{ opacity: 0, y: -10 }}
+  1618→              >
+  1619→                <Card className={cn(glassCard, 'hover:shadow-md transition-all duration-200')}>
+  1620→                  <CardContent className="p-4">
+  1621→                    <div className="flex items-start justify-between mb-2">
+  1622→                      <div className="flex items-center gap-2 flex-wrap">
+  1623→                        <Badge className={cn('text-[10px] gap-0.5', noteCategoryConfig[note.category].color)}>
+  1624→                          {noteCategoryConfig[note.category].icon} {noteCategoryConfig[note.category].label}
+  1625→                        </Badge>
+  1626→                        <span className="text-xs text-muted-foreground">{note.lessonTitle}</span>
+  1627→                        {note.timestamp !== undefined && (
+  1628→                          <button
+  1629→                            className="flex items-center gap-1 text-[10px] text-violet-600 hover:text-violet-700 dark:text-violet-400 transition-colors"
+  1630→                            onClick={() => onJumpToTimestamp?.(note.timestamp!)}
+  1631→                          >
+  1632→                            <Clock className="h-2.5 w-2.5" /> {formatDuration(note.timestamp * 60)}
+  1633→                          </button>
+  1634→                        )}
+  1635→                      </div>
+  1636→                      <div className="flex items-center gap-1">
+  1637→                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingNote(note.id); setEditContent(note.content); }}>
+  1638→                          <Edit3 className="h-3 w-3" />
+  1639→                        </Button>
+  1640→                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500 hover:text-red-600" onClick={() => onDeleteNote(note.id)}>
+  1641→                          <Trash2 className="h-3 w-3" />
+  1642→                        </Button>
+  1643→                      </div>
+  1644→                    </div>
+  1645→                    {editingNote === note.id ? (
+  1646→                      <div className="space-y-2">
+  1647→                        <Textarea
+  1648→                          value={editContent}
+  1649→                          onChange={(e) => setEditContent(e.target.value)}
+  1650→                          rows={4}
+  1651→                          className="resize-none text-sm"
+  1652→                        />
+  1653→                        <div className="flex gap-2 justify-end">
+  1654→                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingNote(null)}>
+  1655→                            <X className="h-3 w-3" /> Cancel
+  1656→                          </Button>
+  1657→                          <Button size="sm" className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => { onUpdateNote(note.id, { content: editContent }); setEditingNote(null); handleSaveNote(); }}>
+  1658→                            <Check className="h-3 w-3" /> Save
+  1659→                          </Button>
+  1660→                        </div>
+  1661→                      </div>
+  1662→                    ) : (
+  1663→                      <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+  1664→                        {note.content}
+  1665→                      </div>
+  1666→                    )}
+  1667→                    <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+  1668→                      <span>Created {new Date(note.createdAt).toLocaleDateString()}</span>
+  1669→                      <span>·</span>
+  1670→                      <span>Updated {new Date(note.updatedAt).toLocaleDateString()}</span>
+  1671→                    </div>
+  1672→                  </CardContent>
+  1673→                </Card>
+  1674→              </motion.div>
+  1675→            ))}
+  1676→          </AnimatePresence>
+  1677→
+  1678→          {filteredNotes.length === 0 && (
+  1679→            <div className="text-center py-8">
+  1680→              <Notebook className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+  1681→              <p className="text-sm text-muted-foreground">No notes found. Start taking notes!</p>
+  1682→            </div>
+  1683→          )}
+  1684→        </div>
+  1685→      </div>
+  1686→    </div>
+  1687→  );
+  1688→}
+  1689→
+  1690→// ─── Progress Timeline Tab ─────────────────────────────────
+  1691→function ProgressTab({ progressData, enrollmentProgress, course, streakDays }: {
+  1692→  progressData: any[];
+  1693→  enrollmentProgress: number;
+  1694→  course: any;
+  1695→  streakDays: number;
+  1696→}) {
+  1697→  // Derive timeline events from progress data
+  1698→  const timelineEvents = useMemo(() => {
+  1699→    if (!progressData || !course) return [];
+  1700→    const events: { id: string; lessonTitle: string; moduleName: string; date: string; timeSpent: number; type: 'completed' | 'started' }[] = [];
+  1701→
+  1702→    // Build lesson lookup from course modules
+  1703→    const lessonLookup = new Map<string, { title: string; moduleName: string }>();
+  1704→    (course.modules || []).forEach((mod: any) => {
+  1705→      (mod.lessons || []).forEach((lesson: any) => {
+  1706→        lessonLookup.set(lesson.id, { title: lesson.title, moduleName: mod.title });
+  1707→      });
+  1708→    });
+  1709→
+  1710→    progressData.forEach((p: any) => {
+  1711→      const lessonInfo = lessonLookup.get(p.lessonId);
+  1712→      if (!lessonInfo) return;
+  1713→
+  1714→      const date = p.completedAt
+  1715→        ? new Date(p.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  1716→        : new Date(p.updatedAt || p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  1717→
+  1718→      events.push({
+  1719→        id: p.id,
+  1720→        lessonTitle: lessonInfo.title,
+  1721→        moduleName: lessonInfo.moduleName,
+  1722→        date,
+  1723→        timeSpent: Math.round((p.timeSpent || 0) / 60),
+  1724→        type: p.status === 'completed' ? 'completed' : 'started',
+  1725→      });
+  1726→    });
+  1727→
+  1728→    // Sort by date (most recent first)
+  1729→    events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  1730→    return events;
+  1731→  }, [progressData, course]);
+  1732→
+  1733→  // Compute weekly activity from progress
+  1734→  const weeklyActivity = useMemo(() => {
+  1735→    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  1736→    const now = new Date();
+  1737→    const dayOfWeek = now.getDay();
+  1738→    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  1739→
+  1740→    return days.map((day, i) => {
+  1741→      const date = new Date(now);
+  1742→      date.setDate(now.getDate() + mondayOffset + i);
+  1743→      const dateStr = date.toDateString();
+  1744→
+  1745→      let totalMinutes = 0;
+  1746→      progressData?.forEach((p: any) => {
+  1747→        const updatedDate = new Date(p.updatedAt || p.createdAt).toDateString();
+  1748→        if (updatedDate === dateStr) {
+  1749→          totalMinutes += (p.timeSpent || 0) / 60;
+  1750→        }
+  1751→      });
+  1752→
+  1753→      return { day, hours: Math.round(totalMinutes * 10) / 10 };
+  1754→    });
+  1755→  }, [progressData]);
+  1756→
+  1757→  // Compute milestones from progress data
+  1758→  const completedCount = progressData?.filter((p: any) => p.status === 'completed').length || 0;
+  1759→  const totalLessons = (course?.modules || []).flatMap((m: any) => m.lessons || []).length;
+  1760→  const modulesComplete = (course?.modules || []).filter((mod: any) =>
+  1761→    (mod.lessons || []).every((l: any) => progressData?.some((p: any) => p.lessonId === l.id && p.status === 'completed'))
+  1762→  ).length;
+  1763→
+  1764→  const milestones = [
+  1765→    { id: 'ms-1', title: 'First Lesson Completed', description: 'Completed your first lesson', icon: '🎯', achieved: completedCount >= 1, date: completedCount >= 1 ? timelineEvents.find(e => e.type === 'completed')?.date || '' : '' },
+  1766→    { id: 'ms-2', title: 'Quick Learner', description: 'Complete 2 lessons', icon: '⚡', achieved: completedCount >= 2, date: '' },
+  1767→    { id: 'ms-3', title: 'Module Master', description: 'Complete all lessons in a module', icon: '🏆', achieved: modulesComplete > 0, date: '' },
+  1768→    { id: 'ms-4', title: 'Halfway There', description: 'Complete 50% of the course', icon: '🎓', achieved: enrollmentProgress >= 50, date: '' },
+  1769→    { id: 'ms-5', title: 'Streak Champion', description: 'Maintain a 7-day learning streak', icon: '🔥', achieved: streakDays >= 7, date: '' },
+  1770→    { id: 'ms-6', title: 'Course Graduate', description: 'Complete the entire course', icon: '🏅', achieved: enrollmentProgress >= 100, date: '' },
+  1771→  ];
+  1772→
+  1773→  const totalTime = Math.round(progressData?.reduce((sum: number, p: any) => sum + (p.timeSpent || 0), 0) / 60) || 0;
+  1774→  const maxHours = Math.max(...weeklyActivity.map(d => d.hours), 0.1);
+  1775→
+  1776→  const learningPace = enrollmentProgress >= 50 ? 'ahead' as const : enrollmentProgress >= 20 ? 'on_track' as const : 'behind' as const;
+  1777→  const paceConfig = {
+  1778→    ahead: { label: 'Ahead of Schedule', color: 'text-emerald-600 dark:text-emerald-400', icon: <TrendingUp className="h-4 w-4" />, bg: 'bg-emerald-50 dark:bg-emerald-900/10' },
+  1779→    on_track: { label: 'On Track', color: 'text-amber-600 dark:text-amber-400', icon: <Minus className="h-4 w-4" />, bg: 'bg-amber-50 dark:bg-amber-900/10' },
+  1780→    behind: { label: 'Behind Schedule', color: 'text-red-600 dark:text-red-400', icon: <TrendingDown className="h-4 w-4" />, bg: 'bg-red-50 dark:bg-red-900/10' },
+  1781→  };
+  1782→  const pace = paceConfig[learningPace];
+  1783→
+  1784→  const estimatedDate = new Date();
+  1785→  estimatedDate.setDate(estimatedDate.getDate() + Math.ceil((100 - enrollmentProgress) / 5));
+  1786→
+  1787→  return (
+  1788→    <div className="space-y-6">
+  1789→      {/* Stats Cards */}
+  1790→      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+  1791→        <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
+  1792→          <Card className={cn(glassCard)}>
+  1793→            <CardContent className="p-4 text-center">
+  1794→              <div className="flex items-center justify-center gap-1.5 mb-1">
+  1795→                <Flame className="h-5 w-5 text-orange-500" />
+  1796→                <span className="text-2xl font-bold text-foreground">{streakDays}</span>
+  1797→              </div>
+  1798→              <p className="text-xs text-muted-foreground">Day Streak</p>
+  1799→            </CardContent>
+  1800→          </Card>
+  1801→        </motion.div>
+  1802→
+  1803→        <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
+  1804→          <Card className={cn(glassCard)}>
+  1805→            <CardContent className="p-4 text-center">
+  1806→              <div className="flex items-center justify-center gap-1.5 mb-1">
+  1807→                <Timer className="h-5 w-5 text-violet-500" />
+  1808→                <span className="text-2xl font-bold text-foreground">{Math.floor(totalTime / 60)}h {totalTime % 60}m</span>
+  1809→              </div>
+  1810→              <p className="text-xs text-muted-foreground">Time Invested</p>
+  1811→            </CardContent>
+  1812→          </Card>
+  1813→        </motion.div>
+  1814→
+  1815→        <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
+  1816→          <Card className={cn(glassCard)}>
+  1817→            <CardContent className="p-4 text-center">
+  1818→              <div className={cn('flex items-center justify-center gap-1.5 mb-1', pace.color)}>
+  1819→                {pace.icon}
+  1820→                <span className="text-sm font-bold">{pace.label}</span>
+  1821→              </div>
+  1822→              <p className="text-xs text-muted-foreground">Learning Pace</p>
+  1823→            </CardContent>
+  1824→          </Card>
+  1825→        </motion.div>
+  1826→
+  1827→        <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
+  1828→          <Card className={cn(glassCard)}>
+  1829→            <CardContent className="p-4 text-center">
+  1830→              <div className="flex items-center justify-center gap-1.5 mb-1">
+  1831→                <Calendar className="h-5 w-5 text-emerald-500" />
+  1832→                <span className="text-sm font-bold text-foreground">{estimatedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+  1833→              </div>
+  1834→              <p className="text-xs text-muted-foreground">Est. Completion</p>
+  1835→            </CardContent>
+  1836→          </Card>
+  1837→        </motion.div>
+  1838→      </div>
+  1839→
+  1840→      {/* Weekly Activity Chart */}
+  1841→      <Card className={cn(glassCard)}>
+  1842→        <CardHeader className="pb-3">
+  1843→          <CardTitle className="text-sm flex items-center gap-2">
+  1844→            <Activity className="h-4 w-4 text-violet-600" />
+  1845→            Weekly Activity
+  1846→          </CardTitle>
+  1847→        </CardHeader>
+  1848→        <CardContent>
+  1849→          <div className="flex items-end gap-2 h-32">
+  1850→            {weeklyActivity.map((day) => (
+  1851→              <div key={day.day} className="flex-1 flex flex-col items-center gap-1">
+  1852→                <span className="text-[10px] text-muted-foreground">{day.hours}h</span>
+  1853→                <div className="w-full bg-muted rounded-t-sm overflow-hidden" style={{ height: '80px' }}>
+  1854→                  <motion.div
+  1855→                    className={cn(
+  1856→                      'w-full rounded-t-sm bg-gradient-to-t',
+  1857→                      day.hours > 1.5 ? 'from-emerald-500 to-emerald-400' : day.hours > 0 ? 'from-amber-500 to-amber-400' : 'from-slate-300 to-slate-200 dark:from-slate-600 dark:to-slate-500'
+  1858→                    )}
+  1859→                    initial={{ height: 0 }}
+  1860→                    animate={{ height: `${(day.hours / maxHours) * 100}%` }}
+  1861→                    transition={{ duration: 0.5, ease: 'easeOut' }}
+  1862→                    style={{ marginTop: 'auto' }}
+  1863→                  />
+  1864→                </div>
+  1865→                <span className="text-[10px] text-muted-foreground font-medium">{day.day}</span>
+  1866→              </div>
+  1867→            ))}
+  1868→          </div>
+  1869→        </CardContent>
+  1870→      </Card>
+  1871→
+  1872→      {/* Learning Timeline */}
+  1873→      <Card className={cn(glassCard)}>
+  1874→        <CardHeader className="pb-3">
+  1875→          <CardTitle className="text-sm flex items-center gap-2">
+  1876→            <Clock className="h-4 w-4 text-emerald-600" />
+  1877→            Learning Timeline
+  1878→          </CardTitle>
+  1879→        </CardHeader>
+  1880→        <CardContent>
+  1881→          {timelineEvents.length > 0 ? (
+  1882→            <div className="relative">
+  1883→              <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gradient-to-b from-emerald-500 via-amber-500 to-slate-300 dark:to-slate-600" />
+  1884→              <div className="space-y-4">
+  1885→                {timelineEvents.map((event, index) => (
+  1886→                  <motion.div
+  1887→                    key={event.id}
+  1888→                    initial={{ opacity: 0, x: -20 }}
+  1889→                    animate={{ opacity: 1, x: 0 }}
+  1890→                    transition={{ delay: index * 0.1 }}
+  1891→                    className="relative pl-10"
+  1892→                  >
+  1893→                    <div className={cn(
+  1894→                      'absolute left-2.5 top-1 w-3 h-3 rounded-full border-2',
+  1895→                      event.type === 'completed' ? 'bg-emerald-500 border-emerald-300' : 'bg-amber-500 border-amber-300'
+  1896→                    )} />
+  1897→                    <div className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+  1898→                      <div className="flex items-center gap-2 mb-1">
+  1899→                        <Badge className={cn(
+  1900→                          'text-[9px]',
+  1901→                          event.type === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+  1902→                        )}>
+  1903→                          {event.type === 'completed' ? '✓ Completed' : '▶ Started'}
+  1904→                        </Badge>
+  1905→                        <span className="text-[10px] text-muted-foreground">{event.date}</span>
+  1906→                      </div>
+  1907→                      <p className="text-sm font-medium text-foreground">{event.lessonTitle}</p>
+  1908→                      <p className="text-xs text-muted-foreground">{event.moduleName}</p>
+  1909→                      {event.timeSpent > 0 && (
+  1910→                        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+  1911→                          <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {event.timeSpent} min</span>
+  1912→                        </div>
+  1913→                      )}
+  1914→                    </div>
+  1915→                  </motion.div>
+  1916→                ))}
+  1917→              </div>
+  1918→            </div>
+  1919→          ) : (
+  1920→            <div className="text-center py-8">
+  1921→              <Clock className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+  1922→              <p className="text-sm text-muted-foreground">No learning activity yet. Start a lesson to track your progress!</p>
+  1923→            </div>
+  1924→          )}
+  1925→        </CardContent>
+  1926→      </Card>
+  1927→
+  1928→      {/* Milestones */}
+  1929→      <Card className={cn(glassCard)}>
+  1930→        <CardHeader className="pb-3">
+  1931→          <CardTitle className="text-sm flex items-center gap-2">
+  1932→            <Trophy className="h-4 w-4 text-amber-600" />
+  1933→            Milestones
+  1934→          </CardTitle>
+  1935→        </CardHeader>
+  1936→        <CardContent>
+  1937→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1938→            {milestones.map((milestone) => (
+  1939→              <motion.div
+  1940→                key={milestone.id}
+  1941→                whileHover={{ scale: 1.02 }}
+  1942→                className={cn(
+  1943→                  'flex items-center gap-3 p-3 rounded-lg border transition-colors',
+  1944→                  milestone.achieved
+  1945→                    ? 'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800/30'
+  1946→                    : 'bg-muted/20 border-border/50'
+  1947→                )}
+  1948→              >
+  1949→                <span className="text-2xl">{milestone.icon}</span>
+  1950→                <div className="flex-1">
+  1951→                  <p className={cn('text-sm font-medium', milestone.achieved ? 'text-foreground' : 'text-muted-foreground')}>
+  1952→                    {milestone.title}
+  1953→                  </p>
+  1954→                  <p className="text-xs text-muted-foreground">{milestone.description}</p>
+  1955→                  {milestone.achieved && milestone.date && (
+  1956→                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">Achieved {milestone.date}</p>
+  1957→                  )}
+  1958→                </div>
+  1959→                {milestone.achieved ? (
+  1960→                  <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+  1961→                ) : (
+  1962→                  <Circle className="h-5 w-5 text-muted-foreground/30 shrink-0" />
+  1963→                )}
+  1964→              </motion.div>
+  1965→            ))}
+  1966→          </div>
+  1967→        </CardContent>
+  1968→      </Card>
+  1969→    </div>
+  1970→  );
+  1971→}
+  1972→
+  1973→// ─── Skeleton for loading states ──────────────────────────────
+  1974→function SectionSkeleton({ count = 3 }: { count?: number }) {
+  1975→  return (
+  1976→    <div className="space-y-3">
+  1977→      {Array.from({ length: count }).map((_, i) => (
+  1978→        <div key={i} className="rounded-xl p-4 bg-muted/30 animate-pulse space-y-3">
+  1979→          <div className="h-4 bg-muted rounded w-1/2" />
+  1980→          <div className="h-3 bg-muted rounded w-3/4" />
+  1981→          <div className="h-3 bg-muted rounded w-1/3" />
+  1982→        </div>
+  1983→      ))}
+  1984→    </div>
+  1985→  );
+  1986→}
+  1987→
+  1988→// ─── Main Component ────────────────────────────────────────
+  1989→export function LearnerCourse() {
+  1990→  const userId = useAppStore(s => s.currentUser?.id) || '';
+  1991→  const currentUser = useAppStore(s => s.currentUser);
+  1992→  const tenantId = useAppStore(s => s.currentTenant?.id) || '';
+  1993→  const setView = useAppStore(s => s.setView);
+  1994→  const [showUnenrollConfirm, setShowUnenrollConfirm] = useState(false);
+  1995→
+  1996→  // Fetch courses to determine the first course ID
+  1997→  const { data: coursesData, isLoading: coursesLoading } = useCourses(tenantId || undefined);
+  1998→  const selectedCourseId = useAppStore(s => s.selectedCourseId);
+  1999→  const firstCourseId = selectedCourseId || (coursesData && coursesData.length > 0 ? coursesData[0].id : null);
+  2000→
+
+[showing lines 1-2000 of 3279; use offset=2001 with limit to continue reading]

@@ -18,6 +18,9 @@ import {
   ArrowRight,
   GraduationCap,
   Search,
+  Settings,
+  Trophy,
+  Sparkles,
 } from 'lucide-react';
 import type { AppView } from '@/types';
 
@@ -31,7 +34,7 @@ interface SearchResult {
 }
 
 export function SearchDialog() {
-  const { activeModal, setActiveModal, setView, appMode, currentTenant } = useAppStore();
+  const { activeModal, setActiveModal, setView, appMode, currentTenant, setSelectedCourseId } = useAppStore();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -106,7 +109,7 @@ export function SearchDialog() {
               description: a.description || `${a.type} · Pass: ${a.passingScore}%`,
               type: 'assessment',
               meta: a.course?.title || 'No course',
-              view: 'admin-assessments',
+              view: appMode === 'admin' ? 'admin-assessments' : 'learner-course',
             });
           }
 
@@ -126,8 +129,11 @@ export function SearchDialog() {
     setOpen(false);
     setQuery('');
     setResults([]);
+    if (result.type === 'course') {
+      setSelectedCourseId(result.id);
+    }
     setView(result.view);
-  }, [setView]);
+  }, [setView, setSelectedCourseId]);
 
   const typeIcon = (type: SearchResult['type']) => {
     switch (type) {
@@ -156,14 +162,14 @@ export function SearchDialog() {
         { label: 'Go to Courses', view: 'admin-courses', icon: <BookOpen className="h-4 w-4" /> },
         { label: 'Go to Community', view: 'admin-community', icon: <MessageSquare className="h-4 w-4" /> },
         { label: 'Go to Assessments', view: 'admin-assessments', icon: <ClipboardCheck className="h-4 w-4" /> },
-        { label: 'Go to Settings', view: 'admin-settings', icon: <Search className="h-4 w-4" /> },
+        { label: 'Go to Settings', view: 'admin-settings', icon: <Settings className="h-4 w-4" /> },
       ]
     : [
         { label: 'Go to Dashboard', view: 'learner-dashboard', icon: <GraduationCap className="h-4 w-4" /> },
         { label: 'Go to My Courses', view: 'learner-course', icon: <BookOpen className="h-4 w-4" /> },
         { label: 'Go to Community', view: 'learner-community', icon: <MessageSquare className="h-4 w-4" /> },
-        { label: 'Go to Achievements', view: 'learner-achievements', icon: <Search className="h-4 w-4" /> },
-        { label: 'Go to AI Tutor', view: 'ai-assistant', icon: <Search className="h-4 w-4" /> },
+        { label: 'Go to Achievements', view: 'learner-achievements', icon: <Trophy className="h-4 w-4" /> },
+        { label: 'Go to AI Tutor', view: 'ai-assistant', icon: <Sparkles className="h-4 w-4" /> },
       ];
 
   return (

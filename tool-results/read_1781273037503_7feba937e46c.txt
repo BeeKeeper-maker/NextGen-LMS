@@ -1,0 +1,2002 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import { useState, useEffect, useRef, useCallback } from 'react';
+     4→     4→import { useRouter } from 'next/navigation';
+     5→     5→import { useAppStore } from '@/store/app-store';
+     6→     6→import { Button } from '@/components/ui/button';
+     7→     7→import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+     8→     8→import { Badge } from '@/components/ui/badge';
+     9→     9→import { Input } from '@/components/ui/input';
+    10→    10→import { LegalLinks } from '@/components/shared/legal-content-dialog';
+    11→    11→
+    12→    12→// Static marketing data - pricing plans are not user-generated, kept inline
+    13→    13→const pricingPlans = [
+    14→    14→  { id: 'starter', name: 'Starter', price: 49, currency: 'USD', period: '/month', description: 'Perfect for individual creators just getting started', features: ['Up to 3 courses', 'Up to 500 students', 'Basic community features', 'Email support', 'Standard certificates', '1 admin user'], highlighted: false, ctaText: 'Start Free Trial' },
+    15→    15→  { id: 'professional', name: 'Professional', price: 97, currency: 'USD', period: '/month', description: 'For growing creators and small businesses', features: ['Unlimited courses', 'Up to 5,000 students', 'Advanced community & live cohorts', 'AI content generation', 'AI tutoring assistant', 'Custom certificates & branding', '0% transaction fees', 'Priority support', '5 admin/team users', 'Advanced analytics'], highlighted: true, ctaText: 'Start Free Trial' },
+    16→    16→  { id: 'enterprise', name: 'Enterprise', price: 249, currency: 'USD', period: '/month', description: 'For organizations requiring full control and scale', features: ['Everything in Professional', 'Unlimited students', 'SSO / SAML authentication', 'Custom domain & full white-label', 'API access & webhooks', 'CRM integrations (Salesforce, HubSpot)', 'Dedicated account manager', 'SLA guarantee (99.99%)', 'Unlimited team users', 'Audit logs & compliance reports'], highlighted: false, ctaText: 'Contact Sales' },
+    17→    17→];
+    18→    18→
+    19→    19→// Static marketing data - competitor comparison is not user-generated, kept inline
+    20→    20→const competitorComparison = [
+    21→    21→  { feature: 'Transaction Fees', nextgen: '0% on all plans', kajabi: '0%', teachable: 'Up to 10%', skool: '10% on Hobby', mightyNetworks: 'Up to 3%' },
+    22→    22→  { feature: 'AI Content Generation', nextgen: true, kajabi: false, teachable: false, skool: false, mightyNetworks: false },
+    23→    23→  { feature: 'AI Tutoring Assistant', nextgen: true, kajabi: false, teachable: false, skool: false, mightyNetworks: false },
+    24→    24→  { feature: 'Native Community', nextgen: true, kajabi: true, teachable: false, skool: true, mightyNetworks: true },
+    25→    25→  { feature: 'Assessment Engine', nextgen: true, kajabi: false, teachable: true, skool: false, mightyNetworks: false },
+    26→    26→  { feature: 'Auto Certificates', nextgen: true, kajabi: false, teachable: true, skool: false, mightyNetworks: true },
+    27→    27→  { feature: 'Multi-Currency', nextgen: true, kajabi: false, teachable: false, skool: false, mightyNetworks: false },
+    28→    28→  { feature: 'White-Label Branding', nextgen: true, kajabi: 'Limited', teachable: false, skool: false, mightyNetworks: 'Partial' },
+    29→    29→  { feature: 'Live Cohorts', nextgen: true, kajabi: true, teachable: false, skool: false, mightyNetworks: true },
+    30→    30→  { feature: 'SSO / SAML', nextgen: true, kajabi: false, teachable: false, skool: false, mightyNetworks: false },
+    31→    31→  { feature: 'Intrinsic Gamification', nextgen: true, kajabi: false, teachable: false, skool: 'Toxic mechanics', mightyNetworks: false },
+    32→    32→  { feature: 'Entry Price', nextgen: '$49/mo', kajabi: '$149/mo', teachable: '$39/mo + fees', skool: '$99/mo', mightyNetworks: '$39/mo' },
+    33→    33→];
+    34→    34→
+    35→    35→import {
+    36→    36→  Sparkles,
+    37→    37→  Bot,
+    38→    38→  Users,
+    39→    39→  ClipboardCheck,
+    40→    40→  Award,
+    41→    41→  Globe,
+    42→    42→  Palette,
+    43→    43→  BarChart3,
+    44→    44→  Video,
+    45→    45→  Shield,
+    46→    46→  DollarSign,
+    47→    47→  Languages,
+    48→    48→  Check,
+    49→    49→  X,
+    50→    50→  Menu,
+    51→    51→  ChevronRight,
+    52→    52→  ChevronLeft,
+    53→    53→  Star,
+    54→    54→  ArrowRight,
+    55→    55→  ArrowUp,
+    56→    56→  Twitter,
+    57→    57→  Linkedin,
+    58→    58→  Github,
+    59→    59→  Youtube,
+    60→    60→  GraduationCap,
+    61→    61→  Zap,
+    62→    62→  Play,
+    63→    63→  Mail,
+    64→    64→  MessageCircle,
+    65→    65→  Heart,
+    66→    66→  Pin,
+    67→    67→  Eye,
+    68→    68→  Clock,
+    69→    69→  MessageSquare,
+    70→    70→  TrendingUp,
+    71→    71→  UserPlus,
+    72→    72→  Trophy,
+    73→    73→  BookOpen,
+    74→    74→  Lightbulb,
+    75→    75→  Target,
+    76→    76→  Rocket,
+    77→    77→  Crown,
+    78→    78→  Minus,
+    79→    79→} from 'lucide-react';
+    80→    80→import { motion, AnimatePresence, useInView, useScroll, useTransform } from 'framer-motion';
+    81→    81→
+    82→    82→// ============================================================
+    83→    83→// Feature Definitions (with category and tooltip)
+    84→    84→// ============================================================
+    85→    85→const features = [
+    86→    86→  { icon: Sparkles, title: 'AI Content Generation', description: 'Generate course outlines, quizzes, and lesson content with advanced AI. Save hours of creation time.', category: 'AI', featured: true, tooltip: 'Powered by GPT-4 with custom training on educational content' },
+    87→    87→  { icon: Bot, title: 'AI Tutoring Assistant', description: '24/7 intelligent tutor that answers student questions, explains concepts, and adapts to learning styles.', category: 'AI', featured: false, tooltip: 'Context-aware AI that references your specific course material' },
+    88→    88→  { icon: Users, title: 'Integrated Community', description: 'Built-in discussions, live cohorts, and peer learning. No need for separate community tools.', category: 'Community', featured: false, tooltip: 'Forums, threads, DMs, and live events all in one place' },
+    89→    89→  { icon: ClipboardCheck, title: 'Assessment Engine', description: 'Quizzes, assignments, peer reviews, and coding challenges with auto-grading and analytics.', category: 'Analytics', featured: false, tooltip: '15+ question types with AI-powered auto-grading' },
+    90→    90→  { icon: Award, title: 'Auto Certificates', description: 'Automatically issue branded certificates on course completion with verification codes.', category: 'Analytics', featured: false, tooltip: 'Customizable templates with QR code verification' },
+    91→    91→  { icon: Globe, title: 'Multi-Currency Checkout', description: 'Sell in 50+ currencies with localized pricing. Support for Stripe, PayPal, and more.', category: 'Commerce', featured: false, tooltip: 'Dynamic currency conversion with PPP pricing support' },
+    92→    92→  { icon: Palette, title: 'White-Label Branding', description: 'Full brand customization — colors, fonts, domain, and logos. Your platform, your identity.', category: 'Commerce', featured: false, tooltip: 'Custom CSS, domain mapping, and complete visual control' },
+    93→    93→  { icon: BarChart3, title: 'Advanced Analytics', description: 'Deep insights into learner engagement, revenue trends, and completion funnels.', category: 'Analytics', featured: false, tooltip: 'Real-time dashboards with exportable reports' },
+    94→    94→  { icon: Video, title: 'Live Cohorts', description: 'Schedule and run live sessions with built-in video, chat, and attendance tracking.', category: 'Community', featured: false, tooltip: 'HD video with breakout rooms and recording' },
+    95→    95→  { icon: Shield, title: 'RBAC Governance', description: 'Role-based access control for admins, instructors, creators, and learners.', category: 'Analytics', featured: false, tooltip: 'Granular permissions with audit trails' },
+    96→    96→  { icon: DollarSign, title: 'Zero Transaction Fees', description: 'Keep 100% of your revenue. No hidden fees, no transaction taxes on any plan.', category: 'Commerce', featured: false, tooltip: 'No processing fees, no hidden charges, ever' },
+    97→    97→  { icon: Languages, title: 'Global i18n', description: 'Multi-language support for global audiences. Localize your entire platform with ease.', category: 'Community', featured: false, tooltip: '40+ languages with automatic detection' },
+    98→    98→];
+    99→    99→
+   100→   100→// ============================================================
+   101→   101→// Testimonials (with star ratings and role badges)
+   102→   102→// ============================================================
+   103→   103→const testimonials = [
+   104→   104→  {
+   105→   105→    name: 'Dr. Sarah Chen',
+   106→   106→    role: 'CEO, TechAcademy',
+   107→   107→    company: 'TechAcademy',
+   108→   108→    quote: 'NextGen LMS transformed our online education business. The AI tutoring alone increased student engagement by 40%. Zero transaction fees saved us over $15K in the first year.',
+   109→   109→    avatar: 'SC',
+   110→   110→    rating: 5,
+   111→   111→    badge: 'Enterprise',
+   112→   112→  },
+   113→   113→  {
+   114→   114→    name: 'Marcus Johnson',
+   115→   115→    role: 'Course Creator, 50K+ Students',
+   116→   116→    company: 'Independent',
+   117→   117→    quote: 'I switched from Kajabi and never looked back. The built-in community features and assessment engine are game-changers. My students love the interactive experience.',
+   118→   118→    avatar: 'MJ',
+   119→   119→    rating: 5,
+   120→   120→    badge: 'Professional',
+   121→   121→  },
+   122→   122→  {
+   123→   123→    name: 'Priya Sharma',
+   124→   124→    role: 'Head of Learning, Fortune 500',
+   125→   125→    company: 'Fortune 500',
+   126→   126→    quote: 'The white-label branding and SSO integration made it seamless to deploy across our organization. The analytics give us insights we never had before.',
+   127→   127→    avatar: 'PS',
+   128→   128→    rating: 5,
+   129→   129→    badge: 'Enterprise',
+   130→   130→  },
+   131→   131→  {
+   132→   132→    name: 'Alex Rivera',
+   133→   133→    role: 'Solo Creator, $200K+ Revenue',
+   134→   134→    company: 'Independent',
+   135→   135→    quote: 'As a solo creator, the AI content generation saves me 10+ hours per week. The zero transaction fees mean I keep more of what I earn. Absolute no-brainer.',
+   136→   136→    avatar: 'AR',
+   137→   137→    rating: 5,
+   138→   138→    badge: 'Professional',
+   139→   139→  },
+   140→   140→  {
+   141→   141→    name: 'Emma Thompson',
+   142→   142→    role: 'Director, Online University',
+   143→   143→    company: 'Online University',
+   144→   144→    quote: 'We migrated 200+ courses to NextGen LMS. The multi-currency checkout and certificate automation made scaling globally effortless. The support team is phenomenal.',
+   145→   145→    avatar: 'ET',
+   146→   146→    rating: 5,
+   147→   147→    badge: 'Enterprise',
+   148→   148→  },
+   149→   149→];
+   150→   150→
+   151→   151→// ============================================================
+   152→   152→// Community Preview Posts
+   153→   153→// ============================================================
+   154→   154→const communityPreviewPosts = [
+   155→   155→  {
+   156→   156→    name: 'Jamie Rodriguez',
+   157→   157→    initials: 'JR',
+   158→   158→    color: 'bg-emerald-500',
+   159→   159→    timestamp: '2 hours ago',
+   160→   160→    content: 'Just completed the React Masterclass! The new hooks module is incredible. Anyone else working through the final project?',
+   161→   161→    likes: 24,
+   162→   162→    comments: 8,
+   163→   163→    pinned: true,
+   164→   164→  },
+   165→   165→  {
+   166→   166→    name: 'Aisha Patel',
+   167→   167→    initials: 'AP',
+   168→   168→    color: 'bg-violet-500',
+   169→   169→    timestamp: '5 hours ago',
+   170→   170→    content: 'Can someone explain the difference between server components and client components in Next.js? The docs are a bit confusing on this...',
+   171→   171→    likes: 12,
+   172→   172→    comments: 15,
+   173→   173→    pinned: false,
+   174→   174→  },
+   175→   175→  {
+   176→   176→    name: 'David Kim',
+   177→   177→    initials: 'DK',
+   178→   178→    color: 'bg-amber-500',
+   179→   179→    timestamp: '8 hours ago',
+   180→   180→    content: 'Pro tip: Use the AI tutor to generate practice quizzes before exams. It creates questions based on your weak areas. Game changer!',
+   181→   181→    likes: 47,
+   182→   182→    comments: 21,
+   183→   183→    pinned: false,
+   184→   184→  },
+   185→   185→  {
+   186→   186→    name: 'Sarah Mitchell',
+   187→   187→    initials: 'SM',
+   188→   188→    color: 'bg-sky-500',
+   189→   189→    timestamp: '1 day ago',
+   190→   190→    content: 'My cohort starts the live session tomorrow on Advanced TypeScript patterns. So excited! Who else is joining?',
+   191→   191→    likes: 18,
+   192→   192→    comments: 6,
+   193→   193→    pinned: false,
+   194→   194→  },
+   195→   195→];
+   196→   196→
+   197→   197→// ============================================================
+   198→   198→// Integrations Data
+   199→   199→// ============================================================
+   200→   200→const integrations = [
+   201→   201→  { name: 'Stripe', icon: DollarSign, color: 'text-violet-600 bg-violet-50 dark:bg-violet-950/40 dark:text-violet-400' },
+   202→   202→  { name: 'PayPal', icon: DollarSign, color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/40 dark:text-blue-400' },
+   203→   203→  { name: 'Zoom', icon: Video, color: 'text-sky-600 bg-sky-50 dark:bg-sky-950/40 dark:text-sky-400' },
+   204→   204→  { name: 'Google Analytics', icon: BarChart3, color: 'text-orange-600 bg-orange-50 dark:bg-orange-950/40 dark:text-orange-400' },
+   205→   205→  { name: 'HubSpot', icon: Users, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-400' },
+   206→   206→  { name: 'Salesforce', icon: Globe, color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/40 dark:text-blue-400' },
+   207→   207→  { name: 'Slack', icon: MessageCircle, color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/40 dark:text-purple-400' },
+   208→   208→  { name: 'Zapier', icon: Zap, color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-400' },
+   209→   209→];
+   210→   210→
+   211→   211→// ============================================================
+   212→   212→// Animation Variants
+   213→   213→// ============================================================
+   214→   214→const fadeInUp = {
+   215→   215→  hidden: { opacity: 0, y: 30 },
+   216→   216→  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } },
+   217→   217→};
+   218→   218→
+   219→   219→const staggerContainer = {
+   220→   220→  hidden: {},
+   221→   221→  visible: { transition: { staggerChildren: 0.1 } },
+   222→   222→};
+   223→   223→
+   224→   224→const staggerContainerSlow = {
+   225→   225→  hidden: {},
+   226→   226→  visible: { transition: { staggerChildren: 0.15 } },
+   227→   227→};
+   228→   228→
+   229→   229→// Section reveal variant — each section fades + slides in
+   230→   230→const sectionReveal = {
+   231→   231→  hidden: { opacity: 0, y: 40 },
+   232→   232→  visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: 'easeOut' } },
+   233→   233→};
+   234→   234→
+   235→   235→// ============================================================
+   236→   236→// Shimmer Text Component (for hero tagline)
+   237→   237→// ============================================================
+   238→   238→function ShimmerText({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+   239→   239→  return (
+   240→   240→    <span className={`relative inline-block ${className}`}>
+   241→   241→      <span className="relative z-10">{children}</span>
+   242→   242→      <span
+   243→   243→        className="absolute inset-0 z-0 bg-gradient-to-r from-transparent via-white/30 to-transparent dark:via-white/10 animate-shimmer bg-[length:200%_100%]"
+   244→   244→        aria-hidden="true"
+   245→   245→      />
+   246→   246→      <style jsx>{`
+   247→   247→        @keyframes shimmer {
+   248→   248→          0% { background-position: -200% 0; }
+   249→   249→          100% { background-position: 200% 0; }
+   250→   250→        }
+   251→   251→        .animate-shimmer {
+   252→   252→          animation: shimmer 3s ease-in-out infinite;
+   253→   253→        }
+   254→   254→      `}</style>
+   255→   255→    </span>
+   256→   256→  );
+   257→   257→}
+   258→   258→
+   259→   259→// ============================================================
+   260→   260→// Typing Animation Component
+   261→   261→// ============================================================
+   262→   262→function TypingText({ text, speed = 35, delay = 0 }: { text: string; speed?: number; delay?: number }) {
+   263→   263→  const [displayed, setDisplayed] = useState('');
+   264→   264→  const [started, setStarted] = useState(false);
+   265→   265→
+   266→   266→  useEffect(() => {
+   267→   267→    const timer = setTimeout(() => setStarted(true), delay);
+   268→   268→    return () => clearTimeout(timer);
+   269→   269→  }, [delay]);
+   270→   270→
+   271→   271→  useEffect(() => {
+   272→   272→    if (!started) return;
+   273→   273→    if (displayed.length < text.length) {
+   274→   274→      const timer = setTimeout(() => {
+   275→   275→        setDisplayed(text.slice(0, displayed.length + 1));
+   276→   276→      }, speed);
+   277→   277→      return () => clearTimeout(timer);
+   278→   278→    }
+   279→   279→  }, [displayed, text, speed, started]);
+   280→   280→
+   281→   281→  return (
+   282→   282→    <span>
+   283→   283→      {displayed}
+   284→   284→      {displayed.length < text.length && started && (
+   285→   285→        <span className="inline-block w-0.5 h-5 bg-emerald-500 ml-0.5 animate-pulse align-middle" />
+   286→   286→      )}
+   287→   287→    </span>
+   288→   288→  );
+   289→   289→}
+   290→   290→
+   291→   291→// ============================================================
+   292→   292→// Rotating Text Component (for hero subtitle cycling)
+   293→   293→// ============================================================
+   294→   294→function RotatingText({ phrases, interval = 3000 }: { phrases: string[]; interval?: number }) {
+   295→   295→  const [index, setIndex] = useState(0);
+   296→   296→  const [direction, setDirection] = useState(1);
+   297→   297→
+   298→   298→  useEffect(() => {
+   299→   299→    const timer = setInterval(() => {
+   300→   300→      setDirection(1);
+   301→   301→      setIndex((prev) => (prev + 1) % phrases.length);
+   302→   302→    }, interval);
+   303→   303→    return () => clearInterval(timer);
+   304→   304→  }, [phrases.length, interval]);
+   305→   305→
+   306→   306→  return (
+   307→   307→    <AnimatePresence mode="wait" custom={direction}>
+   308→   308→      <motion.span
+   309→   309→        key={phrases[index]}
+   310→   310→        custom={direction}
+   311→   311→        initial={{ y: 20, opacity: 0 }}
+   312→   312→        animate={{ y: 0, opacity: 1 }}
+   313→   313→        exit={{ y: -20, opacity: 0 }}
+   314→   314→        transition={{ duration: 0.4, ease: 'easeInOut' }}
+   315→   315→        className="inline-block bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 bg-clip-text text-transparent font-semibold"
+   316→   316→      >
+   317→   317→        {phrases[index]}
+   318→   318→      </motion.span>
+   319→   319→    </AnimatePresence>
+   320→   320→  );
+   321→   321→}
+   322→   322→
+   323→   323→// ============================================================
+   324→   324→// Animated Grid Background
+   325→   325→// ============================================================
+   326→   326→function GridBackground() {
+   327→   327→  return (
+   328→   328→    <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-[0.03]">
+   329→   329→      <svg width="100%" height="100%">
+   330→   330→        <defs>
+   331→   331→          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+   332→   332→            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="1" />
+   333→   333→          </pattern>
+   334→   334→        </defs>
+   335→   335→        <rect width="100%" height="100%" fill="url(#grid)" className="text-foreground" />
+   336→   336→      </svg>
+   337→   337→    </div>
+   338→   338→  );
+   339→   339→}
+   340→   340→
+   341→   341→// ============================================================
+   342→   342→// Noise / Grain Texture Overlay
+   343→   343→// ============================================================
+   344→   344→function GrainOverlay() {
+   345→   345→  return (
+   346→   346→    <div className="absolute inset-0 pointer-events-none z-10 opacity-[0.035]">
+   347→   347→      <svg width="100%" height="100%">
+   348→   348→        <filter id="grain">
+   349→   349→          <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
+   350→   350→        </filter>
+   351→   351→        <rect width="100%" height="100%" filter="url(#grain)" />
+   352→   352→      </svg>
+   353→   353→    </div>
+   354→   354→  );
+   355→   355→}
+   356→   356→
+   357→   357→// ============================================================
+   358→   358→// Constellation Particles — dots connected with lines
+   359→   359→// ============================================================
+   360→   360→const constellationData = Array.from({ length: 18 }, (_, i) => ({
+   361→   361→  id: i,
+   362→   362→  x: ((i * 17 + 5) % 95) + 2,
+   363→   363→  y: ((i * 23 + 11) % 90) + 5,
+   364→   364→  size: ((i * 3 + 2) % 3) + 2,
+   365→   365→  duration: 8 + ((i * 7 + 3) % 8),
+   366→   366→  delay: ((i * 5 + 1) % 6),
+   367→   367→  driftX: ((i * 13 % 7) - 3) * 8,
+   368→   368→  driftY: ((i * 11 % 5) - 2) * 6,
+   369→   369→}));
+   370→   370→
+   371→   371→// Pre-compute constellation lines (deterministic, no state needed)
+   372→   372→const constellationLines = constellationData.flatMap((p1, i) =>
+   373→   373→  constellationData.slice(i + 1).flatMap((p2) => {
+   374→   374→    const dx = p1.x - p2.x;
+   375→   375→    const dy = p1.y - p2.y;
+   376→   376→    const dist = Math.sqrt(dx * dx + dy * dy);
+   377→   377→    if (dist < 25) {
+   378→   378→      return [{ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, opacity: Math.max(0, 1 - dist / 25) * 0.15 }];
+   379→   379→    }
+   380→   380→    return [];
+   381→   381→  })
+   382→   382→);
+   383→   383→
+   384→   384→function ConstellationParticles() {
+   385→   385→  return (
+   386→   386→    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+   387→   387→      {/* SVG lines layer */}
+   388→   388→      <svg className="absolute inset-0 w-full h-full">
+   389→   389→        {constellationLines.map((line, i) => (
+   390→   390→          <line
+   391→   391→            key={`line-${i}`}
+   392→   392→            x1={`${line.x1}%`}
+   393→   393→            y1={`${line.y1}%`}
+   394→   394→            x2={`${line.x2}%`}
+   395→   395→            y2={`${line.y2}%`}
+   396→   396→            stroke="currentColor"
+   397→   397→            strokeWidth="0.5"
+   398→   398→            className="text-emerald-500"
+   399→   399→            style={{ opacity: line.opacity }}
+   400→   400→          />
+   401→   401→        ))}
+   402→   402→      </svg>
+   403→   403→      {/* Dots layer */}
+   404→   404→      {constellationData.map((p) => (
+   405→   405→        <motion.div
+   406→   406→          key={p.id}
+   407→   407→          className="absolute rounded-full bg-emerald-400/30 shadow-[0_0_4px_rgba(52,211,153,0.3)]"
+   408→   408→          style={{
+   409→   409→            width: p.size,
+   410→   410→            height: p.size,
+   411→   411→            left: `${p.x}%`,
+   412→   412→            top: `${p.y}%`,
+   413→   413→          }}
+   414→   414→          animate={{
+   415→   415→            x: [0, p.driftX, 0],
+   416→   416→            y: [0, p.driftY, 0],
+   417→   417→            opacity: [0.3, 0.7, 0.3],
+   418→   418→          }}
+   419→   419→          transition={{
+   420→   420→            duration: p.duration,
+   421→   421→            repeat: Infinity,
+   422→   422→            delay: p.delay,
+   423→   423→            ease: 'easeInOut',
+   424→   424→          }}
+   425→   425→        />
+   426→   426→      ))}
+   427→   427→    </div>
+   428→   428→  );
+   429→   429→}
+   430→   430→
+   431→   431→// ============================================================
+   432→   432→// Floating Particles — deterministic seeded positions to avoid hydration mismatch
+   433→   433→// ============================================================
+   434→   434→const particleData = Array.from({ length: 20 }, (_, i) => ({
+   435→   435→  width: ((i * 7 + 3) % 5) + 2,
+   436→   436→  height: ((i * 5 + 2) % 5) + 2,
+   437→   437→  left: `${((i * 13 + 7) % 100)}%`,
+   438→   438→  top: `${((i * 17 + 11) % 100)}%`,
+   439→   439→  duration: 4 + ((i * 3 + 1) % 5),
+   440→   440→  delay: ((i * 2 + 3) % 4),
+   441→   441→}));
+   442→   442→
+   443→   443→function FloatingParticles() {
+   444→   444→  return (
+   445→   445→    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+   446→   446→      {particleData.map((p, i) => (
+   447→   447→        <motion.div
+   448→   448→          key={i}
+   449→   449→          className="absolute rounded-full bg-emerald-500/20"
+   450→   450→          style={{
+   451→   451→            width: p.width,
+   452→   452→            height: p.height,
+   453→   453→            left: p.left,
+   454→   454→            top: p.top,
+   455→   455→          }}
+   456→   456→          animate={{
+   457→   457→            y: [0, -30, 0],
+   458→   458→            opacity: [0.2, 0.6, 0.2],
+   459→   459→          }}
+   460→   460→          transition={{
+   461→   461→            duration: p.duration,
+   462→   462→            repeat: Infinity,
+   463→   463→            delay: p.delay,
+   464→   464→            ease: 'easeInOut',
+   465→   465→          }}
+   466→   466→        />
+   467→   467→      ))}
+   468→   468→    </div>
+   469→   469→  );
+   470→   470→}
+   471→   471→
+   472→   472→// ============================================================
+   473→   473→// Parallax Orbs (Hero background orbs with parallax scroll)
+   474→   474→// ============================================================
+   475→   475→function ParallaxOrbs() {
+   476→   476→  const ref = useRef<HTMLDivElement>(null);
+   477→   477→  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
+   478→   478→  const y1 = useTransform(scrollYProgress, [0, 1], [0, 150]);
+   479→   479→  const y2 = useTransform(scrollYProgress, [0, 1], [0, -100]);
+   480→   480→  const y3 = useTransform(scrollYProgress, [0, 1], [0, 80]);
+   481→   481→
+   482→   482→  return (
+   483→   483→    <div ref={ref} className="absolute inset-0 overflow-hidden pointer-events-none">
+   484→   484→      <motion.div
+   485→   485→        className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl"
+   486→   486→        style={{ y: y1 }}
+   487→   487→      />
+   488→   488→      <motion.div
+   489→   489→        className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-violet-500/10 blur-3xl"
+   490→   490→        style={{ y: y2 }}
+   491→   491→      />
+   492→   492→      <motion.div
+   493→   493→        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[600px] w-[600px] rounded-full bg-slate-500/5 blur-3xl"
+   494→   494→        style={{ y: y3 }}
+   495→   495→      />
+   496→   496→    </div>
+   497→   497→  );
+   498→   498→}
+   499→   499→
+   500→   500→// ============================================================
+   501→   501→// Floating Dashboard Mockup (Hero) — with 3D perspective tilt on mouse move
+   502→   502→// ============================================================
+   503→   503→function DashboardMockup() {
+   504→   504→  const mockupRef = useRef<HTMLDivElement>(null);
+   505→   505→  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
+   506→   506→
+   507→   507→  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+   508→   508→    if (!mockupRef.current) return;
+   509→   509→    const rect = mockupRef.current.getBoundingClientRect();
+   510→   510→    const x = (e.clientX - rect.left) / rect.width - 0.5;
+   511→   511→    const y = (e.clientY - rect.top) / rect.height - 0.5;
+   512→   512→    setTilt({ rotateX: -y * 6, rotateY: x * 6 });
+   513→   513→  }, []);
+   514→   514→
+   515→   515→  const handleMouseLeave = useCallback(() => {
+   516→   516→    setTilt({ rotateX: 0, rotateY: 0 });
+   517→   517→  }, []);
+   518→   518→
+   519→   519→  return (
+   520→   520→    <motion.div
+   521→   521→      className="relative mx-auto mt-12 max-w-4xl"
+   522→   522→      initial={{ opacity: 0, y: 40 }}
+   523→   523→      animate={{ opacity: 1, y: 0 }}
+   524→   524→      transition={{ duration: 1, delay: 0.6, ease: 'easeOut' }}
+   525→   525→    >
+   526→   526→      <motion.div
+   527→   527→        animate={{ y: [0, -8, 0] }}
+   528→   528→        transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+   529→   529→        className="relative"
+   530→   530→      >
+   531→   531→        <div
+   532→   532→          ref={mockupRef}
+   533→   533→          onMouseMove={handleMouseMove}
+   534→   534→          onMouseLeave={handleMouseLeave}
+   535→   535→          style={{
+   536→   536→            perspective: 1200,
+   537→   537→          }}
+   538→   538→        >
+   539→   539→          <motion.div
+   540→   540→            animate={{
+   541→   541→              rotateX: tilt.rotateX,
+   542→   542→              rotateY: tilt.rotateY,
+   543→   543→            }}
+   544→   544→            transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+   545→   545→            style={{ transformStyle: 'preserve-3d' }}
+   546→   546→          >
+   547→   547→            {/* Glow effect behind mockup */}
+   548→   548→            <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/20 via-violet-500/20 to-emerald-500/20 rounded-2xl blur-2xl" />
+   549→   549→
+   550→   550→            {/* Mockup Card */}
+   551→   551→            <div className="relative rounded-xl border border-border/60 bg-card/90 backdrop-blur-sm shadow-2xl overflow-hidden">
+   552→   552→              {/* Window chrome */}
+   553→   553→              <div className="flex items-center gap-2 px-4 py-3 border-b border-border/40 bg-muted/30">
+   554→   554→                <div className="flex gap-1.5">
+   555→   555→                  <div className="h-3 w-3 rounded-full bg-red-400" />
+   556→   556→                  <div className="h-3 w-3 rounded-full bg-yellow-400" />
+   557→   557→                  <div className="h-3 w-3 rounded-full bg-green-400" />
+   558→   558→                </div>
+   559→   559→                <div className="flex-1 flex justify-center">
+   560→   560→                  <div className="h-6 w-64 rounded-md bg-muted/60 flex items-center justify-center">
+   561→   561→                    <span className="text-[10px] text-muted-foreground">academy.nextgen-lms.com/dashboard</span>
+   562→   562→                  </div>
+   563→   563→                </div>
+   564→   564→              </div>
+   565→   565→
+   566→   566→              {/* Dashboard content mockup */}
+   567→   567→              <div className="p-4 space-y-3">
+   568→   568→                {/* Sidebar + main */}
+   569→   569→                <div className="flex gap-3">
+   570→   570→                  {/* Mini sidebar */}
+   571→   571→                  <div className="w-12 shrink-0 space-y-2">
+   572→   572→                    <div className="h-8 w-8 rounded-lg bg-emerald-500/20 mx-auto" />
+   573→   573→                    {[1, 2, 3, 4].map((n) => (
+   574→   574→                      <div key={n} className="h-6 w-8 rounded bg-muted/60 mx-auto" />
+   575→   575→                    ))}
+   576→   576→                  </div>
+   577→   577→                  {/* Main area */}
+   578→   578→                  <div className="flex-1 space-y-3">
+   579→   579→                    {/* KPI row */}
+   580→   580→                    <div className="grid grid-cols-4 gap-2">
+   581→   581→                      {[
+   582→   582→                        { label: 'Revenue', value: '$47.8K', color: 'bg-emerald-500/10' },
+   583→   583→                        { label: 'Learners', value: '3,847', color: 'bg-violet-500/10' },
+   584→   584→                        { label: 'Completion', value: '72.4%', color: 'bg-amber-500/10' },
+   585→   585→                        { label: 'Engagement', value: '89.3%', color: 'bg-sky-500/10' },
+   586→   586→                      ].map((kpi) => (
+   587→   587→                        <div key={kpi.label} className={`rounded-lg ${kpi.color} p-2.5`}>
+   588→   588→                          <p className="text-[9px] text-muted-foreground">{kpi.label}</p>
+   589→   589→                          <p className="text-sm font-bold text-foreground">{kpi.value}</p>
+   590→   590→                        </div>
+   591→   591→                      ))}
+   592→   592→                    </div>
+   593→   593→                    {/* Chart area */}
+   594→   594→                    <div className="h-20 rounded-lg bg-muted/30 border border-border/30 flex items-end p-2 gap-0.5">
+   595→   595→                      {[40, 65, 45, 80, 55, 90, 70, 85, 60, 95, 75, 88].map((h, i) => (
+   596→   596→                        <motion.div
+   597→   597→                          key={i}
+   598→   598→                          className="flex-1 rounded-t bg-gradient-to-t from-emerald-500 to-emerald-400"
+   599→   599→                          initial={{ height: 0 }}
+   600→   600→                          animate={{ height: `${h}%` }}
+   601→   601→                          transition={{ duration: 0.6, delay: 1 + i * 0.05, ease: 'easeOut' }}
+   602→   602→                        />
+   603→   603→                      ))}
+   604→   604→                    </div>
+   605→   605→                  </div>
+   606→   606→                </div>
+   607→   607→              </div>
+   608→   608→            </div>
+   609→   609→          </motion.div>
+   610→   610→        </div>
+   611→   611→      </motion.div>
+   612→   612→    </motion.div>
+   613→   613→  );
+   614→   614→}
+   615→   615→
+   616→   616→// ============================================================
+   617→   617→// AI Live Demo Preview
+   618→   618→// ============================================================
+   619→   619→function AILiveDemo() {
+   620→   620→  const [currentLine, setCurrentLine] = useState(0);
+   621→   621→  const [displayText, setDisplayText] = useState('');
+   622→   622→  const lines = [
+   623→   623→    'Module 1: React Fundamentals & JSX',
+   624→   624→    'Module 2: State Management with Hooks',
+   625→   625→    'Module 3: Server Components & RSC',
+   626→   626→    'Module 4: API Routes & Data Fetching',
+   627→   627→    'Module 5: Authentication & Authorization',
+   628→   628→  ];
+   629→   629→
+   630→   630→  useEffect(() => {
+   631→   631→    if (currentLine >= lines.length) {
+   632→   632→      const resetTimer = setTimeout(() => {
+   633→   633→        setCurrentLine(0);
+   634→   634→        setDisplayText('');
+   635→   635→      }, 3000);
+   636→   636→      return () => clearTimeout(resetTimer);
+   637→   637→    }
+   638→   638→
+   639→   639→    const line = lines[currentLine];
+   640→   640→    let charIndex = 0;
+   641→   641→    setDisplayText('');
+   642→   642→
+   643→   643→    const typeTimer = setInterval(() => {
+   644→   644→      if (charIndex < line.length) {
+   645→   645→        setDisplayText(line.slice(0, charIndex + 1));
+   646→   646→        charIndex++;
+   647→   647→      } else {
+   648→   648→        clearInterval(typeTimer);
+   649→   649→        setTimeout(() => setCurrentLine((prev) => prev + 1), 800);
+   650→   650→      }
+   651→   651→    }, 40);
+   652→   652→
+   653→   653→    return () => clearInterval(typeTimer);
+   654→   654→  }, [currentLine]);
+   655→   655→
+   656→   656→  return (
+   657→   657→    <Card className="border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50/50 to-emerald-50/50 dark:from-violet-950/30 dark:to-emerald-950/30">
+   658→   658→      <CardHeader className="pb-3">
+   659→   659→        <div className="flex items-center gap-2">
+   660→   660→          <div className="h-8 w-8 rounded-lg bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center">
+   661→   661→            <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+   662→   662→          </div>
+   663→   663→          <div>
+   664→   664→            <CardTitle className="text-sm font-semibold">AI Course Generator</CardTitle>
+   665→   665→            <CardDescription className="text-xs">Watch AI generate a course outline...</CardDescription>
+   666→   666→          </div>
+   667→   667→        </div>
+   668→   668→      </CardHeader>
+   669→   669→      <CardContent>
+   670→   670→        <div className="rounded-lg bg-card/80 border border-border/40 p-3 font-mono text-xs space-y-1.5">
+   671→   671→          {lines.slice(0, currentLine).map((line, i) => (
+   672→   672→            <motion.div
+   673→   673→              key={i}
+   674→   674→              initial={{ opacity: 0, x: -10 }}
+   675→   675→              animate={{ opacity: 1, x: 0 }}
+   676→   676→              className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400"
+   677→   677→            >
+   678→   678→              <Check className="h-3 w-3 shrink-0" />
+   679→   679→              <span>{line}</span>
+   680→   680→            </motion.div>
+   681→   681→          ))}
+   682→   682→          {currentLine < lines.length && (
+   683→   683→            <div className="flex items-center gap-2 text-foreground">
+   684→   684→              <span className="text-violet-500 shrink-0">{'>'}</span>
+   685→   685→              <span>
+   686→   686→                {displayText}
+   687→   687→                <span className="inline-block w-1.5 h-3.5 bg-violet-500 ml-0.5 animate-pulse align-middle" />
+   688→   688→              </span>
+   689→   689→            </div>
+   690→   690→          )}
+   691→   691→          {currentLine >= lines.length && (
+   692→   692→            <motion.div
+   693→   693→              initial={{ opacity: 0 }}
+   694→   694→              animate={{ opacity: 1 }}
+   695→   695→              className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400"
+   696→   696→            >
+   697→   697→              <Check className="h-3 w-3 shrink-0" />
+   698→   698→              <span className="font-semibold">Course outline generated! 5 modules ready.</span>
+   699→   699→            </motion.div>
+   700→   700→          )}
+   701→   701→        </div>
+   702→   702→      </CardContent>
+   703→   703→    </Card>
+   704→   704→  );
+   705→   705→}
+   706→   706→
+   707→   707→// ============================================================
+   708→   708→// Animated Counter Hook
+   709→   709→// ============================================================
+   710→   710→function useAnimatedCounter(target: number, duration: number = 800) {
+   711→   711→  const [count, setCount] = useState(0);
+   712→   712→  const prevTarget = useRef(0);
+   713→   713→
+   714→   714→  useEffect(() => {
+   715→   715→    if (target === prevTarget.current) return;
+   716→   716→    prevTarget.current = target;
+   717→   717→
+   718→   718→    const start = count;
+   719→   719→    const diff = target - start;
+   720→   720→    const startTime = performance.now();
+   721→   721→
+   722→   722→    const animate = (now: number) => {
+   723→   723→      const elapsed = now - startTime;
+   724→   724→      const progress = Math.min(elapsed / duration, 1);
+   725→   725→      // easeOutCubic
+   726→   726→      const eased = 1 - Math.pow(1 - progress, 3);
+   727→   727→      setCount(Math.round(start + diff * eased));
+   728→   728→      if (progress < 1) {
+   729→   729→        requestAnimationFrame(animate);
+   730→   730→      }
+   731→   731→    };
+   732→   732→
+   733→   733→    requestAnimationFrame(animate);
+   734→   734→  }, [target, duration]);
+   735→   735→
+   736→   736→  return count;
+   737→   737→}
+   738→   738→
+   739→   739→// ============================================================
+   740→   740→// Savings Calculator (with animated counter)
+   741→   741→// ============================================================
+   742→   742→function SavingsCalculator() {
+   743→   743→  const [revenue, setRevenue] = useState(5000);
+   744→   744→  const teachableFee = revenue * 0.05 + 59;
+   745→   745→  const nextgenFee = 0;
+   746→   746→  const savings = Math.round(teachableFee - nextgenFee);
+   747→   747→  const animatedSavings = useAnimatedCounter(savings, 600);
+   748→   748→
+   749→   749→  return (
+   750→   750→    <Card className="border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50/50 to-slate-50/50 dark:from-emerald-950/30 dark:to-slate-950/30 h-full">
+   751→   751→      <CardHeader className="pb-3">
+   752→   752→        <CardTitle className="text-base flex items-center gap-2">
+   753→   753→          <DollarSign className="h-5 w-5 text-emerald-600" />
+   754→   754→          How much would you save?
+   755→   755→        </CardTitle>
+   756→   756→      </CardHeader>
+   757→   757→      <CardContent className="space-y-4">
+   758→   758→        <div>
+   759→   759→          <div className="flex items-center justify-between mb-2">
+   760→   760→            <span className="text-sm text-muted-foreground">Monthly Revenue</span>
+   761→   761→            <span className="text-lg font-bold text-foreground">${revenue.toLocaleString()}</span>
+   762→   762→          </div>
+   763→   763→          <input
+   764→   764→            type="range"
+   765→   765→            min={500}
+   766→   766→            max={50000}
+   767→   767→            step={500}
+   768→   768→            value={revenue}
+   769→   769→            onChange={(e) => setRevenue(Number(e.target.value))}
+   770→   770→            className="w-full h-2 rounded-full appearance-none cursor-pointer accent-emerald-600 relative"
+   771→   771→            style={{
+   772→   772→              background: `linear-gradient(to right, #10b981 0%, #8b5cf6 ${((revenue - 500) / (50000 - 500)) * 100}%, hsl(var(--muted)) ${((revenue - 500) / (50000 - 500)) * 100}%, hsl(var(--muted)) 100%)`,
+   773→   773→            }}
+   774→   774→          />
+   775→   775→          <div className="flex justify-between text-xs text-muted-foreground mt-1">
+   776→   776→            <span>$500</span>
+   777→   777→            <span>$50,000</span>
+   778→   778→          </div>
+   779→   779→        </div>
+   780→   780→
+   781→   781→        <div className="space-y-2">
+   782→   782→          <motion.div
+   783→   783→            className="flex items-center justify-between p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200/50 dark:border-red-800/50"
+   784→   784→            whileHover={{ scale: 1.02 }}
+   785→   785→            transition={{ duration: 0.15 }}
+   786→   786→          >
+   787→   787→            <span className="text-sm text-red-700 dark:text-red-400">With Teachable</span>
+   788→   788→            <span className="font-bold text-red-600 dark:text-red-400">${Math.round(teachableFee).toLocaleString()}/mo in fees</span>
+   789→   789→          </motion.div>
+   790→   790→          <motion.div
+   791→   791→            className="flex items-center justify-between p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/50"
+   792→   792→            whileHover={{ scale: 1.02 }}
+   793→   793→            transition={{ duration: 0.15 }}
+   794→   794→          >
+   795→   795→            <span className="text-sm text-emerald-700 dark:text-emerald-400">With NextGen</span>
+   796→   796→            <span className="font-bold text-emerald-600 dark:text-emerald-400">$0/mo in fees</span>
+   797→   797→          </motion.div>
+   798→   798→        </div>
+   799→   799→
+   800→   800→        <motion.div
+   801→   801→          className="text-center p-3 rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 text-white"
+   802→   802→          key={animatedSavings}
+   803→   803→          animate={{ scale: [1, 1.03, 1] }}
+   804→   804→          transition={{ duration: 0.3 }}
+   805→   805→        >
+   806→   806→          <p className="text-xs text-emerald-100">You save</p>
+   807→   807→          <p className="text-2xl font-bold">${animatedSavings.toLocaleString()}/month</p>
+   808→   808→        </motion.div>
+   809→   809→      </CardContent>
+   810→   810→    </Card>
+   811→   811→  );
+   812→   812→}
+   813→   813→
+   814→   814→// ============================================================
+   815→   815→// Sparkle Particles (for "2 months free" badge)
+   816→   816→// ============================================================
+   817→   817→function SparkleParticles() {
+   818→   818→  const sparkles = Array.from({ length: 6 }, (_, i) => ({
+   819→   819→    x: ((i * 17 + 5) % 30) - 15,
+   820→   820→    y: ((i * 13 + 3) % 20) - 10,
+   821→   821→    size: 2 + (i % 3),
+   822→   822→    delay: (i * 0.4) % 2,
+   823→   823→    duration: 1.5 + (i % 3) * 0.5,
+   824→   824→  }));
+   825→   825→
+   826→   826→  return (
+   827→   827→    <span className="relative inline-flex">
+   828→   828→      {sparkles.map((s, i) => (
+   829→   829→        <motion.span
+   830→   830→          key={i}
+   831→   831→          className="absolute pointer-events-none"
+   832→   832→          style={{
+   833→   833→            left: `calc(50% + ${s.x}px)`,
+   834→   834→            top: `calc(50% + ${s.y}px)`,
+   835→   835→            width: s.size,
+   836→   836→            height: s.size,
+   837→   837→          }}
+   838→   838→          animate={{
+   839→   839→            opacity: [0, 1, 0],
+   840→   840→            scale: [0.5, 1.2, 0.5],
+   841→   841→          }}
+   842→   842→          transition={{
+   843→   843→            duration: s.duration,
+   844→   844→            repeat: Infinity,
+   845→   845→            delay: s.delay,
+   846→   846→            ease: 'easeInOut',
+   847→   847→          }}
+   848→   848→        >
+   849→   849→          <span className="block w-full h-full rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.6)]" />
+   850→   850→        </motion.span>
+   851→   851→      ))}
+   852→   852→    </span>
+   853→   853→  );
+   854→   854→}
+   855→   855→
+   856→   856→// ============================================================
+   857→   857→// Animated Border Glow Card (Pulsing for "Most Popular")
+   858→   858→// ============================================================
+   859→   859→function GlowBorderCard({ children, highlighted }: { children: React.ReactNode; highlighted: boolean }) {
+   860→   860→  if (!highlighted) return <>{children}</>;
+   861→   861→
+   862→   862→  return (
+   863→   863→    <div className="relative group">
+   864→   864→      {/* Pulsing glow border */}
+   865→   865→      <motion.div
+   866→   866→        className="absolute -inset-[2px] rounded-xl bg-gradient-to-r from-emerald-500 via-violet-500 to-emerald-500 opacity-75 blur-[1px]"
+   867→   867→        animate={{
+   868→   868→          backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
+   869→   869→          opacity: [0.5, 0.85, 0.5],
+   870→   870→        }}
+   871→   871→        transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+   872→   872→        style={{ backgroundSize: '200% 200%' }}
+   873→   873→      />
+   874→   874→      {/* Outer glow pulse */}
+   875→   875→      <motion.div
+   876→   876→        className="absolute -inset-3 rounded-2xl bg-emerald-500/10"
+   877→   877→        animate={{ opacity: [0.2, 0.5, 0.2], scale: [1, 1.02, 1] }}
+   878→   878→        transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+   879→   879→      />
+   880→   880→      {/* Radial gradient glow behind popular card */}
+   881→   881→      <div className="absolute -inset-8 rounded-3xl bg-gradient-radial from-emerald-500/15 via-emerald-500/5 to-transparent pointer-events-none" />
+   882→   882→      {/* Gradient shine sweep */}
+   883→   883→      <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+   884→   884→        <motion.div
+   885→   885→          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+   886→   886→          animate={{ x: ['-100%', '200%'] }}
+   887→   887→          transition={{ duration: 3, repeat: Infinity, ease: 'linear', repeatDelay: 4 }}
+   888→   888→          style={{ width: '50%' }}
+   889→   889→        />
+   890→   890→      </div>
+   891→   891→      <div className="relative rounded-xl">{children}</div>
+   892→   892→    </div>
+   893→   893→  );
+   894→   894→}
+   895→   895→
+   896→   896→// ============================================================
+   897→   897→// Gradient Border Feature Card
+   898→   898→// ============================================================
+   899→   899→function GradientBorderCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+   900→   900→  return (
+   901→   901→    <div className={`relative group ${className}`}>
+   902→   902→      {/* Gradient border — appears on hover */}
+   903→   903→      <div className="absolute -inset-[1px] rounded-xl bg-gradient-to-r from-emerald-500/0 via-violet-500/0 to-emerald-500/0 group-hover:from-emerald-500/60 group-hover:via-violet-500/60 group-hover:to-emerald-500/60 transition-all duration-500 opacity-0 group-hover:opacity-100" />
+   904→   904→      {/* Glow shadow on hover */}
+   905→   905→      <div className="absolute -inset-2 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-r from-emerald-500/5 via-violet-500/5 to-emerald-500/5 blur-lg" />
+   906→   906→      <div className="relative">
+   907→   907→        {children}
+   908→   908→      </div>
+   909→   909→    </div>
+   910→   910→  );
+   911→   911→}
+   912→   912→
+   913→   913→// ============================================================
+   914→   914→// Animated Gradient Divider
+   915→   915→// ============================================================
+   916→   916→function AnimatedGradientDivider() {
+   917→   917→  return (
+   918→   918→    <div className="relative h-px w-full overflow-hidden">
+   919→   919→      <motion.div
+   920→   920→        className="absolute inset-0 h-full bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent"
+   921→   921→        animate={{ x: ['-100%', '100%'] }}
+   922→   922→        transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+   923→   923→        style={{ width: '50%' }}
+   924→   924→      />
+   925→   925→      <div className="absolute inset-0 h-full bg-gradient-to-r from-transparent via-border/40 to-transparent" />
+   926→   926→    </div>
+   927→   927→  );
+   928→   928→}
+   929→   929→
+   930→   930→// ============================================================
+   931→   931→// "As Seen In" Media Logos Marquee (smooth infinite scroll) — Enhanced
+   932→   932→// ============================================================
+   933→   933→function MediaLogosMarquee() {
+   934→   934→  const logos = ['TechCrunch', 'Forbes', 'Wired', 'EdTech', 'The Verge', 'VentureBeat'];
+   935→   935→
+   936→   936→  return (
+   937→   937→    <section className="py-10 bg-muted/20 overflow-hidden">
+   938→   938→      {/* Animated gradient divider - top */}
+   939→   939→      <AnimatedGradientDivider />
+   940→   940→
+   941→   941→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+   942→   942→        <motion.p
+   943→   943→          initial={{ opacity: 0, y: 10 }}
+   944→   944→          whileInView={{ opacity: 1, y: 0 }}
+   945→   945→          viewport={{ once: true }}
+   946→   946→          className="text-center text-xs text-muted-foreground uppercase tracking-[0.2em] font-medium mb-6"
+   947→   947→        >
+   948→   948→          As Seen In
+   949→   949→        </motion.p>
+   950→   950→      </div>
+   951→   951→      <div className="relative">
+   952→   952→        {/* Fade edges */}
+   953→   953→        <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-muted/20 to-transparent z-10 pointer-events-none" />
+   954→   954→        <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-muted/20 to-transparent z-10 pointer-events-none" />
+   955→   955→
+   956→   956→        <div className="flex animate-marquee-smooth">
+   957→   957→          {[...logos, ...logos, ...logos, ...logos, ...logos, ...logos, ...logos, ...logos].map((logo, i) => (
+   958→   958→            <div
+   959→   959→              key={`${logo}-${i}`}
+   960→   960→              className="flex items-center justify-center mx-8 sm:mx-12 shrink-0 group"
+   961→   961→            >
+   962→   962→              <motion.span
+   963→   963→                className="text-xl sm:text-2xl font-bold text-muted-foreground/40 whitespace-nowrap tracking-tight select-none transition-all duration-500 group-hover:text-muted-foreground/70 group-hover:drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]"
+   964→   964→                initial={{ opacity: 0.3 }}
+   965→   965→                animate={{ opacity: [0.3, 0.55, 0.3] }}
+   966→   966→                transition={{ duration: 4, repeat: Infinity, delay: (i * 0.5) % 4, ease: 'easeInOut' }}
+   967→   967→              >
+   968→   968→                {logo}
+   969→   969→              </motion.span>
+   970→   970→            </div>
+   971→   971→          ))}
+   972→   972→        </div>
+   973→   973→      </div>
+   974→   974→
+   975→   975→      {/* Animated gradient divider - bottom */}
+   976→   976→      <div className="mt-6">
+   977→   977→        <AnimatedGradientDivider />
+   978→   978→      </div>
+   979→   979→
+   980→   980→      <style jsx>{`
+   981→   981→        @keyframes marquee-smooth {
+   982→   982→          0% { transform: translateX(0); }
+   983→   983→          100% { transform: translateX(-12.5%); }
+   984→   984→        }
+   985→   985→        .animate-marquee-smooth {
+   986→   986→          animation: marquee-smooth 25s linear infinite;
+   987→   987→        }
+   988→   988→      `}</style>
+   989→   989→    </section>
+   990→   990→  );
+   991→   991→}
+   992→   992→
+   993→   993→// ============================================================
+   994→   994→// Animated Stats Section (between hero and features)
+   995→   995→// ============================================================
+   996→   996→function AnimatedStatsSection() {
+   997→   997→  const ref = useRef<HTMLDivElement>(null);
+   998→   998→  const isInView = useInView(ref, { once: true, margin: '-80px' });
+   999→   999→
+  1000→  1000→  const stats = [
+  1001→  1001→    { target: 10000, suffix: '+', label: 'Creators', prefix: '', gradient: 'from-emerald-600 to-emerald-400', iconBg: 'bg-emerald-500/10' },
+  1002→  1002→    { target: 500000, suffix: '+', label: 'Learners', prefix: '', gradient: 'from-violet-600 to-violet-400', iconBg: 'bg-violet-500/10' },
+  1003→  1003→    { target: 50, suffix: '+', label: 'Currencies', prefix: '', gradient: 'from-amber-600 to-amber-400', iconBg: 'bg-amber-500/10' },
+  1004→  1004→    { target: 99.9, suffix: '%', label: 'Uptime', prefix: '', gradient: 'from-sky-600 to-sky-400', iconBg: 'bg-sky-500/10', isDecimal: true },
+  1005→  1005→  ];
+  1006→  1006→
+  1007→  1007→  function StatCounter({ target, suffix, label, gradient, isDecimal = false }: {
+  1008→  1008→    target: number; suffix: string; label: string; gradient: string; isDecimal?: boolean;
+  1009→  1009→  }) {
+  1010→  1010→    const [count, setCount] = useState(0);
+  1011→  1011→    const prevTarget = useRef(0);
+  1012→  1012→
+  1013→  1013→    useEffect(() => {
+  1014→  1014→      if (!isInView) return;
+  1015→  1015→      if (target === prevTarget.current) return;
+  1016→  1016→      prevTarget.current = target;
+  1017→  1017→
+  1018→  1018→      const duration = 2000;
+  1019→  1019→      const startTime = performance.now();
+  1020→  1020→
+  1021→  1021→      const animate = (now: number) => {
+  1022→  1022→        const elapsed = now - startTime;
+  1023→  1023→        const progress = Math.min(elapsed / duration, 1);
+  1024→  1024→        // easeOutExpo
+  1025→  1025→        const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+  1026→  1026→        const current = target * eased;
+  1027→  1027→        setCount(isDecimal ? parseFloat(current.toFixed(1)) : Math.round(current));
+  1028→  1028→        if (progress < 1) {
+  1029→  1029→          requestAnimationFrame(animate);
+  1030→  1030→        }
+  1031→  1031→      };
+  1032→  1032→
+  1033→  1033→      requestAnimationFrame(animate);
+  1034→  1034→    }, [target, isInView, isDecimal]);
+  1035→  1035→
+  1036→  1036→    const displayValue = isDecimal
+  1037→  1037→      ? count.toFixed(1)
+  1038→  1038→      : count.toLocaleString('en-US');
+  1039→  1039→
+  1040→  1040→    return (
+  1041→  1041→      <motion.div
+  1042→  1042→        initial={{ opacity: 0, y: 30 }}
+  1043→  1043→        animate={isInView ? { opacity: 1, y: 0 } : {}}
+  1044→  1044→        transition={{ duration: 0.6, ease: 'easeOut' }}
+  1045→  1045→        className="relative group"
+  1046→  1046→      >
+  1047→  1047→        {/* Dot pattern behind each stat */}
+  1048→  1048→        <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none opacity-[0.06]">
+  1049→  1049→          <svg width="100%" height="100%">
+  1050→  1050→            <defs>
+  1051→  1051→              <pattern id={`stat-dots-${label}`} width="16" height="16" patternUnits="userSpaceOnUse">
+  1052→  1052→                <circle cx="8" cy="8" r="1.2" fill="currentColor" />
+  1053→  1053→              </pattern>
+  1054→  1054→            </defs>
+  1055→  1055→            <rect width="100%" height="100%" fill={`url(#stat-dots-${label})`} className="text-foreground" />
+  1056→  1056→          </svg>
+  1057→  1057→        </div>
+  1058→  1058→
+  1059→  1059→        <div className="relative rounded-2xl border border-border/30 bg-white/50 dark:bg-white/5 backdrop-blur-md p-6 sm:p-8 text-center transition-all duration-300 group-hover:border-border/60 group-hover:shadow-lg group-hover:scale-[1.02]">
+  1060→  1060→          <p className={`text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r ${gradient} bg-clip-text text-transparent`}>
+  1061→  1061→            {displayValue}{suffix}
+  1062→  1062→          </p>
+  1063→  1063→          <p className="mt-2 text-sm sm:text-base text-muted-foreground font-medium">{label}</p>
+  1064→  1064→        </div>
+  1065→  1065→      </motion.div>
+  1066→  1066→    );
+  1067→  1067→  }
+  1068→  1068→
+  1069→  1069→  return (
+  1070→  1070→    <section ref={ref} className="py-16 sm:py-20 relative overflow-hidden">
+  1071→  1071→      {/* Subtle background gradient */}
+  1072→  1072→      <div className="absolute inset-0 bg-gradient-to-b from-muted/10 via-background to-muted/10" />
+  1073→  1073→      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+  1074→  1074→        <div className="absolute -top-1/2 left-1/4 h-[600px] w-[600px] rounded-full bg-emerald-500/5 blur-3xl" />
+  1075→  1075→        <div className="absolute -bottom-1/2 right-1/4 h-[600px] w-[600px] rounded-full bg-violet-500/5 blur-3xl" />
+  1076→  1076→      </div>
+  1077→  1077→
+  1078→  1078→      <div className="relative mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+  1079→  1079→        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
+  1080→  1080→          {stats.map((stat) => (
+  1081→  1081→            <StatCounter key={stat.label} {...stat} />
+  1082→  1082→          ))}
+  1083→  1083→        </div>
+  1084→  1084→      </div>
+  1085→  1085→    </section>
+  1086→  1086→  );
+  1087→  1087→}
+  1088→  1088→
+  1089→  1089→// ============================================================
+  1090→  1090→// Live Dashboard Preview Section
+  1091→  1091→// ============================================================
+  1092→  1092→function LiveDashboardPreview() {
+  1093→  1093→  const [inView, setInView] = useState(false);
+  1094→  1094→  const sectionRef = useRef<HTMLDivElement>(null);
+  1095→  1095→  const [urlText, setUrlText] = useState('');
+  1096→  1096→  const fullUrl = 'academy.nextgen-lms.com/admin/dashboard';
+  1097→  1097→
+  1098→  1098→  // Animated typing in URL bar
+  1099→  1099→  useEffect(() => {
+  1100→  1100→    let charIndex = 0;
+  1101→  1101→    const typeTimer = setInterval(() => {
+  1102→  1102→      if (charIndex < fullUrl.length) {
+  1103→  1103→        setUrlText(fullUrl.slice(0, charIndex + 1));
+  1104→  1104→        charIndex++;
+  1105→  1105→      } else {
+  1106→  1106→        clearInterval(typeTimer);
+  1107→  1107→      }
+  1108→  1108→    }, 50);
+  1109→  1109→    return () => clearInterval(typeTimer);
+  1110→  1110→  }, []);
+  1111→  1111→
+  1112→  1112→  useEffect(() => {
+  1113→  1113→    const observer = new IntersectionObserver(
+  1114→  1114→      ([entry]) => {
+  1115→  1115→        if (entry.isIntersecting) {
+  1116→  1116→          setInView(true);
+  1117→  1117→        }
+  1118→  1118→      },
+  1119→  1119→      { threshold: 0.3 }
+  1120→  1120→    );
+  1121→  1121→    if (sectionRef.current) observer.observe(sectionRef.current);
+  1122→  1122→    return () => observer.disconnect();
+  1123→  1123→  }, []);
+  1124→  1124→
+  1125→  1125→  const kpiData = [
+  1126→  1126→    { label: 'Total Revenue', value: 47800, prefix: '$', suffix: '', format: true, color: 'from-emerald-500 to-emerald-600' },
+  1127→  1127→    { label: 'Active Learners', value: 3847, prefix: '', suffix: '', format: true, color: 'from-violet-500 to-violet-600' },
+  1128→  1128→    { label: 'Completion Rate', value: 72.4, prefix: '', suffix: '%', format: false, color: 'from-amber-500 to-amber-600' },
+  1129→  1129→    { label: 'Engagement', value: 89.3, prefix: '', suffix: '%', format: false, color: 'from-sky-500 to-sky-600' },
+  1130→  1130→  ];
+  1131→  1131→
+  1132→  1132→  const chartBars = [40, 65, 45, 80, 55, 90, 70, 85, 60, 95, 75, 88];
+  1133→  1133→
+  1134→  1134→  const tableData = [
+  1135→  1135→    { course: 'React Masterclass', learners: 847, revenue: '$12,450', status: 'Active' },
+  1136→  1136→    { course: 'AI & ML Fundamentals', learners: 623, revenue: '$9,870', status: 'Active' },
+  1137→  1137→    { course: 'Data Science Pro', learners: 534, revenue: '$8,120', status: 'Draft' },
+  1138→  1138→  ];
+  1139→  1139→
+  1140→  1140→  function formatNumber(n: number, shouldFormat: boolean): string {
+  1141→  1141→    if (shouldFormat) return n.toLocaleString('en-US');
+  1142→  1142→    return n.toFixed(1);
+  1143→  1143→  }
+  1144→  1144→
+  1145→  1145→  return (
+  1146→  1146→    <section ref={sectionRef} className="py-20 sm:py-28">
+  1147→  1147→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  1148→  1148→        <motion.div
+  1149→  1149→          initial="hidden"
+  1150→  1150→          whileInView="visible"
+  1151→  1151→          viewport={{ once: true, margin: '-100px' }}
+  1152→  1152→          variants={staggerContainer}
+  1153→  1153→          className="text-center mb-16"
+  1154→  1154→        >
+  1155→  1155→          <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+  1156→  1156→            See Your{' '}
+  1157→  1157→            <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Dashboard</span> in Action
+  1158→  1158→          </motion.h2>
+  1159→  1159→          <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+  1160→  1160→            Real-time insights, beautiful charts, and actionable data — all at your fingertips.
+  1161→  1161→          </motion.p>
+  1162→  1162→        </motion.div>
+  1163→  1163→
+  1164→  1164→        <motion.div
+  1165→  1165→          initial={{ opacity: 0, y: 30 }}
+  1166→  1166→          whileInView={{ opacity: 1, y: 0 }}
+  1167→  1167→          viewport={{ once: true }}
+  1168→  1168→          transition={{ duration: 0.8 }}
+  1169→  1169→          className="relative max-w-5xl mx-auto"
+  1170→  1170→        >
+  1171→  1171→          {/* Glow effect */}
+  1172→  1172→          <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/10 via-violet-500/10 to-emerald-500/10 rounded-3xl blur-2xl" />
+  1173→  1173→
+  1174→  1174→          {/* Floating animation wrapper */}
+  1175→  1175→          <motion.div
+  1176→  1176→            animate={{ y: [0, -6, 0] }}
+  1177→  1177→            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+  1178→  1178→          >
+  1179→  1179→            <div className="relative rounded-2xl border border-border/60 bg-card shadow-2xl overflow-hidden">
+  1180→  1180→              {/* Browser chrome */}
+  1181→  1181→              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border/40 bg-muted/30">
+  1182→  1182→                <div className="flex gap-1.5">
+  1183→  1183→                  <div className="h-3 w-3 rounded-full bg-red-400 shadow-sm shadow-red-400/50" />
+  1184→  1184→                  <div className="h-3 w-3 rounded-full bg-yellow-400 shadow-sm shadow-yellow-400/50" />
+  1185→  1185→                  <div className="h-3 w-3 rounded-full bg-green-400 shadow-sm shadow-green-400/50" />
+  1186→  1186→                </div>
+  1187→  1187→                <div className="flex-1 flex justify-center">
+  1188→  1188→                  <div className="h-7 w-72 rounded-md bg-muted/60 flex items-center justify-center px-3">
+  1189→  1189→                    <span className="text-[11px] text-muted-foreground truncate">
+  1190→  1190→                      {urlText}
+  1191→  1191→                      {urlText.length < fullUrl.length && (
+  1192→  1192→                        <span className="inline-block w-0.5 h-3 bg-emerald-500 ml-0.5 animate-pulse align-middle" />
+  1193→  1193→                      )}
+  1194→  1194→                    </span>
+  1195→  1195→                  </div>
+  1196→  1196→                </div>
+  1197→  1197→              </div>
+  1198→  1198→
+  1199→  1199→              {/* Dashboard mockup content */}
+  1200→  1200→              <div className="p-5 sm:p-6 space-y-5">
+  1201→  1201→                {/* KPI Cards Row */}
+  1202→  1202→                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+  1203→  1203→                  {kpiData.map((kpi) => (
+  1204→  1204→                    <div key={kpi.label} className="rounded-xl border border-border/40 bg-gradient-to-br from-muted/30 to-muted/10 p-4 hover:shadow-md transition-shadow">
+  1205→  1205→                      <p className="text-xs text-muted-foreground mb-1">{kpi.label}</p>
+  1206→  1206→                      <p className="text-xl sm:text-2xl font-bold text-foreground">
+  1207→  1207→                        {kpi.prefix}
+  1208→  1208→                        {inView ? formatNumber(kpi.value, kpi.format) : '0'}
+  1209→  1209→                        {kpi.suffix}
+  1210→  1210→                      </p>
+  1211→  1211→                      <div className="flex items-center gap-1 mt-1">
+  1212→  1212→                        <TrendingUp className="h-3 w-3 text-emerald-500" />
+  1213→  1213→                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">+12.5%</span>
+  1214→  1214→                      </div>
+  1215→  1215→                    </div>
+  1216→  1216→                  ))}
+  1217→  1217→                </div>
+  1218→  1218→
+  1219→  1219→                {/* Chart + Table row */}
+  1220→  1220→                <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+  1221→  1221→                  {/* Bar chart */}
+  1222→  1222→                  <div className="sm:col-span-3 rounded-xl border border-border/40 bg-muted/10 p-4">
+  1223→  1223→                    <div className="flex items-center justify-between mb-3">
+  1224→  1224→                      <span className="text-sm font-semibold text-foreground">Revenue Overview</span>
+  1225→  1225→                      <span className="text-[10px] text-muted-foreground">Last 12 months</span>
+  1226→  1226→                    </div>
+  1227→  1227→                    <div className="h-28 flex items-end gap-1">
+  1228→  1228→                      {chartBars.map((h, i) => (
+  1229→  1229→                        <motion.div
+  1230→  1230→                          key={i}
+  1231→  1231→                          className="flex-1 rounded-t bg-gradient-to-t from-emerald-600 to-emerald-400 min-w-0"
+  1232→  1232→                          initial={{ height: 0 }}
+  1233→  1233→                          animate={inView ? { height: `${h}%` } : { height: 0 }}
+  1234→  1234→                          transition={{ duration: 0.5, delay: 0.3 + i * 0.04, ease: 'easeOut' }}
+  1235→  1235→                        />
+  1236→  1236→                      ))}
+  1237→  1237→                    </div>
+  1238→  1238→                    <div className="flex justify-between mt-2">
+  1239→  1239→                      {['Jan', 'Mar', 'Jun', 'Sep', 'Dec'].map((m) => (
+  1240→  1240→                        <span key={m} className="text-[9px] text-muted-foreground">{m}</span>
+  1241→  1241→                      ))}
+  1242→  1242→                    </div>
+  1243→  1243→                  </div>
+  1244→  1244→
+  1245→  1245→                  {/* Mini table */}
+  1246→  1246→                  <div className="sm:col-span-2 rounded-xl border border-border/40 bg-muted/10 p-4">
+  1247→  1247→                    <span className="text-sm font-semibold text-foreground mb-3 block">Top Courses</span>
+  1248→  1248→                    <div className="space-y-2">
+  1249→  1249→                      {tableData.map((row) => (
+  1250→  1250→                        <div key={row.course} className="flex items-center justify-between py-1.5 border-b border-border/20 last:border-0">
+  1251→  1251→                          <div>
+  1252→  1252→                            <p className="text-xs font-medium text-foreground truncate max-w-[120px]">{row.course}</p>
+  1253→  1253→                            <p className="text-[10px] text-muted-foreground">{row.learners} learners</p>
+  1254→  1254→                          </div>
+  1255→  1255→                          <div className="text-right">
+  1256→  1256→                            <p className="text-xs font-semibold text-foreground">{row.revenue}</p>
+  1257→  1257→                            <Badge variant="secondary" className={`text-[9px] px-1.5 py-0 ${row.status === 'Active' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
+  1258→  1258→                              {row.status}
+  1259→  1259→                            </Badge>
+  1260→  1260→                          </div>
+  1261→  1261→                        </div>
+  1262→  1262→                      ))}
+  1263→  1263→                    </div>
+  1264→  1264→                  </div>
+  1265→  1265→                </div>
+  1266→  1266→              </div>
+  1267→  1267→            </div>
+  1268→  1268→          </motion.div>
+  1269→  1269→
+  1270→  1270→          {/* Reflection / glow below the preview */}
+  1271→  1271→          <div className="relative mt-4">
+  1272→  1272→            <div className="h-16 bg-gradient-to-b from-card/20 via-card/5 to-transparent rounded-b-2xl blur-sm" />
+  1273→  1273→            <div className="absolute inset-0 flex items-center justify-center">
+  1274→  1274→              <div className="h-1 w-3/4 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent rounded-full blur-sm" />
+  1275→  1275→            </div>
+  1276→  1276→          </div>
+  1277→  1277→
+  1278→  1278→          {/* Try it yourself button */}
+  1279→  1279→          <motion.div
+  1280→  1280→            initial={{ opacity: 0 }}
+  1281→  1281→            whileInView={{ opacity: 1 }}
+  1282→  1282→            viewport={{ once: true }}
+  1283→  1283→            transition={{ delay: 0.8 }}
+  1284→  1284→            className="text-center mt-8"
+  1285→  1285→          >
+  1286→  1286→            <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={() => goToLogin('admin')}>
+  1287→  1287→              Try it yourself
+  1288→  1288→              <ArrowRight className="h-4 w-4" />
+  1289→  1289→            </Button>
+  1290→  1290→          </motion.div>
+  1291→  1291→        </motion.div>
+  1292→  1292→      </div>
+  1293→  1293→    </section>
+  1294→  1294→  );
+  1295→  1295→}
+  1296→  1296→
+  1297→  1297→// ============================================================
+  1298→  1298→// Community Preview Section
+  1299→  1299→// ============================================================
+  1300→  1300→function CommunityPreview() {
+  1301→  1301→  return (
+  1302→  1302→    <section className="py-20 sm:py-28 bg-muted/30">
+  1303→  1303→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  1304→  1304→        <motion.div
+  1305→  1305→          initial="hidden"
+  1306→  1306→          whileInView="visible"
+  1307→  1307→          viewport={{ once: true, margin: '-100px' }}
+  1308→  1308→          variants={staggerContainer}
+  1309→  1309→          className="text-center mb-16"
+  1310→  1310→        >
+  1311→  1311→          <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+  1312→  1312→            A Thriving{' '}
+  1313→  1313→            <span className="bg-gradient-to-r from-violet-600 to-violet-400 bg-clip-text text-transparent">Learning Community</span>
+  1314→  1314→          </motion.h2>
+  1315→  1315→          <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+  1316→  1316→            Built-in discussions, peer support, and knowledge sharing — no need for Slack or Discord.
+  1317→  1317→          </motion.p>
+  1318→  1318→        </motion.div>
+  1319→  1319→
+  1320→  1320→        <div className="max-w-2xl mx-auto space-y-4">
+  1321→  1321→          {communityPreviewPosts.map((post, i) => (
+  1322→  1322→            <motion.div
+  1323→  1323→              key={post.name}
+  1324→  1324→              initial={{ opacity: 0, y: 20 }}
+  1325→  1325→              whileInView={{ opacity: 1, y: 0 }}
+  1326→  1326→              viewport={{ once: true }}
+  1327→  1327→              transition={{ duration: 0.5, delay: i * 0.15 }}
+  1328→  1328→            >
+  1329→  1329→              <Card className="hover:shadow-lg transition-all duration-300 border-border/60 group">
+  1330→  1330→                <CardContent className="p-5">
+  1331→  1331→                  <div className="flex items-start gap-3">
+  1332→  1332→                    <div className={`h-10 w-10 rounded-full ${post.color} flex items-center justify-center text-white text-sm font-bold shrink-0`}>
+  1333→  1333→                      {post.initials}
+  1334→  1334→                    </div>
+  1335→  1335→                    <div className="flex-1 min-w-0">
+  1336→  1336→                      <div className="flex items-center gap-2 flex-wrap">
+  1337→  1337→                        <span className="text-sm font-semibold text-foreground">{post.name}</span>
+  1338→  1338→                        {post.pinned && (
+  1339→  1339→                          <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 text-[10px] px-1.5 py-0 gap-1">
+  1340→  1340→                            <Pin className="h-2.5 w-2.5" /> Pinned
+  1341→  1341→                          </Badge>
+  1342→  1342→                        )}
+  1343→  1343→                        <span className="text-xs text-muted-foreground">{post.timestamp}</span>
+  1344→  1344→                      </div>
+  1345→  1345→                      <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">{post.content}</p>
+  1346→  1346→                      <div className="flex items-center gap-4 mt-3">
+  1347→  1347→                        <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-rose-500 transition-colors group/btn">
+  1348→  1348→                          <Heart className="h-3.5 w-3.5 group-hover/btn:scale-110 transition-transform" />
+  1349→  1349→                          {post.likes}
+  1350→  1350→                        </button>
+  1351→  1351→                        <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-emerald-500 transition-colors">
+  1352→  1352→                          <MessageSquare className="h-3.5 w-3.5" />
+  1353→  1353→                          {post.comments}
+  1354→  1354→                        </button>
+  1355→  1355→                      </div>
+  1356→  1356→                    </div>
+  1357→  1357→                  </div>
+  1358→  1358→                </CardContent>
+  1359→  1359→              </Card>
+  1360→  1360→            </motion.div>
+  1361→  1361→          ))}
+  1362→  1362→
+  1363→  1363→          {/* CTA */}
+  1364→  1364→          <motion.div
+  1365→  1365→            initial={{ opacity: 0 }}
+  1366→  1366→            whileInView={{ opacity: 1 }}
+  1367→  1367→            viewport={{ once: true }}
+  1368→  1368→            transition={{ delay: 0.8 }}
+  1369→  1369→            className="text-center pt-4"
+  1370→  1370→          >
+  1371→  1371→            <Button size="lg" className="bg-violet-600 hover:bg-violet-700 text-white gap-2" onClick={() => goToLogin('learner')}>
+  1372→  1372→              Join the Community
+  1373→  1373→              <ArrowRight className="h-4 w-4" />
+  1374→  1374→            </Button>
+  1375→  1375→          </motion.div>
+  1376→  1376→        </div>
+  1377→  1377→      </div>
+  1378→  1378→    </section>
+  1379→  1379→  );
+  1380→  1380→}
+  1381→  1381→
+  1382→  1382→// ============================================================
+  1383→  1383→// Animated Star Rating
+  1384→  1384→// ============================================================
+  1385→  1385→function AnimatedStars({ delay = 0, rating = 5 }: { delay?: number; rating?: number }) {
+  1386→  1386→  const ref = useRef<HTMLDivElement>(null);
+  1387→  1387→  const isInView = useInView(ref, { once: true });
+  1388→  1388→
+  1389→  1389→  return (
+  1390→  1390→    <div ref={ref} className="flex gap-0.5 mb-3">
+  1391→  1391→      {[0, 1, 2, 3, 4].map((j) => (
+  1392→  1392→        <motion.div
+  1393→  1393→          key={j}
+  1394→  1394→          initial={{ opacity: 0, scale: 0, rotate: -30 }}
+  1395→  1395→          animate={isInView ? { opacity: 1, scale: 1, rotate: 0 } : {}}
+  1396→  1396→          transition={{ duration: 0.3, delay: delay + j * 0.08, ease: 'backOut' }}
+  1397→  1397→        >
+  1398→  1398→          <Star className={`h-3.5 w-3.5 ${j < rating ? 'fill-amber-400 text-amber-400' : 'fill-none text-muted-foreground/30'}`} />
+  1399→  1399→        </motion.div>
+  1400→  1400→      ))}
+  1401→  1401→    </div>
+  1402→  1402→  );
+  1403→  1403→}
+  1404→  1404→
+  1405→  1405→// ============================================================
+  1406→  1406→// Dot Pattern Background
+  1407→  1407→// ============================================================
+  1408→  1408→function DotPatternBackground() {
+  1409→  1409→  return (
+  1410→  1410→    <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.04]">
+  1411→  1411→      <svg width="100%" height="100%">
+  1412→  1412→        <defs>
+  1413→  1413→          <pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse">
+  1414→  1414→            <circle cx="10" cy="10" r="1.5" fill="currentColor" />
+  1415→  1415→          </pattern>
+  1416→  1416→        </defs>
+  1417→  1417→        <rect width="100%" height="100%" fill="url(#dots)" className="text-foreground" />
+  1418→  1418→      </svg>
+  1419→  1419→    </div>
+  1420→  1420→  );
+  1421→  1421→}
+  1422→  1422→
+  1423→  1423→// ============================================================
+  1424→  1424→// Enhanced Testimonials Carousel (with dots, animated quotes, role badges)
+  1425→  1425→// ============================================================
+  1426→  1426→function TestimonialCarousel() {
+  1427→  1427→  const [current, setCurrent] = useState(0);
+  1428→  1428→  const [direction, setDirection] = useState(0);
+  1429→  1429→  const [isPaused, setIsPaused] = useState(false);
+  1430→  1430→
+  1431→  1431→  // Auto-rotate every 5 seconds (pause on hover)
+  1432→  1432→  useEffect(() => {
+  1433→  1433→    if (isPaused) return;
+  1434→  1434→    const timer = setInterval(() => {
+  1435→  1435→      setDirection(1);
+  1436→  1436→      setCurrent((prev) => (prev + 1) % testimonials.length);
+  1437→  1437→    }, 5000);
+  1438→  1438→    return () => clearInterval(timer);
+  1439→  1439→  }, [isPaused]);
+  1440→  1440→
+  1441→  1441→  const goTo = (index: number) => {
+  1442→  1442→    setDirection(index > current ? 1 : -1);
+  1443→  1443→    setCurrent(index);
+  1444→  1444→  };
+  1445→  1445→
+  1446→  1446→  const next = () => {
+  1447→  1447→    setDirection(1);
+  1448→  1448→    setCurrent((prev) => (prev + 1) % testimonials.length);
+  1449→  1449→  };
+  1450→  1450→
+  1451→  1451→  const prev = () => {
+  1452→  1452→    setDirection(-1);
+  1453→  1453→    setCurrent((prev) => (prev - 1 + testimonials.length) % testimonials.length);
+  1454→  1454→  };
+  1455→  1455→
+  1456→  1456→  const slideVariants = {
+  1457→  1457→    enter: (d: number) => ({
+  1458→  1458→      x: d > 0 ? 80 : -80,
+  1459→  1459→      opacity: 0,
+  1460→  1460→    }),
+  1461→  1461→    center: {
+  1462→  1462→      x: 0,
+  1463→  1463→      opacity: 1,
+  1464→  1464→    },
+  1465→  1465→    exit: (d: number) => ({
+  1466→  1466→      x: d > 0 ? -80 : 80,
+  1467→  1467→      opacity: 0,
+  1468→  1468→    }),
+  1469→  1469→  };
+  1470→  1470→
+  1471→  1471→  return (
+  1472→  1472→    <div
+  1473→  1473→      className="relative"
+  1474→  1474→      onMouseEnter={() => setIsPaused(true)}
+  1475→  1475→      onMouseLeave={() => setIsPaused(false)}
+  1476→  1476→    >
+  1477→  1477→      {/* Desktop: show all at a time */}
+  1478→  1478→      <div className="hidden lg:grid lg:grid-cols-3 gap-6">
+  1479→  1479→        {testimonials.map((testimonial, i) => (
+  1480→  1480→          <motion.div
+  1481→  1481→            key={testimonial.name}
+  1482→  1482→            initial={{ opacity: 0, y: 20 }}
+  1483→  1483→            animate={{ opacity: 1, y: 0 }}
+  1484→  1484→            transition={{ delay: i * 0.1 }}
+  1485→  1485→            whileHover={{ y: -4, transition: { duration: 0.2 } }}
+  1486→  1486→          >
+  1487→  1487→            <Card className="h-full border-border/60 hover:shadow-lg transition-shadow bg-gradient-to-br from-white/80 to-emerald-50/30 dark:from-card dark:to-emerald-950/10">
+  1488→  1488→              <CardHeader className="pb-3">
+  1489→  1489→                <div className="flex items-center gap-3">
+  1490→  1490→                  <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 text-sm font-bold">
+  1491→  1491→                    {testimonial.avatar}
+  1492→  1492→                  </div>
+  1493→  1493→                  <div className="flex-1">
+  1494→  1494→                    <p className="text-sm font-semibold text-foreground">{testimonial.name}</p>
+  1495→  1495→                    <p className="text-xs text-muted-foreground">{testimonial.role}</p>
+  1496→  1496→                  </div>
+  1497→  1497→                  <Badge className={`text-[9px] px-1.5 py-0 ${
+  1498→  1498→                    testimonial.badge === 'Enterprise'
+  1499→  1499→                      ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'
+  1500→  1500→                      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+  1501→  1501→                  }`}>
+  1502→  1502→                    {testimonial.badge}
+  1503→  1503→                  </Badge>
+  1504→  1504→                </div>
+  1505→  1505→              </CardHeader>
+  1506→  1506→              <CardContent>
+  1507→  1507→                <AnimatedStars delay={i * 0.15} rating={testimonial.rating} />
+  1508→  1508→                {/* Animated quote marks */}
+  1509→  1509→                <motion.span
+  1510→  1510→                  className="absolute top-3 right-4 text-4xl font-serif text-emerald-200 dark:text-emerald-800/40 select-none"
+  1511→  1511→                  initial={{ opacity: 0, scale: 0.5 }}
+  1512→  1512→                  animate={{ opacity: 1, scale: 1 }}
+  1513→  1513→                  transition={{ delay: i * 0.1 + 0.3, duration: 0.5, ease: 'backOut' }}
+  1514→  1514→                >
+  1515→  1515→                  &ldquo;
+  1516→  1516→                </motion.span>
+  1517→  1517→                <p className="text-sm text-muted-foreground leading-relaxed relative z-10">&ldquo;{testimonial.quote}&rdquo;</p>
+  1518→  1518→              </CardContent>
+  1519→  1519→            </Card>
+  1520→  1520→          </motion.div>
+  1521→  1521→        ))}
+  1522→  1522→      </div>
+  1523→  1523→
+  1524→  1524→      {/* Mobile: carousel with single testimonial */}
+  1525→  1525→      <div className="lg:hidden">
+  1526→  1526→        <div className="relative overflow-hidden min-h-[280px]">
+  1527→  1527→          <AnimatePresence initial={false} custom={direction} mode="wait">
+  1528→  1528→            <motion.div
+  1529→  1529→              key={current}
+  1530→  1530→              custom={direction}
+  1531→  1531→              variants={slideVariants}
+  1532→  1532→              initial="enter"
+  1533→  1533→              animate="center"
+  1534→  1534→              exit="exit"
+  1535→  1535→              transition={{ duration: 0.4, ease: 'easeInOut' }}
+  1536→  1536→            >
+  1537→  1537→              <Card className="border-border/60 bg-gradient-to-br from-white/80 to-emerald-50/30 dark:from-card dark:to-emerald-950/10">
+  1538→  1538→                <CardHeader className="pb-3">
+  1539→  1539→                  <div className="flex items-center gap-3">
+  1540→  1540→                    <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 text-sm font-bold">
+  1541→  1541→                      {testimonials[current].avatar}
+  1542→  1542→                    </div>
+  1543→  1543→                    <div className="flex-1">
+  1544→  1544→                      <p className="text-sm font-semibold text-foreground">{testimonials[current].name}</p>
+  1545→  1545→                      <p className="text-xs text-muted-foreground">{testimonials[current].role}</p>
+  1546→  1546→                    </div>
+  1547→  1547→                    <Badge className={`text-[9px] px-1.5 py-0 ${
+  1548→  1548→                      testimonials[current].badge === 'Enterprise'
+  1549→  1549→                        ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'
+  1550→  1550→                        : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+  1551→  1551→                    }`}>
+  1552→  1552→                      {testimonials[current].badge}
+  1553→  1553→                    </Badge>
+  1554→  1554→                  </div>
+  1555→  1555→                </CardHeader>
+  1556→  1556→                <CardContent className="relative">
+  1557→  1557→                  <AnimatedStars delay={0.1} rating={testimonials[current].rating} />
+  1558→  1558→                  <span className="absolute top-0 right-4 text-4xl font-serif text-emerald-200 dark:text-emerald-800/40 select-none">&ldquo;</span>
+  1559→  1559→                  <p className="text-sm text-muted-foreground leading-relaxed relative z-10">&ldquo;{testimonials[current].quote}&rdquo;</p>
+  1560→  1560→                </CardContent>
+  1561→  1561→              </Card>
+  1562→  1562→            </motion.div>
+  1563→  1563→          </AnimatePresence>
+  1564→  1564→        </div>
+  1565→  1565→
+  1566→  1566→        {/* Navigation with dots indicator */}
+  1567→  1567→        <div className="flex items-center justify-center gap-4 mt-6">
+  1568→  1568→          <button
+  1569→  1569→            onClick={prev}
+  1570→  1570→            className="h-8 w-8 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
+  1571→  1571→            aria-label="Previous testimonial"
+  1572→  1572→          >
+  1573→  1573→            <ChevronLeft className="h-4 w-4" />
+  1574→  1574→          </button>
+  1575→  1575→          <div className="flex gap-2">
+  1576→  1576→            {testimonials.map((_, i) => (
+  1577→  1577→              <button
+  1578→  1578→                key={i}
+  1579→  1579→                onClick={() => goTo(i)}
+  1580→  1580→                className={`h-2 rounded-full transition-all duration-300 ${
+  1581→  1581→                  i === current ? 'w-6 bg-emerald-500' : 'w-2 bg-muted-foreground/30'
+  1582→  1582→                }`}
+  1583→  1583→                aria-label={`Go to testimonial ${i + 1}`}
+  1584→  1584→              />
+  1585→  1585→            ))}
+  1586→  1586→          </div>
+  1587→  1587→          <button
+  1588→  1588→            onClick={next}
+  1589→  1589→            className="h-8 w-8 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
+  1590→  1590→            aria-label="Next testimonial"
+  1591→  1591→          >
+  1592→  1592→            <ChevronRight className="h-4 w-4" />
+  1593→  1593→          </button>
+  1594→  1594→        </div>
+  1595→  1595→      </div>
+  1596→  1596→    </div>
+  1597→  1597→  );
+  1598→  1598→}
+  1599→  1599→
+  1600→  1600→// ============================================================
+  1601→  1601→// Floating Stats Counter (fixed Math.random hydration issue)
+  1602→  1602→// ============================================================
+  1603→  1603→function FloatingStatsCounter() {
+  1604→  1604→  const [visible, setVisible] = useState(false);
+  1605→  1605→  const [dismissed, setDismissed] = useState(false);
+  1606→  1606→  const [onlineCount, setOnlineCount] = useState(2847);
+  1607→  1607→  const tickIndex = useRef(0);
+  1608→  1608→
+  1609→  1609→  // Deterministic tick values to avoid hydration mismatch
+  1610→  1610→  const tickValues = [1, -1, 2, 0, 1, -2, 1, 0, 2, -1, 0, 1, -1, 2, 1, 0, -1, 1, 0, 2];
+  1611→  1611→
+  1612→  1612→  useEffect(() => {
+  1613→  1613→    const handleScroll = () => {
+  1614→  1614→      const heroSection = document.getElementById('hero-section');
+  1615→  1615→      if (heroSection) {
+  1616→  1616→        const heroBottom = heroSection.getBoundingClientRect().bottom;
+  1617→  1617→        setVisible(heroBottom < 0);
+  1618→  1618→      }
+  1619→  1619→    };
+  1620→  1620→    window.addEventListener('scroll', handleScroll, { passive: true });
+  1621→  1621→    return () => window.removeEventListener('scroll', handleScroll);
+  1622→  1622→  }, []);
+  1623→  1623→
+  1624→  1624→  // Deterministically tick online count
+  1625→  1625→  useEffect(() => {
+  1626→  1626→    if (!visible || dismissed) return;
+  1627→  1627→    const timer = setInterval(() => {
+  1628→  1628→      const change = tickValues[tickIndex.current % tickValues.length];
+  1629→  1629→      tickIndex.current++;
+  1630→  1630→      setOnlineCount((prev) => Math.max(2800, Math.min(2900, prev + change)));
+  1631→  1631→    }, 3000);
+  1632→  1632→    return () => clearInterval(timer);
+  1633→  1633→  }, [visible, dismissed]);
+  1634→  1634→
+  1635→  1635→  if (dismissed || !visible) return null;
+  1636→  1636→
+  1637→  1637→  return (
+  1638→  1638→    <motion.div
+  1639→  1639→      initial={{ opacity: 0, y: 20, scale: 0.9 }}
+  1640→  1640→      animate={{ opacity: 1, y: 0, scale: 1 }}
+  1641→  1641→      exit={{ opacity: 0, y: 20, scale: 0.9 }}
+  1642→  1642→      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+  1643→  1643→      className="fixed bottom-4 left-4 z-50"
+  1644→  1644→    >
+  1645→  1645→      <motion.div
+  1646→  1646→        animate={{ y: [0, -3, 0] }}
+  1647→  1647→        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+  1648→  1648→        className="rounded-xl border border-border/40 bg-background/80 backdrop-blur-xl shadow-xl px-4 py-3 flex items-center gap-3"
+  1649→  1649→      >
+  1650→  1650→        <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+  1651→  1651→        <div>
+  1652→  1652→          <p className="text-sm font-semibold text-foreground">{onlineCount.toLocaleString()} learners online</p>
+  1653→  1653→          <p className="text-[10px] text-muted-foreground">across 50+ countries</p>
+  1654→  1654→        </div>
+  1655→  1655→        <button
+  1656→  1656→          onClick={() => setDismissed(true)}
+  1657→  1657→          className="ml-2 h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+  1658→  1658→          aria-label="Dismiss"
+  1659→  1659→        >
+  1660→  1660→          <X className="h-3 w-3" />
+  1661→  1661→        </button>
+  1662→  1662→      </motion.div>
+  1663→  1663→    </motion.div>
+  1664→  1664→  );
+  1665→  1665→}
+  1666→  1666→
+  1667→  1667→// ============================================================
+  1668→  1668→// Animated Mesh Gradient Background (for features section)
+  1669→  1669→// ============================================================
+  1670→  1670→function MeshGradientBackground() {
+  1671→  1671→  return (
+  1672→  1672→    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+  1673→  1673→      <motion.div
+  1674→  1674→        className="absolute -top-40 -left-40 h-80 w-80 rounded-full bg-emerald-500/8 blur-3xl"
+  1675→  1675→        animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
+  1676→  1676→        transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+  1677→  1677→      />
+  1678→  1678→      <motion.div
+  1679→  1679→        className="absolute top-1/2 -right-20 h-72 w-72 rounded-full bg-violet-500/8 blur-3xl"
+  1680→  1680→        animate={{ x: [0, -25, 0], y: [0, 30, 0] }}
+  1681→  1681→        transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
+  1682→  1682→      />
+  1683→  1683→      <motion.div
+  1684→  1684→        className="absolute -bottom-20 left-1/3 h-64 w-64 rounded-full bg-amber-500/6 blur-3xl"
+  1685→  1685→        animate={{ x: [0, 20, 0], y: [0, 15, 0] }}
+  1686→  1686→        transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+  1687→  1687→      />
+  1688→  1688→      <motion.div
+  1689→  1689→        className="absolute top-1/4 left-1/2 h-56 w-56 rounded-full bg-sky-500/5 blur-3xl"
+  1690→  1690→        animate={{ x: [0, -15, 0], y: [0, -25, 0] }}
+  1691→  1691→        transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
+  1692→  1692→      />
+  1693→  1693→    </div>
+  1694→  1694→  );
+  1695→  1695→}
+  1696→  1696→
+  1697→  1697→// ============================================================
+  1698→  1698→// Mouse-Following Glow Feature Card
+  1699→  1699→// ============================================================
+  1700→  1700→function GlowFeatureCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  1701→  1701→  const cardRef = useRef<HTMLDivElement>(null);
+  1702→  1702→  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  1703→  1703→  const [isHovered, setIsHovered] = useState(false);
+  1704→  1704→
+  1705→  1705→  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+  1706→  1706→    if (!cardRef.current) return;
+  1707→  1707→    const rect = cardRef.current.getBoundingClientRect();
+  1708→  1708→    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  1709→  1709→  }, []);
+  1710→  1710→
+  1711→  1711→  return (
+  1712→  1712→    <div
+  1713→  1713→      ref={cardRef}
+  1714→  1714→      className={`relative overflow-hidden ${className}`}
+  1715→  1715→      onMouseMove={handleMouseMove}
+  1716→  1716→      onMouseEnter={() => setIsHovered(true)}
+  1717→  1717→      onMouseLeave={() => setIsHovered(false)}
+  1718→  1718→    >
+  1719→  1719→      {/* Mouse-following glow */}
+  1720→  1720→      {isHovered && (
+  1721→  1721→        <motion.div
+  1722→  1722→          className="absolute pointer-events-none z-0"
+  1723→  1723→          animate={{
+  1724→  1724→            left: mousePos.x - 80,
+  1725→  1725→            top: mousePos.y - 80,
+  1726→  1726→            opacity: 1,
+  1727→  1727→          }}
+  1728→  1728→          initial={{ opacity: 0 }}
+  1729→  1729→          exit={{ opacity: 0 }}
+  1730→  1730→          transition={{ duration: 0.15, ease: 'easeOut' }}
+  1731→  1731→          style={{ width: 160, height: 160 }}
+  1732→  1732→        >
+  1733→  1733→          <div className="w-full h-full rounded-full bg-emerald-500/10 dark:bg-emerald-500/5 blur-xl" />
+  1734→  1734→        </motion.div>
+  1735→  1735→      )}
+  1736→  1736→      <div className="relative z-10">{children}</div>
+  1737→  1737→    </div>
+  1738→  1738→  );
+  1739→  1739→}
+  1740→  1740→
+  1741→  1741→// ============================================================
+  1742→  1742→// Pulsing Icon Container
+  1743→  1743→// ============================================================
+  1744→  1744→function PulsingIconContainer({ icon: Icon, index }: { icon: React.ElementType; index: number }) {
+  1745→  1745→  const gradients = [
+  1746→  1746→    'from-emerald-500 to-emerald-600',
+  1747→  1747→    'from-violet-500 to-violet-600',
+  1748→  1748→    'from-amber-500 to-amber-600',
+  1749→  1749→    'from-sky-500 to-sky-600',
+  1750→  1750→    'from-rose-500 to-rose-600',
+  1751→  1751→    'from-teal-500 to-teal-600',
+  1752→  1752→  ];
+  1753→  1753→  const gradient = gradients[index % gradients.length];
+  1754→  1754→
+  1755→  1755→  return (
+  1756→  1756→    <motion.div
+  1757→  1757→      className={`relative h-10 w-10 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow`}
+  1758→  1758→      animate={{ scale: [1, 1.05, 1] }}
+  1759→  1759→      transition={{ duration: 3, repeat: Infinity, delay: index * 0.3, ease: 'easeInOut' }}
+  1760→  1760→    >
+  1761→  1761→      <Icon className="h-5 w-5 text-white" />
+  1762→  1762→      <div className={`absolute inset-0 rounded-lg bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-40 blur-md transition-opacity duration-300`} />
+  1763→  1763→    </motion.div>
+  1764→  1764→  );
+  1765→  1765→}
+  1766→  1766→
+  1767→  1767→// ============================================================
+  1768→  1768→// Category Badge Colors
+  1769→  1769→// ============================================================
+  1770→  1770→const categoryColors: Record<string, string> = {
+  1771→  1771→  AI: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+  1772→  1772→  Commerce: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+  1773→  1773→  Community: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  1774→  1774→  Analytics: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+  1775→  1775→};
+  1776→  1776→
+  1777→  1777→// ============================================================
+  1778→  1778→// Feature Tooltip
+  1779→  1779→// ============================================================
+  1780→  1780→function FeatureTooltip({ text }: { text: string }) {
+  1781→  1781→  const [show, setShow] = useState(false);
+  1782→  1782→  return (
+  1783→  1783→    <div className="relative inline-block">
+  1784→  1784→      <button
+  1785→  1785→        onMouseEnter={() => setShow(true)}
+  1786→  1786→        onMouseLeave={() => setShow(false)}
+  1787→  1787→        className="h-4 w-4 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-[8px] ml-1 hover:bg-muted-foreground/20 transition-colors"
+  1788→  1788→        aria-label="More info"
+  1789→  1789→      >
+  1790→  1790→        ?
+  1791→  1791→      </button>
+  1792→  1792→      <AnimatePresence>
+  1793→  1793→        {show && (
+  1794→  1794→          <motion.div
+  1795→  1795→            initial={{ opacity: 0, y: 5, scale: 0.95 }}
+  1796→  1796→            animate={{ opacity: 1, y: 0, scale: 1 }}
+  1797→  1797→            exit={{ opacity: 0, y: 5, scale: 0.95 }}
+  1798→  1798→            transition={{ duration: 0.15 }}
+  1799→  1799→            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-56 px-3 py-2 rounded-lg bg-popover border border-border shadow-lg text-xs text-popover-foreground"
+  1800→  1800→          >
+  1801→  1801→            {text}
+  1802→  1802→            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-border" />
+  1803→  1803→          </motion.div>
+  1804→  1804→        )}
+  1805→  1805→      </AnimatePresence>
+  1806→  1806→    </div>
+  1807→  1807→  );
+  1808→  1808→}
+  1809→  1809→
+  1810→  1810→// ============================================================
+  1811→  1811→// Connecting Lines Between Features (Desktop)
+  1812→  1812→// ============================================================
+  1813→  1813→function ConnectingLines() {
+  1814→  1814→  return (
+  1815→  1815→    <div className="hidden lg:block absolute inset-0 pointer-events-none overflow-hidden">
+  1816→  1816→      <svg className="w-full h-full" style={{ opacity: 0.06 }}>
+  1817→  1817→        {/* Diagonal lines connecting feature grid cells */}
+  1818→  1818→        <line x1="33%" y1="25%" x2="66%" y2="50%" stroke="currentColor" strokeWidth="1" className="text-emerald-500" />
+  1819→  1819→        <line x1="66%" y1="25%" x2="33%" y2="50%" stroke="currentColor" strokeWidth="1" className="text-emerald-500" />
+  1820→  1820→        <line x1="33%" y1="50%" x2="66%" y2="75%" stroke="currentColor" strokeWidth="1" className="text-emerald-500" />
+  1821→  1821→        <line x1="66%" y1="50%" x2="33%" y2="75%" stroke="currentColor" strokeWidth="1" className="text-emerald-500" />
+  1822→  1822→      </svg>
+  1823→  1823→    </div>
+  1824→  1824→  );
+  1825→  1825→}
+  1826→  1826→
+  1827→  1827→// ============================================================
+  1828→  1828→// Animated Price Counter
+  1829→  1829→// ============================================================
+  1830→  1830→function AnimatedPrice({ target, isInView }: { target: number; isInView: boolean }) {
+  1831→  1831→  const [count, setCount] = useState(0);
+  1832→  1832→  const hasAnimated = useRef(false);
+  1833→  1833→
+  1834→  1834→  useEffect(() => {
+  1835→  1835→    if (!isInView || hasAnimated.current) return;
+  1836→  1836→    hasAnimated.current = true;
+  1837→  1837→
+  1838→  1838→    const duration = 1200;
+  1839→  1839→    const startTime = performance.now();
+  1840→  1840→
+  1841→  1841→    const animate = (now: number) => {
+  1842→  1842→      const elapsed = now - startTime;
+  1843→  1843→      const progress = Math.min(elapsed / duration, 1);
+  1844→  1844→      const eased = 1 - Math.pow(1 - progress, 3);
+  1845→  1845→      setCount(Math.round(target * eased));
+  1846→  1846→      if (progress < 1) {
+  1847→  1847→        requestAnimationFrame(animate);
+  1848→  1848→      }
+  1849→  1849→    };
+  1850→  1850→
+  1851→  1851→    requestAnimationFrame(animate);
+  1852→  1852→  }, [target, isInView]);
+  1853→  1853→
+  1854→  1854→  return <span>{count}</span>;
+  1855→  1855→}
+  1856→  1856→
+  1857→  1857→// ============================================================
+  1858→  1858→// Animated Checkmark (for comparison table)
+  1859→  1859→// ============================================================
+  1860→  1860→function AnimatedCheckmark({ delay = 0, isInView }: { delay?: number; isInView: boolean }) {
+  1861→  1861→  const [drawn, setDrawn] = useState(false);
+  1862→  1862→
+  1863→  1863→  useEffect(() => {
+  1864→  1864→    if (!isInView) return;
+  1865→  1865→    const timer = setTimeout(() => setDrawn(true), delay);
+  1866→  1866→    return () => clearTimeout(timer);
+  1867→  1867→  }, [delay, isInView]);
+  1868→  1868→
+  1869→  1869→  return (
+  1870→  1870→    <motion.svg
+  1871→  1871→      width="16"
+  1872→  1872→      height="16"
+  1873→  1873→      viewBox="0 0 16 16"
+  1874→  1874→      className="mx-auto"
+  1875→  1875→      initial={{ scale: 0 }}
+  1876→  1876→      animate={drawn ? { scale: 1 } : { scale: 0 }}
+  1877→  1877→      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+  1878→  1878→    >
+  1879→  1879→      <motion.path
+  1880→  1880→        d="M3 8.5L6.5 12L13 4"
+  1881→  1881→        fill="none"
+  1882→  1882→        stroke="currentColor"
+  1883→  1883→        strokeWidth="2"
+  1884→  1884→        strokeLinecap="round"
+  1885→  1885→        strokeLinejoin="round"
+  1886→  1886→        initial={{ pathLength: 0 }}
+  1887→  1887→        animate={drawn ? { pathLength: 1 } : { pathLength: 0 }}
+  1888→  1888→        transition={{ duration: 0.5, delay: delay / 1000, ease: 'easeOut' }}
+  1889→  1889→        className="text-emerald-500"
+  1890→  1890→      />
+  1891→  1891→    </motion.svg>
+  1892→  1892→  );
+  1893→  1893→}
+  1894→  1894→
+  1895→  1895→// ============================================================
+  1896→  1896→// Comparison Cell Helper (color-coded)
+  1897→  1897→// ============================================================
+  1898→  1898→function ComparisonCell({ value, isNextgen = false, isInView = false, rowIndex = 0 }: { value: string | boolean; isNextgen?: boolean; isInView?: boolean; rowIndex?: number }) {
+  1899→  1899→  if (typeof value === 'boolean') {
+  1900→  1900→    if (value) {
+  1901→  1901→      return <AnimatedCheckmark delay={rowIndex * 80} isInView={isInView} />;
+  1902→  1902→    }
+  1903→  1903→    return (
+  1904→  1904→      <motion.div
+  1905→  1905→        initial={{ scale: 0 }}
+  1906→  1906→        animate={isInView ? { scale: 1 } : { scale: 0 }}
+  1907→  1907→        transition={{ type: 'spring', stiffness: 300, damping: 20, delay: rowIndex * 0.05 }}
+  1908→  1908→      >
+  1909→  1909→        <X className="h-4 w-4 mx-auto text-red-400" />
+  1910→  1910→      </motion.div>
+  1911→  1911→    );
+  1912→  1912→  }
+  1913→  1913→  // String value — check for "Limited" or "Partial"
+  1914→  1914→  const isAmber = typeof value === 'string' && (value === 'Limited' || value === 'Partial' || value === 'Toxic mechanics');
+  1915→  1915→  return (
+  1916→  1916→    <motion.span
+  1917→  1917→      initial={{ opacity: 0 }}
+  1918→  1918→      animate={isInView ? { opacity: 1 } : { opacity: 0 }}
+  1919→  1919→      transition={{ delay: rowIndex * 0.05, duration: 0.3 }}
+  1920→  1920→      className={`text-xs font-medium ${
+  1921→  1921→        isNextgen ? 'text-emerald-700 dark:text-emerald-300' :
+  1922→  1922→        isAmber ? 'text-amber-600 dark:text-amber-400' :
+  1923→  1923→        'text-muted-foreground'
+  1924→  1924→      }`}
+  1925→  1925→    >
+  1926→  1926→      {value}
+  1927→  1927→    </motion.span>
+  1928→  1928→  );
+  1929→  1929→}
+  1930→  1930→
+  1931→  1931→// ============================================================
+  1932→  1932→// Feature Tooltip for Comparison Table
+  1933→  1933→// ============================================================
+  1934→  1934→function ComparisonFeatureTooltip({ text }: { text: string }) {
+  1935→  1935→  const [show, setShow] = useState(false);
+  1936→  1936→  return (
+  1937→  1937→    <div className="relative inline-block ml-1">
+  1938→  1938→      <button
+  1939→  1939→        onMouseEnter={() => setShow(true)}
+  1940→  1940→        onMouseLeave={() => setShow(false)}
+  1941→  1941→        className="h-3.5 w-3.5 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-[7px] hover:bg-muted-foreground/20 transition-colors"
+  1942→  1942→        aria-label={`Info about ${text}`}
+  1943→  1943→      >
+  1944→  1944→        i
+  1945→  1945→      </button>
+  1946→  1946→      <AnimatePresence>
+  1947→  1947→        {show && (
+  1948→  1948→          <motion.div
+  1949→  1949→            initial={{ opacity: 0, y: 5, scale: 0.95 }}
+  1950→  1950→            animate={{ opacity: 1, y: 0, scale: 1 }}
+  1951→  1951→            exit={{ opacity: 0, y: 5, scale: 0.95 }}
+  1952→  1952→            transition={{ duration: 0.15 }}
+  1953→  1953→            className="absolute bottom-full left-0 mb-2 z-50 w-52 px-3 py-2 rounded-lg bg-popover border border-border shadow-lg text-xs text-popover-foreground"
+  1954→  1954→          >
+  1955→  1955→            {text}
+  1956→  1956→          </motion.div>
+  1957→  1957→        )}
+  1958→  1958→      </AnimatePresence>
+  1959→  1959→    </div>
+  1960→  1960→  );
+  1961→  1961→}
+  1962→  1962→
+  1963→  1963→// ============================================================
+  1964→  1964→// Countdown Timer (for CTA section)
+  1965→  1965→// ============================================================
+  1966→  1966→function CountdownTimer() {
+  1967→  1967→  const [timeLeft, setTimeLeft] = useState({ hours: 23, minutes: 45, seconds: 30 });
+  1968→  1968→
+  1969→  1969→  useEffect(() => {
+  1970→  1970→    const timer = setInterval(() => {
+  1971→  1971→      setTimeLeft((prev) => {
+  1972→  1972→        let { hours, minutes, seconds } = prev;
+  1973→  1973→        seconds--;
+  1974→  1974→        if (seconds < 0) {
+  1975→  1975→          seconds = 59;
+  1976→  1976→          minutes--;
+  1977→  1977→        }
+  1978→  1978→        if (minutes < 0) {
+  1979→  1979→          minutes = 59;
+  1980→  1980→          hours--;
+  1981→  1981→        }
+  1982→  1982→        if (hours < 0) {
+  1983→  1983→          hours = 23;
+  1984→  1984→          minutes = 59;
+  1985→  1985→          seconds = 59;
+  1986→  1986→        }
+  1987→  1987→        return { hours, minutes, seconds };
+  1988→  1988→      });
+  1989→  1989→    }, 1000);
+  1990→  1990→    return () => clearInterval(timer);
+  1991→  1991→  }, []);
+  1992→  1992→
+  1993→  1993→  const pad = (n: number) => n.toString().padStart(2, '0');
+  1994→  1994→
+  1995→  1995→  return (
+  1996→  1996→    <div className="flex items-center justify-center gap-2 mt-6">
+  1997→  1997→      <span className="text-sm text-slate-400">Special offer ends in:</span>
+  1998→  1998→      <div className="flex gap-1">
+  1999→  1999→        {[
+  2000→  2000→          { value: pad(timeLeft.hours), label: 'h' },
+
+[showing lines 1-2000 of 2002; use offset=2001 with limit to continue reading]

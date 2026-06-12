@@ -95,6 +95,16 @@ export async function DELETE(request: Request) {
       );
     }
 
+    // Check if RSVP exists first
+    const existing = await db.liveCohortRSVP.findUnique({
+      where: { cohortId_userId: { cohortId, userId } },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'RSVP not found' }, { status: 404 });
+    }
+
+    // Mark as cancelled instead of deleting
     const rsvp = await db.liveCohortRSVP.update({
       where: { cohortId_userId: { cohortId, userId } },
       data: { status: 'cancelled' },

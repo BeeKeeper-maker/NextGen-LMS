@@ -107,15 +107,17 @@ function getAchievementMeta(achievement: { type: string; points: number }): Achi
   };
 }
 
-// Milestones
-const milestones = [
-  { id: 'm1', label: 'First Lesson', xp: 10, icon: BookOpen },
-  { id: 'm2', label: 'Course Complete', xp: 150, icon: GraduationCap },
-  { id: 'm3', label: '5 Courses', xp: 500, icon: Target },
-  { id: 'm4', label: '100 Day Streak', xp: 300, icon: Flame },
-  { id: 'm5', label: 'Community Leader', xp: 200, icon: Users },
-  { id: 'm6', label: 'Master Learner', xp: 1000, icon: Crown },
-];
+// Milestones - dynamically computed based on user stats
+function getMilestones(completedLessons: number, completedCourses: number, streakDays: number, communityPosts: number, totalPoints: number) {
+  return [
+    { id: 'm1', label: 'First Lesson', xp: 10, icon: BookOpen, achieved: completedLessons >= 1 },
+    { id: 'm2', label: 'Course Complete', xp: 150, icon: GraduationCap, achieved: completedCourses >= 1 },
+    { id: 'm3', label: '5 Courses', xp: 500, icon: Target, achieved: completedCourses >= 5 },
+    { id: 'm4', label: '100 Day Streak', xp: 300, icon: Flame, achieved: streakDays >= 100 },
+    { id: 'm5', label: 'Community Leader', xp: 200, icon: Users, achieved: communityPosts >= 5 },
+    { id: 'm6', label: 'Master Learner', xp: 1000, icon: Crown, achieved: totalPoints >= 1000 },
+  ];
+}
 
 // ─────────────────────────────────────────────────────────────
 // Utility Functions
@@ -505,14 +507,14 @@ function CategorySection({
 // Milestone Tracker
 // ─────────────────────────────────────────────────────────────
 
-function MilestoneTracker({ completedCount }: { completedCount: number }) {
+function MilestoneTracker({ completedCount, milestones }: { completedCount: number; milestones: ReturnType<typeof getMilestones> }) {
   return (
     <div className="overflow-x-auto pb-2">
       <div className="flex items-center min-w-[600px] sm:min-w-0 px-2">
         {milestones.map((milestone, i) => {
-          const isCompleted = i < completedCount;
-          const isCurrent = i === completedCount;
-          const isUpcoming = i > completedCount;
+          const isCompleted = milestone.achieved;
+          const isCurrent = !milestone.achieved && (i === 0 || milestones[i - 1].achieved);
+          const isUpcoming = !isCompleted && !isCurrent;
           const Icon = milestone.icon;
 
           return (
@@ -866,6 +868,7 @@ export function LearnerAchievements() {
       .map((u: any, idx: number) => ({
         rank: idx + 1,
         name: u.name || u.email,
+        userId: u.id,
         points: u.totalPoints || 0,
         streak: u.streakDays || 0,
         coursesCompleted: u._count?.enrollments || 0,
@@ -873,13 +876,16 @@ export function LearnerAchievements() {
     return sorted;
   }, [usersData]);
 
-  // Compute global rank for current user
-  const currentUserName = currentUser?.name;
+  // Compute global rank for current user by userId
+  const currentUserId = currentUser?.id;
   const globalRank = useMemo(() => {
-    if (!leaderboard.length || !currentUserName) return 0;
-    const entry = leaderboard.find((e) => e.name === currentUserName);
-    return entry?.rank || leaderboard.length;
-  }, [leaderboard, currentUserName]);
+    if (!leaderboard.length || !currentUserId) return 0;
+    const entry = leaderboard.find((e: any) => e.userId === currentUserId);
+    if (entry) return entry.rank;
+    // Fallback: find by name only if userId doesn't match
+    const byName = leaderboard.find((e) => e.name === currentUser?.name);
+    return byName?.rank || leaderboard.length;
+  }, [leaderboard, currentUserId, currentUser?.name]);
 
   // Compute milestone progress based on user stats
   const completedMilestones = useMemo(() => {
@@ -892,6 +898,17 @@ export function LearnerAchievements() {
     if ((user._count?.communityPosts || 0) >= 5) count++; // Community Leader
     if (totalPoints >= 1000) count++;               // Master Learner
     return count;
+  }, [user, totalPoints]);
+
+  // Dynamic milestones based on actual user data
+  const dynamicMilestones = useMemo(() => {
+    return getMilestones(
+      user?.stats?.completedLessons || 0,
+      user?.stats?.completedCourses || 0,
+      user?.streakDays || 0,
+      user?._count?.communityPosts || 0,
+      totalPoints
+    );
   }, [user, totalPoints]);
 
   // Loading state
@@ -949,7 +966,7 @@ export function LearnerAchievements() {
                   </div>
                   <div className="mt-2 flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
                     <TrendingUp className="h-3 w-3" />
-                    +{Math.round(totalPoints * 0.12)} this week
+                    +{Math.min(Math.round(totalPoints * 0.05), 500)} this week
                   </div>
                 </div>
               </div>
@@ -1133,13 +1150,13 @@ export function LearnerAchievements() {
                     Learning Path
                   </h2>
                   <Badge variant="secondary" className="text-[10px] gap-1">
-                    {completedMilestones}/{milestones.length} completed
+                    {completedMilestones}/{dynamicMilestones.length} completed
                   </Badge>
                 </div>
               </CardContent>
             </Card>
             <CardContent className="px-5 pb-5 pt-2">
-              <MilestoneTracker completedCount={completedMilestones} />
+              <MilestoneTracker completedCount={completedMilestones} milestones={dynamicMilestones} />
             </CardContent>
           </Card>
         </Section>

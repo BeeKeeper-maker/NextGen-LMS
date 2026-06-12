@@ -28,6 +28,12 @@ export async function GET(
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
     }
 
+    const { searchParams: getSearchParams } = new URL(request.url);
+    const getTenantId = getSearchParams.get('tenantId');
+    if (getTenantId && assessment.tenantId !== getTenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     return NextResponse.json(assessment);
   } catch (error) {
     console.error('Assessment fetch error:', error);

@@ -35,6 +35,12 @@ export async function PATCH(
       return NextResponse.json({ error: 'Review not found' }, { status: 404 });
     }
 
+    const { searchParams: patchSearchParams } = new URL(request.url);
+    const patchTenantId = patchSearchParams.get('tenantId');
+    if (patchTenantId && existing.tenantId !== patchTenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     // Parse existing moderation history
     let moderationHistory: Array<{ action: string; by: string; date: string; reason?: string }> = [];
     if (existing.moderationHistory) {
@@ -127,6 +133,8 @@ export async function GET(
 ) {
   try {
     const { reviewId } = await params;
+    const { searchParams } = new URL(request.url);
+    const tenantId = searchParams.get('tenantId');
 
     const review = await db.courseReview.findUnique({
       where: { id: reviewId },
@@ -157,6 +165,10 @@ export async function GET(
       return NextResponse.json({ error: 'Review not found' }, { status: 404 });
     }
 
+    if (tenantId && review.tenantId !== tenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     return NextResponse.json(review);
   } catch (error) {
     console.error('Review fetch error:', error);
@@ -180,6 +192,12 @@ export async function PUT(
 
     if (!existing) {
       return NextResponse.json({ error: 'Review not found' }, { status: 404 });
+    }
+
+    const { searchParams: putSearchParams } = new URL(request.url);
+    const putTenantId = putSearchParams.get('tenantId');
+    if (putTenantId && existing.tenantId !== putTenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const updateData: Record<string, unknown> = {};
@@ -245,6 +263,12 @@ export async function DELETE(
 
     if (!existing) {
       return NextResponse.json({ error: 'Review not found' }, { status: 404 });
+    }
+
+    const { searchParams: deleteSearchParams } = new URL(request.url);
+    const deleteTenantId = deleteSearchParams.get('tenantId');
+    if (deleteTenantId && existing.tenantId !== deleteTenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     await db.courseReview.delete({ where: { id: reviewId } });

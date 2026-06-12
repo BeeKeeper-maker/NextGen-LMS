@@ -1,0 +1,1315 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { useAppStore } from '@/store/app-store';
+     6→import { useAssessment, useSubmitQuiz } from '@/hooks/use-data';
+     7→import { toast } from 'sonner';
+     8→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+     9→import { Button } from '@/components/ui/button';
+    10→import { Badge } from '@/components/ui/badge';
+    11→import { Progress } from '@/components/ui/progress';
+    12→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+    13→import { Checkbox } from '@/components/ui/checkbox';
+    14→import { Input } from '@/components/ui/input';
+    15→import { Label } from '@/components/ui/label';
+    16→import { Separator } from '@/components/ui/separator';
+    17→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+    18→import { ScrollArea } from '@/components/ui/scroll-area';
+    19→import {
+    20→  Clock,
+    21→  AlertTriangle,
+    22→  Play,
+    23→  ChevronLeft,
+    24→  ChevronRight,
+    25→  CheckCircle2,
+    26→  XCircle,
+    27→  Bookmark,
+    28→  Flag,
+    29→  Award,
+    30→  Timer,
+    31→  ArrowRight,
+    32→  Loader2,
+    33→  FileCheck,
+    34→  RotateCcw,
+    35→  Home,
+    36→  HelpCircle,
+    37→  Zap,
+    38→  Target,
+    39→  Eye,
+    40→  BookOpen,
+    41→  Circle,
+    42→} from 'lucide-react';
+    43→import { cn } from '@/lib/utils';
+    44→
+    45→// ─── Types ──────────────────────────────────────────────────
+    46→interface QuestionData {
+    47→  id: string;
+    48→  type: string;
+    49→  question: string;
+    50→  options?: string | null;
+    51→  correctAnswer?: string | null;
+    52→  explanation?: string | null;
+    53→  points: number;
+    54→  orderIndex: number;
+    55→  difficulty?: string;
+    56→}
+    57→
+    58→interface AssessmentData {
+    59→  id: string;
+    60→  title: string;
+    61→  description?: string | null;
+    62→  type: string;
+    63→  passingScore: number;
+    64→  maxAttempts: number;
+    65→  timeLimit?: number | null;
+    66→  isPublished: boolean;
+    67→  shuffleQuestions: boolean;
+    68→  questions: QuestionData[];
+    69→  submissions?: any[];
+    70→  _count?: { submissions: number; questions: number };
+    71→}
+    72→
+    73→interface GradedQuestion {
+    74→  questionId: string;
+    75→  userAnswer: string;
+    76→  isCorrect: boolean;
+    77→  points: number;
+    78→  earned: number;
+    79→}
+    80→
+    81→interface QuizResults {
+    82→  submission: any;
+    83→  grading: {
+    84→    totalPoints: number;
+    85→    earnedPoints: number;
+    86→    percentScore: number;
+    87→    passed: boolean;
+    88→    questionResults: GradedQuestion[];
+    89→  };
+    90→}
+    91→
+    92→type PlayerPhase = 'start' | 'taking' | 'review' | 'results';
+    93→
+    94→interface AssessmentPlayerProps {
+    95→  assessmentId: string;
+    96→  onClose: () => void;
+    97→  previousSubmissions?: any[];
+    98→}
+    99→
+   100→// ─── Animation variants ─────────────────────────────────────
+   101→const slideVariants = {
+   102→  enter: (direction: number) => ({
+   103→    x: direction > 0 ? 60 : -60,
+   104→    opacity: 0,
+   105→  }),
+   106→  center: {
+   107→    x: 0,
+   108→    opacity: 1,
+   109→  },
+   110→  exit: (direction: number) => ({
+   111→    x: direction < 0 ? 60 : -60,
+   112→    opacity: 0,
+   113→  }),
+   114→};
+   115→
+   116→const fadeVariants = {
+   117→  hidden: { opacity: 0, y: 16 },
+   118→  visible: { opacity: 1, y: 0, transition: { duration: 0.35 } },
+   119→  exit: { opacity: 0, y: -8, transition: { duration: 0.2 } },
+   120→};
+   121→
+   122→const glassCard = 'backdrop-blur-xl bg-white/70 dark:bg-slate-900/70 border border-white/20 dark:border-slate-700/30';
+   123→
+   124→// ─── Format time helper ─────────────────────────────────────
+   125→function formatTime(seconds: number): string {
+   126→  const h = Math.floor(seconds / 3600);
+   127→  const m = Math.floor((seconds % 3600) / 60);
+   128→  const s = seconds % 60;
+   129→  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+   130→  return `${m}:${String(s).padStart(2, '0')}`;
+   131→}
+   132→
+   133→// ─── Parse options from JSON ────────────────────────────────
+   134→function parseOptions(optionsStr: string | null | undefined): string[] {
+   135→  if (!optionsStr) return [];
+   136→  try {
+   137→    const parsed = JSON.parse(optionsStr);
+   138→    return Array.isArray(parsed) ? parsed : [];
+   139→  } catch {
+   140→    return [];
+   141→  }
+   142→}
+   143→
+   144→// ─── Parse correct answer from JSON ─────────────────────────
+   145→function parseCorrectAnswer(answerStr: string | null | undefined): string | string[] {
+   146→  if (!answerStr) return '';
+   147→  try {
+   148→    const parsed = JSON.parse(answerStr);
+   149→    if (Array.isArray(parsed)) return parsed;
+   150→    return String(parsed);
+   151→  } catch {
+   152→    return answerStr;
+   153→  }
+   154→}
+   155→
+   156→// ─── Difficulty badge color ─────────────────────────────────
+   157→function getDifficultyStyle(difficulty?: string) {
+   158→  switch (difficulty) {
+   159→    case 'easy':
+   160→      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
+   161→    case 'medium':
+   162→      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+   163→    case 'hard':
+   164→      return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+   165→    default:
+   166→      return 'bg-slate-100 text-slate-700 dark:bg-slate-800/30 dark:text-slate-400';
+   167→  }
+   168→}
+   169→
+   170→// ═══════════════════════════════════════════════════════════
+   171→// MAIN COMPONENT
+   172→// ═══════════════════════════════════════════════════════════
+   173→export function AssessmentPlayer({ assessmentId, onClose, previousSubmissions = [] }: AssessmentPlayerProps) {
+   174→  const currentUser = useAppStore((s) => s.currentUser);
+   175→  const currentTenant = useAppStore((s) => s.currentTenant);
+   176→  const userId = currentUser?.id || '';
+   177→  const tenantId = currentTenant?.id || '';
+   178→
+   179→  const { data: assessment, isLoading: assessmentLoading, error: assessmentError } = useAssessment(assessmentId);
+   180→  const submitQuiz = useSubmitQuiz();
+   181→
+   182→  const [phase, setPhase] = useState<PlayerPhase>('start');
+   183→  const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
+   184→  const [answers, setAnswers] = useState<Record<string, string>>({});
+   185→  const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
+   186→  const [timeRemaining, setTimeRemaining] = useState<number>(0);
+   187→  const [startTime, setStartTime] = useState<number>(0);
+   188→  const [direction, setDirection] = useState(1);
+   189→  const [showSubmitDialog, setShowSubmitDialog] = useState(false);
+   190→  const [results, setResults] = useState<QuizResults | null>(null);
+   191→  const [isSubmitting, setIsSubmitting] = useState(false);
+   192→  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+   193→
+   194→  const typedAssessment = assessment as AssessmentData | null;
+   195→  const questions = typedAssessment?.questions || [];
+   196→  const currentQuestion = questions[currentQuestionIdx];
+   197→
+   198→  // ─── Timer logic ────────────────────────────────────────
+   199→  useEffect(() => {
+   200→    if (phase !== 'taking' || !typedAssessment?.timeLimit) return;
+   201→
+   202→    timerRef.current = setInterval(() => {
+   203→      setTimeRemaining((prev) => {
+   204→        if (prev <= 1) {
+   205→          if (timerRef.current) clearInterval(timerRef.current);
+   206→          // Auto-submit when timer expires
+   207→          handleAutoSubmit();
+   208→          return 0;
+   209→        }
+   210→        return prev - 1;
+   211→      });
+   212→    }, 1000);
+   213→
+   214→    return () => {
+   215→      if (timerRef.current) clearInterval(timerRef.current);
+   216→    };
+   217→  }, [phase]);
+   218→
+   219→  const handleAutoSubmit = useCallback(() => {
+   220→    toast.warning('Time is up! Your quiz has been auto-submitted.');
+   221→    handleSubmit(true);
+   222→  }, [answers, userId, tenantId, assessmentId]);
+   223→
+   224→  // ─── Start quiz ─────────────────────────────────────────
+   225→  const handleStartQuiz = () => {
+   226→    if (!typedAssessment) return;
+   227→    setPhase('taking');
+   228→    setStartTime(Date.now());
+   229→    setCurrentQuestionIdx(0);
+   230→    setAnswers({});
+   231→    setMarkedForReview(new Set());
+   232→
+   233→    if (typedAssessment.timeLimit) {
+   234→      setTimeRemaining(typedAssessment.timeLimit * 60);
+   235→    }
+   236→  };
+   237→
+   238→  // ─── Answer handling ────────────────────────────────────
+   239→  const setAnswer = (questionId: string, answer: string) => {
+   240→    setAnswers((prev) => ({ ...prev, [questionId]: answer }));
+   241→  };
+   242→
+   243→  const toggleReviewMark = (questionId: string) => {
+   244→    setMarkedForReview((prev) => {
+   245→      const next = new Set(prev);
+   246→      if (next.has(questionId)) next.delete(questionId);
+   247→      else next.add(questionId);
+   248→      return next;
+   249→    });
+   250→  };
+   251→
+   252→  // ─── Navigation ─────────────────────────────────────────
+   253→  const goToQuestion = (idx: number) => {
+   254→    setDirection(idx > currentQuestionIdx ? 1 : -1);
+   255→    setCurrentQuestionIdx(idx);
+   256→  };
+   257→
+   258→  const goNext = () => {
+   259→    if (currentQuestionIdx < questions.length - 1) {
+   260→      setDirection(1);
+   261→      setCurrentQuestionIdx((i) => i + 1);
+   262→    }
+   263→  };
+   264→
+   265→  const goPrev = () => {
+   266→    if (currentQuestionIdx > 0) {
+   267→      setDirection(-1);
+   268→      setCurrentQuestionIdx((i) => i - 1);
+   269→    }
+   270→  };
+   271→
+   272→  // ─── Submit quiz ────────────────────────────────────────
+   273→  const handleSubmit = async (isAutoSubmit = false) => {
+   274→    if (!isAutoSubmit && !showSubmitDialog) {
+   275→      setShowSubmitDialog(true);
+   276→      return;
+   277→    }
+   278→
+   279→    setIsSubmitting(true);
+   280→    if (timerRef.current) clearInterval(timerRef.current);
+   281→
+   282→    const timeTaken = Math.round((Date.now() - startTime) / 1000);
+   283→
+   284→    try {
+   285→      const result = await submitQuiz.mutateAsync({
+   286→        assessmentId,
+   287→        userId,
+   288→        tenantId,
+   289→        answers,
+   290→        timeTaken,
+   291→      });
+   292→      setResults(result as QuizResults);
+   293→      setPhase('results');
+   294→      setShowSubmitDialog(false);
+   295→    } catch (err: any) {
+   296→      toast.error(err?.message || 'Failed to submit quiz');
+   297→    } finally {
+   298→      setIsSubmitting(false);
+   299→    }
+   300→  };
+   301→
+   302→  // ─── Retake quiz ────────────────────────────────────────
+   303→  const handleRetake = () => {
+   304→    setPhase('start');
+   305→    setCurrentQuestionIdx(0);
+   306→    setAnswers({});
+   307→    setMarkedForReview(new Set());
+   308→    setResults(null);
+   309→  };
+   310→
+   311→  // ─── Computed values ────────────────────────────────────
+   312→  const answeredCount = Object.keys(answers).filter((k) => answers[k]?.trim()).length;
+   313→  const unansweredCount = questions.length - answeredCount;
+   314→  const reviewCount = markedForReview.size;
+   315→  const totalPoints = questions.reduce((sum, q) => sum + q.points, 0);
+   316→  const previousAttempts = previousSubmissions?.length || 0;
+   317→  const attemptsRemaining = (typedAssessment?.maxAttempts || 3) - previousAttempts;
+   318→
+   319→  // Timer color
+   320→  const timerUrgent = typedAssessment?.timeLimit ? timeRemaining <= 300 && timeRemaining > 0 : false;
+   321→  const timerCritical = typedAssessment?.timeLimit ? timeRemaining <= 60 && timeRemaining > 0 : false;
+   322→
+   323→  // ─── Loading state ──────────────────────────────────────
+   324→  if (assessmentLoading) {
+   325→    return (
+   326→      <div className="p-4 md:p-6 space-y-6">
+   327→        <div className="rounded-xl overflow-hidden">
+   328→          <div className="h-32 md:h-40 bg-gradient-to-r from-violet-600 to-purple-800 animate-pulse" />
+   329→          <div className="p-6 space-y-4">
+   330→            <div className="h-5 bg-muted rounded animate-pulse w-1/3" />
+   331→            <div className="h-3 bg-muted rounded animate-pulse w-2/3" />
+   332→            <div className="h-2.5 bg-muted rounded animate-pulse w-full" />
+   333→            <div className="flex gap-3">
+   334→              <div className="h-10 w-40 bg-muted rounded animate-pulse" />
+   335→              <div className="h-10 w-32 bg-muted rounded animate-pulse" />
+   336→            </div>
+   337→          </div>
+   338→        </div>
+   339→        <div className="grid grid-cols-3 gap-4">
+   340→          {[1, 2, 3].map((i) => (
+   341→            <div key={i} className="rounded-xl p-4 bg-muted/30 animate-pulse space-y-3">
+   342→              <div className="h-4 bg-muted rounded w-1/2" />
+   343→              <div className="h-3 bg-muted rounded w-3/4" />
+   344→            </div>
+   345→          ))}
+   346→        </div>
+   347→      </div>
+   348→    );
+   349→  }
+   350→
+   351→  if (assessmentError || !typedAssessment) {
+   352→    return (
+   353→      <div className="p-6 text-center">
+   354→        <Card className={cn(glassCard, 'max-w-md mx-auto')}>
+   355→          <CardContent className="p-8">
+   356→            <AlertTriangle className="h-12 w-12 text-orange-500 mx-auto mb-4" />
+   357→            <h3 className="text-lg font-semibold mb-2">Failed to Load Assessment</h3>
+   358→            <p className="text-sm text-muted-foreground mb-4">There was an error loading this assessment. Please try again later.</p>
+   359→            <Button variant="outline" onClick={onClose}>
+   360→              Go Back
+   361→            </Button>
+   362→          </CardContent>
+   363→        </Card>
+   364→      </div>
+   365→    );
+   366→  }
+   367→
+   368→  // Check if max attempts reached
+   369→  if (attemptsRemaining <= 0 && phase === 'start') {
+   370→    return (
+   371→      <div className="p-6 text-center">
+   372→        <Card className={cn(glassCard, 'max-w-md mx-auto')}>
+   373→          <CardContent className="p-8">
+   374→            <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+   375→            <h3 className="text-lg font-semibold mb-2">No Attempts Remaining</h3>
+   376→            <p className="text-sm text-muted-foreground mb-4">
+   377→              You&apos;ve used all {typedAssessment.maxAttempts} allowed attempt{typedAssessment.maxAttempts > 1 ? 's' : ''} for this assessment.
+   378→            </p>
+   379→            <Button variant="outline" onClick={onClose}>
+   380→              Back to Course
+   381→            </Button>
+   382→          </CardContent>
+   383→        </Card>
+   384→      </div>
+   385→    );
+   386→  }
+   387→
+   388→  // ═══════════════════════════════════════════════════════════
+   389→  // PHASE: START
+   390→  // ═══════════════════════════════════════════════════════════
+   391→  if (phase === 'start') {
+   392→    return (
+   393→      <motion.div variants={fadeVariants} initial="hidden" animate="visible" exit="exit" className="p-4 md:p-6">
+   394→        {/* Header Banner */}
+   395→        <div className="relative rounded-xl overflow-hidden mb-6">
+   396→          <div className="bg-gradient-to-r from-violet-600 to-purple-800 p-6 md:p-8">
+   397→            <div className="flex items-start justify-between">
+   398→              <div className="flex-1">
+   399→                <Badge className="bg-white/20 text-white hover:bg-white/30 mb-3">
+   400→                  <FileCheck className="h-3 w-3 mr-1" />
+   401→                  {typedAssessment.type === 'quiz' ? 'Quiz' : typedAssessment.type.charAt(0).toUpperCase() + typedAssessment.type.slice(1)}
+   402→                </Badge>
+   403→                <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">{typedAssessment.title}</h2>
+   404→                {typedAssessment.description && (
+   405→                  <p className="text-white/80 text-sm md:text-base max-w-2xl">{typedAssessment.description}</p>
+   406→                )}
+   407→              </div>
+   408→            </div>
+   409→          </div>
+   410→        </div>
+   411→
+   412→        {/* Stats Cards */}
+   413→        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+   414→          <Card className={cn(glassCard)}>
+   415→            <CardContent className="p-4 text-center">
+   416→              <BookOpen className="h-5 w-5 text-violet-600 mx-auto mb-2" />
+   417→              <div className="text-2xl font-bold">{questions.length}</div>
+   418→              <div className="text-xs text-muted-foreground">Questions</div>
+   419→            </CardContent>
+   420→          </Card>
+   421→          <Card className={cn(glassCard)}>
+   422→            <CardContent className="p-4 text-center">
+   423→              <Target className="h-5 w-5 text-emerald-600 mx-auto mb-2" />
+   424→              <div className="text-2xl font-bold">{totalPoints}</div>
+   425→              <div className="text-xs text-muted-foreground">Total Points</div>
+   426→            </CardContent>
+   427→          </Card>
+   428→          <Card className={cn(glassCard)}>
+   429→            <CardContent className="p-4 text-center">
+   430→              <Timer className="h-5 w-5 text-amber-600 mx-auto mb-2" />
+   431→              <div className="text-2xl font-bold">
+   432→                {typedAssessment.timeLimit ? `${typedAssessment.timeLimit}m` : '∞'}
+   433→              </div>
+   434→              <div className="text-xs text-muted-foreground">Time Limit</div>
+   435→            </CardContent>
+   436→          </Card>
+   437→          <Card className={cn(glassCard)}>
+   438→            <CardContent className="p-4 text-center">
+   439→              <Award className="h-5 w-5 text-orange-600 mx-auto mb-2" />
+   440→              <div className="text-2xl font-bold">{typedAssessment.passingScore}%</div>
+   441→              <div className="text-xs text-muted-foreground">Pass Score</div>
+   442→            </CardContent>
+   443→          </Card>
+   444→        </div>
+   445→
+   446→        {/* Info & Warnings */}
+   447→        <Card className={cn(glassCard, 'mb-6')}>
+   448→          <CardContent className="p-4 md:p-6 space-y-4">
+   449→            <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40">
+   450→              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+   451→              <div>
+   452→                <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Before you begin</p>
+   453→                <ul className="text-xs text-amber-700 dark:text-amber-400 mt-1 space-y-1">
+   454→                  {typedAssessment.timeLimit && (
+   455→                    <li>&#8226; This quiz has a {typedAssessment.timeLimit}-minute time limit. The timer starts when you click &quot;Start Quiz&quot;.</li>
+   456→                  )}
+   457→                  <li>&#8226; Do not navigate away from this page or your progress may be lost.</li>
+   458→                  <li>&#8226; You have {attemptsRemaining} attempt{attemptsRemaining !== 1 ? 's' : ''} remaining out of {typedAssessment.maxAttempts}.</li>
+   459→                  <li>&#8226; You need {typedAssessment.passingScore}% to pass.</li>
+   460→                </ul>
+   461→              </div>
+   462→            </div>
+   463→
+   464→            {previousAttempts > 0 && (
+   465→              <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40">
+   466→                <HelpCircle className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+   467→                <div>
+   468→                  <p className="text-sm font-medium text-blue-800 dark:text-blue-300">Previous Attempts</p>
+   469→                  <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
+   470→                    You&apos;ve taken this quiz {previousAttempts} time{previousAttempts > 1 ? 's' : ''} before. Your best attempt will be recorded.
+   471→                  </p>
+   472→                </div>
+   473→              </div>
+   474→            )}
+   475→
+   476→            <div className="flex flex-wrap gap-2">
+   477→              {questions.some((q) => q.type === 'multiple_choice') && (
+   478→                <Badge variant="secondary" className="text-xs">Multiple Choice</Badge>
+   479→              )}
+   480→              {questions.some((q) => q.type === 'true_false') && (
+   481→                <Badge variant="secondary" className="text-xs">True / False</Badge>
+   482→              )}
+   483→              {questions.some((q) => q.type === 'short_answer') && (
+   484→                <Badge variant="secondary" className="text-xs">Short Answer</Badge>
+   485→              )}
+   486→              {questions.some((q) => q.type === 'multiple_select') && (
+   487→                <Badge variant="secondary" className="text-xs">Multiple Select</Badge>
+   488→              )}
+   489→            </div>
+   490→          </CardContent>
+   491→        </Card>
+   492→
+   493→        {/* Action Buttons */}
+   494→        <div className="flex items-center gap-3">
+   495→          <Button
+   496→            onClick={handleStartQuiz}
+   497→            size="lg"
+   498→            className="gap-2 bg-gradient-to-r from-violet-600 to-purple-700 hover:from-violet-700 hover:to-purple-800 text-white"
+   499→          >
+   500→            <Play className="h-4 w-4" />
+   501→            Start Quiz
+   502→          </Button>
+   503→          <Button variant="outline" onClick={onClose} size="lg">
+   504→            Cancel
+   505→          </Button>
+   506→        </div>
+   507→      </motion.div>
+   508→    );
+   509→  }
+   510→
+   511→  // ═══════════════════════════════════════════════════════════
+   512→  // PHASE: TAKING
+   513→  // ═══════════════════════════════════════════════════════════
+   514→  if (phase === 'taking') {
+   515→    return (
+   516→      <div className="p-4 md:p-6">
+   517→        {/* Top Bar: Timer + Progress */}
+   518→        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+   519→          <div className="flex items-center gap-3">
+   520→            <h2 className="text-lg font-semibold truncate max-w-xs md:max-w-md">{typedAssessment.title}</h2>
+   521→          </div>
+   522→          <div className="flex items-center gap-3">
+   523→            {/* Progress indicator */}
+   524→            <div className="text-xs text-muted-foreground">
+   525→              {answeredCount}/{questions.length} answered
+   526→            </div>
+   527→            {/* Timer */}
+   528→            {typedAssessment.timeLimit && (
+   529→              <div
+   530→                className={cn(
+   531→                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono font-semibold',
+   532→                  timerCritical
+   533→                    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 animate-pulse'
+   534→                    : timerUrgent
+   535→                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+   536→                      : 'bg-slate-100 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300'
+   537→                )}
+   538→              >
+   539→                <Clock className="h-3.5 w-3.5" />
+   540→                {formatTime(timeRemaining)}
+   541→              </div>
+   542→            )}
+   543→            <Button
+   544→              variant="outline"
+   545→              size="sm"
+   546→              onClick={() => setPhase('review')}
+   547→              className="gap-1.5"
+   548→            >
+   549→              <Eye className="h-3.5 w-3.5" />
+   550→              Review
+   551→            </Button>
+   552→          </div>
+   553→        </div>
+   554→
+   555→        {/* Progress Bar */}
+   556→        <Progress value={(answeredCount / questions.length) * 100} className="h-1.5 mb-4" />
+   557→
+   558→        <div className="flex gap-4 md:gap-6">
+   559→          {/* Question Navigation Sidebar */}
+   560→          <Card className={cn(glassCard, 'hidden md:block w-56 shrink-0 self-start sticky top-4')}>
+   561→            <CardHeader className="p-3 pb-2">
+   562→              <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+   563→                Questions
+   564→              </CardTitle>
+   565→            </CardHeader>
+   566→            <CardContent className="p-3 pt-0">
+   567→              <div className="grid grid-cols-5 gap-1.5">
+   568→                {questions.map((q, idx) => {
+   569→                  const isAnswered = answers[q.id]?.trim();
+   570→                  const isCurrent = idx === currentQuestionIdx;
+   571→                  const isMarked = markedForReview.has(q.id);
+   572→
+   573→                  return (
+   574→                    <button
+   575→                      key={q.id}
+   576→                      onClick={() => goToQuestion(idx)}
+   577→                      className={cn(
+   578→                        'h-8 w-8 rounded-md text-xs font-medium transition-all relative',
+   579→                        isCurrent
+   580→                          ? 'bg-violet-600 text-white shadow-md'
+   581→                          : isAnswered
+   582→                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
+   583→                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700/50'
+   584→                      )}
+   585→                      title={`Question ${idx + 1}${isMarked ? ' (marked for review)' : ''}`}
+   586→                    >
+   587→                      {idx + 1}
+   588→                      {isMarked && (
+   589→                        <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-amber-500" />
+   590→                      )}
+   591→                    </button>
+   592→                  );
+   593→                })}
+   594→              </div>
+   595→
+   596→              <Separator className="my-3" />
+   597→
+   598→              {/* Legend */}
+   599→              <div className="space-y-1.5 text-[10px] text-muted-foreground">
+   600→                <div className="flex items-center gap-1.5">
+   601→                  <div className="h-3 w-3 rounded bg-violet-600" /> Current
+   602→                </div>
+   603→                <div className="flex items-center gap-1.5">
+   604→                  <div className="h-3 w-3 rounded bg-emerald-100 dark:bg-emerald-900/30" /> Answered
+   605→                </div>
+   606→                <div className="flex items-center gap-1.5">
+   607→                  <div className="h-3 w-3 rounded bg-slate-100 dark:bg-slate-800/50" /> Unanswered
+   608→                </div>
+   609→                <div className="flex items-center gap-1.5">
+   610→                  <div className="h-2 w-2 rounded-full bg-amber-500" /> Marked for review
+   611→                </div>
+   612→              </div>
+   613→            </CardContent>
+   614→          </Card>
+   615→
+   616→          {/* Main Question Area */}
+   617→          <div className="flex-1 min-w-0">
+   618→            <AnimatePresence mode="wait" custom={direction}>
+   619→              <motion.div
+   620→                key={currentQuestionIdx}
+   621→                custom={direction}
+   622→                variants={slideVariants}
+   623→                initial="enter"
+   624→                animate="center"
+   625→                exit="exit"
+   626→                transition={{ duration: 0.25 }}
+   627→              >
+   628→                <Card className={cn(glassCard)}>
+   629→                  <CardHeader className="p-4 md:p-6 pb-3">
+   630→                    <div className="flex items-start justify-between gap-3">
+   631→                      <div className="flex-1">
+   632→                        <div className="flex items-center gap-2 mb-2">
+   633→                          <Badge variant="outline" className="text-xs">
+   634→                            Question {currentQuestionIdx + 1} of {questions.length}
+   635→                          </Badge>
+   636→                          <Badge className={cn('text-xs', getDifficultyStyle(currentQuestion?.difficulty))}>
+   637→                            {currentQuestion?.difficulty || 'medium'}
+   638→                          </Badge>
+   639→                          <Badge variant="secondary" className="text-xs">
+   640→                            {currentQuestion?.points} pt{currentQuestion?.points !== 1 ? 's' : ''}
+   641→                          </Badge>
+   642→                        </div>
+   643→                        <CardTitle className="text-base md:text-lg leading-relaxed">
+   644→                          {currentQuestion?.question}
+   645→                        </CardTitle>
+   646→                      </div>
+   647→                      <Button
+   648→                        variant="ghost"
+   649→                        size="sm"
+   650→                        onClick={() => currentQuestion && toggleReviewMark(currentQuestion.id)}
+   651→                        className={cn(
+   652→                          'shrink-0 gap-1',
+   653→                          currentQuestion && markedForReview.has(currentQuestion.id)
+   654→                            ? 'text-amber-600'
+   655→                            : 'text-muted-foreground'
+   656→                        )}
+   657→                      >
+   658→                        <Bookmark className={cn('h-4 w-4', currentQuestion && markedForReview.has(currentQuestion.id) && 'fill-current')} />
+   659→                        <span className="hidden sm:inline text-xs">
+   660→                          {currentQuestion && markedForReview.has(currentQuestion.id) ? 'Marked' : 'Mark'}
+   661→                        </span>
+   662→                      </Button>
+   663→                    </div>
+   664→                  </CardHeader>
+   665→                  <CardContent className="p-4 md:p-6 pt-0">
+   666→                    {/* Answer Area */}
+   667→                    {currentQuestion && (
+   668→                      <AnswerInput
+   669→                        question={currentQuestion}
+   670→                        answer={answers[currentQuestion.id] || ''}
+   671→                        onAnswerChange={(val) => setAnswer(currentQuestion.id, val)}
+   672→                      />
+   673→                    )}
+   674→                  </CardContent>
+   675→                </Card>
+   676→              </motion.div>
+   677→            </AnimatePresence>
+   678→
+   679→            {/* Navigation Buttons */}
+   680→            <div className="flex items-center justify-between mt-4">
+   681→              <Button
+   682→                variant="outline"
+   683→                onClick={goPrev}
+   684→                disabled={currentQuestionIdx === 0}
+   685→                className="gap-1.5"
+   686→              >
+   687→                <ChevronLeft className="h-4 w-4" />
+   688→                Previous
+   689→              </Button>
+   690→
+   691→              {/* Mobile question navigation */}
+   692→              <div className="flex md:hidden items-center gap-1">
+   693→                <span className="text-sm text-muted-foreground">
+   694→                  {currentQuestionIdx + 1}/{questions.length}
+   695→                </span>
+   696→              </div>
+   697→
+   698→              {currentQuestionIdx === questions.length - 1 ? (
+   699→                <Button
+   700→                  onClick={() => setPhase('review')}
+   701→                  className="gap-1.5 bg-gradient-to-r from-violet-600 to-purple-700 hover:from-violet-700 hover:to-purple-800 text-white"
+   702→                >
+   703→                  <Eye className="h-4 w-4" />
+   704→                  Review & Submit
+   705→                </Button>
+   706→              ) : (
+   707→                <Button onClick={goNext} className="gap-1.5">
+   708→                  Next
+   709→                  <ChevronRight className="h-4 w-4" />
+   710→                </Button>
+   711→              )}
+   712→            </div>
+   713→
+   714→            {/* Mobile Question Navigation Grid */}
+   715→            <Card className={cn(glassCard, 'md:hidden mt-4')}>
+   716→              <CardContent className="p-3">
+   717→                <div className="flex flex-wrap gap-1.5">
+   718→                  {questions.map((q, idx) => {
+   719→                    const isAnswered = answers[q.id]?.trim();
+   720→                    const isCurrent = idx === currentQuestionIdx;
+   721→                    const isMarked = markedForReview.has(q.id);
+   722→
+   723→                    return (
+   724→                      <button
+   725→                        key={q.id}
+   726→                        onClick={() => goToQuestion(idx)}
+   727→                        className={cn(
+   728→                          'h-8 w-8 rounded-md text-xs font-medium transition-all relative',
+   729→                          isCurrent
+   730→                            ? 'bg-violet-600 text-white shadow-md'
+   731→                            : isAnswered
+   732→                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+   733→                              : 'bg-slate-100 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400'
+   734→                        )}
+   735→                      >
+   736→                        {idx + 1}
+   737→                        {isMarked && (
+   738→                          <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-amber-500" />
+   739→                        )}
+   740→                      </button>
+   741→                    );
+   742→                  })}
+   743→                </div>
+   744→              </CardContent>
+   745→            </Card>
+   746→          </div>
+   747→        </div>
+   748→      </div>
+   749→    );
+   750→  }
+   751→
+   752→  // ═══════════════════════════════════════════════════════════
+   753→  // PHASE: REVIEW
+   754→  // ═══════════════════════════════════════════════════════════
+   755→  if (phase === 'review') {
+   756→    return (
+   757→      <motion.div variants={fadeVariants} initial="hidden" animate="visible" exit="exit" className="p-4 md:p-6">
+   758→        <div className="flex items-center justify-between mb-6">
+   759→          <div>
+   760→            <h2 className="text-xl font-bold">Review Your Answers</h2>
+   761→            <p className="text-sm text-muted-foreground">Make sure you&apos;ve answered all questions before submitting.</p>
+   762→          </div>
+   763→          {typedAssessment.timeLimit && (
+   764→            <div
+   765→              className={cn(
+   766→                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono font-semibold',
+   767→                timerCritical
+   768→                  ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 animate-pulse'
+   769→                  : timerUrgent
+   770→                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+   771→                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300'
+   772→              )}
+   773→            >
+   774→              <Clock className="h-3.5 w-3.5" />
+   775→              {formatTime(timeRemaining)}
+   776→            </div>
+   777→          )}
+   778→        </div>
+   779→
+   780→        {/* Summary Stats */}
+   781→        <div className="grid grid-cols-3 gap-3 md:gap-4 mb-6">
+   782→          <Card className={cn(glassCard, 'border-emerald-200/50 dark:border-emerald-800/30')}>
+   783→            <CardContent className="p-4 text-center">
+   784→              <CheckCircle2 className="h-5 w-5 text-emerald-600 mx-auto mb-2" />
+   785→              <div className="text-2xl font-bold text-emerald-600">{answeredCount}</div>
+   786→              <div className="text-xs text-muted-foreground">Answered</div>
+   787→            </CardContent>
+   788→          </Card>
+   789→          <Card className={cn(glassCard, 'border-slate-200/50 dark:border-slate-700/30')}>
+   790→            <CardContent className="p-4 text-center">
+   791→              <Circle className="h-5 w-5 text-slate-400 mx-auto mb-2" />
+   792→              <div className="text-2xl font-bold text-slate-600 dark:text-slate-400">{unansweredCount}</div>
+   793→              <div className="text-xs text-muted-foreground">Unanswered</div>
+   794→            </CardContent>
+   795→          </Card>
+   796→          <Card className={cn(glassCard, 'border-amber-200/50 dark:border-amber-800/30')}>
+   797→            <CardContent className="p-4 text-center">
+   798→              <Flag className="h-5 w-5 text-amber-600 mx-auto mb-2" />
+   799→              <div className="text-2xl font-bold text-amber-600">{reviewCount}</div>
+   800→              <div className="text-xs text-muted-foreground">Marked for Review</div>
+   801→            </CardContent>
+   802→          </Card>
+   803→        </div>
+   804→
+   805→        {/* Question Review List */}
+   806→        <Card className={cn(glassCard)}>
+   807→          <CardContent className="p-0">
+   808→            <ScrollArea className="max-h-96">
+   809→              <div className="divide-y divide-border/50">
+   810→                {questions.map((q, idx) => {
+   811→                  const isAnswered = answers[q.id]?.trim();
+   812→                  const isMarked = markedForReview.has(q.id);
+   813→
+   814→                  return (
+   815→                    <button
+   816→                      key={q.id}
+   817→                      onClick={() => {
+   818→                        setCurrentQuestionIdx(idx);
+   819→                        setPhase('taking');
+   820→                      }}
+   821→                      className="w-full flex items-center gap-3 p-3 hover:bg-muted/30 transition-colors text-left"
+   822→                    >
+   823→                      <div
+   824→                        className={cn(
+   825→                          'h-8 w-8 rounded-md text-xs font-medium flex items-center justify-center shrink-0',
+   826→                          isAnswered
+   827→                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+   828→                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400'
+   829→                        )}
+   830→                      >
+   831→                        {idx + 1}
+   832→                      </div>
+   833→                      <div className="flex-1 min-w-0">
+   834→                        <p className="text-sm truncate">{q.question}</p>
+   835→                        <div className="flex items-center gap-2 mt-0.5">
+   836→                          {isAnswered ? (
+   837→                            <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+   838→                              Answered
+   839→                            </Badge>
+   840→                          ) : (
+   841→                            <Badge variant="secondary" className="text-[10px]">
+   842→                              Unanswered
+   843→                            </Badge>
+   844→                          )}
+   845→                          {isMarked && (
+   846→                            <Badge variant="secondary" className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+   847→                              <Flag className="h-2.5 w-2.5 mr-0.5" />
+   848→                              Review
+   849→                            </Badge>
+   850→                          )}
+   851→                        </div>
+   852→                      </div>
+   853→                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+   854→                    </button>
+   855→                  );
+   856→                })}
+   857→              </div>
+   858→            </ScrollArea>
+   859→          </CardContent>
+   860→        </Card>
+   861→
+   862→        {unansweredCount > 0 && (
+   863→          <div className="flex items-start gap-3 p-3 mt-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40">
+   864→            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+   865→            <p className="text-sm text-amber-700 dark:text-amber-400">
+   866→              You have {unansweredCount} unanswered question{unansweredCount > 1 ? 's' : ''}. Unanswered questions will be marked as incorrect.
+   867→            </p>
+   868→          </div>
+   869→        )}
+   870→
+   871→        {/* Action Buttons */}
+   872→        <div className="flex items-center justify-between mt-6">
+   873→          <Button variant="outline" onClick={() => setPhase('taking')} className="gap-1.5">
+   874→            <ChevronLeft className="h-4 w-4" />
+   875→            Back to Quiz
+   876→          </Button>
+   877→          <Button
+   878→            onClick={() => handleSubmit()}
+   879→            disabled={isSubmitting}
+   880→            className="gap-1.5 bg-gradient-to-r from-violet-600 to-purple-700 hover:from-violet-700 hover:to-purple-800 text-white"
+   881→          >
+   882→            {isSubmitting ? (
+   883→              <Loader2 className="h-4 w-4 animate-spin" />
+   884→            ) : (
+   885→              <FileCheck className="h-4 w-4" />
+   886→            )}
+   887→            {isSubmitting ? 'Submitting...' : 'Submit Quiz'}
+   888→          </Button>
+   889→        </div>
+   890→
+   891→        {/* Submit Confirmation Dialog */}
+   892→        <Dialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
+   893→          <DialogContent>
+   894→            <DialogHeader>
+   895→              <DialogTitle className="flex items-center gap-2">
+   896→                <AlertTriangle className="h-5 w-5 text-amber-500" />
+   897→                Confirm Submission
+   898→              </DialogTitle>
+   899→            </DialogHeader>
+   900→            <div className="space-y-3 py-2">
+   901→              <p className="text-sm text-muted-foreground">
+   902→                Are you sure you want to submit your quiz? This action cannot be undone.
+   903→              </p>
+   904→              {unansweredCount > 0 && (
+   905→                <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40">
+   906→                  <p className="text-sm text-amber-700 dark:text-amber-400">
+   907→                    ⚠️ You have {unansweredCount} unanswered question{unansweredCount > 1 ? 's' : ''}.
+   908→                  </p>
+   909→                </div>
+   910→              )}
+   911→              <div className="grid grid-cols-2 gap-3 text-sm">
+   912→                <div className="p-2 rounded bg-muted/50">
+   913→                  <span className="text-muted-foreground">Answered:</span>{' '}
+   914→                  <span className="font-medium text-emerald-600">{answeredCount}</span>
+   915→                </div>
+   916→                <div className="p-2 rounded bg-muted/50">
+   917→                  <span className="text-muted-foreground">Unanswered:</span>{' '}
+   918→                  <span className="font-medium text-slate-600">{unansweredCount}</span>
+   919→                </div>
+   920→              </div>
+   921→            </div>
+   922→            <DialogFooter>
+   923→              <DialogClose asChild>
+   924→                <Button variant="outline">Cancel</Button>
+   925→              </DialogClose>
+   926→              <Button
+   927→                onClick={() => handleSubmit(true)}
+   928→                disabled={isSubmitting}
+   929→                className="gap-1.5 bg-gradient-to-r from-violet-600 to-purple-700 hover:from-violet-700 hover:to-purple-800 text-white"
+   930→              >
+   931→                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck className="h-4 w-4" />}
+   932→                Submit Now
+   933→              </Button>
+   934→            </DialogFooter>
+   935→          </DialogContent>
+   936→        </Dialog>
+   937→      </motion.div>
+   938→    );
+   939→  }
+   940→
+   941→  // ═══════════════════════════════════════════════════════════
+   942→  // PHASE: RESULTS
+   943→  // ═══════════════════════════════════════════════════════════
+   944→  if (phase === 'results' && results) {
+   945→    const { grading } = results;
+   946→    const passed = grading.passed;
+   947→    const timeTaken = results.submission?.timeTaken;
+   948→
+   949→    return (
+   950→      <motion.div variants={fadeVariants} initial="hidden" animate="visible" exit="exit" className="p-4 md:p-6">
+   951→        {/* Results Banner */}
+   952→        <div
+   953→          className={cn(
+   954→            'relative rounded-xl overflow-hidden mb-6',
+   955→            passed
+   956→              ? 'bg-gradient-to-r from-emerald-600 to-green-700'
+   957→              : 'bg-gradient-to-r from-red-600 to-rose-700'
+   958→          )}
+   959→        >
+   960→          <div className="p-6 md:p-8 text-center">
+   961→            <motion.div
+   962→              initial={{ scale: 0 }}
+   963→              animate={{ scale: 1 }}
+   964→              transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.2 }}
+   965→            >
+   966→              {passed ? (
+   967→                <Award className="h-16 w-16 text-white mx-auto mb-4" />
+   968→              ) : (
+   969→                <XCircle className="h-16 w-16 text-white mx-auto mb-4" />
+   970→              )}
+   971→            </motion.div>
+   972→            <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">
+   973→              {passed ? 'Congratulations! You Passed!' : 'You Did Not Pass'}
+   974→            </h2>
+   975→            <p className="text-white/80 text-sm md:text-base">
+   976→              {passed
+   977→                ? `You scored ${grading.percentScore}% on "${typedAssessment.title}"`
+   978→                : `You scored ${grading.percentScore}%. You need ${typedAssessment.passingScore}% to pass.`}
+   979→            </p>
+   980→          </div>
+   981→        </div>
+   982→
+   983→        {/* Score Cards */}
+   984→        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+   985→          <Card className={cn(glassCard)}>
+   986→            <CardContent className="p-4 text-center">
+   987→              <Target className="h-5 w-5 text-violet-600 mx-auto mb-2" />
+   988→              <div className="text-2xl font-bold">
+   989→                {grading.earnedPoints}/{grading.totalPoints}
+   990→              </div>
+   991→              <div className="text-xs text-muted-foreground">Points Earned</div>
+   992→            </CardContent>
+   993→          </Card>
+   994→          <Card className={cn(glassCard)}>
+   995→            <CardContent className="p-4 text-center">
+   996→              <Zap className="h-5 w-5 text-amber-600 mx-auto mb-2" />
+   997→              <div className="text-2xl font-bold">{grading.percentScore}%</div>
+   998→              <div className="text-xs text-muted-foreground">Score</div>
+   999→            </CardContent>
+  1000→          </Card>
+  1001→          <Card className={cn(glassCard)}>
+  1002→            <CardContent className="p-4 text-center">
+  1003→              <Timer className="h-5 w-5 text-blue-600 mx-auto mb-2" />
+  1004→              <div className="text-2xl font-bold">{timeTaken ? formatTime(timeTaken) : 'N/A'}</div>
+  1005→              <div className="text-xs text-muted-foreground">Time Taken</div>
+  1006→            </CardContent>
+  1007→          </Card>
+  1008→          <Card className={cn(glassCard)}>
+  1009→            <CardContent className="p-4 text-center">
+  1010→              {passed ? (
+  1011→                <>
+  1012→                  <CheckCircle2 className="h-5 w-5 text-emerald-600 mx-auto mb-2" />
+  1013→                  <div className="text-2xl font-bold text-emerald-600">Passed</div>
+  1014→                </>
+  1015→              ) : (
+  1016→                <>
+  1017→                  <XCircle className="h-5 w-5 text-red-600 mx-auto mb-2" />
+  1018→                  <div className="text-2xl font-bold text-red-600">Failed</div>
+  1019→                </>
+  1020→              )}
+  1021→              <div className="text-xs text-muted-foreground">Status</div>
+  1022→            </CardContent>
+  1023→          </Card>
+  1024→        </div>
+  1025→
+  1026→        {/* Question-by-Question Review */}
+  1027→        <Card className={cn(glassCard)}>
+  1028→          <CardHeader className="p-4 md:p-6 pb-3">
+  1029→            <CardTitle className="text-sm flex items-center gap-2">
+  1030→              <BookOpen className="h-4 w-4 text-violet-600" />
+  1031→              Question Review
+  1032→            </CardTitle>
+  1033→          </CardHeader>
+  1034→          <CardContent className="p-4 md:p-6 pt-0">
+  1035→            <ScrollArea className="max-h-[500px]">
+  1036→              <div className="space-y-4">
+  1037→                {questions.map((q, idx) => {
+  1038→                  const questionResult = grading.questionResults.find((r) => r.questionId === q.id);
+  1039→                  const isCorrect = questionResult?.isCorrect ?? false;
+  1040→                  const userAnswer = questionResult?.userAnswer || '';
+  1041→                  const correctAnswer = parseCorrectAnswer(q.correctAnswer);
+  1042→                  const options = parseOptions(q.options);
+  1043→
+  1044→                  return (
+  1045→                    <div
+  1046→                      key={q.id}
+  1047→                      className={cn(
+  1048→                        'p-4 rounded-lg border',
+  1049→                        isCorrect
+  1050→                          ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-800/40 dark:bg-emerald-900/10'
+  1051→                          : 'border-red-200 bg-red-50/50 dark:border-red-800/40 dark:bg-red-900/10'
+  1052→                      )}
+  1053→                    >
+  1054→                      <div className="flex items-start gap-3">
+  1055→                        {isCorrect ? (
+  1056→                          <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+  1057→                        ) : (
+  1058→                          <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+  1059→                        )}
+  1060→                        <div className="flex-1 min-w-0">
+  1061→                          <div className="flex items-center gap-2 mb-1">
+  1062→                            <span className="text-xs font-medium text-muted-foreground">Q{idx + 1}</span>
+  1063→                            <Badge className={cn('text-[10px]', getDifficultyStyle(q.difficulty))}>{q.difficulty}</Badge>
+  1064→                            <Badge
+  1065→                              variant="secondary"
+  1066→                              className={cn(
+  1067→                                'text-[10px]',
+  1068→                                isCorrect
+  1069→                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+  1070→                                  : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+  1071→                              )}
+  1072→                            >
+  1073→                              {isCorrect ? `+${q.points}` : '0'} / {q.points} pts
+  1074→                            </Badge>
+  1075→                          </div>
+  1076→                          <p className="text-sm font-medium mb-2">{q.question}</p>
+  1077→
+  1078→                          {/* Show options for multiple choice / true false / multiple select */}
+  1079→                          {(q.type === 'multiple_choice' || q.type === 'true_false' || q.type === 'multiple_select') && options.length > 0 && (
+  1080→                            <div className="space-y-1.5 mb-2">
+  1081→                              {options.map((opt, optIdx) => {
+  1082→                                const optionLabel = String.fromCharCode(65 + optIdx);
+  1083→                                const isUserChoice = q.type === 'multiple_select'
+  1084→                                  ? userAnswer.split(',').map((a: string) => a.trim()).includes(opt)
+  1085→                                  : userAnswer === opt;
+  1086→                                const isCorrectOption = Array.isArray(correctAnswer)
+  1087→                                  ? correctAnswer.includes(opt)
+  1088→                                  : correctAnswer === opt;
+  1089→
+  1090→                                return (
+  1091→                                  <div
+  1092→                                    key={optIdx}
+  1093→                                    className={cn(
+  1094→                                      'flex items-center gap-2 text-xs px-2 py-1 rounded',
+  1095→                                      isCorrectOption && isUserChoice
+  1096→                                        ? 'bg-emerald-100 dark:bg-emerald-900/30'
+  1097→                                        : isUserChoice && !isCorrectOption
+  1098→                                          ? 'bg-red-100 dark:bg-red-900/30'
+  1099→                                          : isCorrectOption
+  1100→                                            ? 'bg-emerald-50 dark:bg-emerald-900/20'
+  1101→                                            : 'bg-muted/30'
+  1102→                                    )}
+  1103→                                  >
+  1104→                                    <span className="font-medium">{optionLabel}.</span>
+  1105→                                    <span>{opt}</span>
+  1106→                                    {isCorrectOption && (
+  1107→                                      <CheckCircle2 className="h-3 w-3 text-emerald-600 ml-auto" />
+  1108→                                    )}
+  1109→                                    {isUserChoice && !isCorrectOption && (
+  1110→                                      <XCircle className="h-3 w-3 text-red-600 ml-auto" />
+  1111→                                    )}
+  1112→                                  </div>
+  1113→                                );
+  1114→                              })}
+  1115→                            </div>
+  1116→                          )}
+  1117→
+  1118→                          {/* Short answer display */}
+  1119→                          {q.type === 'short_answer' && (
+  1120→                            <div className="space-y-1.5 mb-2">
+  1121→                              <div className="text-xs">
+  1122→                                <span className="text-muted-foreground">Your answer: </span>
+  1123→                                <span className={cn('font-medium', isCorrect ? 'text-emerald-600' : 'text-red-600')}>
+  1124→                                  {userAnswer || <em className="text-muted-foreground">No answer</em>}
+  1125→                                </span>
+  1126→                              </div>
+  1127→                              {!isCorrect && (
+  1128→                                <div className="text-xs">
+  1129→                                  <span className="text-muted-foreground">Correct answer: </span>
+  1130→                                  <span className="font-medium text-emerald-600">
+  1131→                                    {Array.isArray(correctAnswer) ? correctAnswer.join(', ') : correctAnswer}
+  1132→                                  </span>
+  1133→                                </div>
+  1134→                              )}
+  1135→                            </div>
+  1136→                          )}
+  1137→
+  1138→                          {/* Explanation */}
+  1139→                          {q.explanation && (
+  1140→                            <div className="mt-2 p-2 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40">
+  1141→                              <p className="text-xs text-blue-700 dark:text-blue-400">
+  1142→                                <span className="font-medium">Explanation:</span> {q.explanation}
+  1143→                              </p>
+  1144→                            </div>
+  1145→                          )}
+  1146→                        </div>
+  1147→                      </div>
+  1148→                    </div>
+  1149→                  );
+  1150→                })}
+  1151→              </div>
+  1152→            </ScrollArea>
+  1153→          </CardContent>
+  1154→        </Card>
+  1155→
+  1156→        {/* Action Buttons */}
+  1157→        <div className="flex flex-col sm:flex-row items-center gap-3 mt-6">
+  1158→          {attemptsRemaining > 1 && (
+  1159→            <Button variant="outline" onClick={handleRetake} className="gap-1.5 w-full sm:w-auto">
+  1160→              <RotateCcw className="h-4 w-4" />
+  1161→              Retake Quiz
+  1162→            </Button>
+  1163→          )}
+  1164→          <Button onClick={onClose} className="gap-1.5 w-full sm:w-auto bg-gradient-to-r from-violet-600 to-purple-700 hover:from-violet-700 hover:to-purple-800 text-white">
+  1165→            <Home className="h-4 w-4" />
+  1166→            Back to Course
+  1167→          </Button>
+  1168→        </div>
+  1169→      </motion.div>
+  1170→    );
+  1171→  }
+  1172→
+  1173→  return null;
+  1174→}
+  1175→
+  1176→// ═══════════════════════════════════════════════════════════
+  1177→// ANSWER INPUT COMPONENT
+  1178→// ═══════════════════════════════════════════════════════════
+  1179→function AnswerInput({
+  1180→  question,
+  1181→  answer,
+  1182→  onAnswerChange,
+  1183→}: {
+  1184→  question: QuestionData;
+  1185→  answer: string;
+  1186→  onAnswerChange: (val: string) => void;
+  1187→}) {
+  1188→  const options = parseOptions(question.options);
+  1189→
+  1190→  switch (question.type) {
+  1191→    case 'multiple_choice':
+  1192→      return (
+  1193→        <RadioGroup value={answer} onValueChange={onAnswerChange} className="space-y-2">
+  1194→          {options.map((opt, idx) => {
+  1195→            const optionLabel = String.fromCharCode(65 + idx);
+  1196→            return (
+  1197→              <Label
+  1198→                key={idx}
+  1199→                htmlFor={`q-${question.id}-${idx}`}
+  1200→                className={cn(
+  1201→                  'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
+  1202→                  answer === opt
+  1203→                    ? 'border-violet-300 bg-violet-50 dark:border-violet-700 dark:bg-violet-900/20'
+  1204→                    : 'border-border/50 hover:border-violet-200 hover:bg-muted/30 dark:hover:border-violet-800/50'
+  1205→                )}
+  1206→              >
+  1207→                <RadioGroupItem value={opt} id={`q-${question.id}-${idx}`} />
+  1208→                <span className="flex items-center gap-2 text-sm">
+  1209→                  <span className="font-medium text-muted-foreground">{optionLabel}.</span>
+  1210→                  {opt}
+  1211→                </span>
+  1212→              </Label>
+  1213→            );
+  1214→          })}
+  1215→        </RadioGroup>
+  1216→      );
+  1217→
+  1218→    case 'true_false':
+  1219→      return (
+  1220→        <RadioGroup value={answer} onValueChange={onAnswerChange} className="flex gap-4">
+  1221→          <Label
+  1222→            htmlFor={`q-${question.id}-true`}
+  1223→            className={cn(
+  1224→              'flex-1 flex items-center justify-center gap-2 p-4 rounded-lg border cursor-pointer transition-all',
+  1225→              answer === 'True'
+  1226→                ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-900/20'
+  1227→                : 'border-border/50 hover:border-emerald-200 hover:bg-muted/30 dark:hover:border-emerald-800/50'
+  1228→            )}
+  1229→          >
+  1230→            <RadioGroupItem value="True" id={`q-${question.id}-true`} />
+  1231→            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+  1232→            <span className="text-sm font-medium">True</span>
+  1233→          </Label>
+  1234→          <Label
+  1235→            htmlFor={`q-${question.id}-false`}
+  1236→            className={cn(
+  1237→              'flex-1 flex items-center justify-center gap-2 p-4 rounded-lg border cursor-pointer transition-all',
+  1238→              answer === 'False'
+  1239→                ? 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20'
+  1240→                : 'border-border/50 hover:border-red-200 hover:bg-muted/30 dark:hover:border-red-800/50'
+  1241→            )}
+  1242→          >
+  1243→            <RadioGroupItem value="False" id={`q-${question.id}-false`} />
+  1244→            <XCircle className="h-4 w-4 text-red-600" />
+  1245→            <span className="text-sm font-medium">False</span>
+  1246→          </Label>
+  1247→        </RadioGroup>
+  1248→      );
+  1249→
+  1250→    case 'short_answer':
+  1251→      return (
+  1252→        <div className="space-y-2">
+  1253→          <Input
+  1254→            value={answer}
+  1255→            onChange={(e) => onAnswerChange(e.target.value)}
+  1256→            placeholder="Type your answer here..."
+  1257→            className="text-sm"
+  1258→          />
+  1259→          <p className="text-[10px] text-muted-foreground">Type your answer in the field above. Be as specific as possible.</p>
+  1260→        </div>
+  1261→      );
+  1262→
+  1263→    case 'multiple_select': {
+  1264→      const selectedAnswers = answer ? answer.split(',').filter(Boolean) : [];
+  1265→      const handleToggle = (opt: string) => {
+  1266→        const next = selectedAnswers.includes(opt)
+  1267→          ? selectedAnswers.filter((a) => a !== opt)
+  1268→          : [...selectedAnswers, opt];
+  1269→        onAnswerChange(next.join(','));
+  1270→      };
+  1271→
+  1272→      return (
+  1273→        <div className="space-y-2">
+  1274→          <p className="text-xs text-muted-foreground mb-2">Select all that apply:</p>
+  1275→          {options.map((opt, idx) => {
+  1276→            const optionLabel = String.fromCharCode(65 + idx);
+  1277→            const isChecked = selectedAnswers.includes(opt);
+  1278→
+  1279→            return (
+  1280→              <Label
+  1281→                key={idx}
+  1282→                className={cn(
+  1283→                  'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
+  1284→                  isChecked
+  1285→                    ? 'border-violet-300 bg-violet-50 dark:border-violet-700 dark:bg-violet-900/20'
+  1286→                    : 'border-border/50 hover:border-violet-200 hover:bg-muted/30 dark:hover:border-violet-800/50'
+  1287→                )}
+  1288→              >
+  1289→                <Checkbox
+  1290→                  checked={isChecked}
+  1291→                  onCheckedChange={() => handleToggle(opt)}
+  1292→                />
+  1293→                <span className="flex items-center gap-2 text-sm">
+  1294→                  <span className="font-medium text-muted-foreground">{optionLabel}.</span>
+  1295→                  {opt}
+  1296→                </span>
+  1297→              </Label>
+  1298→            );
+  1299→          })}
+  1300→        </div>
+  1301→      );
+  1302→    }
+  1303→
+  1304→    default:
+  1305→      return (
+  1306→        <Input
+  1307→          value={answer}
+  1308→          onChange={(e) => onAnswerChange(e.target.value)}
+  1309→          placeholder="Type your answer here..."
+  1310→          className="text-sm"
+  1311→        />
+  1312→      );
+  1313→  }
+  1314→}
+  1315→

@@ -466,15 +466,33 @@ export function LearnerProfile() {
 
   // Avatar drag-and-drop state
   const [isDragging, setIsDragging] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   // Learning Preferences state
   const [dailyGoal, setDailyGoal] = useState([30]);
   const [learningPace, setLearningPace] = useState('moderate');
-  const [courseUpdates, setCourseUpdates] = useState(true);
-  const [communityMentions, setCommunityMentions] = useState(true);
-  const [liveReminders, setLiveReminders] = useState(true);
-  const [achievementNotifs, setAchievementNotifs] = useState(true);
-  const [weeklyReport, setWeeklyReport] = useState(false);
+  const [courseUpdates, setCourseUpdates] = useState(() => {
+    try { const s = localStorage.getItem('nextgen-lms-notif-prefs'); return s ? JSON.parse(s).courseUpdates ?? true : true; } catch { return true; }
+  });
+  const [communityMentions, setCommunityMentions] = useState(() => {
+    try { const s = localStorage.getItem('nextgen-lms-notif-prefs'); return s ? JSON.parse(s).communityMentions ?? true : true; } catch { return true; }
+  });
+  const [liveReminders, setLiveReminders] = useState(() => {
+    try { const s = localStorage.getItem('nextgen-lms-notif-prefs'); return s ? JSON.parse(s).liveReminders ?? true : true; } catch { return true; }
+  });
+  const [achievementNotifs, setAchievementNotifs] = useState(() => {
+    try { const s = localStorage.getItem('nextgen-lms-notif-prefs'); return s ? JSON.parse(s).achievementNotifs ?? true : true; } catch { return true; }
+  });
+  const [weeklyReport, setWeeklyReport] = useState(() => {
+    try { const s = localStorage.getItem('nextgen-lms-notif-prefs'); return s ? JSON.parse(s).weeklyReport ?? false : false; } catch { return false; }
+  });
+
+  // Persist notification preferences to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('nextgen-lms-notif-prefs', JSON.stringify({ courseUpdates, communityMentions, liveReminders, achievementNotifs, weeklyReport }));
+    } catch {}
+  }, [courseUpdates, communityMentions, liveReminders, achievementNotifs, weeklyReport]);
   const [autoPlay, setAutoPlay] = useState(true);
   const [videoQuality, setVideoQuality] = useState('auto');
   const [closedCaptions, setClosedCaptions] = useState(false);
@@ -542,6 +560,12 @@ export function LearnerProfile() {
   // ─── Fetch courses for recommendations ─────────────────
   const { data: coursesData } = useCourses(tenantId || undefined);
 
+  // ─── Computed data from API ─────────────────────────────
+  const userEnrollments = useMemo(() => {
+    if (!enrollmentsData) return [];
+    return enrollmentsData;
+  }, [enrollmentsData]);
+
   // ─── Compute skills from enrollments ────────────────────
   const skillsFromApi = useMemo(() => {
     if (userEnrollments.length === 0) return [];
@@ -559,8 +583,13 @@ export function LearnerProfile() {
     });
   }, [userEnrollments]);
 
-  const [skills, setSkills] = useState<{ id: string; name: string; endorsements: number; level: string }[]>([]);
-  useEffect(() => { if (skillsFromApi.length > 0) setSkills(skillsFromApi); }, [skillsFromApi]);
+  const [skills, setSkills] = useState<{ id: string; name: string; endorsements: number; level: string }[]>(() => {
+    try {
+      const stored = localStorage.getItem('nextgen-lms-skills');
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
+  useEffect(() => { if (skillsFromApi.length > 0 && skills.length === 0) setSkills(skillsFromApi); }, [skillsFromApi, skills.length]);
   const [newSkillName, setNewSkillName] = useState('');
   const [showAddSkill, setShowAddSkill] = useState(false);
 
@@ -583,12 +612,6 @@ export function LearnerProfile() {
       setLanguage(userData.locale || 'en');
     }
   }, [userData]);
-
-  // ─── Computed data from API ─────────────────────────────
-  const userEnrollments = useMemo(() => {
-    if (!enrollmentsData) return [];
-    return enrollmentsData;
-  }, [enrollmentsData]);
 
   const completedEnrollments = useMemo(() => {
     return userEnrollments.filter((e: any) => e.status === 'completed');
@@ -817,7 +840,23 @@ export function LearnerProfile() {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    // In a real app, handle file upload here
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setAvatarPreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+      toast.success('Photo uploaded! Preview updated.');
+    }
+  }, []);
+
+  const handleAvatarFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setAvatarPreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+      toast.success('Photo uploaded! Preview updated.');
+    }
   }, []);
 
   const handleCopyLink = useCallback((credentialId: string) => {
@@ -827,19 +866,27 @@ export function LearnerProfile() {
   }, []);
 
   const handleEndorseSkill = useCallback((skillId: string) => {
-    setSkills(prev => prev.map(s =>
-      s.id === skillId ? { ...s, endorsements: s.endorsements + 1 } : s
-    ));
+    setSkills(prev => {
+      const updated = prev.map(s =>
+        s.id === skillId ? { ...s, endorsements: s.endorsements + 1 } : s
+      );
+      try { localStorage.setItem('nextgen-lms-skills', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
   }, []);
 
   const handleAddSkill = useCallback(() => {
     if (newSkillName.trim()) {
-      setSkills(prev => [...prev, {
-        id: `sk-${Date.now()}`,
-        name: newSkillName.trim(),
-        endorsements: 0,
-        level: 'Beginner',
-      }]);
+      setSkills(prev => {
+        const updated = [...prev, {
+          id: `sk-${Date.now()}`,
+          name: newSkillName.trim(),
+          endorsements: 0,
+          level: 'Beginner',
+        }];
+        try { localStorage.setItem('nextgen-lms-skills', JSON.stringify(updated)); } catch {}
+        return updated;
+      });
       setNewSkillName('');
       setShowAddSkill(false);
     }
@@ -851,6 +898,23 @@ export function LearnerProfile() {
 
   // Form validation check
   const personalFormValid = firstName.length > 0 && lastName.length > 0 && bio.length <= 250 && phoneError === '';
+
+  // Compute profile completion percentage from actual filled fields
+  const profileCompletionPercent = useMemo(() => {
+    const fields = [
+      !!firstName,
+      !!lastName,
+      !!bio,
+      !!timezone,
+      !!language,
+      !!phone,
+      emailVerified,
+      Object.values(socialUrls).some(v => v.trim().length > 0),
+      skills.length > 0,
+    ];
+    const filled = fields.filter(Boolean).length;
+    return Math.round((filled / fields.length) * 100);
+  }, [firstName, lastName, bio, timezone, language, phone, emailVerified, socialUrls, skills]);
 
   return (
     <motion.div
@@ -902,19 +966,24 @@ export function LearnerProfile() {
             <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
               {/* Avatar with Profile Completion Ring */}
               <div className="relative group">
-                <ProfileCompletionRing percentage={85} size={110} />
+                <ProfileCompletionRing percentage={profileCompletionPercent} size={110} />
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="rounded-full p-[3px] bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-500">
                     <Avatar className="h-20 w-20 border-4 border-background shadow-lg">
-                      <AvatarFallback className="text-xl font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
-                        {initials}
-                      </AvatarFallback>
+                      {avatarPreview ? (
+                        <img src={avatarPreview} alt="Profile" className="h-full w-full object-cover rounded-full" />
+                      ) : (
+                        <AvatarFallback className="text-xl font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
+                          {initials}
+                        </AvatarFallback>
+                      )}
                     </Avatar>
                   </div>
                 </div>
-                <button className="absolute bottom-1 right-3 flex items-center justify-center bg-black/60 rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                <label className="absolute bottom-1 right-3 flex items-center justify-center bg-black/60 rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
                   <Camera className="h-3.5 w-3.5 text-white" />
-                </button>
+                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarFile} aria-label="Upload profile photo" />
+                </label>
               </div>
 
               <div className="flex-1 min-w-0">
@@ -1166,6 +1235,7 @@ export function LearnerProfile() {
                       accept="image/*"
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       aria-label="Upload profile photo"
+                      onChange={handleAvatarFile}
                     />
                   </div>
                 </CardContent>
@@ -1371,6 +1441,14 @@ export function LearnerProfile() {
                           variant={socialUrls[link.id] ? 'outline' : 'ghost'}
                           size="sm"
                           className="text-[10px] shrink-0"
+                          onClick={() => {
+                            if (socialUrls[link.id]) {
+                              setSocialUrls(prev => ({ ...prev, [link.id]: '' }));
+                              toast.success(`${link.label} disconnected`);
+                            } else {
+                              toast.info(`${link.label} OAuth connection will be available in a future update.`);
+                            }
+                          }}
                         >
                           {socialUrls[link.id] ? (
                             <><Unlink className="h-3 w-3 mr-1" />Remove</>
@@ -2676,7 +2754,30 @@ export function LearnerProfile() {
                         )}
                       </div>
                     </div>
-                    <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={async () => {
+                      if (!passwordValid.match || !currentPassword || !newPassword) {
+                        toast.error('Please fill in all password fields correctly');
+                        return;
+                      }
+                      try {
+                        const res = await fetch(`/api/users/${userId}/password`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ currentPassword, newPassword }),
+                        });
+                        if (res.ok) {
+                          toast.success('Password updated successfully');
+                          setCurrentPassword('');
+                          setNewPassword('');
+                          setConfirmPassword('');
+                        } else {
+                          const data = await res.json();
+                          toast.error(data.error || 'Failed to update password');
+                        }
+                      } catch {
+                        toast.error('Failed to update password. Please try again.');
+                      }
+                    }}>
                       <Lock className="h-4 w-4" />
                       Update Password
                     </Button>
@@ -2696,7 +2797,12 @@ export function LearnerProfile() {
                         <span className={cn('text-[10px] font-medium', twoFactor ? 'text-emerald-600' : 'text-muted-foreground')}>
                           {twoFactor ? 'On' : 'Off'}
                         </span>
-                        <Switch checked={twoFactor} onCheckedChange={setTwoFactor} />
+                        <Switch checked={twoFactor} onCheckedChange={(checked) => {
+                          if (checked) {
+                            toast.info('2FA setup requires configuring an authenticator app. This feature will be available in a future update.');
+                          }
+                          setTwoFactor(checked);
+                        }} />
                       </div>
                     </div>
                     {twoFactor && (

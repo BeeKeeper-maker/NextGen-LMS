@@ -297,7 +297,8 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
 }
 
 // ── Coupon Validation ────────────────────────────────────────────────────
-
+// NOTE: These coupons should be validated server-side via /api/coupons/validate
+// The client-side check below is a fallback for demo purposes only.
 const VALID_COUPONS: Record<string, { discount: number; label: string }> = {
   SAVE20: { discount: 0.2, label: '20% OFF' },
   WELCOME10: { discount: 0.1, label: '10% OFF' },
@@ -377,13 +378,14 @@ export function CheckoutPage() {
 
   // ── Pricing Calculations ────────────────────────────────────────────────
   const monthlyPrice = product.price;
-  const annualPrice = product.compareAtPrice || product.price * 10;
+  // Annual price: 10 months for 12 months access (effectively 2 months free)
+  const annualPrice = product.price * 10;
   const activePrice = isAnnual ? annualPrice : monthlyPrice;
 
   const basePrice = useMemo(() => activePrice * selectedCurrency.rate, [activePrice, selectedCurrency.rate]);
   const discountPercent = couponApplied ? (VALID_COUPONS[couponApplied]?.discount || 0) : 0;
   const discountAmount = useMemo(() => basePrice * discountPercent, [basePrice, discountPercent]);
-  const taxRate = 0;
+  const taxRate = 0.08;
   const taxAmount = useMemo(() => (basePrice - discountAmount) * taxRate, [basePrice, discountAmount, taxRate]);
   const totalAmount = useMemo(() => basePrice - discountAmount + taxAmount, [basePrice, discountAmount, taxAmount]);
 
@@ -408,11 +410,26 @@ export function CheckoutPage() {
   }, []);
 
   // ── Coupon handler ──────────────────────────────────────────────────────
-  const handleApplyCoupon = useCallback(() => {
+  const handleApplyCoupon = useCallback(async () => {
     setCouponError('');
     setCouponLoading(true);
-    setTimeout(() => {
-      const code = couponCode.toUpperCase().trim();
+    const code = couponCode.toUpperCase().trim();
+    try {
+      const res = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        setCouponApplied(code);
+        setCouponError('');
+      } else {
+        setCouponError(data.error || 'Invalid coupon code. Try SAVE20, WELCOME10, or LAUNCH50.');
+        setCouponApplied(null);
+      }
+    } catch {
+      // Fallback to client-side validation
       if (VALID_COUPONS[code]) {
         setCouponApplied(code);
         setCouponError('');
@@ -420,8 +437,8 @@ export function CheckoutPage() {
         setCouponError('Invalid coupon code. Try SAVE20, WELCOME10, or LAUNCH50.');
         setCouponApplied(null);
       }
-      setCouponLoading(false);
-    }, 800);
+    }
+    setCouponLoading(false);
   }, [couponCode]);
 
   const handleRemoveCoupon = useCallback(() => {
@@ -584,7 +601,7 @@ export function CheckoutPage() {
                   <Sparkles className="h-4 w-4 mr-2" />
                   Start Learning Now
                 </Button>
-                <Button variant="outline" className="flex-1 h-11">
+                <Button variant="outline" className="flex-1 h-11" onClick={() => setView('learner-course')}>
                   View Receipt
                 </Button>
               </motion.div>
@@ -598,15 +615,15 @@ export function CheckoutPage() {
               >
                 <p className="text-xs text-muted-foreground mb-3">Share your purchase</p>
                 <div className="flex justify-center gap-2">
-                  <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => { if (navigator.share) { navigator.share({ title: 'NextGen LMS', text: 'Just enrolled in a course on NextGen LMS!', url: window.location.origin }).catch(() => {}); } else { navigator.clipboard.writeText(window.location.origin); toast.success('Link copied to clipboard!'); } }}>
                     <Share2 className="h-3 w-3" />
                     Twitter
                   </Button>
-                  <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => { if (navigator.share) { navigator.share({ title: 'NextGen LMS', text: 'Just enrolled in a course on NextGen LMS!', url: window.location.origin }).catch(() => {}); } else { navigator.clipboard.writeText(window.location.origin); toast.success('Link copied to clipboard!'); } }}>
                     <Share2 className="h-3 w-3" />
                     LinkedIn
                   </Button>
-                  <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => { navigator.clipboard.writeText(window.location.origin); toast.success('Link copied to clipboard!'); }}>
                     <Share2 className="h-3 w-3" />
                     Facebook
                   </Button>
@@ -787,7 +804,7 @@ export function CheckoutPage() {
                                     {product.type}
                                   </Badge>
                                   <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300">
-                                    3 Courses
+                                    {courses.length > 0 ? `${courses.length} Course${courses.length !== 1 ? 's' : ''}` : 'Full Access'}
                                   </Badge>
                                   {savingsFromOriginal > 0 && (
                                     <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900 dark:text-amber-300 text-xs">
@@ -796,7 +813,7 @@ export function CheckoutPage() {
                                   )}
                                 </div>
                                 <h3 className="text-lg font-bold text-foreground">{product.name}</h3>
-                                <p className="text-xs text-muted-foreground mt-1">Instructor: Sarah Mitchell</p>
+                                <p className="text-xs text-muted-foreground mt-1">Instructor: {currentUser?.name || 'Course Instructor'}</p>
                               </div>
 
                               {/* Animated price */}

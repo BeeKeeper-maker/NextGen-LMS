@@ -1,0 +1,1640 @@
+     1→'use client';
+     2→
+     3→import { useState, useMemo, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Search, Plus, LayoutGrid, List, Pin, Lock, Unlock, Trash2, Eye,
+     7→  MessageSquare, Heart, Clock, Tag, Megaphone, HelpCircle, Star,
+     8→  Edit3, X, Filter, Flag, CheckCircle2, XCircle, ChevronUp, ChevronDown,
+     9→  Shield, Image as ImageIcon, Bold, Italic, Heading, ListOrdered, Code,
+    10→  Link2, Flame, Users, TrendingUp, BarChart3, AlertTriangle, BookOpen,
+    11→  Calendar, ArrowUpDown, CheckSquare, Square, Loader2
+    12→} from 'lucide-react';
+    13→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    14→import { Input } from '@/components/ui/input';
+    15→import { Button } from '@/components/ui/button';
+    16→import { Badge } from '@/components/ui/badge';
+    17→import {
+    18→  Select,
+    19→  SelectContent,
+    20→  SelectItem,
+    21→  SelectTrigger,
+    22→  SelectValue,
+    23→} from '@/components/ui/select';
+    24→import {
+    25→  Dialog,
+    26→  DialogContent,
+    27→  DialogHeader,
+    28→  DialogTitle,
+    29→  DialogFooter,
+    30→} from '@/components/ui/dialog';
+    31→import { Textarea } from '@/components/ui/textarea';
+    32→import { Label } from '@/components/ui/label';
+    33→import { Separator } from '@/components/ui/separator';
+    34→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    35→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    36→import { Checkbox } from '@/components/ui/checkbox';
+    37→import { Switch } from '@/components/ui/switch';
+    38→import {
+    39→  useCommunityPosts,
+    40→  useCreateCommunityPost,
+    41→  useUpdateCommunityPost,
+    42→  useDeleteCommunityPost,
+    43→  useCommunityReviews,
+    44→  useModerateReview,
+    45→  useRespondToReview,
+    46→} from '@/hooks/use-data';
+    47→import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+    48→import { useAppStore } from '@/store/app-store';
+    49→import { validateFields, required, minLength } from '@/lib/validations';
+    50→import type { CommunityPost, CommunityCategory } from '@/types';
+    51→
+    52→// ─── Review Types ────────────────────────────────────────────────────────────
+    53→// Types derived from the CourseReview Prisma model + API includes
+    54→
+    55→type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'flagged';
+    56→
+    57→interface CourseReview {
+    58→  id: string;
+    59→  courseName: string;
+    60→  courseThumbnail: string;
+    61→  reviewer: string;
+    62→  reviewerEmail: string;
+    63→  reviewerAvatar: string;
+    64→  reviewerEnrollDate: string;
+    65→  reviewerCoursesEnrolled: number;
+    66→  courseInstructor: string;
+    67→  courseAvgRating: number;
+    68→  rating: number;
+    69→  text: string;
+    70→  status: ReviewStatus;
+    71→  date: string;
+    72→  flagged: boolean;
+    73→  flagReason?: string;
+    74→  adminResponse?: string;
+    75→  moderationHistory: { action: string; by: string; date: string; reason?: string }[];
+    76→}
+    77→
+    78→// Map API review data to the component's CourseReview interface
+    79→function mapApiReviewToCourseReview(apiReview: any): CourseReview {
+    80→  let moderationHistory: CourseReview['moderationHistory'] = [];
+    81→  if (apiReview.moderationHistory) {
+    82→    try {
+    83→      moderationHistory = JSON.parse(apiReview.moderationHistory);
+    84→    } catch {
+    85→      moderationHistory = [];
+    86→    }
+    87→  }
+    88→
+    89→  const authorName = apiReview.author?.name || 'Unknown';
+    90→  const nameParts = authorName.split(' ');
+    91→  const avatarInitials = nameParts.length >= 2
+    92→    ? nameParts[0][0] + nameParts[nameParts.length - 1][0]
+    93→    : authorName.substring(0, 2).toUpperCase();
+    94→
+    95→  return {
+    96→    id: apiReview.id,
+    97→    courseName: apiReview.course?.title || 'Unknown Course',
+    98→    courseThumbnail: apiReview.course?.thumbnailUrl || '',
+    99→    reviewer: authorName,
+   100→    reviewerEmail: apiReview.author?.email || '',
+   101→    reviewerAvatar: avatarInitials,
+   102→    reviewerEnrollDate: apiReview.author?.createdAt
+   103→      ? new Date(apiReview.author.createdAt).toISOString().split('T')[0]
+   104→      : '',
+   105→    reviewerCoursesEnrolled: apiReview.author?._count?.enrollments || 0,
+   106→    courseInstructor: '', // Not stored directly in review; could be derived from course data
+   107→    courseAvgRating: apiReview.course?.avgRating || 0,
+   108→    rating: apiReview.rating,
+   109→    text: apiReview.content,
+   110→    status: apiReview.status as ReviewStatus,
+   111→    date: apiReview.createdAt ? new Date(apiReview.createdAt).toISOString().split('T')[0] : '',
+   112→    flagged: apiReview.flagged || false,
+   113→    flagReason: apiReview.flagReason || undefined,
+   114→    adminResponse: apiReview.adminResponse || undefined,
+   115→    moderationHistory,
+   116→  };
+   117→}
+   118→
+   119→// Fallback reviews used when API returns no data yet (empty DB)
+   120→const fallbackReviews: CourseReview[] = [
+   121→  {
+   122→    id: 'r1', courseName: 'Advanced React & Next.js Masterclass', courseThumbnail: '/courses/react-next.jpg',
+   123→    reviewer: 'Mike Chen', reviewerEmail: 'mike.chen@email.com', reviewerAvatar: 'MC',
+   124→    reviewerEnrollDate: '2025-09-15', reviewerCoursesEnrolled: 4,
+   125→    courseInstructor: 'Dr. Sarah Wilson', courseAvgRating: 4.7,
+   126→    rating: 5, text: 'Excellent course! The instructor explains complex concepts in a way that is easy to understand. The real-world projects were incredibly helpful for building my portfolio. I particularly enjoyed the section on server components and data fetching patterns. Highly recommended for anyone looking to level up their React skills.',
+   127→    status: 'pending', date: '2026-06-10', flagged: false, moderationHistory: []
+   128→  },
+   129→  {
+   130→    id: 'r2', courseName: 'Data Visualization & Analytics', courseThumbnail: '/courses/data-viz.jpg',
+   131→    reviewer: 'Sarah Lopez', reviewerEmail: 'sarah.l@email.com', reviewerAvatar: 'SL',
+   132→    reviewerEnrollDate: '2025-11-02', reviewerCoursesEnrolled: 2,
+   133→    courseInstructor: 'Prof. James Lee', courseAvgRating: 3.8,
+   134→    rating: 2, text: 'The content was outdated and several examples didn\'t work with the latest version of the library. The instructor seems knowledgeable but the course needs a major update. Also, some of the quiz questions have incorrect answers marked as correct.',
+   135→    status: 'flagged', date: '2026-06-09', flagged: true, flagReason: 'Inappropriate',
+   136→    moderationHistory: [{ action: 'Flagged', by: 'System', date: '2026-06-09', reason: 'Auto-flagged: multiple user reports' }]
+   137→  },
+   138→  {
+   139→    id: 'r3', courseName: 'Python for Data Science', courseThumbnail: '/courses/python-ds.jpg',
+   140→    reviewer: 'Alex Kumar', reviewerEmail: 'alex.k@email.com', reviewerAvatar: 'AK',
+   141→    reviewerEnrollDate: '2025-07-20', reviewerCoursesEnrolled: 6,
+   142→    courseInstructor: 'Dr. Maya Patel', courseAvgRating: 4.5,
+   143→    rating: 4, text: 'Great foundational course for data science with Python. The pandas and numpy sections are particularly well done. I would have liked more coverage of machine learning libraries, but as a starting point it\'s solid. The coding exercises are practical and relevant.',
+   144→    status: 'approved', date: '2026-06-08', flagged: false, adminResponse: 'Thank you for the feedback, Alex! We\'re adding ML content in the next update.',
+   145→    moderationHistory: [{ action: 'Approved', by: 'Admin', date: '2026-06-08' }]
+   146→  },
+   147→  {
+   148→    id: 'r4', courseName: 'UI/UX Design Fundamentals', courseThumbnail: '/courses/uiux.jpg',
+   149→    reviewer: 'Emma Wilson', reviewerEmail: 'emma.w@email.com', reviewerAvatar: 'EW',
+   150→    reviewerEnrollDate: '2026-01-10', reviewerCoursesEnrolled: 1,
+   151→    courseInstructor: 'Lisa Chang', courseAvgRating: 4.2,
+   152→    rating: 1, text: 'BUY MY COURSE INSTEAD!!! Visit spam-site.com for the REAL design course at 90% off!!! Limited time offer!!! Don\'t waste your money here!!!',
+   153→    status: 'flagged', date: '2026-06-08', flagged: true, flagReason: 'Spam',
+   154→    moderationHistory: [{ action: 'Flagged', by: 'System', date: '2026-06-08', reason: 'Auto-flagged: spam detected' }]
+   155→  },
+   156→  {
+   157→    id: 'r5', courseName: 'Cloud Architecture with AWS', courseThumbnail: '/courses/aws.jpg',
+   158→    reviewer: 'David Park', reviewerEmail: 'david.p@email.com', reviewerAvatar: 'DP',
+   159→    reviewerEnrollDate: '2025-06-05', reviewerCoursesEnrolled: 5,
+   160→    courseInstructor: 'Tom Richards', courseAvgRating: 4.6,
+   161→    rating: 5, text: 'This is the most comprehensive AWS course I\'ve taken. The hands-on labs are incredible and the architecture patterns section alone is worth the price. Tom is an excellent instructor who clearly has real-world experience. The section on cost optimization saved my company thousands.',
+   162→    status: 'pending', date: '2026-06-07', flagged: false, moderationHistory: []
+   163→  },
+   164→  {
+   165→    id: 'r6', courseName: 'Machine Learning A-Z', courseThumbnail: '/courses/ml.jpg',
+   166→    reviewer: 'Priya Sharma', reviewerEmail: 'priya.s@email.com', reviewerAvatar: 'PS',
+   167→    reviewerEnrollDate: '2025-08-22', reviewerCoursesEnrolled: 3,
+   168→    courseInstructor: 'Dr. Raj Gupta', courseAvgRating: 4.4,
+   169→    rating: 3, text: 'Decent course but could be better organized. Some sections assume prior knowledge that isn\'t mentioned in prerequisites. The math explanations are too brief for beginners. However, the project-based approach in the second half is really good.',
+   170→    status: 'pending', date: '2026-06-06', flagged: false, moderationHistory: []
+   171→  },
+   172→  {
+   173→    id: 'r7', courseName: 'Advanced React & Next.js Masterclass', courseThumbnail: '/courses/react-next.jpg',
+   174→    reviewer: 'Jordan Blake', reviewerEmail: 'jordan.b@email.com', reviewerAvatar: 'JB',
+   175→    reviewerEnrollDate: '2025-12-01', reviewerCoursesEnrolled: 2,
+   176→    courseInstructor: 'Dr. Sarah Wilson', courseAvgRating: 4.7,
+   177→    rating: 4, text: 'Very good course overall. The instructor is clearly an expert. I docked one star because some of the code examples in the middleware section have typos, and the community forum response time could be better. Otherwise, learned a ton!',
+   178→    status: 'approved', date: '2026-06-05', flagged: false,
+   179→    moderationHistory: [{ action: 'Approved', by: 'Admin', date: '2026-06-05' }]
+   180→  },
+   181→  {
+   182→    id: 'r8', courseName: 'DevOps Engineering Bootcamp', courseThumbnail: '/courses/devops.jpg',
+   183→    reviewer: 'Chris Nguyen', reviewerEmail: 'chris.n@email.com', reviewerAvatar: 'CN',
+   184→    reviewerEnrollDate: '2025-10-18', reviewerCoursesEnrolled: 7,
+   185→    courseInstructor: 'Kevin Miller', courseAvgRating: 4.3,
+   186→    rating: 2, text: 'Way too basic for an "advanced" bootcamp. The title is misleading. Most of the content is available for free on YouTube. The Docker section is okay but the Kubernetes part is severely lacking.',
+   187→    status: 'rejected', date: '2026-06-04', flagged: false,
+   188→    moderationHistory: [{ action: 'Rejected', by: 'Admin', date: '2026-06-04', reason: 'Off-topic' }]
+   189→  },
+   190→  {
+   191→    id: 'r9', courseName: 'TypeScript Deep Dive', courseThumbnail: '/courses/typescript.jpg',
+   192→    reviewer: 'Rachel Torres', reviewerEmail: 'rachel.t@email.com', reviewerAvatar: 'RT',
+   193→    reviewerEnrollDate: '2026-02-14', reviewerCoursesEnrolled: 3,
+   194→    courseInstructor: 'Anna Kowalski', courseAvgRating: 4.8,
+   195→    rating: 5, text: 'Anna is an incredible teacher! The way she breaks down advanced TypeScript concepts like conditional types and mapped types makes them accessible. The real-world project at the end ties everything together perfectly. Best TypeScript course on the platform.',
+   196→    status: 'pending', date: '2026-06-03', flagged: false, moderationHistory: []
+   197→  },
+   198→  {
+   199→    id: 'r10', courseName: 'Cybersecurity Essentials', courseThumbnail: '/courses/cyber.jpg',
+   200→    reviewer: 'Marcus Lee', reviewerEmail: 'marcus.l@email.com', reviewerAvatar: 'ML',
+   201→    reviewerEnrollDate: '2025-05-30', reviewerCoursesEnrolled: 4,
+   202→    courseInstructor: 'Col. Ret. Smith', courseAvgRating: 3.9,
+   203→    rating: 3, text: 'The content is okay but feels very theoretical. I expected more hands-on labs and practical exercises. The section on penetration testing is basically just definitions with no actual practice. Good for beginners wanting an overview, not for practitioners.',
+   204→    status: 'pending', date: '2026-06-02', flagged: false, moderationHistory: []
+   205→  },
+   206→];
+   207→
+   208→// ─── Category Fallback Data ──────────────────────────────────────────────────────
+   209→
+   210→const fallbackCategories: CommunityCategory[] = [
+   211→  { id: 'cat-1', tenantId: 'demo-tenant-1', name: 'General Discussion', description: 'Open discussions about anything related to learning', icon: '💬', color: '#10B981', orderIndex: 0, isDefault: true },
+   212→  { id: 'cat-2', tenantId: 'demo-tenant-1', name: 'Q&A Support', description: 'Get help and ask questions about courses', icon: '❓', color: '#8B5CF6', orderIndex: 1, isDefault: false },
+   213→  { id: 'cat-3', tenantId: 'demo-tenant-1', name: 'Announcements', description: 'Official announcements from the team', icon: '📢', color: '#F59E0B', orderIndex: 2, isDefault: false },
+   214→  { id: 'cat-4', tenantId: 'demo-tenant-1', name: 'Show & Tell', description: 'Share your work and projects with the community', icon: '🌟', color: '#EC4899', orderIndex: 3, isDefault: false },
+   215→];
+   216→
+   217→const categoryPostCounts: Record<string, number> = {
+   218→  'cat-1': 24, 'cat-2': 18, 'cat-3': 7, 'cat-4': 12,
+   219→};
+   220→
+   221→const presetColors = ['#10B981', '#8B5CF6', '#F59E0B', '#EC4899', '#EF4444', '#3B82F6'];
+   222→const presetIcons = ['💬', '❓', '📢', '🌟', '📚', '💡', '🎯', '🏆'];
+   223→
+   224→// ─── Helper Functions ───────────────────────────────────────────────────────────
+   225→
+   226→function getTypeIcon(type: CommunityPost['type']) {
+   227→  switch (type) {
+   228→    case 'discussion': return <MessageSquare className="h-4 w-4" />;
+   229→    case 'question': return <HelpCircle className="h-4 w-4" />;
+   230→    case 'announcement': return <Megaphone className="h-4 w-4" />;
+   231→    case 'resource': return <Star className="h-4 w-4" />;
+   232→  }
+   233→}
+   234→
+   235→function getTypeEmoji(type: CommunityPost['type']) {
+   236→  switch (type) {
+   237→    case 'discussion': return '💬';
+   238→    case 'question': return '❓';
+   239→    case 'announcement': return '📢';
+   240→    case 'resource': return '🌟';
+   241→  }
+   242→}
+   243→
+   244→function getTypeColor(type: CommunityPost['type']) {
+   245→  switch (type) {
+   246→    case 'discussion': return 'bg-emerald-100 text-emerald-700 border-emerald-500/30';
+   247→    case 'question': return 'bg-violet-100 text-violet-700 border-violet-200';
+   248→    case 'announcement': return 'bg-amber-100 text-amber-700 border-amber-200';
+   249→    case 'resource': return 'bg-pink-100 text-pink-700 border-pink-200';
+   250→  }
+   251→}
+   252→
+   253→function timeAgo(dateStr: string) {
+   254→  const now = new Date();
+   255→  const date = new Date(dateStr);
+   256→  const diffMs = now.getTime() - date.getTime();
+   257→  const diffMins = Math.floor(diffMs / 60000);
+   258→  if (diffMins < 60) return `${diffMins}m ago`;
+   259→  const diffHours = Math.floor(diffMins / 60);
+   260→  if (diffHours < 24) return `${diffHours}h ago`;
+   261→  const diffDays = Math.floor(diffHours / 24);
+   262→  if (diffDays < 30) return `${diffDays}d ago`;
+   263→  return `${Math.floor(diffDays / 30)}mo ago`;
+   264→}
+   265→
+   266→function getReadingTime(text: string): number {
+   267→  return Math.max(1, Math.ceil(text.split(/\s+/).length / 200));
+   268→}
+   269→
+   270→function getRoleBadge(role: string) {
+   271→  switch (role) {
+   272→    case 'tenant_admin': return { label: 'Admin', color: 'bg-emerald-100 text-emerald-700' };
+   273→    case 'instructor': return { label: 'Instructor', color: 'bg-violet-100 text-violet-700' };
+   274→    case 'learner': return { label: 'Learner', color: 'bg-slate-100 text-slate-600' };
+   275→    default: return { label: 'Member', color: 'bg-slate-100 text-slate-600' };
+   276→  }
+   277→}
+   278→
+   279→// ─── Main Component ─────────────────────────────────────────────────────────────
+   280→
+   281→export function AdminCommunity() {
+   282→  const currentTenant = useAppStore((s) => s.currentTenant);
+   283→  const currentUser = useAppStore((s) => s.currentUser);
+   284→  const tenantId = currentTenant?.id || '';
+   285→  const userId = currentUser?.id || '';
+   286→
+   287→  // ── Real API data hooks ──
+   288→  const { data: communityData, isLoading: postsLoading, refetch: refetchPosts } = useCommunityPosts(tenantId);
+   289→  const posts = useMemo(() => communityData?.posts || [], [communityData?.posts]);
+   290→  const apiCategories = useMemo(() => communityData?.categories || [], [communityData?.categories]);
+   291→
+   292→  const createPostMutation = useCreateCommunityPost();
+   293→  const updatePostMutation = useUpdateCommunityPost();
+   294→  const deletePostMutation = useDeleteCommunityPost();
+   295→
+   296→  // UI state
+   297→  const [searchQuery, setSearchQuery] = useState('');
+   298→  const [typeFilter, setTypeFilter] = useState<string>('all');
+   299→  const [statusFilter, setStatusFilter] = useState<string>('all');
+   300→  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+   301→  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+   302→  const [showCreateDialog, setShowCreateDialog] = useState(false);
+   303→  const [showCategoryDialog, setShowCategoryDialog] = useState(false);
+   304→  const [editingCategory, setEditingCategory] = useState<CommunityCategory | null>(null);
+   305→  const [newPost, setNewPost] = useState({
+   306→    title: '', content: '', type: 'discussion' as CommunityPost['type'],
+   307→    categoryId: 'cat-1', tags: '', isPinned: false, isLocked: false, scheduledDate: '', featuredImage: ''
+   308→  });
+   309→  const [newCategory, setNewCategory] = useState({ name: '', description: '', icon: '💬', color: '#10B981', isDefault: false });
+   310→  const [postDialogTab, setPostDialogTab] = useState<'compose' | 'preview'>('compose');
+   311→  const [activeMainTab, setActiveMainTab] = useState('posts');
+   312→  const [postErrors, setPostErrors] = useState<Record<string, string>>({});
+   313→  const [postTouched, setPostTouched] = useState<Record<string, boolean>>({});
+   314→
+   315→  // Delete confirmation state
+   316→  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; postId: string; postTitle: string }>({
+   317→    open: false, postId: '', postTitle: ''
+   318→  });
+   319→
+   320→  // Category list: derive from API data, fall back to defaults
+   321→  // Local additions are tracked separately so they merge with API categories
+   322→  const [localCategories, setLocalCategories] = useState<CommunityCategory[]>([]);
+   323→  const categories = apiCategories.length > 0 ? [...apiCategories, ...localCategories] : [...fallbackCategories, ...localCategories];
+   324→
+   325→  // Review moderation state
+   326→  const [reviewStatusFilter, setReviewStatusFilter] = useState<string>('all');
+   327→  const [reviewCourseFilter, setReviewCourseFilter] = useState<string>('all');
+   328→  const [reviewRatingFilter, setReviewRatingFilter] = useState<string>('all');
+   329→  const [reviewSort, setReviewSort] = useState<string>('newest');
+   330→  const [selectedReviews, setSelectedReviews] = useState<string[]>([]);
+   331→  const [showReviewDetailDialog, setShowReviewDetailDialog] = useState(false);
+   332→  const [selectedReview, setSelectedReview] = useState<CourseReview | null>(null);
+   333→  const [rejectReason, setRejectReason] = useState<string>('');
+   334→  const [adminResponse, setAdminResponse] = useState('');
+   335→
+   336→  // Review moderation — real API data
+   337→  const { data: reviewsData, isLoading: reviewsLoading } = useCommunityReviews({
+   338→    status: reviewStatusFilter,
+   339→    sort: reviewSort,
+   340→    tenantId: tenantId || undefined,
+   341→  });
+   342→  const reviews = useMemo(() => {
+   343→    if (reviewsData?.reviews && reviewsData.reviews.length > 0) {
+   344→      return reviewsData.reviews.map(mapApiReviewToCourseReview);
+   345→    }
+   346→    return fallbackReviews;
+   347→  }, [reviewsData]);
+   348→
+   349→  const moderateReviewMutation = useModerateReview();
+   350→  const respondToReviewMutation = useRespondToReview();
+   351→
+   352→  // Filter posts
+   353→  const filteredPosts = posts.filter((post) => {
+   354→    const matchesSearch = post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+   355→      post.content.toLowerCase().includes(searchQuery.toLowerCase());
+   356→    const matchesType = typeFilter === 'all' || post.type === typeFilter;
+   357→    const matchesStatus =
+   358→      statusFilter === 'all' ||
+   359→      (statusFilter === 'pinned' && post.isPinned) ||
+   360→      (statusFilter === 'locked' && post.isLocked) ||
+   361→      (statusFilter === 'active' && !post.isPinned && !post.isLocked);
+   362→    const matchesCategory = categoryFilter === 'all' || post.categoryId === categoryFilter;
+   363→    return matchesSearch && matchesType && matchesStatus && matchesCategory;
+   364→  });
+   365→
+   366→  // Filter reviews
+   367→  const filteredReviews = useMemo(() => {
+   368→    let result = [...reviews];
+   369→    if (reviewStatusFilter !== 'all') result = result.filter(r => r.status === reviewStatusFilter);
+   370→    if (reviewCourseFilter !== 'all') result = result.filter(r => r.courseName === reviewCourseFilter);
+   371→    if (reviewRatingFilter !== 'all') result = result.filter(r => r.rating === Number(reviewRatingFilter));
+   372→    switch (reviewSort) {
+   373→      case 'newest': result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); break;
+   374→      case 'oldest': result.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); break;
+   375→      case 'highest': result.sort((a, b) => b.rating - a.rating); break;
+   376→      case 'lowest': result.sort((a, b) => a.rating - b.rating); break;
+   377→      case 'flagged': result.sort((a, b) => (b.flagged ? 1 : 0) - (a.flagged ? 1 : 0)); break;
+   378→    }
+   379→    return result;
+   380→  }, [reviews, reviewStatusFilter, reviewCourseFilter, reviewRatingFilter, reviewSort]);
+   381→
+   382→  // Unique course names for filter
+   383→  const courseNames = useMemo(() => [...new Set(reviews.map(r => r.courseName))], [reviews]);
+   384→
+   385→  // Review analytics
+   386→  const reviewAnalytics = useMemo(() => {
+   387→    const totalThisMonth = reviews.filter(r => new Date(r.date).getMonth() === 5).length;
+   388→    const avgRating = reviews.length > 0 ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1) : '0';
+   389→    const responseRate = reviews.length > 0 ? Math.round((reviews.filter(r => r.adminResponse).length / reviews.length) * 100) : 0;
+   390→    const flaggedCount = reviews.filter(r => r.flagged).length;
+   391→    const ratingDist = [5, 4, 3, 2, 1].map(star => ({ star, count: reviews.filter(r => r.rating === star).length }));
+   392→    return { totalThisMonth, avgRating, responseRate, flaggedCount, ratingDist };
+   393→  }, [reviews]);
+   394→
+   395→  // Stats
+   396→  const totalPosts = posts.length;
+   397→  const activeDiscussions = posts.filter(p => !p.isLocked).length;
+   398→  const engagementRate = Math.round((posts.reduce((sum, p) => sum + p.likeCount + p.commentCount, 0) / (posts.reduce((sum, p) => sum + p.viewCount, 0) || 1)) * 100);
+   399→
+   400→  // ── CRUD handlers using real API mutations ──
+   401→
+   402→  const handleCreatePost = useCallback(() => {
+   403→    const errs = validateFields({
+   404→      title: [required(newPost.title, 'Title'), minLength(newPost.title, 3, 'Title')],
+   405→      content: [required(newPost.content, 'Content'), minLength(newPost.content, 10, 'Content')],
+   406→      categoryId: [required(newPost.categoryId, 'Category')],
+   407→    });
+   408→    setPostErrors(errs);
+   409→    setPostTouched({ title: true, content: true, categoryId: true });
+   410→    if (Object.keys(errs).length > 0) return;
+   411→
+   412→    const tags = newPost.tags ? newPost.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+   413→    createPostMutation.mutate({
+   414→      tenantId,
+   415→      authorId: userId,
+   416→      title: newPost.title,
+   417→      content: newPost.content,
+   418→      type: newPost.type,
+   419→      categoryId: newPost.categoryId,
+   420→      tags,
+   421→      isPinned: newPost.isPinned,
+   422→      isLocked: newPost.isLocked,
+   423→    }, {
+   424→      onSuccess: () => {
+   425→        setShowCreateDialog(false);
+   426→        setNewPost({ title: '', content: '', type: 'discussion', categoryId: 'cat-1', tags: '', isPinned: false, isLocked: false, scheduledDate: '', featuredImage: '' });
+   427→        setPostDialogTab('compose');
+   428→        setPostErrors({});
+   429→        setPostTouched({});
+   430→      },
+   431→    });
+   432→  }, [createPostMutation, newPost, tenantId, userId]);
+   433→
+   434→  const handleTogglePin = useCallback((postId: string) => {
+   435→    const post = posts.find(p => p.id === postId);
+   436→    if (!post) return;
+   437→    updatePostMutation.mutate({ id: postId, isPinned: !post.isPinned });
+   438→  }, [posts, updatePostMutation]);
+   439→
+   440→  const handleToggleLock = useCallback((postId: string) => {
+   441→    const post = posts.find(p => p.id === postId);
+   442→    if (!post) return;
+   443→    updatePostMutation.mutate({ id: postId, isLocked: !post.isLocked });
+   444→  }, [posts, updatePostMutation]);
+   445→
+   446→  const handleDeleteRequest = useCallback((postId: string) => {
+   447→    const post = posts.find(p => p.id === postId);
+   448→    setDeleteConfirm({
+   449→      open: true,
+   450→      postId,
+   451→      postTitle: post?.title || 'this post',
+   452→    });
+   453→  }, [posts]);
+   454→
+   455→  const handleDeleteConfirm = useCallback(() => {
+   456→    if (deleteConfirm.postId) {
+   457→      deletePostMutation.mutate(deleteConfirm.postId, {
+   458→        onSuccess: () => {
+   459→          setDeleteConfirm({ open: false, postId: '', postTitle: '' });
+   460→        },
+   461→      });
+   462→    }
+   463→  }, [deleteConfirm.postId, deletePostMutation]);
+   464→
+   465→  const handleAddCategory = () => {
+   466→    const category: CommunityCategory = {
+   467→      id: `cat-${Date.now()}`,
+   468→      tenantId: tenantId || 'demo-tenant-1',
+   469→      name: newCategory.name,
+   470→      description: newCategory.description,
+   471→      icon: newCategory.icon,
+   472→      color: newCategory.color,
+   473→      orderIndex: categories.length,
+   474→      isDefault: newCategory.isDefault,
+   475→    };
+   476→    setLocalCategories([...localCategories, category]);
+   477→    categoryPostCounts[category.id] = 0;
+   478→    setShowCategoryDialog(false);
+   479→    setNewCategory({ name: '', description: '', icon: '💬', color: '#10B981', isDefault: false });
+   480→  };
+   481→
+   482→  const handleMoveCategory = (index: number, direction: 'up' | 'down') => {
+   483→    const newIndex = direction === 'up' ? index - 1 : index + 1;
+   484→    if (newIndex < 0 || newIndex >= categories.length) return;
+   485→    // For reorder, we rebuild the full list as a local override
+   486→    const updated = [...categories];
+   487→    [updated[index], updated[newIndex]] = [updated[newIndex], updated[index]];
+   488→    updated.forEach((c, i) => c.orderIndex = i);
+   489→    // Store the reordered list as the new local categories (replacing API order)
+   490→    setLocalCategories(updated);
+   491→  };
+   492→
+   493→  // Review moderation handlers — real API mutations
+   494→  const handleReviewAction = useCallback((reviewId: string, action: 'approved' | 'rejected' | 'flagged', reason?: string) => {
+   495→    moderateReviewMutation.mutate({
+   496→      reviewId,
+   497→      action,
+   498→      reason,
+   499→      adminName: currentUser?.name || 'Admin',
+   500→    });
+   501→  }, [moderateReviewMutation, currentUser?.name]);
+   502→
+   503→  const handleBulkAction = useCallback((action: 'approved' | 'rejected' | 'flagged') => {
+   504→    selectedReviews.forEach(id => {
+   505→      moderateReviewMutation.mutate({
+   506→        reviewId: id,
+   507→        action,
+   508→        reason: action === 'flagged' ? 'Bulk flagged by admin' : undefined,
+   509→        adminName: currentUser?.name || 'Admin',
+   510→      });
+   511→    });
+   512→    setSelectedReviews([]);
+   513→  }, [selectedReviews, moderateReviewMutation, currentUser?.name]);
+   514→
+   515→  const handleRespondToReview = useCallback((reviewId: string, response: string) => {
+   516→    if (!response.trim()) return;
+   517→    respondToReviewMutation.mutate({
+   518→      reviewId,
+   519→      adminResponse: response,
+   520→    }, {
+   521→      onSuccess: () => {
+   522→        setAdminResponse('');
+   523→      },
+   524→    });
+   525→  }, [respondToReviewMutation, setAdminResponse]);
+   526→
+   527→  const toggleReviewSelection = (id: string) => {
+   528→    setSelectedReviews(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+   529→  };
+   530→
+   531→  const toggleAllReviews = () => {
+   532→    if (selectedReviews.length === filteredReviews.length) {
+   533→      setSelectedReviews([]);
+   534→    } else {
+   535→      setSelectedReviews(filteredReviews.map(r => r.id));
+   536→    }
+   537→  };
+   538→
+   539→  // Determine if any mutation is in progress
+   540→  const isMutating = createPostMutation.isPending || updatePostMutation.isPending || deletePostMutation.isPending;
+   541→  const isReviewMutating = moderateReviewMutation.isPending || respondToReviewMutation.isPending;
+   542→
+   543→  return (
+   544→    <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
+   545→      {/* Header */}
+   546→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+   547→        <div>
+   548→          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-50">Community Management</h1>
+   549→          <p className="text-slate-500 mt-1">Moderate posts, manage categories, review ratings, and track engagement</p>
+   550→        </div>
+   551→        <Button onClick={() => setShowCreateDialog(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shrink-0">
+   552→          <Megaphone className="h-4 w-4" />
+   553→          New Announcement
+   554→        </Button>
+   555→      </div>
+   556→
+   557→      {/* Community Analytics Card */}
+   558→      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+   559→        {[
+   560→          { label: 'Total Members', value: '2,847', icon: Users, color: 'emerald', change: '+12%' },
+   561→          { label: 'Active This Week', value: '1,203', icon: TrendingUp, color: 'violet', change: '+8%' },
+   562→          { label: 'Posts This Week', value: '156', icon: MessageSquare, color: 'pink', change: '+23%' },
+   563→          { label: 'Avg Response Time', value: '2.4h', icon: Clock, color: 'amber', change: '-15%' },
+   564→          { label: 'Engagement Rate', value: '89%', icon: Heart, color: 'rose', change: '+5%' },
+   565→        ].map((stat, i) => (
+   566→          <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+   567→            <Card className="border-border hover:shadow-md transition-shadow">
+   568→              <CardContent className="p-3 md:p-4">
+   569→                <div className="flex items-center gap-2 mb-2">
+   570→                  <div className={`p-2 rounded-lg shrink-0 ${
+   571→                    stat.color === 'emerald' ? 'bg-emerald-100 text-emerald-600' :
+   572→                    stat.color === 'violet' ? 'bg-violet-100 text-violet-600' :
+   573→                    stat.color === 'pink' ? 'bg-pink-100 text-pink-600' :
+   574→                    stat.color === 'amber' ? 'bg-amber-100 text-amber-600' :
+   575→                    'bg-rose-100 text-rose-600'
+   576→                  }`}>
+   577→                    <stat.icon className="h-4 w-4" />
+   578→                  </div>
+   579→                  <span className="text-xs text-emerald-600 font-medium">{stat.change}</span>
+   580→                </div>
+   581→                <p className="text-xl font-bold text-slate-900 dark:text-slate-50">{stat.value}</p>
+   582→                <p className="text-xs text-slate-500">{stat.label}</p>
+   583→              </CardContent>
+   584→            </Card>
+   585→          </motion.div>
+   586→        ))}
+   587→      </div>
+   588→
+   589→      {/* Main Tabs */}
+   590→      <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="space-y-4">
+   591→        <TabsList className="bg-slate-100 dark:bg-slate-800">
+   592→          <TabsTrigger value="posts" className="gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900">
+   593→            <MessageSquare className="h-4 w-4" /> Posts
+   594→          </TabsTrigger>
+   595→          <TabsTrigger value="categories" className="gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900">
+   596→            <Tag className="h-4 w-4" /> Categories
+   597→          </TabsTrigger>
+   598→          <TabsTrigger value="reviews" className="gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900">
+   599→            <Shield className="h-4 w-4" /> Review Moderation
+   600→            {reviews.filter(r => r.status === 'pending').length > 0 && (
+   601→              <Badge className="bg-amber-500 text-white text-xs px-1.5 py-0 ml-1">{reviews.filter(r => r.status === 'pending').length}</Badge>
+   602→            )}
+   603→          </TabsTrigger>
+   604→        </TabsList>
+   605→
+   606→        {/* ─── Posts Tab ─────────────────────────────────────────────────────── */}
+   607→        <TabsContent value="posts" className="space-y-4">
+   608→          {/* Search & Filters */}
+   609→          <Card className="border-border">
+   610→            <CardContent className="p-4">
+   611→              <div className="flex flex-col lg:flex-row gap-3">
+   612→                <div className="relative flex-1">
+   613→                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
+   614→                  <Input placeholder="Search posts..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 border-border focus:border-emerald-400" />
+   615→                </div>
+   616→                <div className="flex flex-wrap gap-2">
+   617→                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+   618→                    <SelectTrigger className="w-[150px] border-border">
+   619→                      <Filter className="h-3.5 w-3.5 mr-1 text-slate-400 dark:text-slate-500" />
+   620→                      <SelectValue placeholder="Type" />
+   621→                    </SelectTrigger>
+   622→                    <SelectContent>
+   623→                      <SelectItem value="all">All Types</SelectItem>
+   624→                      <SelectItem value="discussion">💬 Discussion</SelectItem>
+   625→                      <SelectItem value="question">❓ Question</SelectItem>
+   626→                      <SelectItem value="announcement">📢 Announcement</SelectItem>
+   627→                      <SelectItem value="resource">🌟 Resource</SelectItem>
+   628→                    </SelectContent>
+   629→                  </Select>
+   630→                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+   631→                    <SelectTrigger className="w-[140px] border-border"><SelectValue placeholder="Status" /></SelectTrigger>
+   632→                    <SelectContent>
+   633→                      <SelectItem value="all">All Status</SelectItem>
+   634→                      <SelectItem value="pinned">📌 Pinned</SelectItem>
+   635→                      <SelectItem value="locked">🔒 Locked</SelectItem>
+   636→                      <SelectItem value="active">✅ Active</SelectItem>
+   637→                    </SelectContent>
+   638→                  </Select>
+   639→                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+   640→                    <SelectTrigger className="w-[170px] border-border"><SelectValue placeholder="Category" /></SelectTrigger>
+   641→                    <SelectContent>
+   642→                      <SelectItem value="all">All Categories</SelectItem>
+   643→                      {categories.map(cat => (
+   644→                        <SelectItem key={cat.id} value={cat.id}>{cat.icon} {cat.name}</SelectItem>
+   645→                      ))}
+   646→                    </SelectContent>
+   647→                  </Select>
+   648→                  <div className="flex border border-border rounded-md overflow-hidden">
+   649→                    <Button variant={viewMode === 'grid' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('grid')} className={viewMode === 'grid' ? 'bg-slate-900 text-white rounded-none' : 'rounded-none'}>
+   650→                      <LayoutGrid className="h-4 w-4" />
+   651→                    </Button>
+   652→                    <Button variant={viewMode === 'list' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('list')} className={viewMode === 'list' ? 'bg-slate-900 text-white rounded-none' : 'rounded-none'}>
+   653→                      <List className="h-4 w-4" />
+   654→                    </Button>
+   655→                  </div>
+   656→                </div>
+   657→              </div>
+   658→            </CardContent>
+   659→          </Card>
+   660→
+   661→          {/* Post Stats */}
+   662→          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   663→            {[
+   664→              { label: 'Total Posts', value: totalPosts, icon: MessageSquare, color: 'emerald' },
+   665→              { label: 'Active Discussions', value: activeDiscussions, icon: Eye, color: 'violet' },
+   666→              { label: 'Engagement Rate', value: `${engagementRate}%`, icon: Heart, color: 'pink' },
+   667→            ].map((stat, i) => (
+   668→              <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
+   669→                <Card className="border-border hover:shadow-md transition-shadow">
+   670→                  <CardContent className="p-4 flex items-center gap-4">
+   671→                    <div className={`p-3 rounded-xl ${
+   672→                      stat.color === 'emerald' ? 'bg-emerald-100 text-emerald-600' :
+   673→                      stat.color === 'violet' ? 'bg-violet-100 text-violet-600' :
+   674→                      'bg-pink-100 text-pink-600'
+   675→                    }`}>
+   676→                      <stat.icon className="h-5 w-5" />
+   677→                    </div>
+   678→                    <div>
+   679→                      <p className="text-sm text-slate-500">{stat.label}</p>
+   680→                      <p className="text-2xl font-bold text-slate-900 dark:text-slate-50">{stat.value}</p>
+   681→                    </div>
+   682→                  </CardContent>
+   683→                </Card>
+   684→              </motion.div>
+   685→            ))}
+   686→          </div>
+   687→
+   688→          {/* Loading State */}
+   689→          {postsLoading && (
+   690→            <div className="flex items-center justify-center py-12">
+   691→              <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+   692→              <span className="ml-3 text-slate-500">Loading posts...</span>
+   693→            </div>
+   694→          )}
+   695→
+   696→          {/* Posts Grid/List */}
+   697→          {!postsLoading && (
+   698→            <div>
+   699→              <div className="flex items-center justify-between mb-4">
+   700→                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Posts ({filteredPosts.length})</h2>
+   701→              </div>
+   702→              <AnimatePresence mode="popLayout">
+   703→                {viewMode === 'grid' ? (
+   704→                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+   705→                    {filteredPosts.map((post, i) => (
+   706→                      <PostCard key={post.id} post={post} index={i} categories={categories} onTogglePin={handleTogglePin} onToggleLock={handleToggleLock} onDelete={handleDeleteRequest} isMutating={isMutating} />
+   707→                    ))}
+   708→                  </div>
+   709→                ) : (
+   710→                  <div className="space-y-3">
+   711→                    {filteredPosts.map((post, i) => (
+   712→                      <PostListItem key={post.id} post={post} index={i} categories={categories} onTogglePin={handleTogglePin} onToggleLock={handleToggleLock} onDelete={handleDeleteRequest} isMutating={isMutating} />
+   713→                    ))}
+   714→                  </div>
+   715→                )}
+   716→              </AnimatePresence>
+   717→              {filteredPosts.length === 0 && (
+   718→                <div className="text-center py-12">
+   719→                  <MessageSquare className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+   720→                  <p className="text-slate-500 text-lg">No posts match your filters</p>
+   721→                  <p className="text-slate-400 text-sm mt-1">Try adjusting your search or filters</p>
+   722→                </div>
+   723→              )}
+   724→            </div>
+   725→          )}
+   726→        </TabsContent>
+   727→
+   728→        {/* ─── Categories Tab ────────────────────────────────────────────────── */}
+   729→        <TabsContent value="categories" className="space-y-4">
+   730→          <Card className="border-border shadow-sm hover:shadow-md transition-shadow">
+   731→            <CardHeader className="pb-3">
+   732→              <div className="flex items-center justify-between">
+   733→                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+   734→                  <Tag className="h-4 w-4 text-emerald-500" />
+   735→                  Category Management
+   736→                </CardTitle>
+   737→                <Button variant="outline" size="sm" onClick={() => { setEditingCategory(null); setNewCategory({ name: '', description: '', icon: '💬', color: '#10B981', isDefault: false }); setShowCategoryDialog(true); }}
+   738→                  className="gap-1.5 border-border text-slate-700 dark:text-slate-300 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-500/30">
+   739→                  <Plus className="h-3.5 w-3.5" /> Add Category
+   740→                </Button>
+   741→              </div>
+   742→            </CardHeader>
+   743→            <CardContent>
+   744→              <div className="space-y-2">
+   745→                {categories.map((cat, i) => (
+   746→                  <motion.div key={cat.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}>
+   747→                    <div className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-border hover:shadow-sm transition-all group">
+   748→                      {/* Reorder buttons */}
+   749→                      <div className="flex flex-col gap-0.5">
+   750→                        <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-slate-400 hover:text-slate-600" disabled={i === 0} onClick={() => handleMoveCategory(i, 'up')}>
+   751→                          <ChevronUp className="h-3 w-3" />
+   752→                        </Button>
+   753→                        <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-slate-400 hover:text-slate-600" disabled={i === categories.length - 1} onClick={() => handleMoveCategory(i, 'down')}>
+   754→                          <ChevronDown className="h-3 w-3" />
+   755→                        </Button>
+   756→                      </div>
+   757→                      {/* Color + Icon */}
+   758→                      <div className="w-10 h-10 rounded-lg flex items-center justify-center text-lg shrink-0" style={{ backgroundColor: cat.color + '20', color: cat.color }}>
+   759→                        {cat.icon}
+   760→                      </div>
+   761→                      {/* Info */}
+   762→                      <div className="flex-1 min-w-0">
+   763→                        <div className="flex items-center gap-2">
+   764→                          <p className="font-medium text-slate-900 dark:text-slate-50 text-sm truncate">{cat.name}</p>
+   765→                          {cat.isDefault && <Badge className="bg-emerald-100 text-emerald-700 text-xs">Default</Badge>}
+   766→                        </div>
+   767→                        <p className="text-xs text-slate-400 truncate">{cat.description || 'No description'}</p>
+   768→                      </div>
+   769→                      {/* Post count */}
+   770→                      <div className="text-center px-3">
+   771→                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">{categoryPostCounts[cat.id] || 0}</p>
+   772→                        <p className="text-xs text-slate-400">posts</p>
+   773→                      </div>
+   774→                      {/* Color dot */}
+   775→                      <div className="w-4 h-4 rounded-full shrink-0 border border-border" style={{ backgroundColor: cat.color }} />
+   776→                      {/* Actions */}
+   777→                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+   778→                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-violet-600"
+   779→                          onClick={() => { setEditingCategory(cat); setNewCategory({ name: cat.name, description: cat.description || '', icon: cat.icon || '💬', color: cat.color || '#10B981', isDefault: cat.isDefault }); setShowCategoryDialog(true); }}>
+   780→                          <Edit3 className="h-3 w-3" />
+   781→                        </Button>
+   782→                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-600">
+   783→                          <Trash2 className="h-3 w-3" />
+   784→                        </Button>
+   785→                      </div>
+   786→                    </div>
+   787→                  </motion.div>
+   788→                ))}
+   789→              </div>
+   790→            </CardContent>
+   791→          </Card>
+   792→        </TabsContent>
+   793→
+   794→        {/* ─── Review Moderation Tab ─────────────────────────────────────────── */}
+   795→        <TabsContent value="reviews" className="space-y-4">
+   796→          {/* Loading State */}
+   797→          {reviewsLoading && (
+   798→            <div className="space-y-4">
+   799→              {/* Skeleton analytics cards */}
+   800→              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+   801→                {Array.from({ length: 5 }).map((_, i) => (
+   802→                  <Card key={i} className="border-border">
+   803→                    <CardContent className="p-3 md:p-4">
+   804→                      <div className="flex items-center gap-2 mb-2">
+   805→                        <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse">
+   806→                          <div className="h-4 w-4" />
+   807→                        </div>
+   808→                      </div>
+   809→                      <div className="h-6 w-12 bg-slate-100 dark:bg-slate-800 rounded animate-pulse mb-1" />
+   810→                      <div className="h-3 w-24 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+   811→                    </CardContent>
+   812→                  </Card>
+   813→                ))}
+   814→              </div>
+   815→              {/* Skeleton review cards */}
+   816→              <div className="space-y-3">
+   817→                {Array.from({ length: 4 }).map((_, i) => (
+   818→                  <Card key={i} className="border-border">
+   819→                    <CardContent className="p-4">
+   820→                      <div className="flex gap-4">
+   821→                        <div className="w-5 h-5 bg-slate-100 dark:bg-slate-800 rounded animate-pulse shrink-0 mt-1" />
+   822→                        <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse shrink-0" />
+   823→                        <div className="flex-1 space-y-2">
+   824→                          <div className="flex gap-2">
+   825→                            <div className="h-5 w-16 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+   826→                            <div className="h-5 w-20 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+   827→                          </div>
+   828→                          <div className="h-4 w-48 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+   829→                          <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+   830→                          <div className="h-3 w-2/3 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+   831→                        </div>
+   832→                      </div>
+   833→                    </CardContent>
+   834→                  </Card>
+   835→                ))}
+   836→              </div>
+   837→            </div>
+   838→          )}
+   839→
+   840→          {/* Review Analytics */}
+   841→          {!reviewsLoading && (
+   842→          <>
+   843→          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+   844→            {[
+   845→              { label: 'Reviews This Month', value: reviewAnalytics.totalThisMonth, icon: Star, color: 'emerald' },
+   846→              { label: 'Average Rating', value: reviewAnalytics.avgRating, icon: TrendingUp, color: 'violet' },
+   847→              { label: 'Response Rate', value: `${reviewAnalytics.responseRate}%`, icon: MessageSquare, color: 'pink' },
+   848→              { label: 'Flagged Reviews', value: reviewAnalytics.flaggedCount, icon: AlertTriangle, color: 'amber' },
+   849→              { label: 'Rating Distribution', value: '', icon: BarChart3, color: 'slate', custom: true },
+   850→            ].map((stat, i) => (
+   851→              <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+   852→                className={stat.custom ? 'col-span-2 lg:col-span-1' : ''}>
+   853→                <Card className="border-border hover:shadow-md transition-shadow h-full">
+   854→                  <CardContent className="p-3 md:p-4">
+   855→                    <div className="flex items-center gap-2 mb-2">
+   856→                      <div className={`p-2 rounded-lg shrink-0 ${
+   857→                        stat.color === 'emerald' ? 'bg-emerald-100 text-emerald-600' :
+   858→                        stat.color === 'violet' ? 'bg-violet-100 text-violet-600' :
+   859→                        stat.color === 'pink' ? 'bg-pink-100 text-pink-600' :
+   860→                        stat.color === 'amber' ? 'bg-amber-100 text-amber-600' :
+   861→                        'bg-slate-100 text-slate-600'
+   862→                      }`}>
+   863→                        <stat.icon className="h-4 w-4" />
+   864→                      </div>
+   865→                    </div>
+   866→                    <p className="text-xl font-bold text-slate-900 dark:text-slate-50">{stat.value}</p>
+   867→                    <p className="text-xs text-slate-500">{stat.label}</p>
+   868→                    {stat.custom && (
+   869→                      <div className="mt-2 space-y-1">
+   870→                        {reviewAnalytics.ratingDist.map(rd => (
+   871→                          <div key={rd.star} className="flex items-center gap-1.5">
+   872→                            <span className="text-xs text-slate-500 w-4">{rd.star}</span>
+   873→                            <Star className="h-2.5 w-2.5 text-amber-400 fill-amber-400" />
+   874→                            <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+   875→                              <div className="h-full rounded-full bg-amber-400" style={{ width: `${reviews.length > 0 ? (rd.count / reviews.length) * 100 : 0}%` }} />
+   876→                            </div>
+   877→                            <span className="text-xs text-slate-400 w-3">{rd.count}</span>
+   878→                          </div>
+   879→                        ))}
+   880→                      </div>
+   881→                    )}
+   882→                  </CardContent>
+   883→                </Card>
+   884→              </motion.div>
+   885→            ))}
+   886→          </div>
+   887→
+   888→          {/* Review Filters & Bulk Actions */}
+   889→          <Card className="border-border">
+   890→            <CardContent className="p-4">
+   891→              <div className="flex flex-col lg:flex-row gap-3">
+   892→                <div className="flex flex-wrap gap-2 flex-1">
+   893→                  <Select value={reviewStatusFilter} onValueChange={setReviewStatusFilter}>
+   894→                    <SelectTrigger className="w-[140px] border-border">
+   895→                      <Filter className="h-3.5 w-3.5 mr-1 text-slate-400" />
+   896→                      <SelectValue placeholder="Status" />
+   897→                    </SelectTrigger>
+   898→                    <SelectContent>
+   899→                      <SelectItem value="all">All Status</SelectItem>
+   900→                      <SelectItem value="pending">⏳ Pending</SelectItem>
+   901→                      <SelectItem value="approved">✅ Approved</SelectItem>
+   902→                      <SelectItem value="rejected">❌ Rejected</SelectItem>
+   903→                      <SelectItem value="flagged">🚩 Flagged</SelectItem>
+   904→                    </SelectContent>
+   905→                  </Select>
+   906→                  <Select value={reviewCourseFilter} onValueChange={setReviewCourseFilter}>
+   907→                    <SelectTrigger className="w-[200px] border-border">
+   908→                      <BookOpen className="h-3.5 w-3.5 mr-1 text-slate-400" />
+   909→                      <SelectValue placeholder="Course" />
+   910→                    </SelectTrigger>
+   911→                    <SelectContent>
+   912→                      <SelectItem value="all">All Courses</SelectItem>
+   913→                      {courseNames.map(name => (
+   914→                        <SelectItem key={name} value={name}>{name}</SelectItem>
+   915→                      ))}
+   916→                    </SelectContent>
+   917→                  </Select>
+   918→                  <Select value={reviewRatingFilter} onValueChange={setReviewRatingFilter}>
+   919→                    <SelectTrigger className="w-[120px] border-border">
+   920→                      <Star className="h-3.5 w-3.5 mr-1 text-slate-400" />
+   921→                      <SelectValue placeholder="Rating" />
+   922→                    </SelectTrigger>
+   923→                    <SelectContent>
+   924→                      <SelectItem value="all">All Ratings</SelectItem>
+   925→                      {[5, 4, 3, 2, 1].map(r => (
+   926→                        <SelectItem key={r} value={String(r)}>{r} Star{r > 1 ? 's' : ''}</SelectItem>
+   927→                      ))}
+   928→                    </SelectContent>
+   929→                  </Select>
+   930→                  <Select value={reviewSort} onValueChange={setReviewSort}>
+   931→                    <SelectTrigger className="w-[160px] border-border">
+   932→                      <ArrowUpDown className="h-3.5 w-3.5 mr-1 text-slate-400" />
+   933→                      <SelectValue placeholder="Sort" />
+   934→                    </SelectTrigger>
+   935→                    <SelectContent>
+   936→                      <SelectItem value="newest">Newest First</SelectItem>
+   937→                      <SelectItem value="oldest">Oldest First</SelectItem>
+   938→                      <SelectItem value="highest">Highest Rating</SelectItem>
+   939→                      <SelectItem value="lowest">Lowest Rating</SelectItem>
+   940→                      <SelectItem value="flagged">Most Flagged</SelectItem>
+   941→                    </SelectContent>
+   942→                  </Select>
+   943→                </div>
+   944→                {/* Bulk Actions */}
+   945→                {selectedReviews.length > 0 && (
+   946→                  <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950 rounded-lg border border-emerald-200 dark:border-emerald-800">
+   947→                    <span className="text-sm text-emerald-700 font-medium">{selectedReviews.length} selected</span>
+   948→                    <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => handleBulkAction('approved')} disabled={isReviewMutating}>
+   949→                      {isReviewMutating ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <CheckCircle2 className="h-3 w-3 mr-1" />} Approve
+   950→                    </Button>
+   951→                    <Button size="sm" className="h-7 text-xs bg-red-600 hover:bg-red-700 text-white" onClick={() => handleBulkAction('rejected')} disabled={isReviewMutating}>
+   952→                      <XCircle className="h-3 w-3 mr-1" /> Reject
+   953→                    </Button>
+   954→                    <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white" onClick={() => handleBulkAction('flagged')} disabled={isReviewMutating}>
+   955→                      <Flag className="h-3 w-3 mr-1" /> Flag
+   956→                    </Button>
+   957→                  </div>
+   958→                )}
+   959→              </div>
+   960→            </CardContent>
+   961→          </Card>
+   962→
+   963→          {/* Review Queue */}
+   964→          <div className="space-y-3">
+   965→            {/* Select All */}
+   966→            <div className="flex items-center gap-2 px-1">
+   967→              <Checkbox checked={selectedReviews.length === filteredReviews.length && filteredReviews.length > 0} onCheckedChange={toggleAllReviews} />
+   968→              <span className="text-sm text-slate-500">Select all ({filteredReviews.length} reviews)</span>
+   969→            </div>
+   970→            <AnimatePresence>
+   971→              {filteredReviews.map((review, i) => (
+   972→                <motion.div key={review.id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ delay: i * 0.03 }}>
+   973→                  <Card className={`border-border hover:shadow-md transition-all ${
+   974→                    review.status === 'flagged' ? 'ring-1 ring-amber-500/40 border-amber-500/30' :
+   975→                    review.status === 'rejected' ? 'opacity-70' : ''
+   976→                  }`}>
+   977→                    <CardContent className="p-4">
+   978→                      <div className="flex gap-4">
+   979→                        {/* Checkbox */}
+   980→                        <div className="flex items-start pt-1">
+   981→                          <Checkbox checked={selectedReviews.includes(review.id)} onCheckedChange={() => toggleReviewSelection(review.id)} />
+   982→                        </div>
+   983→                        {/* Course thumbnail placeholder */}
+   984→                        <div className="w-14 h-14 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+   985→                          <BookOpen className="h-6 w-6 text-slate-400" />
+   986→                        </div>
+   987→                        {/* Main Content */}
+   988→                        <div className="flex-1 min-w-0">
+   989→                          <div className="flex items-center gap-2 flex-wrap mb-1">
+   990→                            {/* Status Badge */}
+   991→                            <Badge variant="outline" className={`text-xs gap-1 ${
+   992→                              review.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+   993→                              review.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+   994→                              review.status === 'rejected' ? 'bg-red-50 text-red-600 border-red-200' :
+   995→                              'bg-orange-50 text-orange-700 border-orange-200'
+   996→                            }`}>
+   997→                              {review.status === 'pending' && <Clock className="h-3 w-3" />}
+   998→                              {review.status === 'approved' && <CheckCircle2 className="h-3 w-3" />}
+   999→                              {review.status === 'rejected' && <XCircle className="h-3 w-3" />}
+  1000→                              {review.status === 'flagged' && <Flag className="h-3 w-3" />}
+  1001→                              {review.status.charAt(0).toUpperCase() + review.status.slice(1)}
+  1002→                            </Badge>
+  1003→                            {review.flagged && (
+  1004→                              <Badge className="bg-orange-100 text-orange-700 text-xs gap-1">
+  1005→                                <AlertTriangle className="h-3 w-3" /> {review.flagReason}
+  1006→                              </Badge>
+  1007→                            )}
+  1008→                            {/* Star Rating */}
+  1009→                            <div className="flex items-center gap-0.5">
+  1010→                              {[1, 2, 3, 4, 5].map(s => (
+  1011→                                <Star key={s} className={`h-3.5 w-3.5 ${s <= review.rating ? 'text-amber-400 fill-amber-400' : 'text-slate-300'}`} />
+  1012→                              ))}
+  1013→                            </div>
+  1014→                          </div>
+  1015→                          <h3 className="font-semibold text-slate-900 dark:text-slate-50 text-sm">{review.courseName}</h3>
+  1016→                          <p className="text-slate-500 text-sm mt-1 line-clamp-2">{review.text}</p>
+  1017→                          <div className="flex items-center gap-3 mt-2 flex-wrap">
+  1018→                            <div className="flex items-center gap-1.5">
+  1019→                              <Avatar className="h-5 w-5">
+  1020→                                <AvatarFallback className="bg-violet-100 text-violet-700 text-xs">{review.reviewerAvatar}</AvatarFallback>
+  1021→                              </Avatar>
+  1022→                              <span className="text-xs text-slate-600 font-medium">{review.reviewer}</span>
+  1023→                            </div>
+  1024→                            <span className="text-xs text-slate-400 flex items-center gap-1">
+  1025→                              <Calendar className="h-3 w-3" /> {review.date}
+  1026→                            </span>
+  1027→                            {review.adminResponse && (
+  1028→                              <span className="text-xs text-emerald-600 flex items-center gap-1">
+  1029→                                <MessageSquare className="h-3 w-3" /> Responded
+  1030→                              </span>
+  1031→                            )}
+  1032→                          </div>
+  1033→                        </div>
+  1034→                        {/* Actions */}
+  1035→                        <div className="shrink-0 flex items-start gap-1">
+  1036→                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-400 hover:text-slate-700" onClick={() => { setSelectedReview(review); setShowReviewDetailDialog(true); }}>
+  1037→                            <Eye className="h-4 w-4" />
+  1038→                          </Button>
+  1039→                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-500 hover:text-emerald-700" onClick={() => handleReviewAction(review.id, 'approved')} disabled={isReviewMutating}>
+  1040→                            {isReviewMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+  1041→                          </Button>
+  1042→                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-400 hover:text-red-600" onClick={() => handleReviewAction(review.id, 'rejected')} disabled={isReviewMutating}>
+  1043→                            <XCircle className="h-4 w-4" />
+  1044→                          </Button>
+  1045→                        </div>
+  1046→                      </div>
+  1047→                    </CardContent>
+  1048→                  </Card>
+  1049→                </motion.div>
+  1050→              ))}
+  1051→            </AnimatePresence>
+  1052→            {filteredReviews.length === 0 && (
+  1053→              <div className="text-center py-12">
+  1054→                <Shield className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+  1055→                <p className="text-slate-500 text-lg">No reviews match your filters</p>
+  1056→                <p className="text-slate-400 text-sm mt-1">Try adjusting your status or course filters</p>
+  1057→              </div>
+  1058→            )}
+  1059→          </div>
+  1060→          </>
+  1061→          )}
+  1062→        </TabsContent>
+  1063→      </Tabs>
+  1064→
+  1065→      {/* ─── Create/Edit Post Dialog (Enhanced) ──────────────────────────────── */}
+  1066→      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+  1067→        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+  1068→          <DialogHeader>
+  1069→            <DialogTitle className="text-slate-900 dark:text-slate-50">Create New Post</DialogTitle>
+  1070→          </DialogHeader>
+  1071→          <div className="space-y-4 py-2">
+  1072→            {/* Compose/Preview Tabs */}
+  1073→            <div className="flex border-b border-border">
+  1074→              <Button variant="ghost" className={`rounded-none border-b-2 ${postDialogTab === 'compose' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500'}`}
+  1075→                onClick={() => setPostDialogTab('compose')}>
+  1076→                Edit
+  1077→              </Button>
+  1078→              <Button variant="ghost" className={`rounded-none border-b-2 ${postDialogTab === 'preview' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500'}`}
+  1079→                onClick={() => setPostDialogTab('preview')}>
+  1080→                Preview
+  1081→              </Button>
+  1082→            </div>
+  1083→
+  1084→            {postDialogTab === 'compose' ? (
+  1085→              <>
+  1086→                <div>
+  1087→                  <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Title</Label>
+  1088→                  <Input placeholder="Enter post title..." value={newPost.title} onChange={(e) => { setNewPost({ ...newPost, title: e.target.value }); if (postErrors.title) setPostErrors(prev => { const n = {...prev}; delete n.title; return n; }); }} onBlur={() => { setPostTouched(prev => ({...prev, title: true})); const e = validateFields({ title: [required(newPost.title, 'Title'), minLength(newPost.title, 3, 'Title')] }); if (e.title) setPostErrors(prev => ({...prev, title: e.title})); }} className={`border-border focus:border-emerald-400 ${postErrors.title ? 'border-destructive focus:border-destructive' : ''}`} />
+  1089→                  {postErrors.title && <p className="text-sm text-destructive mt-1">{postErrors.title}</p>}
+  1090→                </div>
+  1091→                {/* Rich Text Toolbar */}
+  1092→                <div>
+  1093→                  <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Content</Label>
+  1094→                  <div className={`border border-border rounded-lg overflow-hidden focus-within:border-emerald-400 focus-within:ring-1 focus-within:ring-emerald-400 ${postErrors.content ? 'border-destructive focus-within:border-destructive focus-within:ring-destructive' : ''}`}>
+  1095→                    <div className="flex items-center gap-1 p-2 bg-slate-50 dark:bg-slate-900 border-b border-border flex-wrap">
+  1096→                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700"><Bold className="h-3.5 w-3.5" /></Button>
+  1097→                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700"><Italic className="h-3.5 w-3.5" /></Button>
+  1098→                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700"><Heading className="h-3.5 w-3.5" /></Button>
+  1099→                      <Separator orientation="vertical" className="h-5" />
+  1100→                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700"><ListOrdered className="h-3.5 w-3.5" /></Button>
+  1101→                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700"><Code className="h-3.5 w-3.5" /></Button>
+  1102→                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700"><Link2 className="h-3.5 w-3.5" /></Button>
+  1103→                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-500 hover:text-slate-700"><ImageIcon className="h-3.5 w-3.5" /></Button>
+  1104→                    </div>
+  1105→                    <Textarea placeholder="Write your post content..." value={newPost.content} onChange={(e) => { setNewPost({ ...newPost, content: e.target.value }); if (postErrors.content) setPostErrors(prev => { const n = {...prev}; delete n.content; return n; }); }} onBlur={() => { setPostTouched(prev => ({...prev, content: true})); const e = validateFields({ content: [required(newPost.content, 'Content'), minLength(newPost.content, 10, 'Content')] }); if (e.content) setPostErrors(prev => ({...prev, content: e.content})); }} rows={6} className="border-0 focus-visible:ring-0 resize-none" />
+  1106→                  </div>
+  1107→                  {postErrors.content && <p className="text-sm text-destructive mt-1">{postErrors.content}</p>}
+  1108→                </div>
+  1109→                <div className="grid grid-cols-2 gap-3">
+  1110→                  <div>
+  1111→                    <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Type</Label>
+  1112→                    <Select value={newPost.type} onValueChange={(v) => setNewPost({ ...newPost, type: v as CommunityPost['type'] })}>
+  1113→                      <SelectTrigger className="border-border"><SelectValue /></SelectTrigger>
+  1114→                      <SelectContent>
+  1115→                        <SelectItem value="discussion">💬 Discussion</SelectItem>
+  1116→                        <SelectItem value="question">❓ Question</SelectItem>
+  1117→                        <SelectItem value="announcement">📢 Announcement</SelectItem>
+  1118→                        <SelectItem value="resource">🌟 Resource</SelectItem>
+  1119→                      </SelectContent>
+  1120→                    </Select>
+  1121→                  </div>
+  1122→                  <div>
+  1123→                    <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Category</Label>
+  1124→                    <Select value={newPost.categoryId} onValueChange={(v) => { setNewPost({ ...newPost, categoryId: v }); if (postErrors.categoryId) setPostErrors(prev => { const n = {...prev}; delete n.categoryId; return n; }); }}>
+  1125→                      <SelectTrigger className={`border-border ${postErrors.categoryId ? 'border-destructive' : ''}`}><SelectValue /></SelectTrigger>
+  1126→                      <SelectContent>
+  1127→                        {categories.map(cat => (
+  1128→                          <SelectItem key={cat.id} value={cat.id}>{cat.icon} {cat.name}</SelectItem>
+  1129→                        ))}
+  1130→                      </SelectContent>
+  1131→                    </Select>
+  1132→                    {postErrors.categoryId && <p className="text-sm text-destructive mt-1">{postErrors.categoryId}</p>}
+  1133→                  </div>
+  1134→                </div>
+  1135→                <div>
+  1136→                  <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Tags (comma separated)</Label>
+  1137→                  <Input placeholder="e.g., nextjs, react, tips" value={newPost.tags} onChange={(e) => setNewPost({ ...newPost, tags: e.target.value })} className="border-border focus:border-emerald-400" />
+  1138→                </div>
+  1139→                {/* Featured Image */}
+  1140→                <div>
+  1141→                  <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Featured Image</Label>
+  1142→                  <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-emerald-400 transition-colors cursor-pointer">
+  1143→                    <ImageIcon className="h-8 w-8 text-slate-400 mx-auto mb-2" />
+  1144→                    <p className="text-sm text-slate-500">Click to upload or drag and drop</p>
+  1145→                    <p className="text-xs text-slate-400 mt-1">PNG, JPG up to 5MB</p>
+  1146→                  </div>
+  1147→                </div>
+  1148→                {/* Toggles */}
+  1149→                <div className="flex flex-wrap gap-6">
+  1150→                  <div className="flex items-center gap-2">
+  1151→                    <Switch checked={newPost.isPinned} onCheckedChange={(v) => setNewPost({ ...newPost, isPinned: v })} />
+  1152→                    <Label className="text-sm text-slate-700 dark:text-slate-300 flex items-center gap-1">
+  1153→                      <Pin className="h-3.5 w-3.5" /> Pin Post
+  1154→                    </Label>
+  1155→                  </div>
+  1156→                  <div className="flex items-center gap-2">
+  1157→                    <Switch checked={newPost.isLocked} onCheckedChange={(v) => setNewPost({ ...newPost, isLocked: v })} />
+  1158→                    <Label className="text-sm text-slate-700 dark:text-slate-300 flex items-center gap-1">
+  1159→                      <Lock className="h-3.5 w-3.5" /> Lock Comments
+  1160→                    </Label>
+  1161→                  </div>
+  1162→                </div>
+  1163→                {/* Scheduled Posting */}
+  1164→                <div>
+  1165→                  <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Schedule Post (optional)</Label>
+  1166→                  <Input type="datetime-local" value={newPost.scheduledDate} onChange={(e) => setNewPost({ ...newPost, scheduledDate: e.target.value })} className="border-border focus:border-emerald-400" />
+  1167→                </div>
+  1168→              </>
+  1169→            ) : (
+  1170→              /* Preview */
+  1171→              <div className="border border-border rounded-lg p-6 space-y-3">
+  1172→                <div className="flex items-center gap-2 flex-wrap">
+  1173→                  {newPost.isPinned && <Badge className="bg-emerald-50 text-emerald-700 text-xs gap-1"><Pin className="h-3 w-3" /> Pinned</Badge>}
+  1174→                  {newPost.isLocked && <Badge className="bg-red-50 text-red-600 text-xs gap-1"><Lock className="h-3 w-3" /> Locked</Badge>}
+  1175→                  <Badge className={`text-xs gap-1 ${getTypeColor(newPost.type)}`}>{getTypeEmoji(newPost.type)} {newPost.type.charAt(0).toUpperCase() + newPost.type.slice(1)}</Badge>
+  1176→                </div>
+  1177→                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-50">{newPost.title || 'Untitled Post'}</h2>
+  1178→                <div className="flex items-center gap-2 text-sm text-slate-500">
+  1179→                  <Avatar className="h-5 w-5"><AvatarFallback className="bg-violet-100 text-violet-700 text-xs">S</AvatarFallback></Avatar>
+  1180→                  <span>Sarah Mitchell</span>
+  1181→                  <span>·</span>
+  1182→                  <span>Just now</span>
+  1183→                  {newPost.content && <span>· {getReadingTime(newPost.content)} min read</span>}
+  1184→                </div>
+  1185→                {newPost.content && <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{newPost.content}</p>}
+  1186→                {newPost.tags && (
+  1187→                  <div className="flex flex-wrap gap-1.5">
+  1188→                    {newPost.tags.split(',').map(t => t.trim()).filter(Boolean).map(tag => (
+  1189→                      <Badge key={tag} variant="secondary" className="text-xs bg-slate-100 text-slate-600"><Tag className="h-2.5 w-2.5 mr-1" />{tag}</Badge>
+  1190→                    ))}
+  1191→                  </div>
+  1192→                )}
+  1193→              </div>
+  1194→            )}
+  1195→          </div>
+  1196→          <DialogFooter>
+  1197→            <Button variant="outline" onClick={() => { setShowCreateDialog(false); setPostDialogTab('compose'); }} className="border-border">Cancel</Button>
+  1198→            <Button onClick={handleCreatePost} disabled={createPostMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+  1199→              {createPostMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+  1200→              {newPost.scheduledDate ? 'Schedule Post' : 'Create Post'}
+  1201→            </Button>
+  1202→          </DialogFooter>
+  1203→        </DialogContent>
+  1204→      </Dialog>
+  1205→
+  1206→      {/* ─── Add/Edit Category Dialog (Enhanced) ─────────────────────────────── */}
+  1207→      <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
+  1208→        <DialogContent className="sm:max-w-md">
+  1209→          <DialogHeader>
+  1210→            <DialogTitle className="text-slate-900 dark:text-slate-50">
+  1211→              {editingCategory ? 'Edit Category' : 'Add New Category'}
+  1212→            </DialogTitle>
+  1213→          </DialogHeader>
+  1214→          <div className="space-y-4 py-2">
+  1215→            <div>
+  1216→              <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Name</Label>
+  1217→              <Input placeholder="Category name..." value={newCategory.name} onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })} className="border-border focus:border-emerald-400" />
+  1218→            </div>
+  1219→            <div>
+  1220→              <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Description</Label>
+  1221→              <Input placeholder="Brief description..." value={newCategory.description} onChange={(e) => setNewCategory({ ...newCategory, description: e.target.value })} className="border-border focus:border-emerald-400" />
+  1222→            </div>
+  1223→            <div>
+  1224→              <Label className="text-slate-700 dark:text-slate-300 mb-2">Icon</Label>
+  1225→              <div className="flex flex-wrap gap-2">
+  1226→                {presetIcons.map(icon => (
+  1227→                  <Button key={icon} variant="outline" size="sm" className={`h-9 w-9 p-0 text-lg ${newCategory.icon === icon ? 'ring-2 ring-emerald-500 border-emerald-500' : 'border-border'}`}
+  1228→                    onClick={() => setNewCategory({ ...newCategory, icon })}>
+  1229→                    {icon}
+  1230→                  </Button>
+  1231→                ))}
+  1232→              </div>
+  1233→            </div>
+  1234→            <div>
+  1235→              <Label className="text-slate-700 dark:text-slate-300 mb-2">Color</Label>
+  1236→              <div className="flex flex-wrap gap-2">
+  1237→                {presetColors.map(color => (
+  1238→                  <button key={color} className={`w-8 h-8 rounded-full border-2 transition-all ${newCategory.color === color ? 'border-slate-900 dark:border-white scale-110' : 'border-transparent'}`}
+  1239→                    style={{ backgroundColor: color }} onClick={() => setNewCategory({ ...newCategory, color })} />
+  1240→                ))}
+  1241→              </div>
+  1242→            </div>
+  1243→            <div className="flex items-center gap-2">
+  1244→              <Switch checked={newCategory.isDefault} onCheckedChange={(v) => setNewCategory({ ...newCategory, isDefault: v })} />
+  1245→              <Label className="text-sm text-slate-700 dark:text-slate-300">Set as Default Category</Label>
+  1246→            </div>
+  1247→          </div>
+  1248→          <DialogFooter>
+  1249→            <Button variant="outline" onClick={() => setShowCategoryDialog(false)} className="border-border">Cancel</Button>
+  1250→            <Button onClick={handleAddCategory} disabled={!newCategory.name.trim()} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+  1251→              {editingCategory ? 'Save Changes' : 'Add Category'}
+  1252→            </Button>
+  1253→          </DialogFooter>
+  1254→        </DialogContent>
+  1255→      </Dialog>
+  1256→
+  1257→      {/* ─── Review Detail Dialog ────────────────────────────────────────────── */}
+  1258→      <Dialog open={showReviewDetailDialog} onOpenChange={setShowReviewDetailDialog}>
+  1259→        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+  1260→          {selectedReview && (
+  1261→            <>
+  1262→              <DialogHeader>
+  1263→                <DialogTitle className="text-slate-900 dark:text-slate-50">Review Details</DialogTitle>
+  1264→              </DialogHeader>
+  1265→              <div className="space-y-5 py-2">
+  1266→                {/* Review Content */}
+  1267→                <div className="space-y-3">
+  1268→                  <div className="flex items-center gap-3">
+  1269→                    <div className="flex items-center gap-0.5">
+  1270→                      {[1, 2, 3, 4, 5].map(s => (
+  1271→                        <Star key={s} className={`h-5 w-5 ${s <= selectedReview.rating ? 'text-amber-400 fill-amber-400' : 'text-slate-300'}`} />
+  1272→                      ))}
+  1273→                    </div>
+  1274→                    <Badge variant="outline" className={`text-xs gap-1 ${
+  1275→                      selectedReview.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+  1276→                      selectedReview.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+  1277→                      selectedReview.status === 'rejected' ? 'bg-red-50 text-red-600 border-red-200' :
+  1278→                      'bg-orange-50 text-orange-700 border-orange-200'
+  1279→                    }`}>
+  1280→                      {selectedReview.status.charAt(0).toUpperCase() + selectedReview.status.slice(1)}
+  1281→                    </Badge>
+  1282→                    {selectedReview.flagged && (
+  1283→                      <Badge className="bg-orange-100 text-orange-700 text-xs gap-1">
+  1284→                        <AlertTriangle className="h-3 w-3" /> {selectedReview.flagReason}
+  1285→                      </Badge>
+  1286→                    )}
+  1287→                  </div>
+  1288→                  <p className="text-slate-700 dark:text-slate-300 leading-relaxed">{selectedReview.text}</p>
+  1289→                </div>
+  1290→
+  1291→                <Separator />
+  1292→
+  1293→                {/* Reviewer Info */}
+  1294→                <div>
+  1295→                  <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-50 mb-2">Reviewer</h4>
+  1296→                  <div className="flex items-center gap-3">
+  1297→                    <Avatar className="h-10 w-10">
+  1298→                      <AvatarFallback className="bg-violet-100 text-violet-700">{selectedReview.reviewerAvatar}</AvatarFallback>
+  1299→                    </Avatar>
+  1300→                    <div>
+  1301→                      <p className="font-medium text-slate-900 dark:text-slate-50">{selectedReview.reviewer}</p>
+  1302→                      <p className="text-xs text-slate-500">{selectedReview.reviewerEmail}</p>
+  1303→                      <p className="text-xs text-slate-400">Enrolled: {selectedReview.reviewerEnrollDate} · {selectedReview.reviewerCoursesEnrolled} courses</p>
+  1304→                    </div>
+  1305→                  </div>
+  1306→                </div>
+  1307→
+  1308→                {/* Course Info */}
+  1309→                <div>
+  1310→                  <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-50 mb-2">Course</h4>
+  1311→                  <div className="flex items-center gap-3">
+  1312→                    <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+  1313→                      <BookOpen className="h-5 w-5 text-slate-400" />
+  1314→                    </div>
+  1315→                    <div>
+  1316→                      <p className="font-medium text-slate-900 dark:text-slate-50">{selectedReview.courseName}</p>
+  1317→                      <p className="text-xs text-slate-500">Instructor: {selectedReview.courseInstructor} · Avg Rating: {selectedReview.courseAvgRating}/5</p>
+  1318→                    </div>
+  1319→                  </div>
+  1320→                </div>
+  1321→
+  1322→                <Separator />
+  1323→
+  1324→                {/* Admin Response */}
+  1325→                {selectedReview.adminResponse && (
+  1326→                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950 rounded-lg border border-emerald-200 dark:border-emerald-800">
+  1327→                    <p className="text-xs text-emerald-700 font-medium mb-1">Admin Response</p>
+  1328→                    <p className="text-sm text-emerald-800 dark:text-emerald-300">{selectedReview.adminResponse}</p>
+  1329→                  </div>
+  1330→                )}
+  1331→
+  1332→                {/* Respond to Review */}
+  1333→                <div>
+  1334→                  <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Respond to Review</Label>
+  1335→                  <Textarea placeholder="Write your response..." value={adminResponse} onChange={(e) => setAdminResponse(e.target.value)} rows={3} className="border-border focus:border-emerald-400 resize-none" />
+  1336→                  <Button size="sm" className="mt-2 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => handleRespondToReview(selectedReview.id, adminResponse)} disabled={!adminResponse.trim() || respondToReviewMutation.isPending}>
+  1337→                    {respondToReviewMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <MessageSquare className="h-3.5 w-3.5 mr-1" />} Send Response
+  1338→                  </Button>
+  1339→                </div>
+  1340→
+  1341→                <Separator />
+  1342→
+  1343→                {/* Moderation History */}
+  1344→                <div>
+  1345→                  <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-50 mb-2">Moderation History</h4>
+  1346→                  {selectedReview.moderationHistory.length === 0 ? (
+  1347→                    <p className="text-xs text-slate-400">No moderation actions yet</p>
+  1348→                  ) : (
+  1349→                    <div className="space-y-2">
+  1350→                      {selectedReview.moderationHistory.map((h, idx) => (
+  1351→                        <div key={idx} className="flex items-center gap-2 text-xs">
+  1352→                          <div className={`w-2 h-2 rounded-full ${
+  1353→                            h.action === 'Approved' ? 'bg-emerald-500' :
+  1354→                            h.action === 'Rejected' ? 'bg-red-500' :
+  1355→                            'bg-amber-500'
+  1356→                          }`} />
+  1357→                          <span className="text-slate-700 dark:text-slate-300 font-medium">{h.action}</span>
+  1358→                          <span className="text-slate-400">by {h.by}</span>
+  1359→                          <span className="text-slate-400">· {h.date}</span>
+  1360→                          {h.reason && <span className="text-slate-500">({h.reason})</span>}
+  1361→                        </div>
+  1362→                      ))}
+  1363→                    </div>
+  1364→                  )}
+  1365→                </div>
+  1366→
+  1367→                <Separator />
+  1368→
+  1369→                {/* Moderation Actions */}
+  1370→                <div className="flex flex-wrap gap-2">
+  1371→                  <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5" onClick={() => { handleReviewAction(selectedReview.id, 'approved'); setShowReviewDetailDialog(false); }} disabled={isReviewMutating}>
+  1372→                    {isReviewMutating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Approve
+  1373→                  </Button>
+  1374→                  <Button className="bg-red-600 hover:bg-red-700 text-white gap-1.5" onClick={() => { handleReviewAction(selectedReview.id, 'rejected', rejectReason || 'Inappropriate'); setShowReviewDetailDialog(false); }} disabled={isReviewMutating}>
+  1375→                    <XCircle className="h-4 w-4" /> Reject
+  1376→                  </Button>
+  1377→                  <Button className="bg-amber-600 hover:bg-amber-700 text-white gap-1.5" onClick={() => { handleReviewAction(selectedReview.id, 'flagged', 'Flagged by admin'); setShowReviewDetailDialog(false); }} disabled={isReviewMutating}>
+  1378→                    <Flag className="h-4 w-4" /> Flag for Review
+  1379→                  </Button>
+  1380→                </div>
+  1381→                {/* Reject Reason */}
+  1382→                <div>
+  1383→                  <Label className="text-slate-700 dark:text-slate-300 mb-1.5">Rejection Reason (if rejecting)</Label>
+  1384→                  <Select value={rejectReason} onValueChange={setRejectReason}>
+  1385→                    <SelectTrigger className="border-border"><SelectValue placeholder="Select reason..." /></SelectTrigger>
+  1386→                    <SelectContent>
+  1387→                      <SelectItem value="Spam">Spam</SelectItem>
+  1388→                      <SelectItem value="Inappropriate">Inappropriate</SelectItem>
+  1389→                      <SelectItem value="Off-topic">Off-topic</SelectItem>
+  1390→                      <SelectItem value="Conflict of Interest">Conflict of Interest</SelectItem>
+  1391→                    </SelectContent>
+  1392→                  </Select>
+  1393→                </div>
+  1394→              </div>
+  1395→            </>
+  1396→          )}
+  1397→        </DialogContent>
+  1398→      </Dialog>
+  1399→
+  1400→      {/* ─── Delete Post Confirmation Dialog ─────────────────────────────────── */}
+  1401→      <ConfirmDialog
+  1402→        open={deleteConfirm.open}
+  1403→        onOpenChange={(open) => setDeleteConfirm({ open, postId: '', postTitle: '' })}
+  1404→        title="Delete Post"
+  1405→        description={`Are you sure you want to delete "${deleteConfirm.postTitle}"? This action cannot be undone. All comments and reactions on this post will also be permanently removed.`}
+  1406→        confirmLabel={deletePostMutation.isPending ? 'Deleting...' : 'Delete Post'}
+  1407→        onConfirm={handleDeleteConfirm}
+  1408→        variant="destructive"
+  1409→      />
+  1410→    </div>
+  1411→  );
+  1412→}
+  1413→
+  1414→// ─── Enhanced Post Card (Grid View) ────────────────────────────────────────────
+  1415→
+  1416→function PostCard({
+  1417→  post, index, categories, onTogglePin, onToggleLock, onDelete, isMutating,
+  1418→}: {
+  1419→  post: CommunityPost; index: number; categories: CommunityCategory[];
+  1420→  onTogglePin: (id: string) => void; onToggleLock: (id: string) => void; onDelete: (id: string) => void;
+  1421→  isMutating?: boolean;
+  1422→}) {
+  1423→  const cat = categories.find(c => c.id === post.categoryId);
+  1424→  const role = post.author?.role || 'learner';
+  1425→  const roleBadge = getRoleBadge(role);
+  1426→  const isHot = (post.likeCount + (post.reactions?.length || 0)) >= 10;
+  1427→  const readingTime = getReadingTime(post.content);
+  1428→
+  1429→  return (
+  1430→    <motion.div layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ delay: index * 0.05 }}>
+  1431→      <Card className={`border-border hover:shadow-lg transition-all h-full flex flex-col ${post.isPinned ? 'ring-2 ring-emerald-500/30 border-emerald-500/30' : ''}`}>
+  1432→        <CardContent className="p-4 flex-1 flex flex-col">
+  1433→          {/* Top: Badges */}
+  1434→          <div className="flex items-center gap-2 flex-wrap mb-2">
+  1435→            {post.isPinned && (
+  1436→              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-500/30 text-xs gap-1">
+  1437→                <Pin className="h-3 w-3" /> Pinned
+  1438→              </Badge>
+  1439→            )}
+  1440→            {post.isLocked && (
+  1441→              <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 text-xs gap-1">
+  1442→                <Lock className="h-3 w-3" /> Locked
+  1443→              </Badge>
+  1444→            )}
+  1445→            {isHot && (
+  1446→              <Badge className="bg-red-100 text-red-600 text-xs gap-1">
+  1447→                <Flame className="h-3 w-3" /> Hot
+  1448→              </Badge>
+  1449→            )}
+  1450→            <Badge variant="outline" className={`text-xs gap-1 ${getTypeColor(post.type)}`}>
+  1451→              {getTypeEmoji(post.type)} {post.type.charAt(0).toUpperCase() + post.type.slice(1)}
+  1452→            </Badge>
+  1453→          </div>
+  1454→
+  1455→          {/* Title */}
+  1456→          <h3 className="font-bold text-slate-900 dark:text-slate-50 text-base leading-snug mb-1.5 line-clamp-2">
+  1457→            {post.title}
+  1458→          </h3>
+  1459→
+  1460→          {/* Content preview */}
+  1461→          <p className="text-slate-500 text-sm leading-relaxed mb-3 line-clamp-2 flex-1" title={post.content}>
+  1462→            {post.content}
+  1463→          </p>
+  1464→
+  1465→          {/* Tags */}
+  1466→          {post.tags && post.tags.length > 0 && (
+  1467→            <div className="flex flex-wrap gap-1.5 mb-3">
+  1468→              {post.tags.map(tag => (
+  1469→                <Badge key={tag} variant="secondary" className="text-xs bg-slate-100 text-slate-600 hover:bg-slate-200">
+  1470→                  <Tag className="h-2.5 w-2.5 mr-1" /> {tag}
+  1471→                </Badge>
+  1472→              ))}
+  1473→            </div>
+  1474→          )}
+  1475→
+  1476→          {/* Category */}
+  1477→          {cat && (
+  1478→            <div className="mb-3">
+  1479→              <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+  1480→                style={{ backgroundColor: (cat.color || '#10B981') + '15', color: cat.color || '#10B981' }}>
+  1481→                {cat.icon} {cat.name}
+  1482→              </span>
+  1483→            </div>
+  1484→          )}
+  1485→
+  1486→          {/* Author & Stats */}
+  1487→          <div className="flex items-center justify-between mt-auto pt-3 border-t border-border/50">
+  1488→            <div className="flex items-center gap-2">
+  1489→              <Avatar className="h-6 w-6">
+  1490→                <AvatarFallback className="bg-violet-100 text-violet-700 text-xs font-medium">
+  1491→                  {post.author?.name?.charAt(0) || 'U'}
+  1492→                </AvatarFallback>
+  1493→              </Avatar>
+  1494→              <span className="text-xs text-slate-600 font-medium">{post.author?.name || 'Unknown'}</span>
+  1495→              <span className={`text-xs px-1.5 py-0.5 rounded ${roleBadge.color}`}>{roleBadge.label}</span>
+  1496→            </div>
+  1497→            <div className="flex items-center gap-2 text-xs text-slate-400">
+  1498→              <span className="flex items-center gap-0.5"><Clock className="h-3 w-3" />{timeAgo(post.createdAt)}</span>
+  1499→              <span className="flex items-center gap-0.5"><BookOpen className="h-3 w-3" />{readingTime}m</span>
+  1500→            </div>
+  1501→          </div>
+  1502→
+  1503→          {/* Engagement stats */}
+  1504→          <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
+  1505→            <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{post.viewCount}</span>
+  1506→            <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{post.likeCount}</span>
+  1507→            <span className="flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{post.commentCount}</span>
+  1508→          </div>
+  1509→
+  1510→          {/* Actions */}
+  1511→          <div className="flex items-center gap-1 mt-3 pt-2 border-t border-border/50">
+  1512→            <Button variant="ghost" size="sm" onClick={() => onTogglePin(post.id)} disabled={isMutating}
+  1513→              className={`h-8 text-xs gap-1 ${post.isPinned ? 'text-emerald-600 hover:text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}>
+  1514→              <Pin className="h-3 w-3" />{post.isPinned ? 'Unpin' : 'Pin'}
+  1515→            </Button>
+  1516→            <Button variant="ghost" size="sm" onClick={() => onToggleLock(post.id)} disabled={isMutating}
+  1517→              className={`h-8 text-xs gap-1 ${post.isLocked ? 'text-red-600 hover:text-red-700' : 'text-slate-500 hover:text-slate-700'}`}>
+  1518→              {post.isLocked ? <Unlock className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+  1519→              {post.isLocked ? 'Unlock' : 'Lock'}
+  1520→            </Button>
+  1521→            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-slate-500 hover:text-slate-700">
+  1522→              <Eye className="h-3 w-3" /> View
+  1523→            </Button>
+  1524→            <div className="flex-1" />
+  1525→            <Button variant="ghost" size="sm" onClick={() => onDelete(post.id)} disabled={isMutating} className="h-8 text-xs gap-1 text-slate-400 hover:text-red-600">
+  1526→              <Trash2 className="h-3 w-3" />
+  1527→            </Button>
+  1528→          </div>
+  1529→        </CardContent>
+  1530→      </Card>
+  1531→    </motion.div>
+  1532→  );
+  1533→}
+  1534→
+  1535→// ─── Enhanced Post List Item ───────────────────────────────────────────────────
+  1536→
+  1537→function PostListItem({
+  1538→  post, index, categories, onTogglePin, onToggleLock, onDelete, isMutating,
+  1539→}: {
+  1540→  post: CommunityPost; index: number; categories: CommunityCategory[];
+  1541→  onTogglePin: (id: string) => void; onToggleLock: (id: string) => void; onDelete: (id: string) => void;
+  1542→  isMutating?: boolean;
+  1543→}) {
+  1544→  const cat = categories.find(c => c.id === post.categoryId);
+  1545→  const role = post.author?.role || 'learner';
+  1546→  const roleBadge = getRoleBadge(role);
+  1547→  const isHot = (post.likeCount + (post.reactions?.length || 0)) >= 10;
+  1548→  const readingTime = getReadingTime(post.content);
+  1549→
+  1550→  return (
+  1551→    <motion.div layout initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ delay: index * 0.05 }}>
+  1552→      <Card className={`border-border hover:shadow-md transition-all ${post.isPinned ? 'ring-2 ring-emerald-500/30 border-emerald-500/30' : ''}`}>
+  1553→        <CardContent className="p-4">
+  1554→          <div className="flex gap-4">
+  1555→            {/* Left: Type icon */}
+  1556→            <div className={`shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-sm ${
+  1557→              post.type === 'discussion' ? 'bg-emerald-100 text-emerald-600' :
+  1558→              post.type === 'question' ? 'bg-violet-100 text-violet-600' :
+  1559→              post.type === 'announcement' ? 'bg-amber-100 text-amber-600' :
+  1560→              'bg-pink-100 text-pink-600'
+  1561→            }`}>
+  1562→              {getTypeEmoji(post.type)}
+  1563→            </div>
+  1564→
+  1565→            {/* Content */}
+  1566→            <div className="flex-1 min-w-0">
+  1567→              <div className="flex items-center gap-2 flex-wrap mb-1">
+  1568→                {post.isPinned && (
+  1569→                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-500/30 text-xs gap-1">
+  1570→                    <Pin className="h-3 w-3" /> Pinned
+  1571→                  </Badge>
+  1572→                )}
+  1573→                {post.isLocked && (
+  1574→                  <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 text-xs gap-1">
+  1575→                    <Lock className="h-3 w-3" /> Locked
+  1576→                  </Badge>
+  1577→                )}
+  1578→                {isHot && (
+  1579→                  <Badge className="bg-red-100 text-red-600 text-xs gap-1">
+  1580→                    <Flame className="h-3 w-3" /> Hot
+  1581→                  </Badge>
+  1582→                )}
+  1583→                <Badge variant="outline" className={`text-xs gap-1 ${getTypeColor(post.type)}`}>
+  1584→                  {getTypeEmoji(post.type)} {post.type.charAt(0).toUpperCase() + post.type.slice(1)}
+  1585→                </Badge>
+  1586→                {cat && (
+  1587→                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+  1588→                    style={{ backgroundColor: (cat.color || '#10B981') + '15', color: cat.color || '#10B981' }}>
+  1589→                    {cat.icon} {cat.name}
+  1590→                  </span>
+  1591→                )}
+  1592→              </div>
+  1593→              <h3 className="font-bold text-slate-900 dark:text-slate-50 text-sm mb-1">{post.title}</h3>
+  1594→              <p className="text-slate-500 text-sm line-clamp-1 mb-2">{post.content}</p>
+  1595→              <div className="flex items-center gap-3 flex-wrap">
+  1596→                {post.tags && post.tags.slice(0, 3).map(tag => (
+  1597→                  <Badge key={tag} variant="secondary" className="text-xs bg-slate-100 text-slate-500">{tag}</Badge>
+  1598→                ))}
+  1599→                <span className="text-xs text-slate-600 font-medium">{post.author?.name}</span>
+  1600→                <span className={`text-xs px-1.5 py-0.5 rounded ${roleBadge.color}`}>{roleBadge.label}</span>
+  1601→                <span className="text-xs text-slate-400 flex items-center gap-0.5">
+  1602→                  <Clock className="h-3 w-3" /> {timeAgo(post.createdAt)}
+  1603→                </span>
+  1604→                <span className="text-xs text-slate-400 flex items-center gap-0.5">
+  1605→                  <BookOpen className="h-3 w-3" /> {readingTime}m
+  1606→                </span>
+  1607→              </div>
+  1608→            </div>
+  1609→
+  1610→            {/* Right: Stats + Actions */}
+  1611→            <div className="shrink-0 flex flex-col items-end justify-between">
+  1612→              <div className="flex items-center gap-3 text-xs text-slate-400">
+  1613→                <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{post.viewCount}</span>
+  1614→                <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{post.likeCount}</span>
+  1615→                <span className="flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{post.commentCount}</span>
+  1616→              </div>
+  1617→              <div className="flex items-center gap-1 mt-2">
+  1618→                <Button variant="ghost" size="sm" onClick={() => onTogglePin(post.id)} disabled={isMutating}
+  1619→                  className={`h-7 w-7 p-0 ${post.isPinned ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}>
+  1620→                  <Pin className="h-3.5 w-3.5" />
+  1621→                </Button>
+  1622→                <Button variant="ghost" size="sm" onClick={() => onToggleLock(post.id)} disabled={isMutating}
+  1623→                  className={`h-7 w-7 p-0 ${post.isLocked ? 'text-red-500' : 'text-slate-400 hover:text-slate-600'}`}>
+  1624→                  {post.isLocked ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+  1625→                </Button>
+  1626→                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600">
+  1627→                  <Eye className="h-3.5 w-3.5" />
+  1628→                </Button>
+  1629→                <Button variant="ghost" size="sm" onClick={() => onDelete(post.id)} disabled={isMutating} className="h-7 w-7 p-0 text-slate-400 hover:text-red-600">
+  1630→                  <Trash2 className="h-3.5 w-3.5" />
+  1631→                </Button>
+  1632→              </div>
+  1633→            </div>
+  1634→          </div>
+  1635→        </CardContent>
+  1636→      </Card>
+  1637→    </motion.div>
+  1638→  );
+  1639→}
+  1640→

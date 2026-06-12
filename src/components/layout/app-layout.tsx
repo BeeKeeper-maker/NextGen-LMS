@@ -52,6 +52,8 @@ import { ThemeToggle } from '@/components/shared/theme-toggle';
 import { SearchDialog } from '@/components/shared/search-dialog';
 import { signOut } from 'next-auth/react';
 
+import type { AppView } from '@/types';
+
 // View name map for breadcrumbs
 const viewLabels: Record<string, string> = {
   'admin-dashboard': 'Dashboard',
@@ -130,6 +132,21 @@ function TopBar() {
     await signOut({ redirect: false });
   };
 
+  const handleNotificationClick = (notif: { id: string; type: string }) => {
+    markNotificationRead(notif.id);
+    const viewMap: Record<string, AppView> = {
+      enrollment: 'learner-course',
+      assessment: 'learner-course',
+      community: 'learner-community',
+      cohort: 'learner-live-cohorts',
+      system: 'admin-settings',
+      achievement: 'learner-achievements',
+      completion: 'learner-course',
+    };
+    const targetView = viewMap[notif.type] || 'learner-dashboard';
+    setView(targetView);
+  };
+
   return (
     <div className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-background/95 backdrop-blur-sm px-4 sm:px-6 h-14 shrink-0">
       {/* Left: Breadcrumb */}
@@ -187,7 +204,7 @@ function TopBar() {
               {notifications.slice(0, 5).map((notif) => (
                 <button
                   key={notif.id}
-                  onClick={() => markNotificationRead(notif.id)}
+                  onClick={() => handleNotificationClick(notif)}
                   className={`w-full text-left p-3 border-b border-border/50 hover:bg-muted/50 transition-colors ${!notif.read ? 'bg-muted/30' : ''}`}
                 >
                   <div className="flex items-start gap-2.5">
@@ -228,7 +245,7 @@ function TopBar() {
               <User className="mr-2 h-4 w-4" />
               Profile
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setView(isAdmin ? 'admin-settings' : 'learner-profile')}>
+            <DropdownMenuItem onClick={() => setView('admin-settings')}>
               <Settings className="mr-2 h-4 w-4" />
               Settings
             </DropdownMenuItem>

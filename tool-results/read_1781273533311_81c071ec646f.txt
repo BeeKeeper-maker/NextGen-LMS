@@ -1,0 +1,971 @@
+     1→'use client';
+     2→
+     3→import { useState, useRef, useEffect, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { Button } from '@/components/ui/button';
+     6→import { Input } from '@/components/ui/input';
+     7→import { ScrollArea } from '@/components/ui/scroll-area';
+     8→import { Card } from '@/components/ui/card';
+     9→import { Badge } from '@/components/ui/badge';
+    10→import { Separator } from '@/components/ui/separator';
+    11→import {
+    12→  Bot,
+    13→  Send,
+    14→  X,
+    15→  Minus,
+    16→  Maximize2,
+    17→  Sparkles,
+    18→  User,
+    19→  Loader2,
+    20→  BookOpen,
+    21→  HelpCircle,
+    22→  Code,
+    23→  GraduationCap,
+    24→  MessageSquare,
+    25→  ChevronLeft,
+    26→  Plus,
+    27→  Trash2,
+    28→} from 'lucide-react';
+    29→import { toast } from 'sonner';
+    30→import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+    31→import type { ChatMessage } from '@/types';
+    32→import { useAppStore } from '@/store/app-store';
+    33→import { useCourses } from '@/hooks/use-data';
+    34→
+    35→// ============================================================
+    36→// Markdown Renderer (simplified - handles code, bold, lists)
+    37→// ============================================================
+    38→function MarkdownRenderer({ content }: { content: string }) {
+    39→  const lines = content.split('\n');
+    40→  const elements: React.ReactNode[] = [];
+    41→  let inCodeBlock = false;
+    42→  let codeContent = '';
+    43→  let codeLang = '';
+    44→  let inList = false;
+    45→
+    46→  for (let i = 0; i < lines.length; i++) {
+    47→    const line = lines[i];
+    48→
+    49→    if (line.startsWith('```')) {
+    50→      if (inCodeBlock) {
+    51→        elements.push(
+    52→          <pre
+    53→            key={`code-${i}`}
+    54→            className="my-2 rounded-lg bg-slate-900 p-3 text-sm text-emerald-300 overflow-x-auto font-mono"
+    55→          >
+    56→            {codeLang && (
+    57→              <div className="text-xs text-slate-500 mb-1">{codeLang}</div>
+    58→            )}
+    59→            <code>{codeContent.trim()}</code>
+    60→          </pre>
+    61→        );
+    62→        codeContent = '';
+    63→        codeLang = '';
+    64→        inCodeBlock = false;
+    65→      } else {
+    66→        inCodeBlock = true;
+    67→        codeLang = line.slice(3).trim();
+    68→      }
+    69→      continue;
+    70→    }
+    71→
+    72→    if (inCodeBlock) {
+    73→      codeContent += line + '\n';
+    74→      continue;
+    75→    }
+    76→
+    77→    // Inline formatting
+    78→    const formatInline = (text: string): React.ReactNode => {
+    79→      // Bold
+    80→      const parts = text.split(/(\*\*[^*]+\*\*)/g);
+    81→      return parts.map((part, idx) => {
+    82→        if (part.startsWith('**') && part.endsWith('**')) {
+    83→          return (
+    84→            <strong key={idx} className="font-semibold text-foreground">
+    85→              {part.slice(2, -2)}
+    86→            </strong>
+    87→          );
+    88→        }
+    89→        // Inline code
+    90→        const codeParts = part.split(/(`[^`]+`)/g);
+    91→        return codeParts.map((cp, cidx) => {
+    92→          if (cp.startsWith('`') && cp.endsWith('`')) {
+    93→            return (
+    94→              <code
+    95→                key={`${idx}-${cidx}`}
+    96→                className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-mono text-violet-700 dark:bg-slate-800 dark:text-violet-300"
+    97→              >
+    98→                {cp.slice(1, -1)}
+    99→              </code>
+   100→            );
+   101→          }
+   102→          return cp;
+   103→        });
+   104→      });
+   105→    };
+   106→
+   107→    // Headers
+   108→    if (line.startsWith('### ')) {
+   109→      if (inList) { inList = false; }
+   110→      elements.push(
+   111→        <h4 key={`h3-${i}`} className="font-semibold text-foreground mt-3 mb-1">
+   112→          {formatInline(line.slice(4))}
+   113→        </h4>
+   114→      );
+   115→      continue;
+   116→    }
+   117→    if (line.startsWith('## ')) {
+   118→      if (inList) { inList = false; }
+   119→      elements.push(
+   120→        <h3 key={`h2-${i}`} className="text-base font-semibold text-foreground mt-3 mb-1">
+   121→          {formatInline(line.slice(3))}
+   122→        </h3>
+   123→      );
+   124→      continue;
+   125→    }
+   126→    if (line.startsWith('# ')) {
+   127→      if (inList) { inList = false; }
+   128→      elements.push(
+   129→        <h2 key={`h1-${i}`} className="text-lg font-bold text-foreground mt-3 mb-1">
+   130→          {formatInline(line.slice(2))}
+   131→        </h2>
+   132→      );
+   133→      continue;
+   134→    }
+   135→
+   136→    // Unordered list
+   137→    if (line.match(/^[-*]\s/)) {
+   138→      inList = true;
+   139→      elements.push(
+   140→        <li key={`li-${i}`} className="ml-4 list-disc text-sm text-muted-foreground">
+   141→          {formatInline(line.replace(/^[-*]\s/, ''))}
+   142→        </li>
+   143→      );
+   144→      continue;
+   145→    }
+   146→
+   147→    // Ordered list
+   148→    if (line.match(/^\d+\.\s/)) {
+   149→      inList = true;
+   150→      elements.push(
+   151→        <li key={`oli-${i}`} className="ml-4 list-decimal text-sm text-muted-foreground">
+   152→          {formatInline(line.replace(/^\d+\.\s/, ''))}
+   153→        </li>
+   154→      );
+   155→      continue;
+   156→    }
+   157→
+   158→    if (inList) { inList = false; }
+   159→
+   160→    // Empty line
+   161→    if (line.trim() === '') {
+   162→      elements.push(<div key={`br-${i}`} className="h-2" />);
+   163→      continue;
+   164→    }
+   165→
+   166→    // Paragraph
+   167→    elements.push(
+   168→      <p key={`p-${i}`} className="text-sm text-muted-foreground leading-relaxed">
+   169→        {formatInline(line)}
+   170→      </p>
+   171→    );
+   172→  }
+   173→
+   174→  return <div className="space-y-0.5">{elements}</div>;
+   175→}
+   176→
+   177→// ============================================================
+   178→// Persistent Chat Hook - localStorage persistence for chat history
+   179→// ============================================================
+   180→const WELCOME_MESSAGE: ChatMessage = {
+   181→  id: 'welcome',
+   182→  role: 'assistant',
+   183→  content:
+   184→    "Hi! I'm your AI Learning Assistant. I can help you understand concepts, debug code, create study plans, and more. What would you like to learn today?",
+   185→  timestamp: new Date().toISOString(),
+   186→};
+   187→
+   188→function loadMessagesFromStorage(storageKey: string): ChatMessage[] {
+   189→  if (typeof window === 'undefined') return [WELCOME_MESSAGE];
+   190→  try {
+   191→    const saved = localStorage.getItem(storageKey);
+   192→    if (saved) {
+   193→      const data = JSON.parse(saved);
+   194→      if (Array.isArray(data.messages) && data.messages.length > 0) {
+   195→        return data.messages;
+   196→      }
+   197→    }
+   198→  } catch {
+   199→    // ignore parse errors
+   200→  }
+   201→  return [WELCOME_MESSAGE];
+   202→}
+   203→
+   204→function usePersistentChat(storageKey: string) {
+   205→  const [messages, setMessages] = useState<ChatMessage[]>(() => loadMessagesFromStorage(storageKey));
+   206→
+   207→  // Save to localStorage on changes
+   208→  useEffect(() => {
+   209→    if (messages.length > 0) {
+   210→      try {
+   211→        localStorage.setItem(storageKey, JSON.stringify({ messages }));
+   212→      } catch {
+   213→        // ignore storage errors
+   214→      }
+   215→    }
+   216→  }, [storageKey, messages]);
+   217→
+   218→  return { messages, setMessages };
+   219→}
+   220→
+   221→interface Conversation {
+   222→  id: string;
+   223→  title: string;
+   224→  messages: ChatMessage[];
+   225→  createdAt: string;
+   226→  courseContext?: string;
+   227→}
+   228→
+   229→const DEFAULT_CONVERSATIONS: Conversation[] = [
+   230→  {
+   231→    id: 'conv-1',
+   232→    title: 'Getting Started',
+   233→    messages: [
+   234→      {
+   235→        id: 'welcome-full',
+   236→        role: 'assistant',
+   237→        content:
+   238→          "Welcome to your AI Learning Assistant! I can help you with:\n\n- **Understanding concepts** — Ask me to explain any topic\n- **Code help** — Debug issues or learn new patterns\n- **Study plans** — Create personalized learning paths\n- **Quiz prep** — Review and practice for assessments\n\nWhat would you like to explore today?",
+   239→        timestamp: new Date().toISOString(),
+   240→      },
+   241→    ],
+   242→    createdAt: new Date().toISOString(),
+   243→  },
+   244→];
+   245→
+   246→function loadConversationsFromStorage(storageKey: string): Conversation[] {
+   247→  if (typeof window === 'undefined') return DEFAULT_CONVERSATIONS;
+   248→  try {
+   249→    const saved = localStorage.getItem(storageKey);
+   250→    if (saved) {
+   251→      const data = JSON.parse(saved);
+   252→      if (Array.isArray(data.conversations) && data.conversations.length > 0) {
+   253→        return data.conversations;
+   254→      }
+   255→    }
+   256→  } catch {
+   257→    // ignore parse errors
+   258→  }
+   259→  return DEFAULT_CONVERSATIONS;
+   260→}
+   261→
+   262→function usePersistentConversations(storageKey: string) {
+   263→  const [conversations, setConversations] = useState<Conversation[]>(() => loadConversationsFromStorage(storageKey));
+   264→
+   265→  // Save to localStorage on changes
+   266→  useEffect(() => {
+   267→    if (conversations.length > 0) {
+   268→      try {
+   269→        localStorage.setItem(storageKey, JSON.stringify({ conversations }));
+   270→      } catch {
+   271→        // ignore storage errors
+   272→      }
+   273→    }
+   274→  }, [storageKey, conversations]);
+   275→
+   276→  return { conversations, setConversations };
+   277→}
+   278→
+   279→// ============================================================
+   280→// Floating Chat Widget
+   281→// ============================================================
+   282→
+   283→export function AITutorFloatingWidget() {
+   284→  const [isOpen, setIsOpen] = useState(false);
+   285→  const { messages, setMessages } = usePersistentChat('nextgen-lms-floating-chat');
+   286→  const [input, setInput] = useState('');
+   287→  const [isLoading, setIsLoading] = useState(false);
+   288→  const scrollRef = useRef<HTMLDivElement>(null);
+   289→  const inputRef = useRef<HTMLInputElement>(null);
+   290→
+   291→  const scrollToBottom = useCallback(() => {
+   292→    if (scrollRef.current) {
+   293→      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+   294→    }
+   295→  }, []);
+   296→
+   297→  useEffect(() => {
+   298→    scrollToBottom();
+   299→  }, [messages, scrollToBottom]);
+   300→
+   301→  useEffect(() => {
+   302→    if (isOpen && inputRef.current) {
+   303→      inputRef.current.focus();
+   304→    }
+   305→  }, [isOpen]);
+   306→
+   307→  const sendMessage = useCallback(
+   308→    async (messageText?: string) => {
+   309→      const text = messageText || input.trim();
+   310→      if (!text || isLoading) return;
+   311→
+   312→      const userMsg: ChatMessage = {
+   313→        id: `user-${Date.now()}`,
+   314→        role: 'user',
+   315→        content: text,
+   316→        timestamp: new Date().toISOString(),
+   317→      };
+   318→
+   319→      setMessages((prev) => [...prev, userMsg]);
+   320→      setInput('');
+   321→      setIsLoading(true);
+   322→
+   323→      try {
+   324→        const res = await fetch('/api/ai', {
+   325→          method: 'POST',
+   326→          headers: { 'Content-Type': 'application/json' },
+   327→          body: JSON.stringify({
+   328→            message: text,
+   329→            sessionId: 'floating-chat',
+   330→          }),
+   331→        });
+   332→
+   333→        if (!res.ok) throw new Error('Failed to get response');
+   334→
+   335→        const data = await res.json();
+   336→
+   337→        const aiMsg: ChatMessage = {
+   338→          id: `ai-${Date.now()}`,
+   339→          role: 'assistant',
+   340→          content: data.response || 'I apologize, but I could not generate a response. Please try again.',
+   341→          timestamp: new Date().toISOString(),
+   342→        };
+   343→
+   344→        setMessages((prev) => [...prev, aiMsg]);
+   345→      } catch {
+   346→        toast.error('Failed to get AI response. Please try again.');
+   347→        setMessages((prev) => [
+   348→          ...prev,
+   349→          {
+   350→            id: `error-${Date.now()}`,
+   351→            role: 'assistant',
+   352→            content: 'Sorry, I encountered an error. Please try again in a moment.',
+   353→            timestamp: new Date().toISOString(),
+   354→          },
+   355→        ]);
+   356→      } finally {
+   357→        setIsLoading(false);
+   358→      }
+   359→    },
+   360→    [input, isLoading]
+   361→  );
+   362→
+   363→  return (
+   364→    <>
+   365→      {/* Floating Button */}
+   366→      <AnimatePresence>
+   367→        {!isOpen && (
+   368→          <motion.button
+   369→            initial={{ scale: 0, opacity: 0 }}
+   370→            animate={{ scale: 1, opacity: 1 }}
+   371→            exit={{ scale: 0, opacity: 0 }}
+   372→            whileHover={{ scale: 1.1 }}
+   373→            whileTap={{ scale: 0.9 }}
+   374→            onClick={() => setIsOpen(true)}
+   375→            className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-violet-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-shadow"
+   376→            aria-label="Open AI Learning Assistant"
+   377→          >
+   378→            <Bot className="h-6 w-6" />
+   379→          </motion.button>
+   380→        )}
+   381→      </AnimatePresence>
+   382→
+   383→      {/* Chat Panel */}
+   384→      <AnimatePresence>
+   385→        {isOpen && (
+   386→          <motion.div
+   387→            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+   388→            animate={{ opacity: 1, y: 0, scale: 1 }}
+   389→            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+   390→            transition={{ duration: 0.2 }}
+   391→            className="fixed bottom-6 right-6 z-50 flex h-[520px] w-[380px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+   392→          >
+   393→            {/* Header */}
+   394→            <div className="flex items-center justify-between bg-gradient-to-r from-emerald-600 to-violet-600 px-4 py-3 text-white">
+   395→              <div className="flex items-center gap-2">
+   396→                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
+   397→                  <Bot className="h-4 w-4" />
+   398→                </div>
+   399→                <div>
+   400→                  <p className="text-sm font-semibold">AI Learning Assistant</p>
+   401→                  <p className="text-[10px] text-white/70">Always here to help</p>
+   402→                </div>
+   403→              </div>
+   404→              <div className="flex items-center gap-1">
+   405→                <Button
+   406→                  variant="ghost"
+   407→                  size="icon"
+   408→                  className="h-7 w-7 text-white/80 hover:text-white hover:bg-white/10"
+   409→                  onClick={() => {
+   410→                    const store = useAppStore.getState();
+   411→                    store.setView('ai-assistant');
+   412→                    setIsOpen(false);
+   413→                  }}
+   414→                >
+   415→                  <Maximize2 className="h-3.5 w-3.5" />
+   416→                </Button>
+   417→                <Button
+   418→                  variant="ghost"
+   419→                  size="icon"
+   420→                  className="h-7 w-7 text-white/80 hover:text-white hover:bg-white/10"
+   421→                  onClick={() => setIsOpen(false)}
+   422→                >
+   423→                  <X className="h-3.5 w-3.5" />
+   424→                </Button>
+   425→              </div>
+   426→            </div>
+   427→
+   428→            {/* Messages */}
+   429→            <div
+   430→              ref={scrollRef}
+   431→              className="flex-1 overflow-y-auto p-4 space-y-4"
+   432→            >
+   433→              {messages.map((msg) => (
+   434→                <div
+   435→                  key={msg.id}
+   436→                  className={`flex gap-2 ${
+   437→                    msg.role === 'user' ? 'justify-end' : 'justify-start'
+   438→                  }`}
+   439→                >
+   440→                  {msg.role === 'assistant' && (
+   441→                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-100 to-violet-100 dark:from-emerald-900 dark:to-violet-900">
+   442→                      <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+   443→                    </div>
+   444→                  )}
+   445→                  <div
+   446→                    className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm ${
+   447→                      msg.role === 'user'
+   448→                        ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
+   449→                        : 'bg-muted text-muted-foreground'
+   450→                    }`}
+   451→                  >
+   452→                    {msg.role === 'assistant' ? (
+   453→                      <MarkdownRenderer content={msg.content} />
+   454→                    ) : (
+   455→                      msg.content
+   456→                    )}
+   457→                  </div>
+   458→                  {msg.role === 'user' && (
+   459→                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+   460→                      <User className="h-3.5 w-3.5" />
+   461→                    </div>
+   462→                  )}
+   463→                </div>
+   464→              ))}
+   465→
+   466→              {/* Typing Indicator */}
+   467→              {isLoading && (
+   468→                <div className="flex gap-2 justify-start">
+   469→                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-100 to-violet-100 dark:from-emerald-900 dark:to-violet-900">
+   470→                    <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+   471→                  </div>
+   472→                  <div className="rounded-2xl bg-muted px-4 py-3">
+   473→                    <div className="flex gap-1.5">
+   474→                      <motion.span
+   475→                        animate={{ opacity: [0.3, 1, 0.3] }}
+   476→                        transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+   477→                        className="h-2 w-2 rounded-full bg-emerald-500"
+   478→                      />
+   479→                      <motion.span
+   480→                        animate={{ opacity: [0.3, 1, 0.3] }}
+   481→                        transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
+   482→                        className="h-2 w-2 rounded-full bg-violet-500"
+   483→                      />
+   484→                      <motion.span
+   485→                        animate={{ opacity: [0.3, 1, 0.3] }}
+   486→                        transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
+   487→                        className="h-2 w-2 rounded-full bg-emerald-500"
+   488→                      />
+   489→                    </div>
+   490→                  </div>
+   491→                </div>
+   492→              )}
+   493→            </div>
+   494→
+   495→            {/* Input */}
+   496→            <div className="border-t border-border p-3">
+   497→              <form
+   498→                onSubmit={(e) => {
+   499→                  e.preventDefault();
+   500→                  sendMessage();
+   501→                }}
+   502→                className="flex gap-2"
+   503→              >
+   504→                <Input
+   505→                  ref={inputRef}
+   506→                  value={input}
+   507→                  onChange={(e) => setInput(e.target.value)}
+   508→                  placeholder="Ask me anything..."
+   509→                  className="flex-1 rounded-xl text-sm"
+   510→                  disabled={isLoading}
+   511→                />
+   512→                <Button
+   513→                  type="submit"
+   514→                  size="icon"
+   515→                  disabled={!input.trim() || isLoading}
+   516→                  className="h-9 w-9 rounded-xl bg-gradient-to-br from-emerald-500 to-violet-600 hover:from-emerald-600 hover:to-violet-700"
+   517→                >
+   518→                  <Send className="h-4 w-4" />
+   519→                </Button>
+   520→              </form>
+   521→            </div>
+   522→          </motion.div>
+   523→        )}
+   524→      </AnimatePresence>
+   525→    </>
+   526→  );
+   527→}
+   528→
+   529→// ============================================================
+   530→// Full-Page AI Tutor
+   531→// ============================================================
+   532→export function AITutorFullPage() {
+   533→  const { conversations, setConversations } = usePersistentConversations('nextgen-lms-full-chat');
+   534→  const [activeConvId, setActiveConvId] = useState('conv-1');
+   535→  const [confirmDeleteConv, setConfirmDeleteConv] = useState<string | null>(null);
+   536→  const [input, setInput] = useState('');
+   537→  const [isLoading, setIsLoading] = useState(false);
+   538→  const [sidebarOpen, setSidebarOpen] = useState(true);
+   539→  const [selectedCourse, setSelectedCourse] = useState<string>('all');
+   540→  const scrollRef = useRef<HTMLDivElement>(null);
+   541→  const inputRef = useRef<HTMLTextAreaElement>(null);
+   542→  const tenantId = useAppStore((s) => s.currentTenant?.id) || '';
+   543→  const { data: coursesData } = useCourses(tenantId || undefined);
+   544→  const demoCourses = coursesData || [];
+   545→
+   546→  const activeConv = conversations.find((c) => c.id === activeConvId);
+   547→
+   548→  const scrollToBottom = useCallback(() => {
+   549→    if (scrollRef.current) {
+   550→      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+   551→    }
+   552→  }, []);
+   553→
+   554→  useEffect(() => {
+   555→    scrollToBottom();
+   556→  }, [activeConv?.messages, scrollToBottom]);
+   557→
+   558→  const suggestedPrompts = [
+   559→    { icon: Code, label: 'Explain Server Components', prompt: 'Explain how React Server Components work in Next.js, with practical examples and when to use them vs client components.' },
+   560→    { icon: HelpCircle, label: 'Help me with this quiz', prompt: 'I need help preparing for a quiz. Can you give me some practice questions on web development fundamentals and explain the answers?' },
+   561→    { icon: GraduationCap, label: 'Create a study plan', prompt: 'Create a 4-week study plan for learning full-stack web development, starting from the basics and progressing to advanced topics.' },
+   562→    { icon: MessageSquare, label: 'Review my code', prompt: 'I want to learn best practices for code review. Can you explain common patterns and anti-patterns in React/Next.js code?' },
+   563→  ];
+   564→
+   565→  const sendMessage = useCallback(
+   566→    async (messageText?: string) => {
+   567→      const text = messageText || input.trim();
+   568→      if (!text || isLoading) return;
+   569→
+   570→      const userMsg: ChatMessage = {
+   571→        id: `user-${Date.now()}`,
+   572→        role: 'user',
+   573→        content: text,
+   574→        timestamp: new Date().toISOString(),
+   575→      };
+   576→
+   577→      setConversations((prev) =>
+   578→        prev.map((conv) =>
+   579→          conv.id === activeConvId
+   580→            ? { ...conv, messages: [...conv.messages, userMsg], title: conv.messages.length <= 1 ? text.slice(0, 40) + (text.length > 40 ? '...' : '') : conv.title }
+   581→            : conv
+   582→        )
+   583→      );
+   584→      setInput('');
+   585→      setIsLoading(true);
+   586→
+   587→      const courseContext =
+   588→        selectedCourse !== 'all'
+   589→          ? demoCourses.find((c: any) => c.id === selectedCourse)?.title
+   590→          : undefined;
+   591→
+   592→      try {
+   593→        const res = await fetch('/api/ai', {
+   594→          method: 'POST',
+   595→          headers: { 'Content-Type': 'application/json' },
+   596→          body: JSON.stringify({
+   597→            message: text,
+   598→            context: courseContext,
+   599→            sessionId: activeConvId,
+   600→          }),
+   601→        });
+   602→
+   603→        if (!res.ok) throw new Error('Failed to get response');
+   604→
+   605→        const data = await res.json();
+   606→
+   607→        const aiMsg: ChatMessage = {
+   608→          id: `ai-${Date.now()}`,
+   609→          role: 'assistant',
+   610→          content: data.response || 'I apologize, but I could not generate a response. Please try again.',
+   611→          timestamp: new Date().toISOString(),
+   612→        };
+   613→
+   614→        setConversations((prev) =>
+   615→          prev.map((conv) =>
+   616→            conv.id === activeConvId
+   617→              ? { ...conv, messages: [...conv.messages, aiMsg] }
+   618→              : conv
+   619→          )
+   620→        );
+   621→      } catch {
+   622→        toast.error('Failed to get AI response. Please try again.');
+   623→        setConversations((prev) =>
+   624→          prev.map((conv) =>
+   625→            conv.id === activeConvId
+   626→              ? {
+   627→                  ...conv,
+   628→                  messages: [
+   629→                    ...conv.messages,
+   630→                    {
+   631→                      id: `error-${Date.now()}`,
+   632→                      role: 'assistant',
+   633→                      content: 'Sorry, I encountered an error. Please try again in a moment.',
+   634→                      timestamp: new Date().toISOString(),
+   635→                    },
+   636→                  ],
+   637→                }
+   638→              : conv
+   639→          )
+   640→        );
+   641→      } finally {
+   642→        setIsLoading(false);
+   643→      }
+   644→    },
+   645→    [input, isLoading, activeConvId, selectedCourse]
+   646→  );
+   647→
+   648→  const createNewConversation = () => {
+   649→    const newConv: Conversation = {
+   650→      id: `conv-${Date.now()}`,
+   651→      title: 'New Chat',
+   652→      messages: [
+   653→        {
+   654→          id: `welcome-${Date.now()}`,
+   655→          role: 'assistant',
+   656→          content: "Hello! I'm your AI Learning Assistant. How can I help you today?",
+   657→          timestamp: new Date().toISOString(),
+   658→        },
+   659→      ],
+   660→      createdAt: new Date().toISOString(),
+   661→    };
+   662→    setConversations((prev) => [newConv, ...prev]);
+   663→    setActiveConvId(newConv.id);
+   664→  };
+   665→
+   666→  const deleteConversation = (convId: string) => {
+   667→    if (conversations.length <= 1) {
+   668→      toast.error("Can't delete the last conversation");
+   669→      return;
+   670→    }
+   671→    setConversations((prev) => prev.filter((c) => c.id !== convId));
+   672→    if (activeConvId === convId) {
+   673→      setActiveConvId(conversations.find((c) => c.id !== convId)?.id || '');
+   674→    }
+   675→  };
+   676→
+   677→  return (
+   678→    <div className="flex h-full">
+   679→      {/* Left Sidebar - Conversation History */}
+   680→      <AnimatePresence mode="wait">
+   681→        {sidebarOpen && (
+   682→          <motion.div
+   683→            initial={{ width: 0, opacity: 0 }}
+   684→            animate={{ width: 280, opacity: 1 }}
+   685→            exit={{ width: 0, opacity: 0 }}
+   686→            transition={{ duration: 0.2 }}
+   687→            className="border-r border-border bg-card/50 flex flex-col shrink-0 overflow-hidden"
+   688→          >
+   689→            {/* Sidebar Header */}
+   690→            <div className="p-4 border-b border-border">
+   691→              <div className="flex items-center justify-between mb-3">
+   692→                <div className="flex items-center gap-2">
+   693→                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-violet-600">
+   694→                    <Sparkles className="h-3.5 w-3.5 text-white" />
+   695→                  </div>
+   696→                  <span className="font-semibold text-sm text-foreground">AI Tutor</span>
+   697→                </div>
+   698→                <Button
+   699→                  variant="ghost"
+   700→                  size="icon"
+   701→                  className="h-7 w-7"
+   702→                  onClick={() => setSidebarOpen(false)}
+   703→                >
+   704→                  <Minus className="h-3.5 w-3.5" />
+   705→                </Button>
+   706→              </div>
+   707→              <Button
+   708→                onClick={createNewConversation}
+   709→                className="w-full justify-start gap-2 text-sm"
+   710→                variant="outline"
+   711→                size="sm"
+   712→              >
+   713→                <Plus className="h-3.5 w-3.5" />
+   714→                New Chat
+   715→              </Button>
+   716→            </div>
+   717→
+   718→            {/* Course Context Selector */}
+   719→            <div className="px-4 py-3 border-b border-border">
+   720→              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-2">
+   721→                Course Focus
+   722→              </p>
+   723→              <select
+   724→                value={selectedCourse}
+   725→                onChange={(e) => setSelectedCourse(e.target.value)}
+   726→                className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500"
+   727→              >
+   728→                <option value="all">All Courses</option>
+   729→                {demoCourses.map((course: any) => (
+   730→                  <option key={course.id} value={course.id}>
+   731→                    {course.title}
+   732→                  </option>
+   733→                ))}
+   734→              </select>
+   735→            </div>
+   736→
+   737→            {/* Conversation List */}
+   738→            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+   739→              {conversations.map((conv) => (
+   740→                <div
+   741→                  key={conv.id}
+   742→                  className={`group flex items-center gap-2 rounded-lg px-3 py-2 text-sm cursor-pointer transition-colors ${
+   743→                    conv.id === activeConvId
+   744→                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+   745→                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+   746→                  }`}
+   747→                  onClick={() => setActiveConvId(conv.id)}
+   748→                >
+   749→                  <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+   750→                  <span className="truncate flex-1 text-xs">{conv.title}</span>
+   751→                  <button
+   752→                    onClick={(e) => {
+   753→                      e.stopPropagation();
+   754→                      setConfirmDeleteConv(conv.id);
+   755→                    }}
+   756→                    className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+   757→                  >
+   758→                    <Trash2 className="h-3 w-3 text-red-400 hover:text-red-600" />
+   759→                  </button>
+   760→                </div>
+   761→              ))}
+   762→            </div>
+   763→          </motion.div>
+   764→        )}
+   765→      </AnimatePresence>
+   766→
+   767→      {/* Main Chat Area */}
+   768→      <div className="flex-1 flex flex-col min-w-0">
+   769→        {/* Chat Header */}
+   770→        <div className="flex items-center justify-between border-b border-border px-6 py-3 bg-card/50">
+   771→          <div className="flex items-center gap-3">
+   772→            {!sidebarOpen && (
+   773→              <Button
+   774→                variant="ghost"
+   775→                size="icon"
+   776→                className="h-8 w-8"
+   777→                onClick={() => setSidebarOpen(true)}
+   778→              >
+   779→                <ChevronLeft className="h-4 w-4" />
+   780→              </Button>
+   781→            )}
+   782→            <div>
+   783→              <h2 className="text-sm font-semibold text-foreground">AI Learning Assistant</h2>
+   784→              <p className="text-xs text-muted-foreground">
+   785→                {selectedCourse !== 'all'
+   786→                  ? `Focused on: ${demoCourses.find((c: any) => c.id === selectedCourse)?.title}`
+   787→                  : 'General learning mode'}
+   788→              </p>
+   789→            </div>
+   790→          </div>
+   791→          <Badge variant="secondary" className="text-xs gap-1">
+   792→            <Sparkles className="h-3 w-3" />
+   793→            Powered by AI
+   794→          </Badge>
+   795→        </div>
+   796→
+   797→        {/* Messages */}
+   798→        <div
+   799→          ref={scrollRef}
+   800→          className="flex-1 overflow-y-auto px-6 py-4"
+   801→        >
+   802→          {activeConv && activeConv.messages.length <= 1 && (
+   803→            /* Suggested Prompts */
+   804→            <div className="mb-8">
+   805→              <p className="text-sm font-medium text-muted-foreground mb-4 text-center">
+   806→                Try one of these to get started
+   807→              </p>
+   808→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto">
+   809→                {suggestedPrompts.map((prompt) => (
+   810→                  <Card
+   811→                    key={prompt.label}
+   812→                    className="p-4 cursor-pointer hover:border-emerald-300 hover:shadow-md transition-all group"
+   813→                    onClick={() => sendMessage(prompt.prompt)}
+   814→                  >
+   815→                    <div className="flex items-start gap-3">
+   816→                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-400 shrink-0">
+   817→                        <prompt.icon className="h-4 w-4" />
+   818→                      </div>
+   819→                      <div>
+   820→                        <p className="text-sm font-medium text-foreground">{prompt.label}</p>
+   821→                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+   822→                          {prompt.prompt.slice(0, 80)}...
+   823→                        </p>
+   824→                      </div>
+   825→                    </div>
+   826→                  </Card>
+   827→                ))}
+   828→              </div>
+   829→            </div>
+   830→          )}
+   831→
+   832→          {/* Message List */}
+   833→          <div className="space-y-6 max-w-3xl mx-auto">
+   834→            {activeConv?.messages.map((msg) => (
+   835→              <motion.div
+   836→                key={msg.id}
+   837→                initial={{ opacity: 0, y: 10 }}
+   838→                animate={{ opacity: 1, y: 0 }}
+   839→                className={`flex gap-3 ${
+   840→                  msg.role === 'user' ? 'justify-end' : 'justify-start'
+   841→                }`}
+   842→              >
+   843→                {msg.role === 'assistant' && (
+   844→                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-100 to-violet-100 dark:from-emerald-900 dark:to-violet-900 mt-0.5">
+   845→                    <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+   846→                  </div>
+   847→                )}
+   848→                <div
+   849→                  className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+   850→                    msg.role === 'user'
+   851→                      ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
+   852→                      : 'bg-muted'
+   853→                  }`}
+   854→                >
+   855→                  {msg.role === 'assistant' ? (
+   856→                    <MarkdownRenderer content={msg.content} />
+   857→                  ) : (
+   858→                    <p className="text-sm leading-relaxed">{msg.content}</p>
+   859→                  )}
+   860→                  <p
+   861→                    className={`text-[10px] mt-1.5 ${
+   862→                      msg.role === 'user' ? 'text-white/60' : 'text-muted-foreground/60'
+   863→                    }`}
+   864→                  >
+   865→                    {new Date(msg.timestamp).toLocaleTimeString([], {
+   866→                      hour: '2-digit',
+   867→                      minute: '2-digit',
+   868→                    })}
+   869→                  </p>
+   870→                </div>
+   871→                {msg.role === 'user' && (
+   872→                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white mt-0.5">
+   873→                    <User className="h-4 w-4" />
+   874→                  </div>
+   875→                )}
+   876→              </motion.div>
+   877→            ))}
+   878→
+   879→            {/* Typing Indicator */}
+   880→            {isLoading && (
+   881→              <div className="flex gap-3 justify-start">
+   882→                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-100 to-violet-100 dark:from-emerald-900 dark:to-violet-900">
+   883→                  <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+   884→                </div>
+   885→                <div className="rounded-2xl bg-muted px-4 py-3">
+   886→                  <div className="flex gap-2">
+   887→                    <motion.span
+   888→                      animate={{ opacity: [0.3, 1, 0.3] }}
+   889→                      transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+   890→                      className="h-2.5 w-2.5 rounded-full bg-emerald-500"
+   891→                    />
+   892→                    <motion.span
+   893→                      animate={{ opacity: [0.3, 1, 0.3] }}
+   894→                      transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
+   895→                      className="h-2.5 w-2.5 rounded-full bg-violet-500"
+   896→                    />
+   897→                    <motion.span
+   898→                      animate={{ opacity: [0.3, 1, 0.3] }}
+   899→                      transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
+   900→                      className="h-2.5 w-2.5 rounded-full bg-emerald-500"
+   901→                    />
+   902→                  </div>
+   903→                </div>
+   904→              </div>
+   905→            )}
+   906→          </div>
+   907→        </div>
+   908→
+   909→        {/* Input Area */}
+   910→        <div className="border-t border-border px-6 py-4 bg-card/50">
+   911→          <div className="max-w-3xl mx-auto">
+   912→            <form
+   913→              onSubmit={(e) => {
+   914→                e.preventDefault();
+   915→                sendMessage();
+   916→              }}
+   917→              className="flex gap-3 items-end"
+   918→            >
+   919→              <div className="flex-1 relative">
+   920→                <textarea
+   921→                  ref={inputRef}
+   922→                  value={input}
+   923→                  onChange={(e) => setInput(e.target.value)}
+   924→                  onKeyDown={(e) => {
+   925→                    if (e.key === 'Enter' && !e.shiftKey) {
+   926→                      e.preventDefault();
+   927→                      sendMessage();
+   928→                    }
+   929→                  }}
+   930→                  placeholder="Ask anything about your courses..."
+   931→                  className="w-full resize-none rounded-xl border border-border bg-background px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px] max-h-[120px]"
+   932→                  rows={1}
+   933→                  disabled={isLoading}
+   934→                />
+   935→              </div>
+   936→              <Button
+   937→                type="submit"
+   938→                disabled={!input.trim() || isLoading}
+   939→                className="h-11 w-11 rounded-xl bg-gradient-to-br from-emerald-500 to-violet-600 hover:from-emerald-600 hover:to-violet-700 shrink-0"
+   940→                size="icon"
+   941→              >
+   942→                {isLoading ? (
+   943→                  <Loader2 className="h-4 w-4 animate-spin" />
+   944→                ) : (
+   945→                  <Send className="h-4 w-4" />
+   946→                )}
+   947→              </Button>
+   948→            </form>
+   949→            <p className="text-[10px] text-muted-foreground/60 mt-2 text-center">
+   950→              AI can make mistakes. Verify important information.
+   951→            </p>
+   952→          </div>
+   953→        </div>
+   954→      </div>
+   955→
+   956→      <ConfirmDialog
+   957→        open={!!confirmDeleteConv}
+   958→        onOpenChange={(open) => { if (!open) setConfirmDeleteConv(null); }}
+   959→        title="Delete Conversation"
+   960→        description="Are you sure you want to delete this conversation? All messages will be permanently lost."
+   961→        confirmLabel="Delete"
+   962→        variant="destructive"
+   963→        onConfirm={() => {
+   964→          if (confirmDeleteConv) deleteConversation(confirmDeleteConv);
+   965→          setConfirmDeleteConv(null);
+   966→        }}
+   967→      />
+   968→    </div>
+   969→  );
+   970→}
+   971→

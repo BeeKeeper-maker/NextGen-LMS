@@ -151,3 +151,32 @@ export async function PUT(
     return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
   }
 }
+
+// DELETE /api/users/[userId] - Soft-delete a user (deactivate)
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ userId: string }> }
+) {
+  try {
+    const { userId } = await params;
+
+    const existing = await db.user.findUnique({ where: { id: userId } });
+    if (!existing) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Soft delete: deactivate the user instead of removing from DB
+    await db.user.update({
+      where: { id: userId },
+      data: {
+        isActive: false,
+        name: existing.name ? `${existing.name} (deleted)` : '(deleted)',
+      },
+    });
+
+    return NextResponse.json({ success: true, message: 'User deactivated successfully' });
+  } catch (error) {
+    console.error('User delete error:', error);
+    return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 });
+  }
+}

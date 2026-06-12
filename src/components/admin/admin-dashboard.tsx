@@ -1447,6 +1447,29 @@ const quickActions = [
 ];
 
 function QuickActionsPanel({ onBulkOpsClick }: { onBulkOpsClick: () => void }) {
+  const { setView } = useAppStore();
+
+  const handleAction = (action: typeof quickActions[number]) => {
+    if ('isBulkOps' in action && action.isBulkOps) {
+      onBulkOpsClick();
+      return;
+    }
+    switch (action.title) {
+      case 'Create New Course':
+        setView('admin-courses');
+        break;
+      case 'Generate AI Content':
+        setView('ai-content-gen');
+        break;
+      case 'View Reports':
+        setView('admin-analytics');
+        break;
+      case 'Manage Community':
+        setView('admin-community');
+        break;
+    }
+  };
+
   return (
     <motion.div variants={itemVariants}>
       <Card className="shadow-sm hover:shadow-md transition-shadow duration-200 h-full">
@@ -1460,7 +1483,6 @@ function QuickActionsPanel({ onBulkOpsClick }: { onBulkOpsClick: () => void }) {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
             {quickActions.map((action, idx) => {
               const IconComp = action.icon;
-              const isBulkOps = 'isBulkOps' in action && action.isBulkOps;
               const isNew = 'isNew' in action && action.isNew;
               return (
                 <motion.button
@@ -1468,7 +1490,7 @@ function QuickActionsPanel({ onBulkOpsClick }: { onBulkOpsClick: () => void }) {
                   type="button"
                   whileHover={{ scale: 1.02, y: -3 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={isBulkOps ? onBulkOpsClick : undefined}
+                  onClick={() => handleAction(action)}
                   className="group relative flex flex-col items-start gap-3 rounded-xl p-[1px] text-left transition-all duration-300 focus:outline-none overflow-hidden"
                 >
                   {/* Glassmorphism border */}

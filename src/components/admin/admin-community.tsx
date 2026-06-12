@@ -43,6 +43,7 @@ import {
   useCommunityReviews,
   useModerateReview,
   useRespondToReview,
+  useUsers,
 } from '@/hooks/use-data';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useAppStore } from '@/store/app-store';
@@ -288,6 +289,21 @@ export function AdminCommunity() {
   const { data: communityData, isLoading: postsLoading, refetch: refetchPosts } = useCommunityPosts(tenantId);
   const posts = useMemo(() => communityData?.posts || [], [communityData?.posts]);
   const apiCategories = useMemo(() => communityData?.categories || [], [communityData?.categories]);
+  const { data: usersData } = useUsers(tenantId);
+  const totalMembers = usersData?.users?.length || 0;
+  const activeThisWeek = useMemo(() => {
+    const weekAgo = new Date(Date.now() - 7 * 86400000);
+    return (usersData?.users || []).filter((u: any) => u.lastLoginAt && new Date(u.lastLoginAt) >= weekAgo).length;
+  }, [usersData]);
+  const postsThisWeek = useMemo(() => {
+    const weekAgo = new Date(Date.now() - 7 * 86400000);
+    return posts.filter((p: any) => p.createdAt && new Date(p.createdAt) >= weekAgo).length;
+  }, [posts]);
+  const engagementRate = useMemo(() => {
+    if (totalMembers === 0) return 0;
+    const usersWithActivity = (usersData?.users || []).filter((u: any) => u.totalPoints > 0 || u.streakDays > 0).length;
+    return Math.round((usersWithActivity / totalMembers) * 100);
+  }, [usersData, totalMembers]);
 
   const createPostMutation = useCreateCommunityPost();
   const updatePostMutation = useUpdateCommunityPost();
@@ -319,7 +335,13 @@ export function AdminCommunity() {
 
   // Category list: derive from API data, fall back to defaults
   // Local additions are tracked separately so they merge with API categories
-  const [localCategories, setLocalCategories] = useState<CommunityCategory[]>([]);
+  const [localCategories, setLocalCategories] = useState<CommunityCategory[]>(() => {
+    const saved = localStorage.getItem('lms_community_categories');
+    if (saved) {
+      try { return JSON.parse(saved); } catch { /* fall through */ }
+    }
+    return [];
+  });
   const categories = apiCategories.length > 0 ? [...apiCategories, ...localCategories] : [...fallbackCategories, ...localCategories];
 
   // Review moderation state
@@ -395,7 +417,6 @@ export function AdminCommunity() {
   // Stats
   const totalPosts = posts.length;
   const activeDiscussions = posts.filter(p => !p.isLocked).length;
-  const engagementRate = Math.round((posts.reduce((sum, p) => sum + p.likeCount + p.commentCount, 0) / (posts.reduce((sum, p) => sum + p.viewCount, 0) || 1)) * 100);
 
   // ── CRUD handlers using real API mutations ──
 
@@ -473,7 +494,12 @@ export function AdminCommunity() {
       orderIndex: categories.length,
       isDefault: newCategory.isDefault,
     };
-    setLocalCategories([...localCategories, category]);
+    const updated = [...localCategories, category];
+    setLocalCategories(updated);
+    // Persist to localStorage
+    const saved = JSON.parse(localStorage.getItem('lms_community_categories') || '[]');
+    saved.push(category);
+    localStorage.setItem('lms_community_categories', JSON.stringify(saved));
     categoryPostCounts[category.id] = 0;
     setShowCategoryDialog(false);
     setNewCategory({ name: '', description: '', icon: '💬', color: '#10B981', isDefault: false });
@@ -488,6 +514,8 @@ export function AdminCommunity() {
     updated.forEach((c, i) => c.orderIndex = i);
     // Store the reordered list as the new local categories (replacing API order)
     setLocalCategories(updated);
+    // Persist to localStorage
+    localStorage.setItem('lms_community_categories', JSON.stringify(updated));
   };
 
   // Review moderation handlers — real API mutations
@@ -557,11 +585,11 @@ export function AdminCommunity() {
       {/* Community Analytics Card */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
-          { label: 'Total Members', value: '2,847', icon: Users, color: 'emerald', change: '+12%' },
-          { label: 'Active This Week', value: '1,203', icon: TrendingUp, color: 'violet', change: '+8%' },
-          { label: 'Posts This Week', value: '156', icon: MessageSquare, color: 'pink', change: '+23%' },
+          { label: 'Total Members', value: totalMembers.toLocaleString(), icon: Users, color: 'emerald', change: '+12%' },
+          { label: 'Active This Week', value: activeThisWeek.toLocaleString(), icon: TrendingUp, color: 'violet', change: '+8%' },
+          { label: 'Posts This Week', value: postsThisWeek.toLocaleString(), icon: MessageSquare, color: 'pink', change: '+23%' },
           { label: 'Avg Response Time', value: '2.4h', icon: Clock, color: 'amber', change: '-15%' },
-          { label: 'Engagement Rate', value: '89%', icon: Heart, color: 'rose', change: '+5%' },
+          { label: 'Engagement Rate', value: `${engagementRate}%`, icon: Heart, color: 'rose', change: '+5%' },
         ].map((stat, i) => (
           <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
             <Card className="border-border hover:shadow-md transition-shadow">

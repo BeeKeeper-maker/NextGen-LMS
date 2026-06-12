@@ -185,6 +185,9 @@ export function VideoPlayer({
   const totalDuration = totalDurationProp || lesson?.videoDuration || 300;
   const resolvedContentType = lesson?.contentType || 'video';
 
+  // Whether we use real HTML5 video or simulated playback
+  const useRealVideo = !!videoUrl;
+
   // ─── State ──────────────────────────────────────────────
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(initialPosition);
@@ -203,9 +206,11 @@ export function VideoPlayer({
   const [showResumePrompt, setShowResumePrompt] = useState(initialPosition > 0);
   const [watchedPercent, setWatchedPercent] = useState(0);
   const [bufferedPercent, setBufferedPercent] = useState(0);
+  const [realDuration, setRealDuration] = useState(totalDuration);
 
   // ─── Refs ───────────────────────────────────────────────
   const containerRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -213,8 +218,11 @@ export function VideoPlayer({
   const lastTimeRef = useRef(initialPosition);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
+  // Use realDuration for HTML5 video, totalDuration for simulated
+  const effectiveDuration = useRealVideo ? realDuration : totalDuration;
+
   // ─── Computed ───────────────────────────────────────────
-  const progressPercent = (currentTime / totalDuration) * 100;
+  const progressPercent = (currentTime / effectiveDuration) * 100;
   const displayVolume = isMuted ? 0 : volume;
 
   const chapterAtTime = useMemo(() => {
@@ -243,8 +251,72 @@ export function VideoPlayer({
     resetControlsTimer();
   }, [resetControlsTimer]);
 
-  // ─── Playback simulation ────────────────────────────────
+  // ─── HTML5 Video Event Handlers ─────────────────────────
+  const handleVideoTimeUpdate = useCallback(() => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const time = video.currentTime;
+    setCurrentTime(time);
+
+    // Update segment tracker
+    segmentTrackerRef.current.updateSegment(time);
+    const wp = segmentTrackerRef.current.getWatchedPercent(video.duration || effectiveDuration);
+    setWatchedPercent(wp);
+
+    if (onProgress) {
+      onProgress(wp, time, segmentTrackerRef.current.getSegments());
+    }
+
+    // Auto-complete at threshold
+    if (wp >= AUTO_COMPLETE_THRESHOLD * 100 && !isCompleted) {
+      setIsCompleted(true);
+      if (onComplete) onComplete();
+      if (onMarkComplete && lesson?.id) onMarkComplete(lesson.id);
+    }
+  }, [effectiveDuration, isCompleted, lesson, onComplete, onMarkComplete, onProgress]);
+
+  const handleVideoEnded = useCallback(() => {
+    setIsPlaying(false);
+    segmentTrackerRef.current.stopSegment(effectiveDuration);
+    if (!isCompleted) {
+      setIsCompleted(true);
+      if (onComplete) onComplete();
+      if (onMarkComplete && lesson?.id) onMarkComplete(lesson.id);
+    }
+  }, [effectiveDuration, isCompleted, lesson, onComplete, onMarkComplete]);
+
+  const handleVideoPlay = useCallback(() => {
+    setIsPlaying(true);
+  }, []);
+
+  const handleVideoPause = useCallback(() => {
+    setIsPlaying(false);
+  }, []);
+
+  const handleVideoLoadedMetadata = useCallback(() => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    setRealDuration(video.duration);
+
+    // Set initial position if provided
+    if (initialPosition > 0 && video.currentTime === 0) {
+      video.currentTime = initialPosition;
+    }
+  }, [initialPosition]);
+
+  const handleVideoProgress = useCallback(() => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    if (video.buffered.length > 0) {
+      const buffered = video.buffered.end(video.buffered.length - 1);
+      setBufferedPercent((buffered / (video.duration || effectiveDuration)) * 100);
+    }
+  }, [effectiveDuration]);
+
+  // ─── Simulated playback (fallback when no videoUrl) ─────
   useEffect(() => {
+    if (useRealVideo) return; // Skip simulated playback for real video
+
     if (isPlaying) {
       segmentTrackerRef.current.startSegment(currentTime);
       intervalRef.current = setInterval(() => {
@@ -291,24 +363,56 @@ export function VideoPlayer({
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [isPlaying, playbackSpeed, totalDuration]);
+  }, [isPlaying, playbackSpeed, totalDuration, useRealVideo, onProgress, onComplete, onMarkComplete, lesson?.id, isCompleted, currentTime]);
 
   // Simulated buffering
   useEffect(() => {
+    if (useRealVideo) return;
     if (isPlaying) {
       const bufferInterval = setInterval(() => {
         setBufferedPercent(Math.min(100, progressPercent + 10 + Math.random() * 15));
       }, 2000);
       return () => clearInterval(bufferInterval);
     }
-  }, [isPlaying, progressPercent]);
+  }, [isPlaying, progressPercent, useRealVideo]);
+
+  // ─── Sync playback speed to HTML5 video ─────────────────
+  useEffect(() => {
+    if (useRealVideo && videoRef.current) {
+      videoRef.current.playbackRate = playbackSpeed;
+    }
+  }, [playbackSpeed, useRealVideo]);
+
+  // ─── Sync volume to HTML5 video ─────────────────────────
+  useEffect(() => {
+    if (useRealVideo && videoRef.current) {
+      videoRef.current.volume = displayVolume;
+      videoRef.current.muted = isMuted;
+    }
+  }, [displayVolume, isMuted, useRealVideo]);
 
   // ─── Toggle play ────────────────────────────────────────
   const togglePlay = useCallback(() => {
-    const willPlay = !isPlaying;
-    setIsPlaying(willPlay);
+    if (useRealVideo && videoRef.current) {
+      const video = videoRef.current;
+      if (video.paused) {
+        video.play().catch(() => {});
+        segmentTrackerRef.current.startSegment(video.currentTime);
+      } else {
+        video.pause();
+        segmentTrackerRef.current.stopSegment(video.currentTime);
+      }
+    } else {
+      const willPlay = !isPlaying;
+      setIsPlaying(willPlay);
+      if (willPlay) {
+        segmentTrackerRef.current.startSegment(currentTime);
+      } else {
+        segmentTrackerRef.current.stopSegment(lastTimeRef.current);
+      }
+    }
     setShowResumePrompt(false);
-    if (willPlay) {
+    if (!isPlaying || useRealVideo) {
       setShowTitle(true);
       resetControlsTimer();
       setTimeout(() => setShowTitle(false), 3000);
@@ -317,15 +421,18 @@ export function VideoPlayer({
       setShowControls(true);
       setShowTitle(true);
     }
-  }, [isPlaying, resetControlsTimer]);
+  }, [isPlaying, resetControlsTimer, useRealVideo, currentTime]);
 
   // ─── Seek ───────────────────────────────────────────────
   const seekTo = useCallback((time: number) => {
-    const clamped = Math.max(0, Math.min(time, totalDuration));
+    const clamped = Math.max(0, Math.min(time, effectiveDuration));
     segmentTrackerRef.current.seekTo(clamped);
     setCurrentTime(clamped);
     lastTimeRef.current = clamped;
-  }, [totalDuration]);
+    if (useRealVideo && videoRef.current) {
+      videoRef.current.currentTime = clamped;
+    }
+  }, [effectiveDuration, useRealVideo]);
 
   const skipForward = useCallback(() => seekTo(currentTime + 10), [currentTime, seekTo]);
   const skipBackward = useCallback(() => seekTo(currentTime - 10), [currentTime, seekTo]);
@@ -337,9 +444,9 @@ export function VideoPlayer({
       const rect = progressRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const percent = Math.max(0, Math.min(1, x / rect.width));
-      seekTo(percent * totalDuration);
+      seekTo(percent * effectiveDuration);
     },
-    [totalDuration, seekTo]
+    [effectiveDuration, seekTo]
   );
 
   const handleProgressHover = useCallback(
@@ -348,11 +455,11 @@ export function VideoPlayer({
       const rect = progressRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const percent = Math.max(0, Math.min(1, x / rect.width));
-      setHoverTime(percent * totalDuration);
+      setHoverTime(percent * effectiveDuration);
       setHoverX(e.clientX - rect.left);
       setProgressBarWidth(rect.width);
     },
-    [totalDuration]
+    [effectiveDuration]
   );
 
   const handleProgressLeave = useCallback(() => {
@@ -383,25 +490,48 @@ export function VideoPlayer({
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
-  // ─── PiP (simulated) ───────────────────────────────────
-  const togglePiP = useCallback(() => {
-    setIsPiP(!isPiP);
-  }, [isPiP]);
+  // ─── PiP ───────────────────────────────────────────────
+  const togglePiP = useCallback(async () => {
+    if (useRealVideo && videoRef.current && document.pictureInPictureEnabled) {
+      try {
+        if (document.pictureInPictureElement) {
+          await document.exitPictureInPicture();
+          setIsPiP(false);
+        } else {
+          await videoRef.current.requestPictureInPicture();
+          setIsPiP(true);
+        }
+      } catch {
+        setIsPiP((prev) => !prev); // Fallback toggle
+      }
+    } else {
+      setIsPiP(!isPiP);
+    }
+  }, [isPiP, useRealVideo]);
 
   // ─── Resume ─────────────────────────────────────────────
   const handleResume = useCallback(() => {
     setShowResumePrompt(false);
-    setIsPlaying(true);
+    if (useRealVideo && videoRef.current) {
+      videoRef.current.play().catch(() => {});
+    } else {
+      setIsPlaying(true);
+    }
     resetControlsTimer();
-  }, [resetControlsTimer]);
+  }, [resetControlsTimer, useRealVideo]);
 
   const handleStartFromBeginning = useCallback(() => {
     setCurrentTime(0);
     lastTimeRef.current = 0;
     setShowResumePrompt(false);
-    setIsPlaying(true);
+    if (useRealVideo && videoRef.current) {
+      videoRef.current.currentTime = 0;
+      videoRef.current.play().catch(() => {});
+    } else {
+      setIsPlaying(true);
+    }
     resetControlsTimer();
-  }, [resetControlsTimer]);
+  }, [resetControlsTimer, useRealVideo]);
 
   // ─── Keyboard shortcuts ─────────────────────────────────
   useEffect(() => {
@@ -510,11 +640,11 @@ export function VideoPlayer({
         <div
           key={i}
           className="absolute top-0 bottom-0 w-0.5 bg-white/40 z-10"
-          style={{ left: `${(ch.time / totalDuration) * 100}%` }}
+          style={{ left: `${(ch.time / effectiveDuration) * 100}%` }}
           title={ch.title}
         />
       ));
-  }, [chapters, totalDuration]);
+  }, [chapters, effectiveDuration]);
 
   // ─── Volume icon ────────────────────────────────────────
   const VolumeIcon = displayVolume === 0 ? VolumeX : displayVolume < 0.5 ? Volume1 : Volume2;
@@ -550,51 +680,67 @@ export function VideoPlayer({
           >
             {/* 16:9 Aspect Ratio Container */}
             <div className="relative w-full" style={{ aspectRatio: isPiP ? '16/9' : '16/9' }}>
-              {/* Simulated Video Content - Animated Gradient */}
-              <div className="absolute inset-0">
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    background: isPlaying
-                      ? `linear-gradient(${135 + currentTime * 0.5}deg, 
-                          #0f172a 0%, 
-                          #1e293b 25%, 
-                          #334155 50%, 
-                          #1e293b 75%, 
-                          #0f172a 100%)`
-                      : 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)',
-                    transition: 'background 2s ease',
-                  }}
+              {/* Real HTML5 Video or Simulated Video Content */}
+              {useRealVideo ? (
+                <video
+                  ref={videoRef}
+                  src={videoUrl}
+                  className="absolute inset-0 w-full h-full object-contain bg-black"
+                  onTimeUpdate={handleVideoTimeUpdate}
+                  onEnded={handleVideoEnded}
+                  onPlay={handleVideoPlay}
+                  onPause={handleVideoPause}
+                  onLoadedMetadata={handleVideoLoadedMetadata}
+                  onProgress={handleVideoProgress}
+                  playsInline
+                  preload="metadata"
                 />
-                {/* Animated wave pattern */}
-                {isPlaying && (
-                  <div className="absolute inset-0 opacity-20">
-                    <div
-                      className="absolute inset-0"
-                      style={{
-                        background: `radial-gradient(ellipse at ${30 + Math.sin(currentTime * 0.1) * 20}% ${50 + Math.cos(currentTime * 0.08) * 20}%, 
-                          rgba(16, 185, 129, 0.4) 0%, 
-                          transparent 50%),
-                          radial-gradient(ellipse at ${70 + Math.cos(currentTime * 0.12) * 20}% ${50 + Math.sin(currentTime * 0.09) * 20}%, 
-                          rgba(139, 92, 246, 0.3) 0%, 
-                          transparent 50%)`,
-                      }}
-                    />
-                  </div>
-                )}
-                {/* Center content indicator */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center text-white/30">
-                    <Video className={cn('mx-auto mb-3', isPiP ? 'h-8 w-8' : 'h-16 w-16')} />
-                    <p className={cn('font-medium', isPiP ? 'text-[10px]' : 'text-sm')}>Simulated Video Playback</p>
-                    {!isPiP && (
-                      <p className="text-xs mt-1">
-                        {isPlaying ? `Playing at ${playbackSpeed}x speed` : 'Click play to start'}
-                      </p>
-                    )}
+              ) : (
+                <div className="absolute inset-0">
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      background: isPlaying
+                        ? `linear-gradient(${135 + currentTime * 0.5}deg, 
+                            #0f172a 0%, 
+                            #1e293b 25%, 
+                            #334155 50%, 
+                            #1e293b 75%, 
+                            #0f172a 100%)`
+                        : 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)',
+                      transition: 'background 2s ease',
+                    }}
+                  />
+                  {/* Animated wave pattern */}
+                  {isPlaying && (
+                    <div className="absolute inset-0 opacity-20">
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          background: `radial-gradient(ellipse at ${30 + Math.sin(currentTime * 0.1) * 20}% ${50 + Math.cos(currentTime * 0.08) * 20}%, 
+                            rgba(16, 185, 129, 0.4) 0%, 
+                            transparent 50%),
+                            radial-gradient(ellipse at ${70 + Math.cos(currentTime * 0.12) * 20}% ${50 + Math.sin(currentTime * 0.09) * 20}%, 
+                            rgba(139, 92, 246, 0.3) 0%, 
+                            transparent 50%)`,
+                        }}
+                      />
+                    </div>
+                  )}
+                  {/* Center content indicator */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center text-white/30">
+                      <Video className={cn('mx-auto mb-3', isPiP ? 'h-8 w-8' : 'h-16 w-16')} />
+                      <p className={cn('font-medium', isPiP ? 'text-[10px]' : 'text-sm')}>Simulated Video Playback</p>
+                      {!isPiP && (
+                        <p className="text-xs mt-1">
+                          {isPlaying ? `Playing at ${playbackSpeed}x speed` : 'Click play to start'}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Title Overlay */}
               <AnimatePresence>
@@ -827,7 +973,7 @@ export function VideoPlayer({
 
                       {/* Time Display */}
                       <span className="text-xs text-white/70 font-mono tabular-nums shrink-0 ml-1">
-                        {formatTime(currentTime)} / {formatTime(totalDuration)}
+                        {formatTime(currentTime)} / {formatTime(effectiveDuration)}
                       </span>
 
                       {/* Spacer */}
@@ -1008,7 +1154,7 @@ export function VideoPlayer({
                 <p className="text-xs text-muted-foreground line-clamp-3 mb-2">{lesson.description}</p>
               )}
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatDuration(totalDuration)}</span>
+                <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatDuration(effectiveDuration)}</span>
                 {isCompleted && (
                   <span className="flex items-center gap-1 text-emerald-600">
                     <CheckCircle2 className="h-3 w-3" /> Completed
@@ -1086,5 +1232,3 @@ export function VideoPlayer({
     </div>
   );
 }
-
-

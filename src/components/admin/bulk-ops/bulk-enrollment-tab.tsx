@@ -53,6 +53,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCourses, useUsers } from '@/hooks/use-data';
 import { useAppStore } from '@/store/app-store';
+import { toast } from 'sonner';
 
 // Bulk user display type for enrollment UI
 interface BulkUser {
@@ -220,23 +221,60 @@ export function BulkEnrollmentTab() {
     URL.revokeObjectURL(url);
   }, []);
 
-  const handleEnroll = useCallback(() => {
+  const handleEnroll = useCallback(async () => {
     setShowConfirmDialog(false);
     setCurrentStep('processing');
     setProgress(0);
     const total = usersToEnroll.length;
-    let processed = 0;
-    const interval = setInterval(() => {
-      processed++;
-      setProgress(Math.round((processed / total) * 100));
-      if (processed >= total) {
-        clearInterval(interval);
-        setSuccessCount(Math.round(total * 0.92));
-        setFailCount(total - Math.round(total * 0.92));
+
+    try {
+      // Call the real bulk-operations API
+      const response = await fetch('/api/bulk-operations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          operation: 'bulk-enroll',
+          data: {
+            courseId: selectedCourseId,
+            userIds: usersToEnroll.map(u => u.id),
+            sendWelcomeEmail,
+            grantImmediateAccess,
+          },
+        }),
+      });
+      const result = await response.json();
+
+      // Animate progress
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+        progress += 10;
+        if (progress >= 100) {
+          progress = 100;
+          clearInterval(progressInterval);
+        }
+        setProgress(progress);
+      }, 100);
+
+      // Wait for progress animation
+      await new Promise(resolve => setTimeout(resolve, 1200));
+
+      if (result.success) {
+        setSuccessCount(result.successCount || 0);
+        setFailCount(result.failCount || 0);
         setCurrentStep('complete');
+      } else {
+        setSuccessCount(0);
+        setFailCount(total);
+        setCurrentStep('complete');
+        toast.error('Bulk enrollment failed', { description: result.error || 'Unknown error' });
       }
-    }, 200);
-  }, [usersToEnroll]);
+    } catch (error) {
+      setSuccessCount(0);
+      setFailCount(total);
+      setCurrentStep('complete');
+      toast.error('Bulk enrollment failed', { description: 'Network error occurred.' });
+    }
+  }, [usersToEnroll, selectedCourseId, sendWelcomeEmail, grantImmediateAccess, setShowConfirmDialog, setCurrentStep, setProgress, setSuccessCount, setFailCount]);
 
   const resetForm = useCallback(() => {
     setSelectedCourseId('');

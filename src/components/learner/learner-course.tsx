@@ -433,7 +433,16 @@ function ModuleSection({ module: mod, moduleIndex, onLessonClick, progressMap }:
                             </Badge>
                           )}
                           {/* Download icon for downloadable resources */}
-                          {lesson.resources && <Download className="h-3 w-3 text-muted-foreground/50 hover:text-muted-foreground cursor-pointer transition-colors" />}
+                          {lesson.resources && <Download className="h-3 w-3 text-muted-foreground/50 hover:text-muted-foreground cursor-pointer transition-colors" onClick={(e) => {
+                            e.stopPropagation();
+                            const resourceUrl = Array.isArray(lesson.resources) ? lesson.resources[0]?.url : String(lesson.resources);
+                            if (resourceUrl) {
+                              window.open(resourceUrl, '_blank');
+                            } else {
+                              navigator.clipboard?.writeText(lesson.title + ' resources').catch(() => {});
+                              toast.success('Resource link copied');
+                            }
+                          }} />}
                         </div>
                       </div>
                     </div>
@@ -475,7 +484,7 @@ function ModuleSection({ module: mod, moduleIndex, onLessonClick, progressMap }:
 }
 
 // ─── Discussion Q&A Tab ────────────────────────────────────
-function DiscussionTab({ courseId, userId }: { courseId: string; userId: string }) {
+function DiscussionTab({ courseId, userId, onSwitchToQA }: { courseId: string; userId: string; onSwitchToQA?: () => void }) {
   const { data: discussionsData, isLoading } = useLessonDiscussions({ courseId });
   const createDiscussion = useCreateDiscussion();
 
@@ -697,11 +706,18 @@ function DiscussionTab({ courseId, userId }: { courseId: string; userId: string 
                     <div className="flex items-start gap-3">
                       {/* Vote column */}
                       <div className="flex flex-col items-center gap-1 pt-1">
-                        <button className="p-1 rounded hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+                        <button className="p-1 rounded hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors text-muted-foreground hover:text-emerald-600" onClick={(e) => {
+                          e.stopPropagation();
+                          setQuestionVotes(prev => ({ ...prev, [question.id]: (prev[question.id] || 0) + 1 }));
+                          toggleReaction.mutate({ postId: question.id, userId, type: 'like' });
+                        }}>
                           <ChevronUp className="h-4 w-4" />
                         </button>
-                        <span className="text-sm font-semibold text-foreground">{qReplies.length}</span>
-                        <button className="p-1 rounded hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+                        <span className="text-sm font-semibold text-foreground">{(questionVotes[question.id] || 0) + qReplies.length}</span>
+                        <button className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors text-muted-foreground hover:text-red-500" onClick={(e) => {
+                          e.stopPropagation();
+                          setQuestionVotes(prev => ({ ...prev, [question.id]: (prev[question.id] || 0) - 1 }));
+                        }}>
                           <ChevronDown className="h-4 w-4" />
                         </button>
                       </div>
@@ -798,7 +814,7 @@ function DiscussionTab({ courseId, userId }: { courseId: string; userId: string 
         </div>
       )}
 
-      <Button variant="outline" className="w-full">View All Discussions</Button>
+      <Button variant="outline" className="w-full" onClick={onSwitchToQA}>View All Discussions</Button>
     </div>
   );
 }
@@ -807,6 +823,7 @@ function DiscussionTab({ courseId, userId }: { courseId: string; userId: string 
 function QADiscussionTab({ courseId, userId, modules }: { courseId: string; userId: string; modules: Module[] }) {
   const { data: discussionsData, isLoading } = useLessonDiscussions({ courseId });
   const createDiscussion = useCreateDiscussion();
+  const toggleReaction = useToggleReaction();
 
   const [selectedLessonId, setSelectedLessonId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -819,6 +836,7 @@ function QADiscussionTab({ courseId, userId, modules }: { courseId: string; user
   const [answerContent, setAnswerContent] = useState('');
   const [qaErrors, setQaErrors] = useState<Record<string, string>>({});
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set(modules.map(m => m.id)));
+  const [questionVotes, setQuestionVotes] = useState<Record<string, number>>({});
 
   const discussions = discussionsData?.discussions || [];
 
@@ -1117,10 +1135,10 @@ function QADiscussionTab({ courseId, userId, modules }: { courseId: string; user
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Details</label>
                 <div className="flex items-center gap-1 mb-2 p-1 rounded-lg border bg-muted/30">
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Bold className="h-3.5 w-3.5" /></Button>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Italic className="h-3.5 w-3.5" /></Button>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Code2 className="h-3.5 w-3.5" /></Button>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Link2 className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setAskContent(prev => prev + '****')}><Bold className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setAskContent(prev => prev + '____')}><Italic className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setAskContent(prev => prev + '``')}><Code2 className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setAskContent(prev => prev + '[](url)')}><Link2 className="h-3.5 w-3.5" /></Button>
                 </div>
                 <Textarea
                   placeholder="Provide more details about your question... Supports **bold**, *italic*, `code`"
@@ -1382,6 +1400,8 @@ function NotesTab({ notes, onAddNote, onUpdateNote, onDeleteNote, allLessons, on
   const [newNoteCategory, setNewNoteCategory] = useState<Note['category']>('personal');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [showAiSummary, setShowAiSummary] = useState(false);
+  const [aiSummaryText, setAiSummaryText] = useState('');
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
 
   // Group notes by lesson
   const lessonsWithNotes = Array.from(new Set(notes.map(n => n.lessonId)));
@@ -1453,8 +1473,30 @@ function NotesTab({ notes, onAddNote, onUpdateNote, onDeleteNote, allLessons, on
               <Check className="h-3 w-3" /> Saved
             </motion.div>
           )}
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowAiSummary(!showAiSummary)}>
-            <Sparkles className="h-3.5 w-3.5" /> AI Summarize
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={async () => {
+            if (showAiSummary) { setShowAiSummary(false); return; }
+            setShowAiSummary(true);
+            if (aiSummaryText) return; // already loaded
+            setAiSummaryLoading(true);
+            try {
+              const notesText = notes.map(n => `[${n.lessonTitle} - ${noteCategoryConfig[n.category].label}]: ${n.content}`).join('\n');
+              const res = await fetch('/api/ai', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  message: `Summarize my course notes in 3-5 key takeaways with actionable study suggestions:\n\n${notesText || 'No notes yet.'}`,
+                  context: 'Course notes summary',
+                }),
+              });
+              const data = await res.json();
+              setAiSummaryText(data.response || 'Unable to generate summary. Please try again.');
+            } catch {
+              setAiSummaryText('Failed to generate AI summary. Please try again later.');
+            } finally {
+              setAiSummaryLoading(false);
+            }
+          }}>
+            <Sparkles className="h-3.5 w-3.5" /> {showAiSummary ? 'Hide Summary' : 'AI Summarize'}
           </Button>
           <Button size="sm" variant="outline" className="gap-1.5" onClick={handleExportNotes}>
             <Copy className="h-3.5 w-3.5" /> Export
@@ -1479,7 +1521,14 @@ function NotesTab({ notes, onAddNote, onUpdateNote, onDeleteNote, allLessons, on
                   <span className="text-sm font-semibold text-foreground">AI Summary of Your Notes</span>
                 </div>
                 <div className="text-sm text-muted-foreground leading-relaxed space-y-2">
-                  {notes.length > 0 ? (
+                  {aiSummaryLoading ? (
+                    <div className="flex items-center gap-2 text-violet-600">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Generating AI summary of your notes...</span>
+                    </div>
+                  ) : aiSummaryText ? (
+                    <div className="whitespace-pre-wrap">{aiSummaryText}</div>
+                  ) : notes.length > 0 ? (
                     <>
                       <p><strong>Total Notes:</strong> {notes.length} across {lessonsWithNotes.length} lessons</p>
                       <p><strong>Categories:</strong> {Object.entries(
@@ -2058,6 +2107,13 @@ export function LearnerCourse() {
   const [activeLessonModuleName, setActiveLessonModuleName] = useState('');
   const [activeAssessmentId, setActiveAssessmentId] = useState<string | null>(null);
   const curriculumRef = useRef<HTMLDivElement>(null);
+  const [visibleReviewCount, setVisibleReviewCount] = useState(5);
+  const [helpfulReviews, setHelpfulReviews] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('nextgen-lms-helpful-reviews');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch { return new Set(); }
+  });
 
   // Fetch assessments for this course
   const { data: assessmentsData, isLoading: assessmentsLoading } = useAssessments(firstCourseId || undefined);
@@ -2347,10 +2403,10 @@ export function LearnerCourse() {
               <div className="flex items-center gap-1.5">
                 <Avatar className="h-6 w-6">
                   <AvatarFallback className="text-[10px] bg-slate-200 dark:bg-slate-700">
-                    {currentUser?.name?.split(' ').map(n => n[0]).join('') || 'U'}
+                    {(course.instructor?.name || 'Instructor').split(' ').map(n => n[0]).join('')}
                   </AvatarFallback>
                 </Avatar>
-                <span>{currentUser?.name || 'Instructor'}</span>
+                <span>{course.instructor?.name || 'Instructor'}</span>
               </div>
               <div className="flex items-center gap-1">
                 <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
@@ -2407,11 +2463,17 @@ export function LearnerCourse() {
                 </Button>
               ) : (
                 <>
-                  <Button className="gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20 text-white">
+                  <Button className="gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md shadow-emerald-500/20 text-white" onClick={() => {
+                    const inProgress = allLessons.find(l => lessonProgressState[l.id] === 'in_progress');
+                    const nextUp = allLessons.find(l => lessonProgressState[l.id] === 'not_started');
+                    const target = inProgress || nextUp;
+                    if (target) handleLessonClick(target);
+                    else setActiveTab('curriculum');
+                  }}>
                     <Play className="h-4 w-4" />
                     Continue Learning
                   </Button>
-                  <Button variant="outline" className="gap-2">
+                  <Button variant="outline" className="gap-2" onClick={() => setView('learner-achievements')}>
                     <Award className="h-4 w-4" />
                     View Certificate
                   </Button>
@@ -2753,7 +2815,7 @@ export function LearnerCourse() {
                 animate="visible"
                 exit="exit"
               >
-                <DiscussionTab courseId={course.id} userId={userId} />
+                <DiscussionTab courseId={course.id} userId={userId} onSwitchToQA={() => setActiveTab('qa')} />
               </motion.div>
             </AnimatePresence>
           </TabsContent>
@@ -3011,7 +3073,7 @@ export function LearnerCourse() {
                     <div className="space-y-3">
                       <h3 className="font-semibold text-foreground">Recent Reviews</h3>
                       {reviews.length > 0 ? (
-                        reviews.slice(0, 10).map((review: any) => (
+                        reviews.slice(0, visibleReviewCount).map((review: any) => (
                           <Card key={review.id} className={cn(glassCard, 'hover:shadow-md transition-all duration-200')}>
                             <CardContent className="p-4">
                               <div className="flex items-start gap-3">
@@ -3040,8 +3102,16 @@ export function LearnerCourse() {
                                   </div>
                                   <p className="text-sm text-muted-foreground leading-relaxed">{review.content}</p>
                                   <div className="flex items-center gap-3 mt-3">
-                                    <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                                      <ThumbsUp className="h-3 w-3" /> Helpful
+                                    <button className={cn("flex items-center gap-1 text-xs transition-colors", helpfulReviews.has(review.id) ? "text-emerald-600" : "text-muted-foreground hover:text-foreground")} onClick={() => {
+                                      setHelpfulReviews(prev => {
+                                        const next = new Set(prev);
+                                        if (next.has(review.id)) next.delete(review.id);
+                                        else next.add(review.id);
+                                        try { localStorage.setItem('nextgen-lms-helpful-reviews', JSON.stringify([...next])); } catch {}
+                                        return next;
+                                      });
+                                    }}>
+                                      <ThumbsUp className="h-3 w-3" /> {helpfulReviews.has(review.id) ? 'Helpful ✓' : 'Helpful'}
                                     </button>
                                   </div>
                                 </div>
@@ -3059,8 +3129,8 @@ export function LearnerCourse() {
                       )}
                     </div>
 
-                    {reviews.length > 10 && (
-                      <Button variant="outline" className="w-full">Load More Reviews</Button>
+                    {reviews.length > visibleReviewCount && (
+                      <Button variant="outline" className="w-full" onClick={() => setVisibleReviewCount(prev => prev + 5)}>Load More Reviews</Button>
                     )}
                   </>
                 )}

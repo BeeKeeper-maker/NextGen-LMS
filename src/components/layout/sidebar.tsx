@@ -52,6 +52,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
+import { NotificationCenter } from '@/components/shared/notification-center';
 
 interface NavItem {
   label: string;
@@ -90,7 +91,7 @@ const quickCreateItems = [
   { label: 'New Course', icon: BookOpen, view: 'admin-courses' as AppView },
   { label: 'New Assessment', icon: ClipboardCheck, view: 'admin-assessments' as AppView },
   { label: 'New Post', icon: MessageCircle, view: 'admin-community' as AppView },
-  { label: 'Schedule Session', icon: Calendar, view: 'admin-dashboard' as AppView },
+  { label: 'Schedule Session', icon: Calendar, view: 'admin-live-cohorts' as AppView },
 ];
 
 export function Sidebar() {
@@ -108,6 +109,7 @@ export function Sidebar() {
     enterAdminMode,
     enterLearnerMode,
     goToLanding,
+    logout,
   } = useAppStore();
 
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
@@ -148,51 +150,8 @@ export function Sidebar() {
                   {isAdmin ? 'Admin Portal' : 'Learner Portal'}
                 </p>
               </div>
-              {/* Notification Bell in sidebar header */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 relative">
-                    <Bell className="h-4 w-4" />
-                    {unreadCount > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
-                        {unreadCount > 9 ? '9+' : unreadCount}
-                      </span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-72 p-0">
-                  <div className="flex items-center justify-between p-3 border-b">
-                    <h4 className="text-sm font-semibold">Notifications</h4>
-                    {unreadCount > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 text-[11px] text-muted-foreground"
-                        onClick={markAllNotificationsRead}
-                      >
-                        Mark all read
-                      </Button>
-                    )}
-                  </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {notifications.slice(0, 4).map((notif) => (
-                      <button
-                        key={notif.id}
-                        onClick={() => markNotificationRead(notif.id)}
-                        className={`w-full text-left p-2.5 border-b border-border/50 hover:bg-muted/50 transition-colors ${!notif.read ? 'bg-muted/30' : ''}`}
-                      >
-                        <div className="flex items-start gap-2">
-                          <span className="text-sm shrink-0">{notif.icon}</span>
-                          <div className="min-w-0">
-                            <p className="text-xs font-medium text-foreground">{notif.title}</p>
-                            <p className="text-[11px] text-muted-foreground line-clamp-1">{notif.message}</p>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
+              {/* Notification Center in sidebar header */}
+              <NotificationCenter />
             </motion.div>
           )}
         </div>
@@ -338,7 +297,7 @@ export function Sidebar() {
                     <p className="text-xs text-muted-foreground">{currentUser.email}</p>
                   </div>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setView(isAdmin ? 'admin-settings' : 'learner-profile')}>
                     <User className="mr-2 h-4 w-4" />
                     Profile
                   </DropdownMenuItem>
@@ -357,7 +316,7 @@ export function Sidebar() {
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={goToLanding}>
+                  <DropdownMenuItem onClick={() => { logout(); goToLanding(); }}>
                     <LogOut className="mr-2 h-4 w-4" />
                     Sign Out
                   </DropdownMenuItem>

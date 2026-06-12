@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCourses, useLiveCohorts, useLiveCohortRSVPs, useToggleRSVP } from '@/hooks/use-data';
 import { useAppStore } from '@/store/app-store';
+import { toast } from 'sonner';
 import type { CalendarEvent } from '@/types';
 
 // Event type color mapping
@@ -465,10 +466,13 @@ export function LearnerLiveCohorts() {
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <div
-                                    className="text-[10px] rounded px-1 py-0.5 text-white font-medium truncate cursor-pointer"
+                                    className="text-[10px] rounded px-1 py-0.5 text-white font-medium truncate cursor-pointer hover:opacity-80 transition-opacity"
                                     style={{
                                       backgroundColor: color,
                                       minHeight: duration > 90 ? '40px' : '24px',
+                                    }}
+                                    onClick={() => {
+                                      toast.info(`${event.title}\n${format(parseISO(event.startDate), 'h:mm a')} – ${format(parseISO(event.endDate), 'h:mm a')}`);
                                     }}
                                   >
                                     {event.title}
@@ -557,8 +561,14 @@ export function LearnerLiveCohorts() {
 
                         {/* Watch Button */}
                         <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => {
-                          const recordingUrl = `/api/live-cohorts/${recording.id}`;
-                          window.open(recordingUrl, '_blank');
+                          // Use meetingUrl if available, otherwise show coming soon toast
+                          if (recording.meetingUrl) {
+                            window.open(recording.meetingUrl, '_blank');
+                          } else if (recording.recordingUrl) {
+                            window.open(recording.recordingUrl, '_blank');
+                          } else {
+                            toast.success('Recording coming soon! Check back later.');
+                          }
                         }}>
                           <Play className="h-3.5 w-3.5" />
                           Watch Recording

@@ -1,0 +1,700 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import { useState, useCallback, useMemo } from 'react';
+     4→     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→     5→import {
+     6→     6→  Award,
+     7→     7→  FileText,
+     8→     8→  Send,
+     9→     9→  Ban,
+    10→    10→  Download,
+    11→    11→  CheckCircle2,
+    12→    12→  AlertCircle,
+    13→    13→  Loader2,
+    14→    14→  ChevronRight,
+    15→    15→  Mail,
+    16→    16→  Shield,
+    17→    17→  Users,
+    18→    18→  Search,
+    19→    19→  RefreshCw,
+    20→    20→  Trash2,
+    21→    21→  Filter,
+    22→    22→} from 'lucide-react';
+    23→    23→import { Button } from '@/components/ui/button';
+    24→    24→import { Input } from '@/components/ui/input';
+    25→    25→import { Badge } from '@/components/ui/badge';
+    26→    26→import { Switch } from '@/components/ui/switch';
+    27→    27→import { Label } from '@/components/ui/label';
+    28→    28→import { Separator } from '@/components/ui/separator';
+    29→    29→import { Progress } from '@/components/ui/progress';
+    30→    30→import { Checkbox } from '@/components/ui/checkbox';
+    31→    31→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    32→    32→import {
+    33→    33→  Select,
+    34→    34→  SelectContent,
+    35→    35→  SelectItem,
+    36→    36→  SelectTrigger,
+    37→    37→  SelectValue,
+    38→    38→} from '@/components/ui/select';
+    39→    39→import {
+    40→    40→  Table,
+    41→    41→  TableBody,
+    42→    42→  TableCell,
+    43→    43→  TableHead,
+    44→    44→  TableHeader,
+    45→    45→  TableRow,
+    46→    46→} from '@/components/ui/table';
+    47→    47→import {
+    48→    48→  Dialog,
+    49→    49→  DialogContent,
+    50→    50→  DialogDescription,
+    51→    51→  DialogFooter,
+    52→    52→  DialogHeader,
+    53→    53→  DialogTitle,
+    54→    54→} from '@/components/ui/dialog';
+    55→    55→import { ScrollArea } from '@/components/ui/scroll-area';
+    56→    56→import { useCourses, useCertificateAwards } from '@/hooks/use-data';
+    57→    57→import { useAppStore } from '@/store/app-store';
+    58→    58→
+    59→    59→interface BulkCertificateRecord {
+    60→    60→  id: string;
+    61→    61→  userName: string;
+    62→    62→  email: string;
+    63→    63→  courseName: string;
+    64→    64→  issuedDate: string;
+    65→    65→  verificationCode: string;
+    66→    66→  status: 'issued' | 'revoked' | 'pending';
+    67→    67→}
+    68→    68→
+    69→    69→// Certificate templates
+    70→    70→const certTemplates = [
+    71→    71→  { id: 'tpl-1', name: 'Classic Certificate', description: 'Traditional bordered design with gold accents' },
+    72→    72→  { id: 'tpl-2', name: 'Modern Minimal', description: 'Clean, minimal design with subtle gradients' },
+    73→    73→  { id: 'tpl-3', name: 'Professional Badge', description: 'Digital badge style with icon overlay' },
+    74→    74→  { id: 'tpl-4', name: 'Academic Scroll', description: 'Formal academic style with seal' },
+    75→    75→];
+    76→    76→
+    77→    77→type CertSubTab = 'issue' | 'manage';
+    78→    78→type RecipientCriteria = 'all_completers' | 'score_threshold' | 'custom';
+    79→    79→type IssueStep = 'configure' | 'confirm' | 'processing' | 'complete';
+    80→    80→
+    81→    81→export function BulkCertificateTab() {
+    82→    82→  // Sub-tab
+    83→    83→  const [subTab, setSubTab] = useState<CertSubTab>('issue');
+    84→    84→  const { currentTenant } = useAppStore();
+    85→    85→  const tenantId = currentTenant?.id || '';
+    86→    86→  const { data: coursesData } = useCourses(tenantId || undefined);
+    87→    87→  const { data: awardsData } = useCertificateAwards(tenantId);
+    88→    88→  const demoCourses = coursesData || [];
+    89→    89→
+    90→    90→  // Map real certificate awards to BulkCertificateRecord
+    91→    91→  const bulkCertificateRecords: BulkCertificateRecord[] = (awardsData || []).map((award: any) => ({
+    92→    92→    id: award.id,
+    93→    93→    userName: award.recipientName || award.user?.name || award.user?.email || 'Unknown',
+    94→    94→    email: award.user?.email || '',
+    95→    95→    courseName: award.courseName || 'General Certificate',
+    96→    96→    issuedDate: new Date(award.issuedAt).toISOString().split('T')[0],
+    97→    97→    verificationCode: award.verificationCode,
+    98→    98→    status: 'issued' as const,
+    99→    99→  }));
+   100→   100→  // Issue state
+   101→   101→  const [selectedCourseId, setSelectedCourseId] = useState('');
+   102→   102→  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+   103→   103→  const [recipientCriteria, setRecipientCriteria] = useState<RecipientCriteria>('all_completers');
+   104→   104→  const [scoreThreshold, setScoreThreshold] = useState('70');
+   105→   105→  const [sendNotification, setSendNotification] = useState(true);
+   106→   106→  const [issueStep, setIssueStep] = useState<IssueStep>('configure');
+   107→   107→  const [issueProgress, setIssueProgress] = useState(0);
+   108→   108→  const [showIssueConfirm, setShowIssueConfirm] = useState(false);
+   109→   109→  const [issuedCount, setIssuedCount] = useState(0);
+   110→   110→  const [issueFailCount, setIssueFailCount] = useState(0);
+   111→   111→  // Manage state
+   112→   112→  const [selectedCertIds, setSelectedCertIds] = useState<Set<string>>(new Set());
+   113→   113→  const [searchQuery, setSearchQuery] = useState('');
+   114→   114→  const [statusFilter, setStatusFilter] = useState('all');
+   115→   115→  const [showRevokeDialog, setShowRevokeDialog] = useState(false);
+   116→   116→  const [showResendDialog, setShowResendDialog] = useState(false);
+   117→   117→  const [actionProgress, setActionProgress] = useState(false);
+   118→   118→  const [actionComplete, setActionComplete] = useState('');
+   119→   119→
+   120→   120→  const selectedCourse = demoCourses.find((c: any) => c.id === selectedCourseId);
+   121→   121→  const selectedTemplate = certTemplates.find((t) => t.id === selectedTemplateId);
+   122→   122→
+   123→   123→  // Estimate count for issuance
+   124→   124→  const estimatedCount = useMemo(() => {
+   125→   125→    if (!selectedCourse) return 0;
+   126→   126→    const enrollmentCount = selectedCourse.enrollmentCount || 0;
+   127→   127→    const completionRate = selectedCourse.completionRate || 0;
+   128→   128→    const completers = Math.round(enrollmentCount * (completionRate / 100));
+   129→   129→    if (recipientCriteria === 'all_completers') return completers;
+   130→   130→    if (recipientCriteria === 'score_threshold') return Math.round(completers * 0.65);
+   131→   131→    return Math.round(completers * 0.3);
+   132→   132→  }, [selectedCourse, recipientCriteria]);
+   133→   133→
+   134→   134→  // Filter certificates for management
+   135→   135→  const filteredCerts = useMemo(() => {
+   136→   136→    return bulkCertificateRecords.filter((cert) => {
+   137→   137→      const matchesSearch =
+   138→   138→        !searchQuery ||
+   139→   139→        cert.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+   140→   140→        cert.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+   141→   141→        cert.courseName.toLowerCase().includes(searchQuery.toLowerCase());
+   142→   142→      const matchesStatus = statusFilter === 'all' || cert.status === statusFilter;
+   143→   143→      return matchesSearch && matchesStatus;
+   144→   144→    });
+   145→   145→  }, [searchQuery, statusFilter]);
+   146→   146→
+   147→   147→  const toggleCertSelect = useCallback((id: string) => {
+   148→   148→    setSelectedCertIds((prev) => {
+   149→   149→      const next = new Set(prev);
+   150→   150→      if (next.has(id)) next.delete(id);
+   151→   151→      else next.add(id);
+   152→   152→      return next;
+   153→   153→    });
+   154→   154→  }, []);
+   155→   155→
+   156→   156→  const toggleAllCerts = useCallback(() => {
+   157→   157→    if (selectedCertIds.size === filteredCerts.length) {
+   158→   158→      setSelectedCertIds(new Set());
+   159→   159→    } else {
+   160→   160→      setSelectedCertIds(new Set(filteredCerts.map((c) => c.id)));
+   161→   161→    }
+   162→   162→  }, [filteredCerts, selectedCertIds]);
+   163→   163→
+   164→   164→  const handleIssue = useCallback(() => {
+   165→   165→    setShowIssueConfirm(false);
+   166→   166→    setIssueStep('processing');
+   167→   167→    setIssueProgress(0);
+   168→   168→    const total = estimatedCount;
+   169→   169→    let processed = 0;
+   170→   170→    const interval = setInterval(() => {
+   171→   171→      processed++;
+   172→   172→      setIssueProgress(Math.round((processed / total) * 100));
+   173→   173→      if (processed >= total) {
+   174→   174→        clearInterval(interval);
+   175→   175→        setIssuedCount(Math.round(total * 0.95));
+   176→   176→        setIssueFailCount(total - Math.round(total * 0.95));
+   177→   177→        setIssueStep('complete');
+   178→   178→      }
+   179→   179→    }, 150);
+   180→   180→  }, [estimatedCount]);
+   181→   181→
+   182→   182→  const resetIssueForm = useCallback(() => {
+   183→   183→    setSelectedCourseId('');
+   184→   184→    setSelectedTemplateId('');
+   185→   185→    setRecipientCriteria('all_completers');
+   186→   186→    setSendNotification(true);
+   187→   187→    setIssueStep('configure');
+   188→   188→    setIssueProgress(0);
+   189→   189→  }, []);
+   190→   190→
+   191→   191→  const handleBulkAction = useCallback((action: string) => {
+   192→   192→    setActionProgress(true);
+   193→   193→    setActionComplete('');
+   194→   194→    setTimeout(() => {
+   195→   195→      setActionProgress(false);
+   196→   196→      setActionComplete(action);
+   197→   197→      setSelectedCertIds(new Set());
+   198→   198→      setTimeout(() => setActionComplete(''), 3000);
+   199→   199→    }, 1500);
+   200→   200→  }, []);
+   201→   201→
+   202→   202→  const exportCertificates = useCallback(() => {
+   203→   203→    const headers = 'Name,Email,Course,Issued Date,Verification Code,Status\n';
+   204→   204→    const rows = filteredCerts
+   205→   205→      .map((c) => `${c.userName},${c.email},${c.courseName},${c.issuedDate},${c.verificationCode},${c.status}`)
+   206→   206→      .join('\n');
+   207→   207→    const blob = new Blob([headers + rows], { type: 'text/csv' });
+   208→   208→    const url = URL.createObjectURL(blob);
+   209→   209→    const a = document.createElement('a');
+   210→   210→    a.href = url;
+   211→   211→    a.download = 'certificates_export.csv';
+   212→   212→    a.click();
+   213→   213→    URL.revokeObjectURL(url);
+   214→   214→  }, [filteredCerts]);
+   215→   215→
+   216→   216→  return (
+   217→   217→    <div className="space-y-4">
+   218→   218→      <Tabs value={subTab} onValueChange={(v) => setSubTab(v as CertSubTab)}>
+   219→   219→        <TabsList className="grid w-full grid-cols-2">
+   220→   220→          <TabsTrigger value="issue" className="gap-1.5">
+   221→   221→            <Award className="h-3.5 w-3.5" />
+   222→   222→            Issue Certificates
+   223→   223→          </TabsTrigger>
+   224→   224→          <TabsTrigger value="manage" className="gap-1.5">
+   225→   225→            <FileText className="h-3.5 w-3.5" />
+   226→   226→            Manage Certificates
+   227→   227→          </TabsTrigger>
+   228→   228→        </TabsList>
+   229→   229→
+   230→   230→        {/* ─── ISSUE TAB ───────────────────────────────── */}
+   231→   231→        <TabsContent value="issue" className="space-y-4 mt-4">
+   232→   232→          <AnimatePresence mode="wait">
+   233→   233→            {issueStep === 'configure' && (
+   234→   234→              <motion.div
+   235→   235→                key="configure"
+   236→   236→                initial={{ opacity: 0, x: 20 }}
+   237→   237→                animate={{ opacity: 1, x: 0 }}
+   238→   238→                exit={{ opacity: 0, x: -20 }}
+   239→   239→                className="space-y-5"
+   240→   240→              >
+   241→   241→                {/* Course Selector */}
+   242→   242→                <div className="space-y-2">
+   243→   243→                  <Label className="text-sm font-semibold flex items-center gap-2">
+   244→   244→                    <FileText className="h-4 w-4 text-emerald-500" />
+   245→   245→                    Select Course
+   246→   246→                  </Label>
+   247→   247→                  <Select value={selectedCourseId} onValueChange={setSelectedCourseId}>
+   248→   248→                    <SelectTrigger>
+   249→   249→                      <SelectValue placeholder="Choose a course..." />
+   250→   250→                    </SelectTrigger>
+   251→   251→                    <SelectContent>
+   252→   252→                      {demoCourses.map((course: any) => (
+   253→   253→                        <SelectItem key={course.id} value={course.id}>
+   254→   254→                          <div className="flex items-center gap-2">
+   255→   255→                            <span>{course.title}</span>
+   256→   256→                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+   257→   257→                              {course.completionRate || 0}% complete
+   258→   258→                            </Badge>
+   259→   259→                          </div>
+   260→   260→                        </SelectItem>
+   261→   261→                      ))}
+   262→   262→                    </SelectContent>
+   263→   263→                  </Select>
+   264→   264→                </div>
+   265→   265→
+   266→   266→                {/* Template Selector */}
+   267→   267→                <div className="space-y-2">
+   268→   268→                  <Label className="text-sm font-semibold flex items-center gap-2">
+   269→   269→                    <Award className="h-4 w-4 text-emerald-500" />
+   270→   270→                    Certificate Template
+   271→   271→                  </Label>
+   272→   272→                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+   273→   273→                    {certTemplates.map((tpl) => (
+   274→   274→                      <button
+   275→   275→                        key={tpl.id}
+   276→   276→                        onClick={() => setSelectedTemplateId(tpl.id)}
+   277→   277→                        className={`flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-all duration-200 ${
+   278→   278→                          selectedTemplateId === tpl.id
+   279→   279→                            ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20 shadow-sm'
+   280→   280→                            : 'hover:border-emerald-300'
+   281→   281→                        }`}
+   282→   282→                      >
+   283→   283→                        <p className="text-sm font-medium">{tpl.name}</p>
+   284→   284→                        <p className="text-xs text-muted-foreground">{tpl.description}</p>
+   285→   285→                      </button>
+   286→   286→                    ))}
+   287→   287→                  </div>
+   288→   288→                </div>
+   289→   289→
+   290→   290→                <Separator />
+   291→   291→
+   292→   292→                {/* Recipient Criteria */}
+   293→   293→                <div className="space-y-3">
+   294→   294→                  <Label className="text-sm font-semibold flex items-center gap-2">
+   295→   295→                    <Users className="h-4 w-4 text-emerald-500" />
+   296→   296→                    Recipient Criteria
+   297→   297→                  </Label>
+   298→   298→                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+   299→   299→                    {[
+   300→   300→                      { key: 'all_completers' as RecipientCriteria, label: 'All Completers', desc: 'Everyone who completed the course' },
+   301→   301→                      { key: 'score_threshold' as RecipientCriteria, label: 'Score > X%', desc: 'Only those above a score threshold' },
+   302→   302→                      { key: 'custom' as RecipientCriteria, label: 'Custom Selection', desc: 'Manually select recipients' },
+   303→   303→                    ].map((opt) => (
+   304→   304→                      <button
+   305→   305→                        key={opt.key}
+   306→   306→                        onClick={() => setRecipientCriteria(opt.key)}
+   307→   307→                        className={`flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-all duration-200 ${
+   308→   308→                          recipientCriteria === opt.key
+   309→   309→                            ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20 shadow-sm'
+   310→   310→                            : 'hover:border-emerald-300'
+   311→   311→                        }`}
+   312→   312→                      >
+   313→   313→                        <p className="text-sm font-medium">{opt.label}</p>
+   314→   314→                        <p className="text-xs text-muted-foreground">{opt.desc}</p>
+   315→   315→                      </button>
+   316→   316→                    ))}
+   317→   317→                  </div>
+   318→   318→
+   319→   319→                  {recipientCriteria === 'score_threshold' && (
+   320→   320→                    <div className="flex items-center gap-2">
+   321→   321→                      <Label className="text-sm">Minimum Score:</Label>
+   322→   322→                      <Input
+   323→   323→                        type="number"
+   324→   324→                        value={scoreThreshold}
+   325→   325→                        onChange={(e) => setScoreThreshold(e.target.value)}
+   326→   326→                        className="w-20 h-8 text-sm"
+   327→   327→                        min={0}
+   328→   328→                        max={100}
+   329→   329→                      />
+   330→   330→                      <span className="text-sm text-muted-foreground">%</span>
+   331→   331→                    </div>
+   332→   332→                  )}
+   333→   333→
+   334→   334→                  {/* Count Preview */}
+   335→   335→                  {selectedCourseId && (
+   336→   336→                    <motion.div
+   337→   337→                      initial={{ opacity: 0, y: 5 }}
+   338→   338→                      animate={{ opacity: 1, y: 0 }}
+   339→   339→                      className="rounded-lg border bg-emerald-50/50 dark:bg-emerald-950/20 p-3 flex items-center gap-3"
+   340→   340→                    >
+   341→   341→                      <Award className="h-8 w-8 text-emerald-500" />
+   342→   342→                      <div>
+   343→   343→                        <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+   344→   344→                          {estimatedCount} certificates
+   345→   345→                        </p>
+   346→   346→                        <p className="text-xs text-muted-foreground">
+   347→   347→                          will be issued based on your criteria
+   348→   348→                        </p>
+   349→   349→                      </div>
+   350→   350→                    </motion.div>
+   351→   351→                  )}
+   352→   352→                </div>
+   353→   353→
+   354→   354→                <Separator />
+   355→   355→
+   356→   356→                {/* Notification Toggle */}
+   357→   357→                <div className="flex items-center justify-between rounded-lg border p-3">
+   358→   358→                  <div className="flex items-center gap-3">
+   359→   359→                    <Mail className="h-4 w-4 text-emerald-500" />
+   360→   360→                    <div>
+   361→   361→                      <p className="text-sm font-medium">Send Notification Email</p>
+   362→   362→                      <p className="text-xs text-muted-foreground">Notify recipients about their certificate</p>
+   363→   363→                    </div>
+   364→   364→                  </div>
+   365→   365→                  <Switch checked={sendNotification} onCheckedChange={setSendNotification} />
+   366→   366→                </div>
+   367→   367→
+   368→   368→                {/* Action */}
+   369→   369→                <div className="flex justify-end">
+   370→   370→                  <Button
+   371→   371→                    onClick={() => setShowIssueConfirm(true)}
+   372→   372→                    disabled={!selectedCourseId || !selectedTemplateId || estimatedCount === 0}
+   373→   373→                    className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-lg"
+   374→   374→                  >
+   375→   375→                    <Award className="h-4 w-4 mr-1.5" />
+   376→   376→                    Issue {estimatedCount} Certificates
+   377→   377→                  </Button>
+   378→   378→                </div>
+   379→   379→              </motion.div>
+   380→   380→            )}
+   381→   381→
+   382→   382→            {issueStep === 'processing' && (
+   383→   383→              <motion.div
+   384→   384→                key="processing"
+   385→   385→                initial={{ opacity: 0, scale: 0.95 }}
+   386→   386→                animate={{ opacity: 1, scale: 1 }}
+   387→   387→                className="flex flex-col items-center py-12 space-y-6"
+   388→   388→              >
+   389→   389→                <motion.div
+   390→   390→                  animate={{ rotate: 360 }}
+   391→   391→                  transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+   392→   392→                >
+   393→   393→                  <Loader2 className="h-12 w-12 text-emerald-500" />
+   394→   394→                </motion.div>
+   395→   395→                <div className="text-center">
+   396→   396→                  <h3 className="text-lg font-semibold">Issuing Certificates...</h3>
+   397→   397→                  <p className="text-sm text-muted-foreground mt-1">
+   398→   398→                    Generating {estimatedCount} certificates for {selectedCourse?.title}
+   399→   399→                  </p>
+   400→   400→                </div>
+   401→   401→                <div className="w-full max-w-sm">
+   402→   402→                  <Progress value={issueProgress} className="h-3" />
+   403→   403→                  <p className="text-xs text-muted-foreground text-center mt-2">{issueProgress}% complete</p>
+   404→   404→                </div>
+   405→   405→              </motion.div>
+   406→   406→            )}
+   407→   407→
+   408→   408→            {issueStep === 'complete' && (
+   409→   409→              <motion.div
+   410→   410→                key="complete"
+   411→   411→                initial={{ opacity: 0, scale: 0.95 }}
+   412→   412→                animate={{ opacity: 1, scale: 1 }}
+   413→   413→                className="flex flex-col items-center py-8 space-y-6"
+   414→   414→              >
+   415→   415→                <motion.div
+   416→   416→                  initial={{ scale: 0 }}
+   417→   417→                  animate={{ scale: 1 }}
+   418→   418→                  transition={{ type: 'spring', stiffness: 200, delay: 0.2 }}
+   419→   419→                >
+   420→   420→                  <CheckCircle2 className="h-16 w-16 text-emerald-500" />
+   421→   421→                </motion.div>
+   422→   422→                <div className="text-center">
+   423→   423→                  <h3 className="text-lg font-semibold">Certificates Issued!</h3>
+   424→   424→                  <p className="text-sm text-muted-foreground mt-1">
+   425→   425→                    {sendNotification ? 'Notifications have been sent.' : 'Notifications were skipped.'}
+   426→   426→                  </p>
+   427→   427→                </div>
+   428→   428→                <div className="grid grid-cols-2 gap-4 w-full max-w-xs">
+   429→   429→                  <div className="rounded-xl border bg-emerald-50 dark:bg-emerald-950/20 p-4 text-center">
+   430→   430→                    <p className="text-2xl font-bold text-emerald-600">{issuedCount}</p>
+   431→   431→                    <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1">
+   432→   432→                      <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+   433→   433→                      Issued
+   434→   434→                    </p>
+   435→   435→                  </div>
+   436→   436→                  {issueFailCount > 0 && (
+   437→   437→                    <div className="rounded-xl border bg-red-50 dark:bg-red-950/20 p-4 text-center">
+   438→   438→                      <p className="text-2xl font-bold text-red-600">{issueFailCount}</p>
+   439→   439→                      <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1">
+   440→   440→                        <AlertCircle className="h-3 w-3 text-red-500" />
+   441→   441→                        Failed
+   442→   442→                      </p>
+   443→   443→                    </div>
+   444→   444→                  )}
+   445→   445→                </div>
+   446→   446→                <Button onClick={resetIssueForm} className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white">
+   447→   447→                  <Award className="h-4 w-4 mr-1.5" />
+   448→   448→                  Issue More Certificates
+   449→   449→                </Button>
+   450→   450→              </motion.div>
+   451→   451→            )}
+   452→   452→          </AnimatePresence>
+   453→   453→        </TabsContent>
+   454→   454→
+   455→   455→        {/* ─── MANAGE TAB ──────────────────────────────── */}
+   456→   456→        <TabsContent value="manage" className="space-y-4 mt-4">
+   457→   457→          {/* Action feedback */}
+   458→   458→          {actionComplete && (
+   459→   459→            <motion.div
+   460→   460→              initial={{ opacity: 0, y: -10 }}
+   461→   461→              animate={{ opacity: 1, y: 0 }}
+   462→   462→              className="flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 p-3"
+   463→   463→            >
+   464→   464→              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+   465→   465→              <p className="text-sm text-emerald-700 dark:text-emerald-300">
+   466→   466→                {actionComplete === 'revoke'
+   467→   467→                  ? `${selectedCertIds.size || 'Selected'} certificates revoked successfully`
+   468→   468→                  : actionComplete === 'resend'
+   469→   469→                  ? `${selectedCertIds.size || 'Selected'} certificates resent successfully`
+   470→   470→                  : 'Action completed'}
+   471→   471→              </p>
+   472→   472→            </motion.div>
+   473→   473→          )}
+   474→   474→
+   475→   475→          {/* Search & Filters */}
+   476→   476→          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   477→   477→            <div className="relative flex-1 max-w-sm">
+   478→   478→              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+   479→   479→              <Input
+   480→   480→                placeholder="Search certificates..."
+   481→   481→                value={searchQuery}
+   482→   482→                onChange={(e) => setSearchQuery(e.target.value)}
+   483→   483→                className="pl-9"
+   484→   484→              />
+   485→   485→            </div>
+   486→   486→            <div className="flex items-center gap-2">
+   487→   487→              <Select value={statusFilter} onValueChange={setStatusFilter}>
+   488→   488→                <SelectTrigger className="w-32 h-8 text-xs">
+   489→   489→                  <SelectValue />
+   490→   490→                </SelectTrigger>
+   491→   491→                <SelectContent>
+   492→   492→                  <SelectItem value="all">All Status</SelectItem>
+   493→   493→                  <SelectItem value="issued">Issued</SelectItem>
+   494→   494→                  <SelectItem value="revoked">Revoked</SelectItem>
+   495→   495→                  <SelectItem value="pending">Pending</SelectItem>
+   496→   496→                </SelectContent>
+   497→   497→              </Select>
+   498→   498→              <Button variant="outline" size="sm" onClick={exportCertificates} className="text-xs">
+   499→   499→                <Download className="h-3.5 w-3.5 mr-1.5" />
+   500→   500→                Export CSV
+   501→   501→              </Button>
+   502→   502→            </div>
+   503→   503→          </div>
+   504→   504→
+   505→   505→          {/* Bulk Action Bar */}
+   506→   506→          {selectedCertIds.size > 0 && (
+   507→   507→            <motion.div
+   508→   508→              initial={{ opacity: 0, y: -5 }}
+   509→   509→              animate={{ opacity: 1, y: 0 }}
+   510→   510→              className="flex items-center gap-3 rounded-lg border bg-muted/50 p-3"
+   511→   511→            >
+   512→   512→              <span className="text-sm font-medium">{selectedCertIds.size} selected</span>
+   513→   513→              <div className="flex items-center gap-2 ml-auto">
+   514→   514→                <Button
+   515→   515→                  variant="outline"
+   516→   516→                  size="sm"
+   517→   517→                  onClick={() => setShowResendDialog(true)}
+   518→   518→                  className="text-xs"
+   519→   519→                  disabled={actionProgress}
+   520→   520→                >
+   521→   521→                  <Send className="h-3.5 w-3.5 mr-1" />
+   522→   522→                  Resend
+   523→   523→                </Button>
+   524→   524→                <Button
+   525→   525→                  variant="outline"
+   526→   526→                  size="sm"
+   527→   527→                  onClick={() => setShowRevokeDialog(true)}
+   528→   528→                  className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20"
+   529→   529→                  disabled={actionProgress}
+   530→   530→                >
+   531→   531→                  <Ban className="h-3.5 w-3.5 mr-1" />
+   532→   532→                  Revoke
+   533→   533→                </Button>
+   534→   534→              </div>
+   535→   535→            </motion.div>
+   536→   536→          )}
+   537→   537→
+   538→   538→          {/* Certificate Table */}
+   539→   539→          <div className="rounded-md border">
+   540→   540→            <Table>
+   541→   541→              <TableHeader>
+   542→   542→                <TableRow>
+   543→   543→                  <TableHead className="w-10">
+   544→   544→                    <Checkbox
+   545→   545→                      checked={selectedCertIds.size === filteredCerts.length && filteredCerts.length > 0}
+   546→   546→                      onCheckedChange={toggleAllCerts}
+   547→   547→                    />
+   548→   548→                  </TableHead>
+   549→   549→                  <TableHead>Recipient</TableHead>
+   550→   550→                  <TableHead>Course</TableHead>
+   551→   551→                  <TableHead>Issued Date</TableHead>
+   552→   552→                  <TableHead>Verification</TableHead>
+   553→   553→                  <TableHead>Status</TableHead>
+   554→   554→                </TableRow>
+   555→   555→              </TableHeader>
+   556→   556→              <TableBody>
+   557→   557→                {filteredCerts.map((cert) => (
+   558→   558→                  <TableRow key={cert.id} className={selectedCertIds.has(cert.id) ? 'bg-emerald-50/50 dark:bg-emerald-950/10' : ''}>
+   559→   559→                    <TableCell>
+   560→   560→                      <Checkbox
+   561→   561→                        checked={selectedCertIds.has(cert.id)}
+   562→   562→                        onCheckedChange={() => toggleCertSelect(cert.id)}
+   563→   563→                      />
+   564→   564→                    </TableCell>
+   565→   565→                    <TableCell>
+   566→   566→                      <div>
+   567→   567→                        <p className="text-sm font-medium">{cert.userName}</p>
+   568→   568→                        <p className="text-xs text-muted-foreground">{cert.email}</p>
+   569→   569→                      </div>
+   570→   570→                    </TableCell>
+   571→   571→                    <TableCell className="text-sm max-w-[180px] truncate">{cert.courseName}</TableCell>
+   572→   572→                    <TableCell className="text-sm text-muted-foreground">{cert.issuedDate}</TableCell>
+   573→   573→                    <TableCell>
+   574→   574→                      <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{cert.verificationCode}</code>
+   575→   575→                    </TableCell>
+   576→   576→                    <TableCell>
+   577→   577→                      <Badge
+   578→   578→                        variant="secondary"
+   579→   579→                        className={`text-[10px] ${
+   580→   580→                          cert.status === 'issued'
+   581→   581→                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+   582→   582→                            : cert.status === 'revoked'
+   583→   583→                            ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+   584→   584→                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+   585→   585→                        }`}
+   586→   586→                      >
+   587→   587→                        {cert.status}
+   588→   588→                      </Badge>
+   589→   589→                    </TableCell>
+   590→   590→                  </TableRow>
+   591→   591→                ))}
+   592→   592→              </TableBody>
+   593→   593→            </Table>
+   594→   594→          </div>
+   595→   595→        </TabsContent>
+   596→   596→      </Tabs>
+   597→   597→
+   598→   598→      {/* Issue Confirmation Dialog */}
+   599→   599→      <Dialog open={showIssueConfirm} onOpenChange={setShowIssueConfirm}>
+   600→   600→        <DialogContent className="sm:max-w-md">
+   601→   601→          <DialogHeader>
+   602→   602→            <DialogTitle className="flex items-center gap-2">
+   603→   603→              <Award className="h-5 w-5 text-amber-500" />
+   604→   604→              Confirm Certificate Issuance
+   605→   605→            </DialogTitle>
+   606→   606→            <DialogDescription>
+   607→   607→              You are about to issue <strong>{estimatedCount} certificates</strong> using the{' '}
+   608→   608→              <strong>{selectedTemplate?.name}</strong> template.
+   609→   609→            </DialogDescription>
+   610→   610→          </DialogHeader>
+   611→   611→          <div className="space-y-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-3">
+   612→   612→            <p className="text-sm font-medium text-amber-700 dark:text-amber-300">Details:</p>
+   613→   613→            <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+   614→   614→              <li>Course: {selectedCourse?.title}</li>
+   615→   615→              <li>Template: {selectedTemplate?.name}</li>
+   616→   616→              <li>Recipients: {estimatedCount} users</li>
+   617→   617→              <li>Criteria: {recipientCriteria === 'all_completers' ? 'All completers' : recipientCriteria === 'score_threshold' ? `Score > ${scoreThreshold}%` : 'Custom selection'}</li>
+   618→   618→              <li>Notification Email: {sendNotification ? 'Yes' : 'No'}</li>
+   619→   619→            </ul>
+   620→   620→          </div>
+   621→   621→          <DialogFooter className="gap-2">
+   622→   622→            <Button variant="outline" onClick={() => setShowIssueConfirm(false)}>
+   623→   623→              Cancel
+   624→   624→            </Button>
+   625→   625→            <Button onClick={handleIssue} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+   626→   626→              <Award className="h-4 w-4 mr-1.5" />
+   627→   627→              Issue Certificates
+   628→   628→            </Button>
+   629→   629→          </DialogFooter>
+   630→   630→        </DialogContent>
+   631→   631→      </Dialog>
+   632→   632→
+   633→   633→      {/* Revoke Confirmation Dialog */}
+   634→   634→      <Dialog open={showRevokeDialog} onOpenChange={setShowRevokeDialog}>
+   635→   635→        <DialogContent className="sm:max-w-md">
+   636→   636→          <DialogHeader>
+   637→   637→            <DialogTitle className="flex items-center gap-2 text-red-600">
+   638→   638→              <Ban className="h-5 w-5" />
+   639→   639→              Revoke Certificates
+   640→   640→            </DialogTitle>
+   641→   641→            <DialogDescription>
+   642→   642→              This will revoke <strong>{selectedCertIds.size} certificates</strong>. Revoked certificates will no longer be verifiable.
+   643→   643→            </DialogDescription>
+   644→   644→          </DialogHeader>
+   645→   645→          <div className="rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 p-3">
+   646→   646→            <p className="text-sm text-red-700 dark:text-red-300">
+   647→   647→              ⚠️ This is a destructive action and cannot be undone. Recipients will lose access to their certificates.
+   648→   648→            </p>
+   649→   649→          </div>
+   650→   650→          <DialogFooter className="gap-2">
+   651→   651→            <Button variant="outline" onClick={() => setShowRevokeDialog(false)}>
+   652→   652→              Cancel
+   653→   653→            </Button>
+   654→   654→            <Button
+   655→   655→              onClick={() => {
+   656→   656→                setShowRevokeDialog(false);
+   657→   657→                handleBulkAction('revoke');
+   658→   658→              }}
+   659→   659→              variant="destructive"
+   660→   660→            >
+   661→   661→              <Ban className="h-4 w-4 mr-1.5" />
+   662→   662→              Revoke Certificates
+   663→   663→            </Button>
+   664→   664→          </DialogFooter>
+   665→   665→        </DialogContent>
+   666→   666→      </Dialog>
+   667→   667→
+   668→   668→      {/* Resend Confirmation Dialog */}
+   669→   669→      <Dialog open={showResendDialog} onOpenChange={setShowResendDialog}>
+   670→   670→        <DialogContent className="sm:max-w-md">
+   671→   671→          <DialogHeader>
+   672→   672→            <DialogTitle className="flex items-center gap-2">
+   673→   673→              <Send className="h-5 w-5 text-emerald-500" />
+   674→   674→              Resend Certificate Emails
+   675→   675→            </DialogTitle>
+   676→   676→            <DialogDescription>
+   677→   677→              Resend certificate notification emails to <strong>{selectedCertIds.size} recipients</strong>.
+   678→   678→            </DialogDescription>
+   679→   679→          </DialogHeader>
+   680→   680→          <DialogFooter className="gap-2">
+   681→   681→            <Button variant="outline" onClick={() => setShowResendDialog(false)}>
+   682→   682→              Cancel
+   683→   683→            </Button>
+   684→   684→            <Button
+   685→   685→              onClick={() => {
+   686→   686→                setShowResendDialog(false);
+   687→   687→                handleBulkAction('resend');
+   688→   688→              }}
+   689→   689→              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   690→   690→            >
+   691→   691→              <Send className="h-4 w-4 mr-1.5" />
+   692→   692→              Resend Emails
+   693→   693→            </Button>
+   694→   694→          </DialogFooter>
+   695→   695→        </DialogContent>
+   696→   696→      </Dialog>
+   697→   697→    </div>
+   698→   698→  );
+   699→   699→}
+   700→   700→

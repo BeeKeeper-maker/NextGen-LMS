@@ -40,6 +40,12 @@ export async function GET(
       );
     }
 
+    const { searchParams: getSearchParams } = new URL(_request.url);
+    const getTenantId = getSearchParams.get('tenantId');
+    if (getTenantId && path.tenantId !== getTenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const courseCount = path.courses.length;
     const enrolledCount = path.enrollments.length;
     const completedEnrollments = path.enrollments.filter(
@@ -78,6 +84,8 @@ export async function PUT(
   try {
     const { pathId } = await params;
     const body = await request.json();
+    const { searchParams: putSearchParams } = new URL(request.url);
+    const putTenantId = putSearchParams.get('tenantId');
     const {
       title,
       description,
@@ -88,6 +96,15 @@ export async function PUT(
       isPublished,
       courses,
     } = body;
+
+    // Verify the learning path exists and belongs to tenant
+    const existingPath = await db.learningPath.findUnique({ where: { id: pathId } });
+    if (!existingPath) {
+      return NextResponse.json({ error: 'Learning path not found' }, { status: 404 });
+    }
+    if (putTenantId && existingPath.tenantId !== putTenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     // If courses array is provided, replace all existing courses
     if (courses !== undefined) {
@@ -205,6 +222,12 @@ export async function DELETE(
         { error: 'Learning path not found' },
         { status: 404 }
       );
+    }
+
+    const { searchParams: deleteSearchParams } = new URL(_request.url);
+    const deleteTenantId = deleteSearchParams.get('tenantId');
+    if (deleteTenantId && existing.tenantId !== deleteTenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Delete the path (cascades will handle courses and enrollments)

@@ -1,0 +1,1222 @@
+     1→'use client';
+     2→
+     3→import { useState, useCallback, useMemo } from 'react';
+     4→import { motion, AnimatePresence, Reorder } from 'framer-motion';
+     5→import {
+     6→  Map,
+     7→  Plus,
+     8→  Search,
+     9→  Filter,
+    10→  MoreVertical,
+    11→  Edit3,
+    12→  Copy,
+    13→  Trash2,
+    14→  Eye,
+    15→  GripVertical,
+    16→  X,
+    17→  Check,
+    18→  Lock,
+    19→  Unlock,
+    20→  Flag,
+    21→  ArrowRight,
+    22→  Users,
+    23→  BookOpen,
+    24→  Clock,
+    25→  TrendingUp,
+    26→  BarChart3,
+    27→  Save,
+    28→  Globe,
+    29→  Target,
+    30→  Award,
+    31→} from 'lucide-react';
+    32→import { Button } from '@/components/ui/button';
+    33→import { Input } from '@/components/ui/input';
+    34→import { Badge } from '@/components/ui/badge';
+    35→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    36→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    37→import {
+    38→  Select,
+    39→  SelectContent,
+    40→  SelectItem,
+    41→  SelectTrigger,
+    42→  SelectValue,
+    43→} from '@/components/ui/select';
+    44→import {
+    45→  Dialog,
+    46→  DialogContent,
+    47→  DialogHeader,
+    48→  DialogTitle,
+    49→  DialogDescription,
+    50→  DialogFooter,
+    51→} from '@/components/ui/dialog';
+    52→import {
+    53→  DropdownMenu,
+    54→  DropdownMenuContent,
+    55→  DropdownMenuItem,
+    56→  DropdownMenuSeparator,
+    57→  DropdownMenuTrigger,
+    58→} from '@/components/ui/dropdown-menu';
+    59→import { Switch } from '@/components/ui/switch';
+    60→import { Label } from '@/components/ui/label';
+    61→import { Textarea } from '@/components/ui/textarea';
+    62→import { Separator } from '@/components/ui/separator';
+    63→import { Skeleton } from '@/components/ui/skeleton';
+    64→import { cn } from '@/lib/utils';
+    65→import { validateFields, required, minLength } from '@/lib/validations';
+    66→import {
+    67→  BarChart,
+    68→  Bar,
+    69→  XAxis,
+    70→  YAxis,
+    71→  CartesianGrid,
+    72→  Tooltip as RechartsTooltip,
+    73→  ResponsiveContainer,
+    74→  LineChart,
+    75→  Line,
+    76→  PieChart,
+    77→  Pie,
+    78→  Cell,
+    79→} from 'recharts';
+    80→import {
+    81→  useLearningPaths,
+    82→  useCourses,
+    83→  useCreateLearningPath,
+    84→  useUpdateLearningPath,
+    85→  useDeleteLearningPath,
+    86→} from '@/hooks/use-data';
+    87→import { useAppStore } from '@/store/app-store';
+    88→
+    89→// ---- Types ----
+    90→interface PathCourse {
+    91→  id: string;
+    92→  title: string;
+    93→  duration: number;
+    94→  level: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+    95→  isRequired: boolean;
+    96→  prerequisiteIds: string[];
+    97→  milestone?: string;
+    98→}
+    99→
+   100→interface LearningPath {
+   101→  id: string;
+   102→  name: string;
+   103→  description: string;
+   104→  category: string;
+   105→  difficulty: 'beginner' | 'intermediate' | 'advanced';
+   106→  status: 'published' | 'draft' | 'archived';
+   107→  thumbnailUrl?: string;
+   108→  courseCount: number;
+   109→  enrolledCount: number;
+   110→  completionRate: number;
+   111→  estimatedDuration: number;
+   112→  courses: PathCourse[];
+   113→  createdAt: string;
+   114→}
+   115→
+   116→// ---- Chart Data (static analytics mock) ----
+   117→const enrollmentTrendData = [
+   118→  { month: 'Jul', enrollments: 45 },
+   119→  { month: 'Aug', enrollments: 62 },
+   120→  { month: 'Sep', enrollments: 78 },
+   121→  { month: 'Oct', enrollments: 95 },
+   122→  { month: 'Nov', enrollments: 120 },
+   123→  { month: 'Dec', enrollments: 156 },
+   124→  { month: 'Jan', enrollments: 189 },
+   125→  { month: 'Feb', enrollments: 234 },
+   126→];
+   127→
+   128→const dropoffData = [
+   129→  { course: 'HTML & CSS', dropoff: 12 },
+   130→  { course: 'JavaScript', dropoff: 28 },
+   131→  { course: 'React', dropoff: 35 },
+   132→  { course: 'TypeScript', dropoff: 22 },
+   133→  { course: 'Node.js', dropoff: 18 },
+   134→  { course: 'Next.js', dropoff: 42 },
+   135→];
+   136→
+   137→const completionPieData = [
+   138→  { name: 'Completed', value: 68, color: '#10b981' },
+   139→  { name: 'In Progress', value: 22, color: '#f59e0b' },
+   140→  { name: 'Not Started', value: 10, color: '#94a3b8' },
+   141→];
+   142→
+   143→// ---- API Data Mappers ----
+   144→function mapApiPathToLearningPath(apiPath: any): LearningPath {
+   145→  return {
+   146→    id: apiPath.id,
+   147→    name: apiPath.title,
+   148→    description: apiPath.description || '',
+   149→    category: apiPath.category || '',
+   150→    difficulty: (apiPath.level as 'beginner' | 'intermediate' | 'advanced') || 'beginner',
+   151→    status: apiPath.isPublished ? 'published' : 'draft',
+   152→    thumbnailUrl: apiPath.thumbnailUrl || undefined,
+   153→    courseCount: apiPath.courseCount ?? apiPath.courses?.length ?? 0,
+   154→    enrolledCount: apiPath.enrolledCount ?? apiPath.enrollments?.length ?? 0,
+   155→    completionRate: apiPath.completionRate ?? 0,
+   156→    estimatedDuration: apiPath.estimatedDuration ?? 0,
+   157→    courses: (apiPath.courses || []).map((pc: any) => ({
+   158→      id: pc.courseId || pc.course?.id,
+   159→      title: pc.course?.title || '',
+   160→      duration: pc.course?.durationHours || 0,
+   161→      level: (pc.course?.level as 'beginner' | 'intermediate' | 'advanced' | 'expert') || 'beginner',
+   162→      isRequired: pc.isRequired ?? true,
+   163→      prerequisiteIds: pc.prerequisiteIds ? pc.prerequisiteIds.split(',').filter(Boolean) : [],
+   164→      milestone: pc.milestone || undefined,
+   165→    })),
+   166→    createdAt: apiPath.createdAt,
+   167→  };
+   168→}
+   169→
+   170→function mapApiCourseToPathCourseSource(apiCourse: any) {
+   171→  return {
+   172→    id: apiCourse.id,
+   173→    title: apiCourse.title,
+   174→    duration: apiCourse.durationHours || 0,
+   175→    level: (apiCourse.level as 'beginner' | 'intermediate' | 'advanced' | 'expert') || 'beginner',
+   176→  };
+   177→}
+   178→
+   179→// ---- Sub-Components ----
+   180→
+   181→function PathCard({ path, onEdit, onDuplicate, onDelete, onView }: {
+   182→  path: LearningPath;
+   183→  onEdit: () => void;
+   184→  onDuplicate: () => void;
+   185→  onDelete: () => void;
+   186→  onView: () => void;
+   187→}) {
+   188→  const statusColor = {
+   189→    published: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300',
+   190→    draft: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
+   191→    archived: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+   192→  };
+   193→
+   194→  const difficultyColor = {
+   195→    beginner: 'text-emerald-600',
+   196→    intermediate: 'text-amber-600',
+   197→    advanced: 'text-rose-600',
+   198→  };
+   199→
+   200→  return (
+   201→    <motion.div
+   202→      initial={{ opacity: 0, y: 20 }}
+   203→      animate={{ opacity: 1, y: 0 }}
+   204→      exit={{ opacity: 0, y: -10 }}
+   205→      whileHover={{ y: -2 }}
+   206→      transition={{ duration: 0.3 }}
+   207→    >
+   208→      <Card className="group relative overflow-hidden border-border/50 bg-card/80 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
+   209→        {/* Gradient accent bar */}
+   210→        <div className={cn(
+   211→          'h-1.5 w-full',
+   212→          path.status === 'published' ? 'bg-gradient-to-r from-emerald-500 to-teal-500' :
+   213→          path.status === 'draft' ? 'bg-gradient-to-r from-amber-400 to-orange-400' :
+   214→          'bg-gradient-to-r from-slate-400 to-slate-500'
+   215→        )} />
+   216→        <CardHeader className="pb-3">
+   217→          <div className="flex items-start justify-between gap-2">
+   218→            <div className="flex-1 min-w-0">
+   219→              <CardTitle className="text-base font-semibold truncate">{path.name}</CardTitle>
+   220→              <CardDescription className="text-xs mt-1 line-clamp-2">{path.description}</CardDescription>
+   221→            </div>
+   222→            <DropdownMenu>
+   223→              <DropdownMenuTrigger asChild>
+   224→                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+   225→                  <MoreVertical className="h-4 w-4" />
+   226→                </Button>
+   227→              </DropdownMenuTrigger>
+   228→              <DropdownMenuContent align="end" className="w-40">
+   229→                <DropdownMenuItem onClick={onView}><Eye className="mr-2 h-4 w-4" /> View</DropdownMenuItem>
+   230→                <DropdownMenuItem onClick={onEdit}><Edit3 className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
+   231→                <DropdownMenuItem onClick={onDuplicate}><Copy className="mr-2 h-4 w-4" /> Duplicate</DropdownMenuItem>
+   232→                <DropdownMenuSeparator />
+   233→                <DropdownMenuItem className="text-red-600" onClick={onDelete}><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
+   234→              </DropdownMenuContent>
+   235→            </DropdownMenu>
+   236→          </div>
+   237→          <div className="flex items-center gap-2 mt-2">
+   238→            <Badge variant="secondary" className={cn('text-[10px] px-2 py-0.5', statusColor[path.status])}>
+   239→              {path.status.charAt(0).toUpperCase() + path.status.slice(1)}
+   240→            </Badge>
+   241→            <Badge variant="outline" className="text-[10px] px-2 py-0.5">
+   242→              {path.category}
+   243→            </Badge>
+   244→            <span className={cn('text-[10px] font-medium', difficultyColor[path.difficulty])}>
+   245→              {path.difficulty.charAt(0).toUpperCase() + path.difficulty.slice(1)}
+   246→            </span>
+   247→          </div>
+   248→        </CardHeader>
+   249→        <CardContent className="pt-0">
+   250→          <div className="grid grid-cols-3 gap-3 text-center">
+   251→            <div>
+   252→              <div className="flex items-center justify-center gap-1 text-emerald-600 dark:text-emerald-400">
+   253→                <BookOpen className="h-3.5 w-3.5" />
+   254→                <span className="text-sm font-bold">{path.courseCount}</span>
+   255→              </div>
+   256→              <p className="text-[10px] text-muted-foreground mt-0.5">Courses</p>
+   257→            </div>
+   258→            <div>
+   259→              <div className="flex items-center justify-center gap-1 text-amber-600 dark:text-amber-400">
+   260→                <Users className="h-3.5 w-3.5" />
+   261→                <span className="text-sm font-bold">{path.enrolledCount}</span>
+   262→              </div>
+   263→              <p className="text-[10px] text-muted-foreground mt-0.5">Enrolled</p>
+   264→            </div>
+   265→            <div>
+   266→              <div className="flex items-center justify-center gap-1 text-blue-600 dark:text-blue-400">
+   267→                <TrendingUp className="h-3.5 w-3.5" />
+   268→                <span className="text-sm font-bold">{path.completionRate}%</span>
+   269→              </div>
+   270→              <p className="text-[10px] text-muted-foreground mt-0.5">Complete</p>
+   271→            </div>
+   272→          </div>
+   273→          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+   274→            <Clock className="h-3 w-3" />
+   275→            <span>{path.estimatedDuration}h estimated</span>
+   276→          </div>
+   277→        </CardContent>
+   278→      </Card>
+   279→    </motion.div>
+   280→  );
+   281→}
+   282→
+   283→function PathVisualPreview({ courses }: { courses: PathCourse[] }) {
+   284→  return (
+   285→    <div className="relative p-4 overflow-x-auto">
+   286→      <div className="flex items-center gap-0 min-w-max">
+   287→        {courses.map((course, idx) => {
+   288→          const hasPrereq = course.prerequisiteIds.length > 0;
+   289→          return (
+   290→            <div key={course.id} className="flex items-center">
+   291→              {idx > 0 && (
+   292→                <div className="flex items-center mx-1">
+   293→                  <div className="w-6 h-0.5 bg-border" />
+   294→                  {hasPrereq && (
+   295→                    <ArrowRight className="h-3 w-3 text-muted-foreground mx-0.5" />
+   296→                  )}
+   297→                  <div className="w-6 h-0.5 bg-border" />
+   298→                </div>
+   299→              )}
+   300→              <motion.div
+   301→                initial={{ opacity: 0, scale: 0.8 }}
+   302→                animate={{ opacity: 1, scale: 1 }}
+   303→                transition={{ delay: idx * 0.1 }}
+   304→                className={cn(
+   305→                  'flex flex-col items-center gap-1 p-3 rounded-xl border min-w-[100px] max-w-[120px]',
+   306→                  'bg-card/80 backdrop-blur-sm border-border/50',
+   307→                  course.isRequired ? 'border-emerald-300 dark:border-emerald-700' : 'border-amber-300 dark:border-amber-700 border-dashed'
+   308→                )}
+   309→              >
+   310→                <div className={cn(
+   311→                  'h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold',
+   312→                  course.isRequired
+   313→                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300'
+   314→                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+   315→                )}>
+   316→                  {idx + 1}
+   317→                </div>
+   318→                <span className="text-[10px] font-medium text-center leading-tight line-clamp-2">{course.title}</span>
+   319→                <span className="text-[9px] text-muted-foreground">{course.duration}h</span>
+   320→                {course.milestone && (
+   321→                  <Badge className="text-[8px] px-1.5 py-0 h-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0">
+   322→                    <Flag className="h-2.5 w-2.5 mr-0.5" />
+   323→                    {course.milestone}
+   324→                  </Badge>
+   325→                )}
+   326→                {!course.isRequired && (
+   327→                  <Badge variant="outline" className="text-[8px] px-1 py-0 h-4">
+   328→                    Optional
+   329→                  </Badge>
+   330→                )}
+   331→              </motion.div>
+   332→            </div>
+   333→          );
+   334→        })}
+   335→      </div>
+   336→    </div>
+   337→  );
+   338→}
+   339→
+   340→function PathBuilderPanel({
+   341→  editingPath,
+   342→  onSave,
+   343→  onCancel,
+   344→  availableCourses,
+   345→}: {
+   346→  editingPath: LearningPath | null;
+   347→  onSave: (path: LearningPath) => void;
+   348→  onCancel: () => void;
+   349→  availableCourses: { id: string; title: string; duration: number; level: 'beginner' | 'intermediate' | 'advanced' | 'expert' }[];
+   350→}) {
+   351→  const [name, setName] = useState(editingPath?.name || '');
+   352→  const [description, setDescription] = useState(editingPath?.description || '');
+   353→  const [category, setCategory] = useState(editingPath?.category || '');
+   354→  const [difficulty, setDifficulty] = useState<'beginner' | 'intermediate' | 'advanced'>(editingPath?.difficulty || 'beginner');
+   355→  const [status, setStatus] = useState<'published' | 'draft'>(editingPath?.status === 'archived' ? 'draft' : (editingPath?.status as 'published' | 'draft') || 'draft');
+   356→  const [courses, setCourses] = useState<PathCourse[]>(editingPath?.courses || []);
+   357→  const [courseSearch, setCourseSearch] = useState('');
+   358→  const [showCourseDropdown, setShowCourseDropdown] = useState(false);
+   359→  const [selectedCourseForPrereq, setSelectedCourseForPrereq] = useState<string | null>(null);
+   360→  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+   361→  const [touched, setTouched] = useState<Record<string, boolean>>({});
+   362→
+   363→  const validate = (isPublish: boolean = false): boolean => {
+   364→    const errs = validateFields({
+   365→      name: [required(name, 'Path name'), minLength(name, 3, 'Path name')],
+   366→    });
+   367→    if (isPublish && courses.length === 0) {
+   368→      errs.courses = 'At least 1 course is required to publish';
+   369→    }
+   370→    setFormErrors(errs);
+   371→    setTouched({ name: true });
+   372→    return Object.keys(errs).length === 0;
+   373→  };
+   374→
+   375→  const handleBlur = (field: string) => {
+   376→    setTouched(prev => ({ ...prev, [field]: true }));
+   377→    const errs = validateFields({
+   378→      name: [required(name, 'Path name'), minLength(name, 3, 'Path name')],
+   379→    });
+   380→    setFormErrors(prev => {
+   381→      const next = { ...prev };
+   382→      if (touched[field] || errs[field]) {
+   383→        next[field] = errs[field] || '';
+   384→        if (!next[field]) delete next[field];
+   385→      }
+   386→      return next;
+   387→    });
+   388→  };
+   389→
+   390→  const filteredAvailableCourses = availableCourses.filter(
+   391→    (c) => !courses.find((pc) => pc.id === c.id) &&
+   392→      c.title.toLowerCase().includes(courseSearch.toLowerCase())
+   393→  );
+   394→
+   395→  const addCourse = (courseId: string) => {
+   396→    const course = availableCourses.find((c) => c.id === courseId);
+   397→    if (!course) return;
+   398→    const newCourse: PathCourse = {
+   399→      id: course.id,
+   400→      title: course.title,
+   401→      duration: course.duration,
+   402→      level: course.level,
+   403→      isRequired: true,
+   404→      prerequisiteIds: courses.length > 0 ? [courses[courses.length - 1].id] : [],
+   405→    };
+   406→    setCourses([...courses, newCourse]);
+   407→    setCourseSearch('');
+   408→    setShowCourseDropdown(false);
+   409→  };
+   410→
+   411→  const removeCourse = (courseId: string) => {
+   412→    setCourses(courses.filter((c) => c.id !== courseId).map((c) => ({
+   413→      ...c,
+   414→      prerequisiteIds: c.prerequisiteIds.filter((pid) => pid !== courseId),
+   415→    })));
+   416→  };
+   417→
+   418→  const toggleRequired = (courseId: string) => {
+   419→    setCourses(courses.map((c) => c.id === courseId ? { ...c, isRequired: !c.isRequired } : c));
+   420→  };
+   421→
+   422→  const setMilestone = (courseId: string, milestone: string) => {
+   423→    setCourses(courses.map((c) => c.id === courseId ? { ...c, milestone: milestone || undefined } : c));
+   424→  };
+   425→
+   426→  const togglePrerequisite = (courseId: string, prereqId: string) => {
+   427→    setCourses(courses.map((c) => {
+   428→      if (c.id !== courseId) return c;
+   429→      const hasPrereq = c.prerequisiteIds.includes(prereqId);
+   430→      return {
+   431→        ...c,
+   432→        prerequisiteIds: hasPrereq
+   433→          ? c.prerequisiteIds.filter((p) => p !== prereqId)
+   434→          : [...c.prerequisiteIds, prereqId],
+   435→      };
+   436→    }));
+   437→  };
+   438→
+   439→  const totalDuration = courses.reduce((sum, c) => sum + c.duration, 0);
+   440→
+   441→  const handleSave = (publishStatus: 'published' | 'draft') => {
+   442→    if (!validate(publishStatus === 'published')) return;
+   443→    const path: LearningPath = {
+   444→      id: editingPath?.id || `lp-${Date.now()}`,
+   445→      name,
+   446→      description,
+   447→      category,
+   448→      difficulty,
+   449→      status: publishStatus,
+   450→      courseCount: courses.length,
+   451→      enrolledCount: editingPath?.enrolledCount || 0,
+   452→      completionRate: editingPath?.completionRate || 0,
+   453→      estimatedDuration: totalDuration,
+   454→      courses,
+   455→      createdAt: editingPath?.createdAt || new Date().toISOString(),
+   456→    };
+   457→    onSave(path);
+   458→  };
+   459→
+   460→  return (
+   461→    <div className="space-y-6">
+   462→      {/* Header */}
+   463→      <div className="flex items-center justify-between">
+   464→        <div>
+   465→          <h2 className="text-lg font-semibold">{editingPath ? 'Edit Learning Path' : 'Create Learning Path'}</h2>
+   466→          <p className="text-sm text-muted-foreground">Design a guided course sequence for your learners</p>
+   467→        </div>
+   468→        <div className="flex items-center gap-2">
+   469→          <Button variant="outline" size="sm" onClick={onCancel}>
+   470→            <X className="h-4 w-4 mr-1" /> Cancel
+   471→          </Button>
+   472→          <Button variant="outline" size="sm" onClick={() => handleSave('draft')} className={cn(status === 'draft' && 'border-amber-500')}>
+   473→            <Save className="h-4 w-4 mr-1" /> Save Draft
+   474→          </Button>
+   475→          <Button size="sm" onClick={() => handleSave('published')} className="bg-emerald-600 hover:bg-emerald-700">
+   476→            <Globe className="h-4 w-4 mr-1" /> Publish
+   477→          </Button>
+   478→        </div>
+   479→      </div>
+   480→
+   481→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   482→        {/* Left: Form */}
+   483→        <div className="lg:col-span-1 space-y-4">
+   484→          <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   485→            <CardHeader className="pb-3">
+   486→              <CardTitle className="text-sm">Path Details</CardTitle>
+   487→            </CardHeader>
+   488→            <CardContent className="space-y-4">
+   489→              <div className="space-y-2">
+   490→                <Label className="text-xs">Path Name</Label>
+   491→                <Input
+   492→                  value={name}
+   493→                  onChange={(e) => setName(e.target.value)}
+   494→                  onBlur={() => handleBlur('name')}
+   495→                  placeholder="e.g., Full-Stack Developer"
+   496→                  className={`h-9 ${formErrors.name ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+   497→                />
+   498→                {formErrors.name && <p className="text-sm text-destructive mt-1">{formErrors.name}</p>}
+   499→              </div>
+   500→              <div className="space-y-2">
+   501→                <Label className="text-xs">Description</Label>
+   502→                <Textarea
+   503→                  value={description}
+   504→                  onChange={(e) => setDescription(e.target.value)}
+   505→                  placeholder="Describe this learning path..."
+   506→                  rows={3}
+   507→                  className="text-sm"
+   508→                />
+   509→              </div>
+   510→              <div className="space-y-2">
+   511→                <Label className="text-xs">Category</Label>
+   512→                <Select value={category} onValueChange={setCategory}>
+   513→                  <SelectTrigger className="h-9">
+   514→                    <SelectValue placeholder="Select category" />
+   515→                  </SelectTrigger>
+   516→                  <SelectContent>
+   517→                    <SelectItem value="Web Development">Web Development</SelectItem>
+   518→                    <SelectItem value="Data Science">Data Science</SelectItem>
+   519→                    <SelectItem value="Backend">Backend</SelectItem>
+   520→                    <SelectItem value="DevOps">DevOps</SelectItem>
+   521→                    <SelectItem value="Mobile">Mobile</SelectItem>
+   522→                    <SelectItem value="AI/ML">AI/ML</SelectItem>
+   523→                  </SelectContent>
+   524→                </Select>
+   525→              </div>
+   526→              <div className="space-y-2">
+   527→                <Label className="text-xs">Difficulty Level</Label>
+   528→                <Select value={difficulty} onValueChange={(v) => setDifficulty(v as 'beginner' | 'intermediate' | 'advanced')}>
+   529→                  <SelectTrigger className="h-9">
+   530→                    <SelectValue />
+   531→                  </SelectTrigger>
+   532→                  <SelectContent>
+   533→                    <SelectItem value="beginner">Beginner</SelectItem>
+   534→                    <SelectItem value="intermediate">Intermediate</SelectItem>
+   535→                    <SelectItem value="advanced">Advanced</SelectItem>
+   536→                  </SelectContent>
+   537→                </Select>
+   538→              </div>
+   539→              <div className="flex items-center gap-3 pt-2">
+   540→                <Label className="text-xs">Status</Label>
+   541→                <div className="flex items-center gap-2">
+   542→                  <Switch
+   543→                    checked={status === 'published'}
+   544→                    onCheckedChange={(checked) => setStatus(checked ? 'published' : 'draft')}
+   545→                  />
+   546→                  <span className="text-xs text-muted-foreground">
+   547→                    {status === 'published' ? 'Published' : 'Draft'}
+   548→                  </span>
+   549→                </div>
+   550→              </div>
+   551→            </CardContent>
+   552→          </Card>
+   553→
+   554→          <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   555→            <CardHeader className="pb-3">
+   556→              <CardTitle className="text-sm">Summary</CardTitle>
+   557→            </CardHeader>
+   558→            <CardContent className="space-y-3">
+   559→              <div className="flex items-center justify-between text-sm">
+   560→                <span className="text-muted-foreground">Total Courses</span>
+   561→                <span className="font-semibold">{courses.length}</span>
+   562→              </div>
+   563→              <div className="flex items-center justify-between text-sm">
+   564→                <span className="text-muted-foreground">Required</span>
+   565→                <span className="font-semibold">{courses.filter((c) => c.isRequired).length}</span>
+   566→              </div>
+   567→              <div className="flex items-center justify-between text-sm">
+   568→                <span className="text-muted-foreground">Optional</span>
+   569→                <span className="font-semibold">{courses.filter((c) => !c.isRequired).length}</span>
+   570→              </div>
+   571→              <Separator />
+   572→              <div className="flex items-center justify-between text-sm">
+   573→                <span className="text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> Est. Duration</span>
+   574→                <span className="font-semibold">{totalDuration}h</span>
+   575→              </div>
+   576→              <div className="flex items-center justify-between text-sm">
+   577→                <span className="text-muted-foreground flex items-center gap-1"><Flag className="h-3 w-3" /> Milestones</span>
+   578→                <span className="font-semibold">{courses.filter((c) => c.milestone).length}</span>
+   579→              </div>
+   580→            </CardContent>
+   581→          </Card>
+   582→        </div>
+   583→
+   584→        {/* Right: Course Builder */}
+   585→        <div className="lg:col-span-2 space-y-4">
+   586→          <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   587→            <CardHeader className="pb-3">
+   588→              <div className="flex items-center justify-between">
+   589→                <CardTitle className="text-sm">Course Sequence</CardTitle>
+   590→                {formErrors.courses && (
+   591→                  <span className="text-xs text-destructive">{formErrors.courses}</span>
+   592→                )}
+   593→                <div className="relative">
+   594→                  <Button
+   595→                    variant="outline"
+   596→                    size="sm"
+   597→                    onClick={() => setShowCourseDropdown(!showCourseDropdown)}
+   598→                    className="gap-1"
+   599→                  >
+   600→                    <Plus className="h-3.5 w-3.5" /> Add Course
+   601→                  </Button>
+   602→                  {showCourseDropdown && (
+   603→                    <div className="absolute right-0 top-full mt-1 w-64 bg-card border border-border rounded-lg shadow-lg z-20 p-2">
+   604→                      <Input
+   605→                        value={courseSearch}
+   606→                        onChange={(e) => setCourseSearch(e.target.value)}
+   607→                        placeholder="Search courses..."
+   608→                        className="h-8 text-sm mb-2"
+   609→                        autoFocus
+   610→                      />
+   611→                      <div className="max-h-48 overflow-y-auto space-y-1">
+   612→                        {filteredAvailableCourses.length === 0 ? (
+   613→                          <p className="text-xs text-muted-foreground text-center py-2">No courses found</p>
+   614→                        ) : (
+   615→                          filteredAvailableCourses.map((course) => (
+   616→                            <button
+   617→                              key={course.id}
+   618→                              onClick={() => addCourse(course.id)}
+   619→                              className="w-full text-left px-2 py-1.5 rounded-md hover:bg-muted text-xs flex items-center justify-between"
+   620→                            >
+   621→                              <span>{course.title}</span>
+   622→                              <span className="text-muted-foreground">{course.duration}h</span>
+   623→                            </button>
+   624→                          ))
+   625→                        )}
+   626→                      </div>
+   627→                    </div>
+   628→                  )}
+   629→                </div>
+   630→              </div>
+   631→            </CardHeader>
+   632→            <CardContent>
+   633→              {courses.length === 0 ? (
+   634→                <div className="text-center py-12 text-muted-foreground">
+   635→                  <Map className="h-10 w-10 mx-auto mb-3 opacity-30" />
+   636→                  <p className="text-sm">No courses added yet</p>
+   637→                  <p className="text-xs mt-1">Click &quot;Add Course&quot; to start building your path</p>
+   638→                </div>
+   639→              ) : (
+   640→                <Reorder.Group
+   641→                  axis="y"
+   642→                  values={courses}
+   643→                  onReorder={setCourses}
+   644→                  className="space-y-2"
+   645→                >
+   646→                  {courses.map((course, idx) => (
+   647→                    <Reorder.Item
+   648→                      key={course.id}
+   649→                      value={course}
+   650→                      className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/30 cursor-grab active:cursor-grabbing group"
+   651→                    >
+   652→                      <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+   653→                      <div className="h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 text-xs font-bold shrink-0">
+   654→                        {idx + 1}
+   655→                      </div>
+   656→                      <div className="flex-1 min-w-0">
+   657→                        <div className="flex items-center gap-2">
+   658→                          <span className="text-sm font-medium truncate">{course.title}</span>
+   659→                          {course.milestone && (
+   660→                            <Badge className="text-[8px] px-1.5 py-0 h-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 shrink-0">
+   661→                              <Flag className="h-2.5 w-2.5 mr-0.5" />
+   662→                              {course.milestone}
+   663→                            </Badge>
+   664→                          )}
+   665→                        </div>
+   666→                        <div className="flex items-center gap-3 mt-1">
+   667→                          <span className="text-[10px] text-muted-foreground">{course.duration}h</span>
+   668→                          <span className="text-[10px] text-muted-foreground capitalize">{course.level}</span>
+   669→                          {course.prerequisiteIds.length > 0 && (
+   670→                            <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+   671→                              <Lock className="h-2.5 w-2.5" />
+   672→                              Requires: {course.prerequisiteIds.map((pid) => courses.find((c) => c.id === pid)?.title).filter(Boolean).join(', ')}
+   673→                            </span>
+   674→                          )}
+   675→                        </div>
+   676→                      </div>
+   677→                      <div className="flex items-center gap-1.5 shrink-0">
+   678→                        <Button
+   679→                          variant="ghost"
+   680→                          size="icon"
+   681→                          className="h-7 w-7"
+   682→                          onClick={() => toggleRequired(course.id)}
+   683→                          title={course.isRequired ? 'Mark optional' : 'Mark required'}
+   684→                        >
+   685→                          {course.isRequired ? (
+   686→                            <Lock className="h-3.5 w-3.5 text-emerald-600" />
+   687→                          ) : (
+   688→                            <Unlock className="h-3.5 w-3.5 text-amber-500" />
+   689→                          )}
+   690→                        </Button>
+   691→                        <Button
+   692→                          variant="ghost"
+   693→                          size="icon"
+   694→                          className="h-7 w-7"
+   695→                          onClick={() => {
+   696→                            const milestone = course.milestone || '';
+   697→                            const newMilestone = prompt('Enter milestone label (leave empty to remove):', milestone);
+   698→                            if (newMilestone !== null) setMilestone(course.id, newMilestone);
+   699→                          }}
+   700→                          title="Set milestone"
+   701→                        >
+   702→                          <Flag className={cn('h-3.5 w-3.5', course.milestone ? 'text-purple-500' : 'text-muted-foreground')} />
+   703→                        </Button>
+   704→                        <Button
+   705→                          variant="ghost"
+   706→                          size="icon"
+   707→                          className="h-7 w-7"
+   708→                          onClick={() => setSelectedCourseForPrereq(selectedCourseForPrereq === course.id ? null : course.id)}
+   709→                          title="Edit prerequisites"
+   710→                        >
+   711→                          <Target className={cn('h-3.5 w-3.5', selectedCourseForPrereq === course.id ? 'text-blue-500' : 'text-muted-foreground')} />
+   712→                        </Button>
+   713→                        <Button
+   714→                          variant="ghost"
+   715→                          size="icon"
+   716→                          className="h-7 w-7 text-red-500 hover:text-red-600"
+   717→                          onClick={() => removeCourse(course.id)}
+   718→                        >
+   719→                          <Trash2 className="h-3.5 w-3.5" />
+   720→                        </Button>
+   721→                      </div>
+   722→                    </Reorder.Item>
+   723→                  ))}
+   724→                </Reorder.Group>
+   725→              )}
+   726→
+   727→              {/* Prerequisites Editor */}
+   728→              <AnimatePresence>
+   729→                {selectedCourseForPrereq && (
+   730→                  <motion.div
+   731→                    initial={{ opacity: 0, height: 0 }}
+   732→                    animate={{ opacity: 1, height: 'auto' }}
+   733→                    exit={{ opacity: 0, height: 0 }}
+   734→                    className="mt-4 border border-border/50 rounded-xl p-4 bg-muted/20"
+   735→                  >
+   736→                    <h4 className="text-sm font-medium mb-3">
+   737→                      Prerequisites for: {courses.find((c) => c.id === selectedCourseForPrereq)?.title}
+   738→                    </h4>
+   739→                    <div className="flex flex-wrap gap-2">
+   740→                      {courses
+   741→                        .filter((c) => c.id !== selectedCourseForPrereq)
+   742→                        .map((c) => {
+   743→                          const isSelected = courses.find((cc) => cc.id === selectedCourseForPrereq)?.prerequisiteIds.includes(c.id);
+   744→                          return (
+   745→                            <button
+   746→                              key={c.id}
+   747→                              onClick={() => togglePrerequisite(selectedCourseForPrereq, c.id)}
+   748→                              className={cn(
+   749→                                'px-3 py-1.5 rounded-lg text-xs font-medium transition-all border',
+   750→                                isSelected
+   751→                                  ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/50 dark:text-blue-300 dark:border-blue-700'
+   752→                                  : 'bg-background text-muted-foreground border-border hover:border-blue-300'
+   753→                              )}
+   754→                            >
+   755→                              {isSelected && <Check className="h-3 w-3 inline mr-1" />}
+   756→                              {c.title}
+   757→                            </button>
+   758→                          );
+   759→                        })}
+   760→                    </div>
+   761→                  </motion.div>
+   762→                )}
+   763→              </AnimatePresence>
+   764→            </CardContent>
+   765→          </Card>
+   766→
+   767→          {/* Visual Preview */}
+   768→          <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   769→            <CardHeader className="pb-3">
+   770→              <CardTitle className="text-sm flex items-center gap-2">
+   771→                <Eye className="h-4 w-4" /> Visual Preview
+   772→              </CardTitle>
+   773→            </CardHeader>
+   774→            <CardContent>
+   775→              {courses.length === 0 ? (
+   776→                <p className="text-sm text-muted-foreground text-center py-6">Add courses to see the visual roadmap</p>
+   777→              ) : (
+   778→                <PathVisualPreview courses={courses} />
+   779→              )}
+   780→            </CardContent>
+   781→          </Card>
+   782→        </div>
+   783→      </div>
+   784→    </div>
+   785→  );
+   786→}
+   787→
+   788→function PathAnalyticsPanel() {
+   789→  return (
+   790→    <div className="space-y-6">
+   791→      <div>
+   792→        <h2 className="text-lg font-semibold">Path Analytics</h2>
+   793→        <p className="text-sm text-muted-foreground">Track enrollment, completion, and dropoff metrics</p>
+   794→      </div>
+   795→
+   796→      {/* KPI Cards */}
+   797→      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   798→        {[
+   799→          { label: 'Total Enrollments', value: '479', change: '+18%', icon: Users, color: 'text-emerald-600' },
+   800→          { label: 'Avg Completion', value: '58%', change: '+5%', icon: Target, color: 'text-amber-600' },
+   801→          { label: 'Avg Time to Complete', value: '42 days', change: '-3 days', icon: Clock, color: 'text-blue-600' },
+   802→          { label: 'Active Paths', value: '3', change: '+1', icon: Map, color: 'text-purple-600' },
+   803→        ].map((kpi) => (
+   804→          <Card key={kpi.label} className="border-border/50 bg-card/80 backdrop-blur-sm">
+   805→            <CardContent className="p-4">
+   806→              <div className="flex items-center gap-2 mb-2">
+   807→                <kpi.icon className={cn('h-4 w-4', kpi.color)} />
+   808→                <span className="text-xs text-muted-foreground">{kpi.label}</span>
+   809→              </div>
+   810→              <div className="flex items-end gap-2">
+   811→                <span className="text-xl font-bold">{kpi.value}</span>
+   812→                <span className="text-[10px] text-emerald-600 font-medium mb-0.5">{kpi.change}</span>
+   813→              </div>
+   814→            </CardContent>
+   815→          </Card>
+   816→        ))}
+   817→      </div>
+   818→
+   819→      {/* Charts */}
+   820→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   821→        {/* Enrollment Trend */}
+   822→        <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   823→          <CardHeader className="pb-2">
+   824→            <CardTitle className="text-sm flex items-center gap-2">
+   825→              <TrendingUp className="h-4 w-4 text-emerald-600" /> Enrollment Trend
+   826→            </CardTitle>
+   827→          </CardHeader>
+   828→          <CardContent>
+   829→            <div className="h-56">
+   830→              <ResponsiveContainer width="100%" height="100%">
+   831→                <LineChart data={enrollmentTrendData}>
+   832→                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+   833→                  <XAxis dataKey="month" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+   834→                  <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" />
+   835→                  <RechartsTooltip
+   836→                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+   837→                  />
+   838→                  <Line type="monotone" dataKey="enrollments" stroke="#10b981" strokeWidth={2} dot={{ r: 3, fill: '#10b981' }} />
+   839→                </LineChart>
+   840→              </ResponsiveContainer>
+   841→            </div>
+   842→          </CardContent>
+   843→        </Card>
+   844→
+   845→        {/* Completion Rate */}
+   846→        <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   847→          <CardHeader className="pb-2">
+   848→            <CardTitle className="text-sm flex items-center gap-2">
+   849→              <Award className="h-4 w-4 text-amber-600" /> Completion Rate (Full-Stack Path)
+   850→            </CardTitle>
+   851→          </CardHeader>
+   852→          <CardContent>
+   853→            <div className="h-56 flex items-center justify-center">
+   854→              <ResponsiveContainer width="100%" height="100%">
+   855→                <PieChart>
+   856→                  <Pie
+   857→                    data={completionPieData}
+   858→                    cx="50%"
+   859→                    cy="50%"
+   860→                    innerRadius={60}
+   861→                    outerRadius={80}
+   862→                    paddingAngle={4}
+   863→                    dataKey="value"
+   864→                  >
+   865→                    {completionPieData.map((entry, index) => (
+   866→                      <Cell key={`cell-${index}`} fill={entry.color} />
+   867→                    ))}
+   868→                  </Pie>
+   869→                  <RechartsTooltip
+   870→                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+   871→                  />
+   872→                </PieChart>
+   873→              </ResponsiveContainer>
+   874→            </div>
+   875→            <div className="flex items-center justify-center gap-4 mt-2">
+   876→              {completionPieData.map((entry) => (
+   877→                <div key={entry.name} className="flex items-center gap-1.5">
+   878→                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+   879→                  <span className="text-[10px] text-muted-foreground">{entry.name} ({entry.value}%)</span>
+   880→                </div>
+   881→              ))}
+   882→            </div>
+   883→          </CardContent>
+   884→        </Card>
+   885→
+   886→        {/* Dropoff Points */}
+   887→        <Card className="border-border/50 bg-card/80 backdrop-blur-sm lg:col-span-2">
+   888→          <CardHeader className="pb-2">
+   889→            <CardTitle className="text-sm flex items-center gap-2">
+   890→              <BarChart3 className="h-4 w-4 text-rose-600" /> Dropoff Points (Full-Stack Path)
+   891→            </CardTitle>
+   892→            <CardDescription className="text-xs">Courses where most learners stop progressing</CardDescription>
+   893→          </CardHeader>
+   894→          <CardContent>
+   895→            <div className="h-64">
+   896→              <ResponsiveContainer width="100%" height="100%">
+   897→                <BarChart data={dropoffData}>
+   898→                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+   899→                  <XAxis dataKey="course" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+   900→                  <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" />
+   901→                  <RechartsTooltip
+   902→                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+   903→                  />
+   904→                  <Bar dataKey="dropoff" fill="#ef4444" radius={[4, 4, 0, 0]} name="Dropoff %" />
+   905→                </BarChart>
+   906→              </ResponsiveContainer>
+   907→            </div>
+   908→          </CardContent>
+   909→        </Card>
+   910→      </div>
+   911→    </div>
+   912→  );
+   913→}
+   914→
+   915→// ---- Loading Skeletons ----
+   916→
+   917→function PathCardSkeleton() {
+   918→  return (
+   919→    <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   920→      <div className="h-1.5 w-full bg-gradient-to-r from-muted to-muted/50" />
+   921→      <CardHeader className="pb-3">
+   922→        <Skeleton className="h-5 w-3/4 mb-2" />
+   923→        <Skeleton className="h-3 w-full" />
+   924→        <div className="flex items-center gap-2 mt-2">
+   925→          <Skeleton className="h-5 w-16 rounded-full" />
+   926→          <Skeleton className="h-5 w-20 rounded-full" />
+   927→          <Skeleton className="h-3 w-16" />
+   928→        </div>
+   929→      </CardHeader>
+   930→      <CardContent className="pt-0">
+   931→        <div className="grid grid-cols-3 gap-3">
+   932→          {[1, 2, 3].map((i) => (
+   933→            <div key={i} className="text-center">
+   934→              <Skeleton className="h-4 w-8 mx-auto mb-1" />
+   935→              <Skeleton className="h-2.5 w-12 mx-auto" />
+   936→            </div>
+   937→          ))}
+   938→        </div>
+   939→        <Skeleton className="h-3 w-24 mt-3" />
+   940→      </CardContent>
+   941→    </Card>
+   942→  );
+   943→}
+   944→
+   945→function PathListSkeleton() {
+   946→  return (
+   947→    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+   948→      {[1, 2, 3].map((i) => (
+   949→        <PathCardSkeleton key={i} />
+   950→      ))}
+   951→    </div>
+   952→  );
+   953→}
+   954→
+   955→// ---- Main Component ----
+   956→export function AdminLearningPaths() {
+   957→  const tenant = useAppStore((s) => s.currentTenant);
+   958→  const tenantId = tenant?.id || '';
+   959→
+   960→  // API data hooks
+   961→  const { data: apiPaths, isLoading: pathsLoading, error: pathsError } = useLearningPaths(tenantId);
+   962→  const { data: apiCourses } = useCourses(tenantId);
+   963→  const createPathMutation = useCreateLearningPath();
+   964→  const updatePathMutation = useUpdateLearningPath();
+   965→  const deletePathMutation = useDeleteLearningPath();
+   966→
+   967→  // Map API data to component interfaces
+   968→  const paths: LearningPath[] = useMemo(
+   969→    () => (apiPaths || []).map(mapApiPathToLearningPath),
+   970→    [apiPaths]
+   971→  );
+   972→
+   973→  const availableCourses = useMemo(
+   974→    () => (apiCourses || []).map(mapApiCourseToPathCourseSource),
+   975→    [apiCourses]
+   976→  );
+   977→
+   978→  const [searchQuery, setSearchQuery] = useState('');
+   979→  const [statusFilter, setStatusFilter] = useState<string>('all');
+   980→  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+   981→  const [activeTab, setActiveTab] = useState('paths');
+   982→  const [editingPath, setEditingPath] = useState<LearningPath | null>(null);
+   983→  const [isCreating, setIsCreating] = useState(false);
+   984→  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+   985→
+   986→  const filteredPaths = paths.filter((p) => {
+   987→    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+   988→      p.description.toLowerCase().includes(searchQuery.toLowerCase());
+   989→    const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
+   990→    const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
+   991→    return matchesSearch && matchesStatus && matchesCategory;
+   992→  });
+   993→
+   994→  const categories = [...new Set(paths.map((p) => p.category).filter(Boolean))];
+   995→
+   996→  const handleSave = useCallback(async (path: LearningPath) => {
+   997→    const isEdit = paths.some((p) => p.id === path.id);
+   998→    const payload = {
+   999→      tenantId,
+  1000→      title: path.name,
+  1001→      description: path.description || null,
+  1002→      category: path.category || null,
+  1003→      level: path.difficulty,
+  1004→      isPublished: path.status === 'published',
+  1005→      courses: path.courses.map((c, i) => ({
+  1006→        courseId: c.id,
+  1007→        orderIndex: i,
+  1008→        isRequired: c.isRequired,
+  1009→        milestone: c.milestone || null,
+  1010→        prerequisiteIds: c.prerequisiteIds.length > 0 ? c.prerequisiteIds.join(',') : null,
+  1011→      })),
+  1012→    };
+  1013→
+  1014→    try {
+  1015→      if (isEdit) {
+  1016→        await updatePathMutation.mutateAsync({ id: path.id, ...payload });
+  1017→      } else {
+  1018→        await createPathMutation.mutateAsync(payload);
+  1019→      }
+  1020→      setEditingPath(null);
+  1021→      setIsCreating(false);
+  1022→    } catch {
+  1023→      // Error is handled by mutation hooks with toast
+  1024→    }
+  1025→  }, [paths, tenantId, createPathMutation, updatePathMutation]);
+  1026→
+  1027→  const handleDuplicate = useCallback(async (path: LearningPath) => {
+  1028→    const payload = {
+  1029→      tenantId,
+  1030→      title: `${path.name} (Copy)`,
+  1031→      description: path.description || null,
+  1032→      category: path.category || null,
+  1033→      level: path.difficulty,
+  1034→      isPublished: false, // Duplicates are always drafts
+  1035→      courses: path.courses.map((c, i) => ({
+  1036→        courseId: c.id,
+  1037→        orderIndex: i,
+  1038→        isRequired: c.isRequired,
+  1039→        milestone: c.milestone || null,
+  1040→        prerequisiteIds: c.prerequisiteIds.length > 0 ? c.prerequisiteIds.join(',') : null,
+  1041→      })),
+  1042→    };
+  1043→
+  1044→    try {
+  1045→      await createPathMutation.mutateAsync(payload);
+  1046→    } catch {
+  1047→      // Error is handled by mutation hooks
+  1048→    }
+  1049→  }, [tenantId, createPathMutation]);
+  1050→
+  1051→  const handleDelete = useCallback(async (id: string) => {
+  1052→    try {
+  1053→      await deletePathMutation.mutateAsync(id);
+  1054→      setDeleteConfirmId(null);
+  1055→    } catch {
+  1056→      // Error is handled by mutation hooks
+  1057→    }
+  1058→  }, [deletePathMutation]);
+  1059→
+  1060→  if (isCreating || editingPath) {
+  1061→    return (
+  1062→      <div className="p-4 sm:p-6">
+  1063→        <PathBuilderPanel
+  1064→          editingPath={editingPath}
+  1065→          onSave={handleSave}
+  1066→          onCancel={() => { setEditingPath(null); setIsCreating(false); }}
+  1067→          availableCourses={availableCourses}
+  1068→        />
+  1069→      </div>
+  1070→    );
+  1071→  }
+  1072→
+  1073→  return (
+  1074→    <div className="p-4 sm:p-6 space-y-6">
+  1075→      {/* Header */}
+  1076→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+  1077→        <div>
+  1078→          <h1 className="text-2xl font-bold flex items-center gap-2">
+  1079→            <Map className="h-6 w-6 text-emerald-600" /> Learning Paths
+  1080→          </h1>
+  1081→          <p className="text-sm text-muted-foreground mt-1">Create and manage guided course sequences</p>
+  1082→        </div>
+  1083→        <Button onClick={() => setIsCreating(true)} className="bg-emerald-600 hover:bg-emerald-700 gap-1.5">
+  1084→          <Plus className="h-4 w-4" /> Create Path
+  1085→        </Button>
+  1086→      </div>
+  1087→
+  1088→      <Tabs value={activeTab} onValueChange={setActiveTab}>
+  1089→        <TabsList>
+  1090→          <TabsTrigger value="paths" className="gap-1.5">
+  1091→            <Map className="h-3.5 w-3.5" /> All Paths
+  1092→          </TabsTrigger>
+  1093→          <TabsTrigger value="analytics" className="gap-1.5">
+  1094→            <BarChart3 className="h-3.5 w-3.5" /> Analytics
+  1095→          </TabsTrigger>
+  1096→        </TabsList>
+  1097→
+  1098→        <TabsContent value="paths" className="mt-4 space-y-4">
+  1099→          {/* Filters */}
+  1100→          <div className="flex flex-col sm:flex-row gap-3">
+  1101→            <div className="relative flex-1">
+  1102→              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1103→              <Input
+  1104→                value={searchQuery}
+  1105→                onChange={(e) => setSearchQuery(e.target.value)}
+  1106→                placeholder="Search learning paths..."
+  1107→                className="h-9 pl-9"
+  1108→              />
+  1109→            </div>
+  1110→            <Select value={statusFilter} onValueChange={setStatusFilter}>
+  1111→              <SelectTrigger className="h-9 w-36">
+  1112→                <Filter className="h-3.5 w-3.5 mr-1.5" />
+  1113→                <SelectValue placeholder="Status" />
+  1114→              </SelectTrigger>
+  1115→              <SelectContent>
+  1116→                <SelectItem value="all">All Statuses</SelectItem>
+  1117→                <SelectItem value="published">Published</SelectItem>
+  1118→                <SelectItem value="draft">Draft</SelectItem>
+  1119→                <SelectItem value="archived">Archived</SelectItem>
+  1120→              </SelectContent>
+  1121→            </Select>
+  1122→            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+  1123→              <SelectTrigger className="h-9 w-40">
+  1124→                <SelectValue placeholder="Category" />
+  1125→              </SelectTrigger>
+  1126→              <SelectContent>
+  1127→                <SelectItem value="all">All Categories</SelectItem>
+  1128→                {categories.map((cat) => (
+  1129→                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+  1130→                ))}
+  1131→              </SelectContent>
+  1132→            </Select>
+  1133→          </div>
+  1134→
+  1135→          {/* Loading State */}
+  1136→          {pathsLoading && <PathListSkeleton />}
+  1137→
+  1138→          {/* Error State */}
+  1139→          {pathsError && (
+  1140→            <div className="text-center py-12">
+  1141→              <div className="h-12 w-12 mx-auto mb-4 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+  1142→                <Trash2 className="h-6 w-6 text-red-500" />
+  1143→              </div>
+  1144→              <p className="text-sm text-muted-foreground">Failed to load learning paths</p>
+  1145→              <p className="text-xs text-muted-foreground mt-1">Please try again later</p>
+  1146→            </div>
+  1147→          )}
+  1148→
+  1149→          {/* Path Grid */}
+  1150→          {!pathsLoading && !pathsError && (
+  1151→            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+  1152→              <AnimatePresence mode="popLayout">
+  1153→                {filteredPaths.map((path) => (
+  1154→                  <PathCard
+  1155→                    key={path.id}
+  1156→                    path={path}
+  1157→                    onEdit={() => setEditingPath(path)}
+  1158→                    onDuplicate={() => handleDuplicate(path)}
+  1159→                    onDelete={() => setDeleteConfirmId(path.id)}
+  1160→                    onView={() => setEditingPath(path)}
+  1161→                  />
+  1162→                ))}
+  1163→              </AnimatePresence>
+  1164→            </div>
+  1165→          )}
+  1166→
+  1167→          {/* Empty State */}
+  1168→          {!pathsLoading && !pathsError && filteredPaths.length === 0 && (
+  1169→            <div className="text-center py-12">
+  1170→              <Map className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
+  1171→              {paths.length === 0 ? (
+  1172→                <>
+  1173→                  <p className="text-sm text-muted-foreground">No learning paths yet</p>
+  1174→                  <p className="text-xs text-muted-foreground mt-1">Create your first learning path to guide your learners</p>
+  1175→                  <Button
+  1176→                    onClick={() => setIsCreating(true)}
+  1177→                    className="mt-4 bg-emerald-600 hover:bg-emerald-700 gap-1.5"
+  1178→                    size="sm"
+  1179→                  >
+  1180→                    <Plus className="h-4 w-4" /> Create Path
+  1181→                  </Button>
+  1182→                </>
+  1183→              ) : (
+  1184→                <>
+  1185→                  <p className="text-sm text-muted-foreground">No learning paths found</p>
+  1186→                  <p className="text-xs text-muted-foreground mt-1">Try adjusting your filters or create a new path</p>
+  1187→                </>
+  1188→              )}
+  1189→            </div>
+  1190→          )}
+  1191→        </TabsContent>
+  1192→
+  1193→        <TabsContent value="analytics" className="mt-4">
+  1194→          <PathAnalyticsPanel />
+  1195→        </TabsContent>
+  1196→      </Tabs>
+  1197→
+  1198→      {/* Delete Confirmation Dialog */}
+  1199→      <Dialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>
+  1200→        <DialogContent>
+  1201→          <DialogHeader>
+  1202→            <DialogTitle>Delete Learning Path</DialogTitle>
+  1203→            <DialogDescription>
+  1204→              Are you sure you want to delete this learning path? This action cannot be undone. All enrolled learners will lose access.
+  1205→            </DialogDescription>
+  1206→          </DialogHeader>
+  1207→          <DialogFooter>
+  1208→            <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
+  1209→            <Button
+  1210→              variant="destructive"
+  1211→              onClick={() => deleteConfirmId && handleDelete(deleteConfirmId)}
+  1212→              disabled={deletePathMutation.isPending}
+  1213→            >
+  1214→              {deletePathMutation.isPending ? 'Deleting...' : 'Delete'}
+  1215→            </Button>
+  1216→          </DialogFooter>
+  1217→        </DialogContent>
+  1218→      </Dialog>
+  1219→    </div>
+  1220→  );
+  1221→}
+  1222→

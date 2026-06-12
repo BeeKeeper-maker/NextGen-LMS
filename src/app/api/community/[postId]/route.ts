@@ -8,6 +8,8 @@ export async function GET(
 ) {
   try {
     const { postId } = await params;
+    const { searchParams } = new URL(request.url);
+    const tenantId = searchParams.get('tenantId');
 
     const post = await db.communityPost.findUnique({
       where: { id: postId },
@@ -38,6 +40,10 @@ export async function GET(
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     }
 
+    if (tenantId && post.tenantId !== tenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     // Increment view count
     await db.communityPost.update({
       where: { id: postId },
@@ -65,10 +71,16 @@ export async function PUT(
   try {
     const { postId } = await params;
     const body = await request.json();
+    const { searchParams } = new URL(request.url);
+    const tenantId = searchParams.get('tenantId');
 
     const existing = await db.communityPost.findUnique({ where: { id: postId } });
     if (!existing) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+    }
+
+    if (tenantId && existing.tenantId !== tenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const updateData: Record<string, unknown> = {};
@@ -108,10 +120,16 @@ export async function DELETE(
 ) {
   try {
     const { postId } = await params;
+    const { searchParams } = new URL(request.url);
+    const tenantId = searchParams.get('tenantId');
 
     const existing = await db.communityPost.findUnique({ where: { id: postId } });
     if (!existing) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+    }
+
+    if (tenantId && existing.tenantId !== tenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     await db.communityPost.delete({ where: { id: postId } });

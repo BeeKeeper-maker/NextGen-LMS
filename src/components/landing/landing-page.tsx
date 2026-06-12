@@ -1344,11 +1344,11 @@ function CommunityPreview() {
                       </div>
                       <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">{post.content}</p>
                       <div className="flex items-center gap-4 mt-3">
-                        <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-rose-500 transition-colors group/btn">
+                        <button onClick={() => goToLogin('learner')} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-rose-500 transition-colors group/btn">
                           <Heart className="h-3.5 w-3.5 group-hover/btn:scale-110 transition-transform" />
                           {post.likes}
                         </button>
-                        <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-emerald-500 transition-colors">
+                        <button onClick={() => goToLogin('learner')} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-emerald-500 transition-colors">
                           <MessageSquare className="h-3.5 w-3.5" />
                           {post.comments}
                         </button>
@@ -1603,7 +1603,7 @@ function TestimonialCarousel() {
 function FloatingStatsCounter() {
   const [visible, setVisible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
-  const [onlineCount, setOnlineCount] = useState(2847);
+  const [onlineCount, setOnlineCount] = useState(1423);
   const tickIndex = useRef(0);
 
   // Deterministic tick values to avoid hydration mismatch
@@ -1627,7 +1627,7 @@ function FloatingStatsCounter() {
     const timer = setInterval(() => {
       const change = tickValues[tickIndex.current % tickValues.length];
       tickIndex.current++;
-      setOnlineCount((prev) => Math.max(2800, Math.min(2900, prev + change)));
+      setOnlineCount((prev) => Math.max(1200, Math.min(1600, prev + change)));
     }, 3000);
     return () => clearInterval(timer);
   }, [visible, dismissed]);
@@ -1650,7 +1650,7 @@ function FloatingStatsCounter() {
         <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
         <div>
           <p className="text-sm font-semibold text-foreground">{onlineCount.toLocaleString()} learners online</p>
-          <p className="text-[10px] text-muted-foreground">across 50+ countries</p>
+          <p className="text-[10px] text-muted-foreground">across 30+ countries</p>
         </div>
         <button
           onClick={() => setDismissed(true)}
@@ -1965,8 +1965,10 @@ function ComparisonFeatureTooltip({ text }: { text: string }) {
 // ============================================================
 function CountdownTimer() {
   const [timeLeft, setTimeLeft] = useState({ hours: 23, minutes: 45, seconds: 30 });
+  const [expired, setExpired] = useState(false);
 
   useEffect(() => {
+    if (expired) return;
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         let { hours, minutes, seconds } = prev;
@@ -1980,17 +1982,24 @@ function CountdownTimer() {
           hours--;
         }
         if (hours < 0) {
-          hours = 23;
-          minutes = 59;
-          seconds = 59;
+          setExpired(true);
+          return { hours: 0, minutes: 0, seconds: 0 };
         }
         return { hours, minutes, seconds };
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [expired]);
 
   const pad = (n: number) => n.toString().padStart(2, '0');
+
+  if (expired) {
+    return (
+      <div className="flex items-center justify-center gap-2 mt-6">
+        <span className="text-sm text-rose-400 font-medium">Offer Expired</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center gap-2 mt-6">
@@ -2111,7 +2120,7 @@ export function LandingPage() {
   };
 
   const goToCheckout = () => {
-    setAppMode('admin');
+    setAppMode('learner');
     setView('checkout');
   };
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -2159,7 +2168,7 @@ export function LandingPage() {
 
             {/* Desktop Nav */}
             <nav className="hidden md:flex items-center gap-6">
-              <button onClick={() => scrollTo('features')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</button>
+              <button onClick={() => scrollTo('about')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</button>
               <button onClick={() => scrollTo('pricing')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</button>
               <button onClick={() => scrollTo('comparison')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Comparison</button>
               <button onClick={() => scrollTo('testimonials')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Community</button>
@@ -2196,7 +2205,7 @@ export function LandingPage() {
               className="md:hidden border-t border-border bg-background"
             >
               <div className="px-4 py-4 space-y-3">
-                <button onClick={() => scrollTo('features')} className="block w-full text-left text-sm text-muted-foreground hover:text-foreground py-2">Features</button>
+                <button onClick={() => scrollTo('about')} className="block w-full text-left text-sm text-muted-foreground hover:text-foreground py-2">Features</button>
                 <button onClick={() => scrollTo('pricing')} className="block w-full text-left text-sm text-muted-foreground hover:text-foreground py-2">Pricing</button>
                 <button onClick={() => scrollTo('comparison')} className="block w-full text-left text-sm text-muted-foreground hover:text-foreground py-2">Comparison</button>
                 <button onClick={() => scrollTo('testimonials')} className="block w-full text-left text-sm text-muted-foreground hover:text-foreground py-2">Community</button>
@@ -2360,7 +2369,7 @@ export function LandingPage() {
         <AnimatedStatsSection />
 
         {/* ============ FEATURES SECTION ============ */}
-        <section id="features" className="py-20 sm:py-28 bg-muted/30 relative">
+        <section id="about" className="py-20 sm:py-28 bg-muted/30 relative">
           {/* Mesh gradient background */}
           <MeshGradientBackground />
 
@@ -2806,6 +2815,19 @@ export function LandingPage() {
           </motion.div>
         </section>
 
+        {/* ============ CONTACT SECTION ============ */}
+        <section id="contact" className="py-12 bg-muted/20">
+          <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 text-center">
+            <h3 className="text-xl font-bold text-foreground mb-2">Get in Touch</h3>
+            <p className="text-sm text-muted-foreground mb-4">Have questions? We&apos;d love to hear from you.</p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <a href="mailto:hello@nextgen-lms.com" className="text-sm text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors">hello@nextgen-lms.com</a>
+              <span className="hidden sm:inline text-muted-foreground">•</span>
+              <span className="text-sm text-muted-foreground">Response within 24 hours</span>
+            </div>
+          </div>
+        </section>
+
         {/* ============ CTA SECTION ============ */}
         <section className="py-20 sm:py-28 relative overflow-hidden">
           {/* Dramatic gradient mesh background */}
@@ -3005,20 +3027,21 @@ export function LandingPage() {
               {/* Social media icons with hover animations */}
               <div className="flex gap-3 mt-4">
                 {[
-                  { Icon: Twitter, hoverColor: 'hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/40' },
-                  { Icon: Linkedin, hoverColor: 'hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40' },
-                  { Icon: Github, hoverColor: 'hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800' },
-                  { Icon: Youtube, hoverColor: 'hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40' },
-                ].map(({ Icon, hoverColor }, i) => (
-                  <motion.button
+                  { Icon: Twitter, hoverColor: 'hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/40', href: 'https://twitter.com' },
+                  { Icon: Linkedin, hoverColor: 'hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40', href: 'https://linkedin.com' },
+                  { Icon: Github, hoverColor: 'hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800', href: 'https://github.com' },
+                  { Icon: Youtube, hoverColor: 'hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40', href: 'https://youtube.com' },
+                ].map(({ Icon, hoverColor, href }, i) => (
+                  <a
                     key={i}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className={`h-9 w-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground transition-colors ${hoverColor}`}
-                    whileHover={{ scale: 1.15, rotate: 5 }}
-                    whileTap={{ scale: 0.95 }}
                     aria-label="Social media"
                   >
                     <Icon className="h-4 w-4" />
-                  </motion.button>
+                  </a>
                 ))}
               </div>
 
@@ -3043,7 +3066,7 @@ export function LandingPage() {
                       onChange={(e) => setEmail(e.target.value)}
                       className="h-9 text-sm"
                     />
-                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 gap-1.5" onClick={() => { if (email) setSubscribed(true); }}>
+                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 gap-1.5" onClick={async () => { if (email) { try { await fetch('/api/newsletter', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); setSubscribed(true); } catch { setSubscribed(true); } } }}>
                       <Mail className="h-3.5 w-3.5" />
                       Subscribe
                     </Button>
@@ -3056,13 +3079,18 @@ export function LandingPage() {
             <div>
               <h4 className="text-sm font-semibold text-foreground mb-4">Product</h4>
               <ul className="space-y-2">
-                {['About', 'Features', 'Pricing', 'Contact'].map((link) => (
-                  <li key={link}>
+                {[
+                  { label: 'About', id: 'about' },
+                  { label: 'Features', id: 'features' },
+                  { label: 'Pricing', id: 'pricing' },
+                  { label: 'Contact', id: 'contact' },
+                ].map(({ label, id }) => (
+                  <li key={label}>
                     <button
-                      onClick={() => scrollTo(link.toLowerCase())}
+                      onClick={() => scrollTo(id)}
                       className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      {link}
+                      {label}
                     </button>
                   </li>
                 ))}
@@ -3072,11 +3100,21 @@ export function LandingPage() {
             <div>
               <h4 className="text-sm font-semibold text-foreground mb-4">Resources</h4>
               <ul className="space-y-2">
-                {['Documentation', 'API Reference', 'Blog', 'Changelog'].map((link) => (
-                  <li key={link}>
-                    <span className="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
-                      {link}
-                    </span>
+                {[
+                  { label: 'Documentation', href: '#' },
+                  { label: 'API Reference', href: '#' },
+                  { label: 'Blog', href: '#' },
+                  { label: 'Changelog', href: '#' },
+                ].map(({ label, href }) => (
+                  <li key={label}>
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {label}
+                    </a>
                   </li>
                 ))}
               </ul>

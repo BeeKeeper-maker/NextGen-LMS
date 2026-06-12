@@ -1,0 +1,1091 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { Button } from '@/components/ui/button';
+     6→import { Badge } from '@/components/ui/badge';
+     7→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+     8→import {
+     9→  Play,
+    10→  Pause,
+    11→  Volume2,
+    12→  VolumeX,
+    13→  Volume1,
+    14→  Maximize,
+    15→  Minimize,
+    16→  Settings,
+    17→  CheckCircle2,
+    18→  SkipForward,
+    19→  SkipBack,
+    20→  PictureInPicture2,
+    21→  Video,
+    22→  Headphones,
+    23→  Monitor,
+    24→  FileText,
+    25→  Clock,
+    26→  ChevronRight,
+    27→  RotateCcw,
+    28→} from 'lucide-react';
+    29→import { cn } from '@/lib/utils';
+    30→
+    31→// ─── Types ──────────────────────────────────────────────────
+    32→export interface Chapter {
+    33→  time: number;
+    34→  title: string;
+    35→}
+    36→
+    37→export interface VideoPlayerProps {
+    38→  videoUrl?: string;
+    39→  title: string;
+    40→  onComplete?: () => void;
+    41→  onProgress?: (progress: number, currentTime: number, watchedSegments: [number, number][]) => void;
+    42→  initialPosition?: number;
+    43→  chapters?: Chapter[];
+    44→  /** Compact mode - hides sidebar, back button, keyboard shortcuts */
+    45→  compact?: boolean;
+    46→  /** Legacy prop support — lesson-based usage */
+    47→  lesson?: {
+    48→    id: string;
+    49→    title: string;
+    50→    description?: string;
+    51→    contentType: 'video' | 'text' | 'audio' | 'document' | 'live_session';
+    52→    videoDuration?: number;
+    53→  };
+    54→  moduleName?: string;
+    55→  nextLessons?: { id: string; title: string; moduleName: string; duration: number; contentType: string }[];
+    56→  onMarkComplete?: (lessonId: string) => void;
+    57→  onNextLesson?: (lessonId: string) => void;
+    58→  onBack?: () => void;
+    59→  isCompleted?: boolean;
+    60→  totalDuration?: number;
+    61→}
+    62→
+    63→// ─── Constants ──────────────────────────────────────────────
+    64→const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+    65→const CONTROLS_HIDE_DELAY = 3000;
+    66→const AUTO_COMPLETE_THRESHOLD = 0.9;
+    67→const SEGMENT_MERGE_THRESHOLD = 5; // merge segments within 5s of each other
+    68→
+    69→// ─── Helpers ────────────────────────────────────────────────
+    70→function formatTime(seconds: number): string {
+    71→  const h = Math.floor(seconds / 3600);
+    72→  const m = Math.floor((seconds % 3600) / 60);
+    73→  const s = Math.floor(seconds % 60);
+    74→  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    75→  return `${m}:${s.toString().padStart(2, '0')}`;
+    76→}
+    77→
+    78→function formatDuration(seconds?: number): string {
+    79→  if (!seconds) return '';
+    80→  const mins = Math.floor(seconds / 60);
+    81→  if (mins < 60) return `${mins} min`;
+    82→  const hours = Math.floor(mins / 60);
+    83→  const remainMins = mins % 60;
+    84→  return `${hours}h ${remainMins}m`;
+    85→}
+    86→
+    87→function ContentTypeIcon({ type, className }: { type: string; className?: string }) {
+    88→  switch (type) {
+    89→    case 'video': return <Video className={className} />;
+    90→    case 'audio': return <Headphones className={className} />;
+    91→    case 'live_session': return <Monitor className={className} />;
+    92→    default: return <FileText className={className} />;
+    93→  }
+    94→}
+    95→
+    96→// ─── Segment Tracker ────────────────────────────────────────
+    97→class SegmentTracker {
+    98→  private segments: [number, number][] = [];
+    99→  private currentStart: number | null = null;
+   100→
+   101→  startSegment(time: number) {
+   102→    if (this.currentStart === null) {
+   103→      this.currentStart = time;
+   104→    }
+   105→  }
+   106→
+   107→  updateSegment(time: number) {
+   108→    if (this.currentStart !== null) {
+   109→      // Extend or create segment
+   110→      const last = this.segments[this.segments.length - 1];
+   111→      if (last && Math.abs(time - last[1]) < SEGMENT_MERGE_THRESHOLD) {
+   112→        last[1] = Math.max(last[1], time);
+   113→      } else {
+   114→        if (this.currentStart !== null) {
+   115→          this.segments.push([this.currentStart, time]);
+   116→          this.mergeSegments();
+   117→        }
+   118→      }
+   119→    }
+   120→  }
+   121→
+   122→  stopSegment(time: number) {
+   123→    if (this.currentStart !== null) {
+   124→      this.segments.push([this.currentStart, time]);
+   125→      this.mergeSegments();
+   126→      this.currentStart = null;
+   127→    }
+   128→  }
+   129→
+   130→  private mergeSegments() {
+   131→    if (this.segments.length <= 1) return;
+   132→    const merged: [number, number][] = [this.segments[0]];
+   133→    for (let i = 1; i < this.segments.length; i++) {
+   134→      const last = merged[merged.length - 1];
+   135→      const cur = this.segments[i];
+   136→      if (cur[0] - last[1] < SEGMENT_MERGE_THRESHOLD) {
+   137→        last[1] = Math.max(last[1], cur[1]);
+   138→      } else {
+   139→        merged.push(cur);
+   140→      }
+   141→    }
+   142→    this.segments = merged;
+   143→  }
+   144→
+   145→  getWatchedPercent(totalDuration: number): number {
+   146→    if (totalDuration <= 0) return 0;
+   147→    const watched = this.segments.reduce((sum, seg) => sum + (seg[1] - seg[0]), 0);
+   148→    return Math.min(100, (watched / totalDuration) * 100);
+   149→  }
+   150→
+   151→  getSegments(): [number, number][] {
+   152→    return [...this.segments];
+   153→  }
+   154→
+   155→  seekTo(time: number) {
+   156→    // When seeking, end current segment and start new
+   157→    if (this.currentStart !== null) {
+   158→      this.segments.push([this.currentStart, this.currentStart + 0.5]);
+   159→      this.currentStart = time;
+   160→    }
+   161→  }
+   162→}
+   163→
+   164→// ─── Main Component ─────────────────────────────────────────
+   165→export function VideoPlayer({
+   166→  videoUrl,
+   167→  title,
+   168→  onComplete,
+   169→  onProgress,
+   170→  initialPosition = 0,
+   171→  chapters = [],
+   172→  compact = false,
+   173→  lesson,
+   174→  moduleName,
+   175→  nextLessons = [],
+   176→  onMarkComplete,
+   177→  onNextLesson,
+   178→  onBack,
+   179→  isCompleted: isCompletedProp = false,
+   180→  totalDuration: totalDurationProp,
+   181→}: VideoPlayerProps) {
+   182→  // Resolve props from lesson or direct
+   183→  const resolvedTitle = title || lesson?.title || 'Untitled Lesson';
+   184→  const resolvedModuleName = moduleName || '';
+   185→  const totalDuration = totalDurationProp || lesson?.videoDuration || 300;
+   186→  const resolvedContentType = lesson?.contentType || 'video';
+   187→
+   188→  // ─── State ──────────────────────────────────────────────
+   189→  const [isPlaying, setIsPlaying] = useState(false);
+   190→  const [currentTime, setCurrentTime] = useState(initialPosition);
+   191→  const [volume, setVolume] = useState(1);
+   192→  const [isMuted, setIsMuted] = useState(false);
+   193→  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+   194→  const [showControls, setShowControls] = useState(true);
+   195→  const [showTitle, setShowTitle] = useState(true);
+   196→  const [showSpeedMenu, setShowSpeedMenu] = useState(false);
+   197→  const [isFullscreen, setIsFullscreen] = useState(false);
+   198→  const [isPiP, setIsPiP] = useState(false);
+   199→  const [isCompleted, setIsCompleted] = useState(isCompletedProp);
+   200→  const [hoverTime, setHoverTime] = useState<number | null>(null);
+   201→  const [hoverX, setHoverX] = useState(0);
+   202→  const [progressBarWidth, setProgressBarWidth] = useState(0);
+   203→  const [showResumePrompt, setShowResumePrompt] = useState(initialPosition > 0);
+   204→  const [watchedPercent, setWatchedPercent] = useState(0);
+   205→  const [bufferedPercent, setBufferedPercent] = useState(0);
+   206→
+   207→  // ─── Refs ───────────────────────────────────────────────
+   208→  const containerRef = useRef<HTMLDivElement>(null);
+   209→  const progressRef = useRef<HTMLDivElement>(null);
+   210→  const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+   211→  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+   212→  const segmentTrackerRef = useRef(new SegmentTracker());
+   213→  const lastTimeRef = useRef(initialPosition);
+   214→  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+   215→
+   216→  // ─── Computed ───────────────────────────────────────────
+   217→  const progressPercent = (currentTime / totalDuration) * 100;
+   218→  const displayVolume = isMuted ? 0 : volume;
+   219→
+   220→  const chapterAtTime = useMemo(() => {
+   221→    if (chapters.length === 0) return null;
+   222→    let current = chapters[0];
+   223→    for (const ch of chapters) {
+   224→      if (currentTime >= ch.time) current = ch;
+   225→      else break;
+   226→    }
+   227→    return current;
+   228→  }, [currentTime, chapters]);
+   229→
+   230→  // ─── Controls visibility ────────────────────────────────
+   231→  const resetControlsTimer = useCallback(() => {
+   232→    setShowControls(true);
+   233→    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+   234→    if (isPlaying) {
+   235→      controlsTimeoutRef.current = setTimeout(() => {
+   236→        setShowControls(false);
+   237→        setShowTitle(false);
+   238→      }, CONTROLS_HIDE_DELAY);
+   239→    }
+   240→  }, [isPlaying]);
+   241→
+   242→  const handleMouseMove = useCallback(() => {
+   243→    resetControlsTimer();
+   244→  }, [resetControlsTimer]);
+   245→
+   246→  // ─── Playback simulation ────────────────────────────────
+   247→  useEffect(() => {
+   248→    if (isPlaying) {
+   249→      segmentTrackerRef.current.startSegment(currentTime);
+   250→      intervalRef.current = setInterval(() => {
+   251→        setCurrentTime((prev) => {
+   252→          const next = prev + playbackSpeed;
+   253→          lastTimeRef.current = prev;
+   254→
+   255→          // Update segment tracker
+   256→          segmentTrackerRef.current.updateSegment(next);
+   257→
+   258→          // Calculate watched percentage
+   259→          const wp = segmentTrackerRef.current.getWatchedPercent(totalDuration);
+   260→          setWatchedPercent(wp);
+   261→
+   262→          // Report progress
+   263→          if (onProgress) {
+   264→            onProgress(wp, next, segmentTrackerRef.current.getSegments());
+   265→          }
+   266→
+   267→          // Auto-complete at threshold
+   268→          if (wp >= AUTO_COMPLETE_THRESHOLD * 100 && !isCompleted) {
+   269→            setIsCompleted(true);
+   270→            if (onComplete) onComplete();
+   271→            if (onMarkComplete && lesson?.id) onMarkComplete(lesson.id);
+   272→          }
+   273→
+   274→          if (next >= totalDuration) {
+   275→            setIsPlaying(false);
+   276→            segmentTrackerRef.current.stopSegment(totalDuration);
+   277→            if (!isCompleted) {
+   278→              setIsCompleted(true);
+   279→              if (onComplete) onComplete();
+   280→              if (onMarkComplete && lesson?.id) onMarkComplete(lesson.id);
+   281→            }
+   282→            return totalDuration;
+   283→          }
+   284→          return next;
+   285→        });
+   286→      }, 1000);
+   287→    } else {
+   288→      segmentTrackerRef.current.stopSegment(lastTimeRef.current);
+   289→      if (intervalRef.current) clearInterval(intervalRef.current);
+   290→    }
+   291→    return () => {
+   292→      if (intervalRef.current) clearInterval(intervalRef.current);
+   293→    };
+   294→  }, [isPlaying, playbackSpeed, totalDuration]);
+   295→
+   296→  // Simulated buffering
+   297→  useEffect(() => {
+   298→    if (isPlaying) {
+   299→      const bufferInterval = setInterval(() => {
+   300→        setBufferedPercent(Math.min(100, progressPercent + 10 + Math.random() * 15));
+   301→      }, 2000);
+   302→      return () => clearInterval(bufferInterval);
+   303→    }
+   304→  }, [isPlaying, progressPercent]);
+   305→
+   306→  // ─── Toggle play ────────────────────────────────────────
+   307→  const togglePlay = useCallback(() => {
+   308→    const willPlay = !isPlaying;
+   309→    setIsPlaying(willPlay);
+   310→    setShowResumePrompt(false);
+   311→    if (willPlay) {
+   312→      setShowTitle(true);
+   313→      resetControlsTimer();
+   314→      setTimeout(() => setShowTitle(false), 3000);
+   315→    } else {
+   316→      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+   317→      setShowControls(true);
+   318→      setShowTitle(true);
+   319→    }
+   320→  }, [isPlaying, resetControlsTimer]);
+   321→
+   322→  // ─── Seek ───────────────────────────────────────────────
+   323→  const seekTo = useCallback((time: number) => {
+   324→    const clamped = Math.max(0, Math.min(time, totalDuration));
+   325→    segmentTrackerRef.current.seekTo(clamped);
+   326→    setCurrentTime(clamped);
+   327→    lastTimeRef.current = clamped;
+   328→  }, [totalDuration]);
+   329→
+   330→  const skipForward = useCallback(() => seekTo(currentTime + 10), [currentTime, seekTo]);
+   331→  const skipBackward = useCallback(() => seekTo(currentTime - 10), [currentTime, seekTo]);
+   332→
+   333→  // ─── Progress bar click ─────────────────────────────────
+   334→  const handleProgressClick = useCallback(
+   335→    (e: React.MouseEvent<HTMLDivElement>) => {
+   336→      if (!progressRef.current) return;
+   337→      const rect = progressRef.current.getBoundingClientRect();
+   338→      const x = e.clientX - rect.left;
+   339→      const percent = Math.max(0, Math.min(1, x / rect.width));
+   340→      seekTo(percent * totalDuration);
+   341→    },
+   342→    [totalDuration, seekTo]
+   343→  );
+   344→
+   345→  const handleProgressHover = useCallback(
+   346→    (e: React.MouseEvent<HTMLDivElement>) => {
+   347→      if (!progressRef.current) return;
+   348→      const rect = progressRef.current.getBoundingClientRect();
+   349→      const x = e.clientX - rect.left;
+   350→      const percent = Math.max(0, Math.min(1, x / rect.width));
+   351→      setHoverTime(percent * totalDuration);
+   352→      setHoverX(e.clientX - rect.left);
+   353→      setProgressBarWidth(rect.width);
+   354→    },
+   355→    [totalDuration]
+   356→  );
+   357→
+   358→  const handleProgressLeave = useCallback(() => {
+   359→    setHoverTime(null);
+   360→  }, []);
+   361→
+   362→  // ─── Volume ─────────────────────────────────────────────
+   363→  const toggleMute = useCallback(() => setIsMuted(!isMuted), [isMuted]);
+   364→  const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+   365→    const val = parseFloat(e.target.value);
+   366→    setVolume(val);
+   367→    setIsMuted(val === 0);
+   368→  }, []);
+   369→
+   370→  // ─── Fullscreen ─────────────────────────────────────────
+   371→  const toggleFullscreen = useCallback(() => {
+   372→    if (!containerRef.current) return;
+   373→    if (!document.fullscreenElement) {
+   374→      containerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+   375→    } else {
+   376→      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+   377→    }
+   378→  }, []);
+   379→
+   380→  useEffect(() => {
+   381→    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+   382→    document.addEventListener('fullscreenchange', handler);
+   383→    return () => document.removeEventListener('fullscreenchange', handler);
+   384→  }, []);
+   385→
+   386→  // ─── PiP (simulated) ───────────────────────────────────
+   387→  const togglePiP = useCallback(() => {
+   388→    setIsPiP(!isPiP);
+   389→  }, [isPiP]);
+   390→
+   391→  // ─── Resume ─────────────────────────────────────────────
+   392→  const handleResume = useCallback(() => {
+   393→    setShowResumePrompt(false);
+   394→    setIsPlaying(true);
+   395→    resetControlsTimer();
+   396→  }, [resetControlsTimer]);
+   397→
+   398→  const handleStartFromBeginning = useCallback(() => {
+   399→    setCurrentTime(0);
+   400→    lastTimeRef.current = 0;
+   401→    setShowResumePrompt(false);
+   402→    setIsPlaying(true);
+   403→    resetControlsTimer();
+   404→  }, [resetControlsTimer]);
+   405→
+   406→  // ─── Keyboard shortcuts ─────────────────────────────────
+   407→  useEffect(() => {
+   408→    const handler = (e: KeyboardEvent) => {
+   409→      // Don't capture if focused on input
+   410→      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+   411→
+   412→      switch (e.key) {
+   413→        case ' ':
+   414→        case 'k':
+   415→          e.preventDefault();
+   416→          togglePlay();
+   417→          break;
+   418→        case 'ArrowLeft':
+   419→          e.preventDefault();
+   420→          skipBackward();
+   421→          break;
+   422→        case 'ArrowRight':
+   423→          e.preventDefault();
+   424→          skipForward();
+   425→          break;
+   426→        case 'ArrowUp':
+   427→          e.preventDefault();
+   428→          setVolume((v) => {
+   429→            const nv = Math.min(1, v + 0.1);
+   430→            setIsMuted(nv === 0);
+   431→            return nv;
+   432→          });
+   433→          break;
+   434→        case 'ArrowDown':
+   435→          e.preventDefault();
+   436→          setVolume((v) => {
+   437→            const nv = Math.max(0, v - 0.1);
+   438→            setIsMuted(nv === 0);
+   439→            return nv;
+   440→          });
+   441→          break;
+   442→        case 'f':
+   443→        case 'F':
+   444→          e.preventDefault();
+   445→          toggleFullscreen();
+   446→          break;
+   447→        case 'm':
+   448→        case 'M':
+   449→          e.preventDefault();
+   450→          toggleMute();
+   451→          break;
+   452→        case '<':
+   453→        case ',':
+   454→          e.preventDefault();
+   455→          setPlaybackSpeed((s) => {
+   456→            const idx = PLAYBACK_SPEEDS.indexOf(s);
+   457→            return idx > 0 ? PLAYBACK_SPEEDS[idx - 1] : s;
+   458→          });
+   459→          break;
+   460→        case '>':
+   461→        case '.':
+   462→          e.preventDefault();
+   463→          setPlaybackSpeed((s) => {
+   464→            const idx = PLAYBACK_SPEEDS.indexOf(s);
+   465→            return idx < PLAYBACK_SPEEDS.length - 1 ? PLAYBACK_SPEEDS[idx + 1] : s;
+   466→          });
+   467→          break;
+   468→      }
+   469→    };
+   470→    window.addEventListener('keydown', handler);
+   471→    return () => window.removeEventListener('keydown', handler);
+   472→  }, [togglePlay, skipForward, skipBackward, toggleFullscreen, toggleMute]);
+   473→
+   474→  // ─── Touch / Swipe handling ─────────────────────────────
+   475→  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+   476→    touchStartRef.current = {
+   477→      x: e.touches[0].clientX,
+   478→      y: e.touches[0].clientY,
+   479→      time: Date.now(),
+   480→    };
+   481→  }, []);
+   482→
+   483→  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+   484→    if (!touchStartRef.current) return;
+   485→    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+   486→    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+   487→    const dt = Date.now() - touchStartRef.current.time;
+   488→
+   489→    // Only horizontal swipes
+   490→    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 2 && dt < 500) {
+   491→      const seekAmount = (dx / 300) * 30; // up to 30s based on swipe distance
+   492→      seekTo(currentTime + seekAmount);
+   493→    }
+   494→    touchStartRef.current = null;
+   495→  }, [currentTime, seekTo]);
+   496→
+   497→  // ─── Mark complete manually ─────────────────────────────
+   498→  const handleMarkComplete = () => {
+   499→    setIsCompleted(true);
+   500→    if (onComplete) onComplete();
+   501→    if (onMarkComplete && lesson?.id) onMarkComplete(lesson.id);
+   502→  };
+   503→
+   504→  // ─── Chapter markers on progress bar ────────────────────
+   505→  const chapterMarkers = useMemo(() => {
+   506→    if (chapters.length === 0) return null;
+   507→    return chapters
+   508→      .filter((ch) => ch.time > 0)
+   509→      .map((ch, i) => (
+   510→        <div
+   511→          key={i}
+   512→          className="absolute top-0 bottom-0 w-0.5 bg-white/40 z-10"
+   513→          style={{ left: `${(ch.time / totalDuration) * 100}%` }}
+   514→          title={ch.title}
+   515→        />
+   516→      ));
+   517→  }, [chapters, totalDuration]);
+   518→
+   519→  // ─── Volume icon ────────────────────────────────────────
+   520→  const VolumeIcon = displayVolume === 0 ? VolumeX : displayVolume < 0.5 ? Volume1 : Volume2;
+   521→
+   522→  return (
+   523→    <div className="space-y-4">
+   524→      {/* Back Button */}
+   525→      {onBack && !compact && (
+   526→        <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}>
+   527→          <Button variant="ghost" size="sm" onClick={onBack} className="gap-1.5 text-muted-foreground hover:text-foreground">
+   528→            <ChevronRight className="h-4 w-4 rotate-180" />
+   529→            Back to Course
+   530→          </Button>
+   531→        </motion.div>
+   532→      )}
+   533→
+   534→      <div className={cn(compact ? 'flex flex-col' : 'flex flex-col lg:flex-row gap-4')}>
+   535→        {/* ─── Video Player Container ──────────────────────── */}
+   536→        <div className="flex-1 min-w-0">
+   537→          <motion.div
+   538→            ref={containerRef}
+   539→            initial={{ opacity: 0, y: 10 }}
+   540→            animate={{ opacity: 1, y: 0 }}
+   541→            transition={{ duration: 0.4 }}
+   542→            className={cn(
+   543→              'relative rounded-xl overflow-hidden bg-black shadow-2xl group/container',
+   544→              isPiP && 'fixed bottom-4 right-4 w-80 h-45 z-50 rounded-lg shadow-2xl'
+   545→            )}
+   546→            onMouseMove={handleMouseMove}
+   547→            onMouseLeave={() => isPlaying && setShowControls(false)}
+   548→            onTouchStart={handleTouchStart}
+   549→            onTouchEnd={handleTouchEnd}
+   550→          >
+   551→            {/* 16:9 Aspect Ratio Container */}
+   552→            <div className="relative w-full" style={{ aspectRatio: isPiP ? '16/9' : '16/9' }}>
+   553→              {/* Simulated Video Content - Animated Gradient */}
+   554→              <div className="absolute inset-0">
+   555→                <div
+   556→                  className="absolute inset-0"
+   557→                  style={{
+   558→                    background: isPlaying
+   559→                      ? `linear-gradient(${135 + currentTime * 0.5}deg, 
+   560→                          #0f172a 0%, 
+   561→                          #1e293b 25%, 
+   562→                          #334155 50%, 
+   563→                          #1e293b 75%, 
+   564→                          #0f172a 100%)`
+   565→                      : 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)',
+   566→                    transition: 'background 2s ease',
+   567→                  }}
+   568→                />
+   569→                {/* Animated wave pattern */}
+   570→                {isPlaying && (
+   571→                  <div className="absolute inset-0 opacity-20">
+   572→                    <div
+   573→                      className="absolute inset-0"
+   574→                      style={{
+   575→                        background: `radial-gradient(ellipse at ${30 + Math.sin(currentTime * 0.1) * 20}% ${50 + Math.cos(currentTime * 0.08) * 20}%, 
+   576→                          rgba(16, 185, 129, 0.4) 0%, 
+   577→                          transparent 50%),
+   578→                          radial-gradient(ellipse at ${70 + Math.cos(currentTime * 0.12) * 20}% ${50 + Math.sin(currentTime * 0.09) * 20}%, 
+   579→                          rgba(139, 92, 246, 0.3) 0%, 
+   580→                          transparent 50%)`,
+   581→                      }}
+   582→                    />
+   583→                  </div>
+   584→                )}
+   585→                {/* Center content indicator */}
+   586→                <div className="absolute inset-0 flex items-center justify-center">
+   587→                  <div className="text-center text-white/30">
+   588→                    <Video className={cn('mx-auto mb-3', isPiP ? 'h-8 w-8' : 'h-16 w-16')} />
+   589→                    <p className={cn('font-medium', isPiP ? 'text-[10px]' : 'text-sm')}>Simulated Video Playback</p>
+   590→                    {!isPiP && (
+   591→                      <p className="text-xs mt-1">
+   592→                        {isPlaying ? `Playing at ${playbackSpeed}x speed` : 'Click play to start'}
+   593→                      </p>
+   594→                    )}
+   595→                  </div>
+   596→                </div>
+   597→              </div>
+   598→
+   599→              {/* Title Overlay */}
+   600→              <AnimatePresence>
+   601→                {showTitle && !isPiP && (
+   602→                  <motion.div
+   603→                    initial={{ opacity: 0 }}
+   604→                    animate={{ opacity: 1 }}
+   605→                    exit={{ opacity: 0 }}
+   606→                    transition={{ duration: 0.5 }}
+   607→                    className="absolute inset-x-0 top-0 p-4 md:p-6"
+   608→                    style={{
+   609→                      background: 'linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%)',
+   610→                    }}
+   611→                  >
+   612→                    <div className="flex items-center gap-2 mb-1">
+   613→                      {resolvedModuleName && (
+   614→                        <Badge variant="secondary" className="bg-white/20 text-white border-0 text-[10px] backdrop-blur-sm">
+   615→                          {resolvedModuleName}
+   616→                        </Badge>
+   617→                      )}
+   618→                      <ContentTypeIcon type={resolvedContentType} className="h-3.5 w-3.5 text-white/60" />
+   619→                    </div>
+   620→                    <h2 className="text-lg md:text-xl font-bold text-white">{resolvedTitle}</h2>
+   621→                    {/* Chapter indicator */}
+   622→                    {chapterAtTime && (
+   623→                      <p className="text-xs text-white/60 mt-1 flex items-center gap-1">
+   624→                        <Clock className="h-3 w-3" />
+   625→                        {chapterAtTime.title}
+   626→                      </p>
+   627→                    )}
+   628→                  </motion.div>
+   629→                )}
+   630→              </AnimatePresence>
+   631→
+   632→              {/* Large Play/Pause Overlay Button */}
+   633→              <AnimatePresence>
+   634→                {!isPlaying && !showResumePrompt && (
+   635→                  <motion.button
+   636→                    initial={{ opacity: 0, scale: 0.8 }}
+   637→                    animate={{ opacity: 1, scale: 1 }}
+   638→                    exit={{ opacity: 0, scale: 0.8 }}
+   639→                    transition={{ duration: 0.2 }}
+   640→                    onClick={togglePlay}
+   641→                    className="absolute inset-0 flex items-center justify-center z-10 cursor-pointer group"
+   642→                  >
+   643→                    <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center group-hover:bg-white/30 transition-all duration-200 group-hover:scale-110">
+   644→                      <Play className="h-8 w-8 md:h-10 md:w-10 text-white ml-1" fill="white" />
+   645→                    </div>
+   646→                  </motion.button>
+   647→                )}
+   648→              </AnimatePresence>
+   649→
+   650→              {/* Resume Prompt */}
+   651→              <AnimatePresence>
+   652→                {showResumePrompt && !isPlaying && (
+   653→                  <motion.div
+   654→                    initial={{ opacity: 0, scale: 0.9 }}
+   655→                    animate={{ opacity: 1, scale: 1 }}
+   656→                    exit={{ opacity: 0, scale: 0.9 }}
+   657→                    className="absolute inset-0 flex items-center justify-center z-20 bg-black/60 backdrop-blur-sm"
+   658→                  >
+   659→                    <div className="bg-slate-900/90 backdrop-blur-md rounded-xl p-6 max-w-sm mx-4 text-center border border-white/10 shadow-2xl">
+   660→                      <RotateCcw className="h-10 w-10 text-emerald-400 mx-auto mb-3" />
+   661→                      <h3 className="text-white font-semibold text-lg mb-1">Continue Watching?</h3>
+   662→                      <p className="text-white/60 text-sm mb-4">
+   663→                        You left off at {formatTime(initialPosition)}
+   664→                      </p>
+   665→                      <div className="flex gap-3 justify-center">
+   666→                        <Button
+   667→                          variant="outline"
+   668→                          size="sm"
+   669→                          onClick={handleStartFromBeginning}
+   670→                          className="border-white/20 text-white hover:bg-white/10"
+   671→                        >
+   672→                          Start Over
+   673→                        </Button>
+   674→                        <Button
+   675→                          size="sm"
+   676→                          onClick={handleResume}
+   677→                          className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+   678→                        >
+   679→                          <Play className="h-3.5 w-3.5" fill="currentColor" />
+   680→                          Resume
+   681→                        </Button>
+   682→                      </div>
+   683→                    </div>
+   684→                  </motion.div>
+   685→                )}
+   686→              </AnimatePresence>
+   687→
+   688→              {/* Completed Overlay */}
+   689→              {isCompleted && !isPlaying && !showResumePrompt && (
+   690→                <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+   691→                  <motion.div
+   692→                    initial={{ scale: 0 }}
+   693→                    animate={{ scale: 1 }}
+   694→                    transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+   695→                    className="bg-emerald-600/80 backdrop-blur-sm rounded-full p-4"
+   696→                  >
+   697→                    <CheckCircle2 className="h-10 w-10 text-white" />
+   698→                  </motion.div>
+   699→                </div>
+   700→              )}
+   701→
+   702→              {/* Progress Percentage Badge */}
+   703→              {isPlaying && watchedPercent > 0 && (
+   704→                <div className="absolute top-3 right-3 z-20">
+   705→                  <Badge className="bg-black/50 text-white/80 border-0 text-[10px] backdrop-blur-sm">
+   706→                    {Math.round(watchedPercent)}% watched
+   707→                  </Badge>
+   708→                </div>
+   709→              )}
+   710→
+   711→              {/* Bottom Control Bar */}
+   712→              <AnimatePresence>
+   713→                {showControls && (
+   714→                  <motion.div
+   715→                    initial={{ opacity: 0, y: 10 }}
+   716→                    animate={{ opacity: 1, y: 0 }}
+   717→                    exit={{ opacity: 0, y: 10 }}
+   718→                    transition={{ duration: 0.2 }}
+   719→                    className="absolute inset-x-0 bottom-0"
+   720→                    style={{
+   721→                      background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)',
+   722→                    }}
+   723→                  >
+   724→                    {/* Progress Bar */}
+   725→                    <div
+   726→                      ref={progressRef}
+   727→                      onClick={handleProgressClick}
+   728→                      onMouseMove={handleProgressHover}
+   729→                      onMouseLeave={handleProgressLeave}
+   730→                      className="mx-3 md:mx-4 relative h-1.5 bg-white/20 rounded-full cursor-pointer group/progress hover:h-2.5 transition-all"
+   731→                    >
+   732→                      {/* Buffered indicator */}
+   733→                      <div
+   734→                        className="absolute h-full bg-white/20 rounded-full"
+   735→                        style={{ width: `${bufferedPercent}%` }}
+   736→                      />
+   737→                      {/* Progress */}
+   738→                      <div
+   739→                        className="relative h-full bg-emerald-500 rounded-full transition-all duration-200"
+   740→                        style={{ width: `${progressPercent}%` }}
+   741→                      >
+   742→                        <div className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-3.5 bg-emerald-400 rounded-full shadow-lg opacity-0 group-hover/progress:opacity-100 transition-opacity" />
+   743→                      </div>
+   744→                      {/* Chapter markers */}
+   745→                      {chapterMarkers}
+   746→                      {/* Hover time tooltip */}
+   747→                      {hoverTime !== null && (
+   748→                        <div
+   749→                          className="absolute -top-8 bg-black/80 text-white text-[11px] px-2 py-1 rounded-md backdrop-blur-sm pointer-events-none whitespace-nowrap z-20"
+   750→                          style={{ left: `${Math.max(0, Math.min(hoverX - 25, progressBarWidth - 50))}px` }}
+   751→                        >
+   752→                          {formatTime(hoverTime)}
+   753→                          {chapters.find((ch, i) => {
+   754→                            const nextCh = chapters[i + 1];
+   755→                            return hoverTime >= ch.time && (!nextCh || hoverTime < nextCh.time);
+   756→                          }) && (
+   757→                            <span className="ml-1.5 text-emerald-400">
+   758→                              {chapters.find((ch, i) => {
+   759→                                const nextCh = chapters[i + 1];
+   760→                                return hoverTime >= ch.time && (!nextCh || hoverTime < nextCh.time);
+   761→                              })?.title}
+   762→                            </span>
+   763→                          )}
+   764→                        </div>
+   765→                      )}
+   766→                    </div>
+   767→
+   768→                    {/* Controls Row */}
+   769→                    <div className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 md:py-3">
+   770→                      {/* Play/Pause */}
+   771→                      <button onClick={togglePlay} className="text-white hover:text-emerald-400 transition-colors shrink-0 p-1" aria-label={isPlaying ? 'Pause' : 'Play'}>
+   772→                        <AnimatePresence mode="wait">
+   773→                          <motion.div
+   774→                            key={isPlaying ? 'pause' : 'play'}
+   775→                            initial={{ scale: 0.7, opacity: 0 }}
+   776→                            animate={{ scale: 1, opacity: 1 }}
+   777→                            exit={{ scale: 0.7, opacity: 0 }}
+   778→                            transition={{ duration: 0.15 }}
+   779→                          >
+   780→                            {isPlaying ? <Pause className="h-5 w-5" fill="currentColor" /> : <Play className="h-5 w-5 ml-0.5" fill="currentColor" />}
+   781→                          </motion.div>
+   782→                        </AnimatePresence>
+   783→                      </button>
+   784→
+   785→                      {/* Skip Backward */}
+   786→                      <button
+   787→                        onClick={skipBackward}
+   788→                        className="text-white/70 hover:text-white transition-colors shrink-0 p-1"
+   789→                        title="Back 10s"
+   790→                        aria-label="Skip back 10 seconds"
+   791→                      >
+   792→                        <SkipBack className="h-4 w-4" />
+   793→                      </button>
+   794→
+   795→                      {/* Skip Forward */}
+   796→                      <button
+   797→                        onClick={skipForward}
+   798→                        className="text-white/70 hover:text-white transition-colors shrink-0 p-1"
+   799→                        title="Forward 10s"
+   800→                        aria-label="Skip forward 10 seconds"
+   801→                      >
+   802→                        <SkipForward className="h-4 w-4" />
+   803→                      </button>
+   804→
+   805→                      {/* Volume */}
+   806→                      <div className="flex items-center gap-1 group/vol">
+   807→                        <button
+   808→                          onClick={toggleMute}
+   809→                          className="text-white/70 hover:text-white transition-colors shrink-0 p-1"
+   810→                          aria-label={isMuted ? 'Unmute' : 'Mute'}
+   811→                        >
+   812→                          <VolumeIcon className="h-4 w-4" />
+   813→                        </button>
+   814→                        <div className="w-0 overflow-hidden group-hover/vol:w-20 transition-all duration-200">
+   815→                          <input
+   816→                            type="range"
+   817→                            min={0}
+   818→                            max={1}
+   819→                            step={0.01}
+   820→                            value={displayVolume}
+   821→                            onChange={handleVolumeChange}
+   822→                            className="w-full h-1 bg-white/30 rounded-full appearance-none cursor-pointer accent-emerald-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-emerald-400"
+   823→                            aria-label="Volume"
+   824→                          />
+   825→                        </div>
+   826→                      </div>
+   827→
+   828→                      {/* Time Display */}
+   829→                      <span className="text-xs text-white/70 font-mono tabular-nums shrink-0 ml-1">
+   830→                        {formatTime(currentTime)} / {formatTime(totalDuration)}
+   831→                      </span>
+   832→
+   833→                      {/* Spacer */}
+   834→                      <div className="flex-1" />
+   835→
+   836→                      {/* Mark as Complete */}
+   837→                      {!isCompleted ? (
+   838→                        <Button
+   839→                          size="sm"
+   840→                          onClick={handleMarkComplete}
+   841→                          className="h-7 text-[11px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
+   842→                        >
+   843→                          <CheckCircle2 className="h-3 w-3" />
+   844→                          <span className="hidden sm:inline">Complete</span>
+   845→                        </Button>
+   846→                      ) : (
+   847→                        <Badge className="bg-emerald-600/20 text-emerald-400 border-emerald-600/30 text-[11px] shrink-0">
+   848→                          <CheckCircle2 className="h-3 w-3 mr-1" /> Done
+   849→                        </Badge>
+   850→                      )}
+   851→
+   852→                      {/* Speed Selector */}
+   853→                      <div className="relative shrink-0">
+   854→                        <button
+   855→                          onClick={() => setShowSpeedMenu(!showSpeedMenu)}
+   856→                          className="text-white/70 hover:text-white transition-colors flex items-center gap-1 text-xs font-medium p-1"
+   857→                          aria-label="Playback speed"
+   858→                        >
+   859→                          <Settings className="h-4 w-4" />
+   860→                          <span className="hidden sm:inline">{playbackSpeed}x</span>
+   861→                        </button>
+   862→                        <AnimatePresence>
+   863→                          {showSpeedMenu && (
+   864→                            <motion.div
+   865→                              initial={{ opacity: 0, y: 5 }}
+   866→                              animate={{ opacity: 1, y: 0 }}
+   867→                              exit={{ opacity: 0, y: 5 }}
+   868→                              className="absolute bottom-full right-0 mb-2 bg-slate-900 border border-slate-700 rounded-lg overflow-hidden shadow-xl z-20"
+   869→                            >
+   870→                              <div className="px-3 py-1.5 text-[10px] text-white/40 font-medium uppercase tracking-wider border-b border-slate-700/50">
+   871→                                Speed
+   872→                              </div>
+   873→                              {PLAYBACK_SPEEDS.map((speed) => (
+   874→                                <button
+   875→                                  key={speed}
+   876→                                  onClick={() => {
+   877→                                    setPlaybackSpeed(speed);
+   878→                                    setShowSpeedMenu(false);
+   879→                                  }}
+   880→                                  className={cn(
+   881→                                    'flex items-center justify-between w-full px-4 py-1.5 text-xs text-left hover:bg-slate-800 transition-colors',
+   882→                                    speed === playbackSpeed ? 'text-emerald-400 bg-slate-800/50' : 'text-white/70'
+   883→                                  )}
+   884→                                >
+   885→                                  <span>{speed}x</span>
+   886→                                  {speed === 1 && <span className="text-[10px] text-white/30">Normal</span>}
+   887→                                  {speed === playbackSpeed && <CheckCircle2 className="h-3 w-3" />}
+   888→                                </button>
+   889→                              ))}
+   890→                            </motion.div>
+   891→                          )}
+   892→                        </AnimatePresence>
+   893→                      </div>
+   894→
+   895→                      {/* PiP */}
+   896→                      <button
+   897→                        onClick={togglePiP}
+   898→                        className={cn(
+   899→                          'transition-colors shrink-0 p-1',
+   900→                          isPiP ? 'text-emerald-400' : 'text-white/70 hover:text-white'
+   901→                        )}
+   902→                        title="Picture in Picture"
+   903→                        aria-label="Toggle picture in picture"
+   904→                      >
+   905→                        <PictureInPicture2 className="h-4 w-4" />
+   906→                      </button>
+   907→
+   908→                      {/* Fullscreen */}
+   909→                      <button
+   910→                        onClick={toggleFullscreen}
+   911→                        className="text-white/70 hover:text-white transition-colors shrink-0 p-1"
+   912→                        aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+   913→                      >
+   914→                        {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+   915→                      </button>
+   916→                    </div>
+   917→                  </motion.div>
+   918→                )}
+   919→              </AnimatePresence>
+   920→            </div>
+   921→          </motion.div>
+   922→
+   923→          {/* ─── Keyboard Shortcuts Hint ─────────────────────── */}
+   924→          {!compact && (
+   925→          <motion.div
+   926→            initial={{ opacity: 0 }}
+   927→            animate={{ opacity: 1 }}
+   928→            transition={{ delay: 0.5 }}
+   929→            className="mt-3 flex flex-wrap gap-2"
+   930→          >
+   931→            {[
+   932→              { key: 'Space', label: 'Play/Pause' },
+   933→              { key: '←→', label: 'Seek 10s' },
+   934→              { key: '↑↓', label: 'Volume' },
+   935→              { key: 'F', label: 'Fullscreen' },
+   936→              { key: 'M', label: 'Mute' },
+   937→              { key: '<>', label: 'Speed' },
+   938→            ].map((shortcut) => (
+   939→              <div key={shortcut.key} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+   940→                <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono border border-border">
+   941→                  {shortcut.key}
+   942→                </kbd>
+   943→                <span>{shortcut.label}</span>
+   944→              </div>
+   945→            ))}
+   946→          </motion.div>
+   947→          )}
+   948→
+   949→          {/* ─── Chapter List ────────────────────────────────── */}
+   950→          {!compact && chapters.length > 0 && (
+   951→            <div className="mt-4">
+   952→              <h3 className="text-sm font-semibold text-foreground mb-2">Chapters</h3>
+   953→              <div className="space-y-1 max-h-48 overflow-y-auto">
+   954→                {chapters.map((ch, i) => {
+   955→                  const isActive = chapterAtTime?.time === ch.time;
+   956→                  const isPast = currentTime >= ch.time;
+   957→                  return (
+   958→                    <button
+   959→                      key={i}
+   960→                      onClick={() => seekTo(ch.time)}
+   961→                      className={cn(
+   962→                        'w-full flex items-center gap-3 p-2 rounded-lg text-left transition-colors',
+   963→                        isActive ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' :
+   964→                        isPast ? 'text-muted-foreground hover:bg-muted/40' :
+   965→                        'text-muted-foreground/60 hover:bg-muted/40'
+   966→                      )}
+   967→                    >
+   968→                      <div className={cn(
+   969→                        'h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold',
+   970→                        isActive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-800 dark:text-emerald-300' :
+   971→                        isPast ? 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' :
+   972→                        'bg-slate-50 text-slate-400 dark:bg-slate-900 dark:text-slate-500'
+   973→                      )}>
+   974→                        {i + 1}
+   975→                      </div>
+   976→                      <div className="min-w-0 flex-1">
+   977→                        <p className="text-xs font-medium truncate">{ch.title}</p>
+   978→                        <p className="text-[10px] text-muted-foreground">{formatTime(ch.time)}</p>
+   979→                      </div>
+   980→                      {isPast && !isActive && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
+   981→                    </button>
+   982→                  );
+   983→                })}
+   984→              </div>
+   985→            </div>
+   986→          )}
+   987→        </div>
+   988→
+   989→        {/* ─── Sidebar / Next Up Panel ───────────────────── */}
+   990→        {!compact && (
+   991→        <motion.div
+   992→          initial={{ opacity: 0, x: 20 }}
+   993→          animate={{ opacity: 1, x: 0 }}
+   994→          transition={{ duration: 0.4, delay: 0.1 }}
+   995→          className="w-full lg:w-80 shrink-0 space-y-4"
+   996→        >
+   997→          {/* Current Lesson Info */}
+   998→          <Card>
+   999→            <CardContent className="p-4">
+  1000→              <div className="flex items-center gap-2 mb-2">
+  1001→                {resolvedModuleName && (
+  1002→                  <Badge variant="secondary" className="text-[10px]">{resolvedModuleName}</Badge>
+  1003→                )}
+  1004→                <ContentTypeIcon type={resolvedContentType} className="h-3.5 w-3.5 text-muted-foreground" />
+  1005→              </div>
+  1006→              <h3 className="font-semibold text-foreground text-sm mb-1">{resolvedTitle}</h3>
+  1007→              {lesson?.description && (
+  1008→                <p className="text-xs text-muted-foreground line-clamp-3 mb-2">{lesson.description}</p>
+  1009→              )}
+  1010→              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+  1011→                <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatDuration(totalDuration)}</span>
+  1012→                {isCompleted && (
+  1013→                  <span className="flex items-center gap-1 text-emerald-600">
+  1014→                    <CheckCircle2 className="h-3 w-3" /> Completed
+  1015→                  </span>
+  1016→                )}
+  1017→              </div>
+  1018→              {/* Progress bar */}
+  1019→              {watchedPercent > 0 && (
+  1020→                <div className="mt-3">
+  1021→                  <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+  1022→                    <span>Watched</span>
+  1023→                    <span>{Math.round(watchedPercent)}%</span>
+  1024→                  </div>
+  1025→                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+  1026→                    <motion.div
+  1027→                      className="h-full bg-emerald-500 rounded-full"
+  1028→                      initial={{ width: 0 }}
+  1029→                      animate={{ width: `${watchedPercent}%` }}
+  1030→                      transition={{ duration: 0.3 }}
+  1031→                    />
+  1032→                  </div>
+  1033→                </div>
+  1034→              )}
+  1035→            </CardContent>
+  1036→          </Card>
+  1037→
+  1038→          {/* Up Next */}
+  1039→          {nextLessons.length > 0 && (
+  1040→            <Card>
+  1041→              <CardHeader className="pb-2 pt-4 px-4">
+  1042→                <CardTitle className="text-sm flex items-center gap-2">
+  1043→                  <SkipForward className="h-4 w-4 text-emerald-600" />
+  1044→                  Up Next
+  1045→                </CardTitle>
+  1046→              </CardHeader>
+  1047→              <CardContent className="px-4 pb-4 space-y-1">
+  1048→                {nextLessons.map((nl) => (
+  1049→                  <button
+  1050→                    key={nl.id}
+  1051→                    onClick={() => onNextLesson?.(nl.id)}
+  1052→                    className="w-full flex items-start gap-3 p-2.5 rounded-lg hover:bg-muted/60 transition-colors text-left group"
+  1053→                  >
+  1054→                    <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 group-hover:bg-emerald-50 dark:group-hover:bg-emerald-900/30 transition-colors">
+  1055→                      <ContentTypeIcon type={nl.contentType} className="h-4 w-4 text-muted-foreground group-hover:text-emerald-600 transition-colors" />
+  1056→                    </div>
+  1057→                    <div className="min-w-0 flex-1">
+  1058→                      <p className="text-xs font-medium text-foreground line-clamp-2 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+  1059→                        {nl.title}
+  1060→                      </p>
+  1061→                      <p className="text-[11px] text-muted-foreground mt-0.5">{nl.moduleName} · {formatDuration(nl.duration)}</p>
+  1062→                    </div>
+  1063→                  </button>
+  1064→                ))}
+  1065→              </CardContent>
+  1066→            </Card>
+  1067→          )}
+  1068→
+  1069→          {/* Lesson Notes */}
+  1070→          <Card>
+  1071→            <CardHeader className="pb-2 pt-4 px-4">
+  1072→              <CardTitle className="text-sm flex items-center gap-2">
+  1073→                <FileText className="h-4 w-4 text-violet-600" />
+  1074→                Lesson Notes
+  1075→              </CardTitle>
+  1076→            </CardHeader>
+  1077→            <CardContent className="px-4 pb-4">
+  1078→              <p className="text-xs text-muted-foreground leading-relaxed">
+  1079→                {lesson?.description || 'This lesson covers key concepts and practical examples. Take notes to reinforce your learning and revisit important topics.'}
+  1080→              </p>
+  1081→            </CardContent>
+  1082→          </Card>
+  1083→        </motion.div>
+  1084→        )}
+  1085→      </div>
+  1086→    </div>
+  1087→  );
+  1088→}
+  1089→
+  1090→
+  1091→

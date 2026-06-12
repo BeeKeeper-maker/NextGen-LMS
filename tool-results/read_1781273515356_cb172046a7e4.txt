@@ -1,0 +1,842 @@
+     1→'use client';
+     2→
+     3→import { useState, useCallback, useRef, useMemo } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Upload,
+     7→  Download,
+     8→  Search,
+     9→  UserPlus,
+    10→  CheckCircle2,
+    11→  XCircle,
+    12→  AlertCircle,
+    13→  FileSpreadsheet,
+    14→  Mail,
+    15→  Calendar,
+    16→  Shield,
+    17→  ChevronRight,
+    18→  Users,
+    19→  Loader2,
+    20→  X,
+    21→} from 'lucide-react';
+    22→import { Button } from '@/components/ui/button';
+    23→import { Input } from '@/components/ui/input';
+    24→import { Badge } from '@/components/ui/badge';
+    25→import { Switch } from '@/components/ui/switch';
+    26→import { Label } from '@/components/ui/label';
+    27→import { Separator } from '@/components/ui/separator';
+    28→import { Progress } from '@/components/ui/progress';
+    29→import { Checkbox } from '@/components/ui/checkbox';
+    30→import {
+    31→  Select,
+    32→  SelectContent,
+    33→  SelectItem,
+    34→  SelectTrigger,
+    35→  SelectValue,
+    36→} from '@/components/ui/select';
+    37→import {
+    38→  Table,
+    39→  TableBody,
+    40→  TableCell,
+    41→  TableHead,
+    42→  TableHeader,
+    43→  TableRow,
+    44→} from '@/components/ui/table';
+    45→import {
+    46→  Dialog,
+    47→  DialogContent,
+    48→  DialogDescription,
+    49→  DialogFooter,
+    50→  DialogHeader,
+    51→  DialogTitle,
+    52→} from '@/components/ui/dialog';
+    53→import { ScrollArea } from '@/components/ui/scroll-area';
+    54→import { useCourses, useUsers } from '@/hooks/use-data';
+    55→import { useAppStore } from '@/store/app-store';
+    56→
+    57→// Bulk user display type for enrollment UI
+    58→interface BulkUser {
+    59→  id: string;
+    60→  name: string;
+    61→  email: string;
+    62→  role: string;
+    63→  status: 'active' | 'inactive';
+    64→  coursesEnrolled: number;
+    65→  lastActive: string;
+    66→}
+    67→
+    68→/** Format a date as a relative time string */
+    69→function formatRelativeTime(dateStr: string | null | undefined): string {
+    70→  if (!dateStr) return 'Never';
+    71→  const date = new Date(dateStr);
+    72→  const now = new Date();
+    73→  const diffMs = now.getTime() - date.getTime();
+    74→  const diffMin = Math.floor(diffMs / 60000);
+    75→  if (diffMin < 1) return 'Just now';
+    76→  if (diffMin < 60) return `${diffMin} min ago`;
+    77→  const diffHrs = Math.floor(diffMin / 60);
+    78→  if (diffHrs < 24) return `${diffHrs} hour${diffHrs > 1 ? 's' : ''} ago`;
+    79→  const diffDays = Math.floor(diffHrs / 24);
+    80→  if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    81→  const diffWeeks = Math.floor(diffDays / 7);
+    82→  if (diffWeeks < 4) return `${diffWeeks} week${diffWeeks > 1 ? 's' : ''} ago`;
+    83→  return `${Math.floor(diffDays / 30)} month${Math.floor(diffDays / 30) > 1 ? 's' : ''} ago`;
+    84→}
+    85→
+    86→/** Map API user data to BulkUser display type */
+    87→function mapApiUserToBulkUser(apiUser: any): BulkUser {
+    88→  return {
+    89→    id: apiUser.id,
+    90→    name: apiUser.name || apiUser.email?.split('@')[0] || 'Unknown',
+    91→    email: apiUser.email || '',
+    92→    role: apiUser.role || 'learner',
+    93→    status: apiUser.isActive ? 'active' : 'inactive',
+    94→    coursesEnrolled: apiUser._count?.enrollments ?? 0,
+    95→    lastActive: formatRelativeTime(apiUser.lastLoginAt),
+    96→  };
+    97→}
+    98→
+    99→interface CSVRow {
+   100→  email: string;
+   101→  name: string;
+   102→  valid: boolean;
+   103→  error?: string;
+   104→}
+   105→
+   106→type EnrollmentStep = 'configure' | 'preview' | 'processing' | 'complete';
+   107→
+   108→export function BulkEnrollmentTab() {
+   109→  // Course selection
+   110→  const [selectedCourseId, setSelectedCourseId] = useState<string>('');
+   111→  const tenantId = useAppStore((s) => s.currentTenant?.id) || '';
+   112→  const { data: coursesData } = useCourses(tenantId || undefined);
+   113→  const demoCourses = coursesData || [];
+   114→  const { data: usersData, isLoading: usersLoading } = useUsers(tenantId || undefined);
+   115→  // Map API users to display type
+   116→  const bulkUsers: BulkUser[] = useMemo(() => {
+   117→    if (!usersData?.users) return [];
+   118→    return usersData.users.map(mapApiUserToBulkUser);
+   119→  }, [usersData]);
+   120→  // User selection mode
+   121→  const [selectionMode, setSelectionMode] = useState<'manual' | 'csv'>('manual');
+   122→  // Manual selection
+   123→  const [searchQuery, setSearchQuery] = useState('');
+   124→  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+   125→  // CSV
+   126→  const [csvRows, setCsvRows] = useState<CSVRow[]>([]);
+   127→  const [csvFileName, setCsvFileName] = useState('');
+   128→  const [isDragging, setIsDragging] = useState(false);
+   129→  const fileInputRef = useRef<HTMLInputElement>(null);
+   130→  // Options
+   131→  const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
+   132→  const [grantImmediateAccess, setGrantImmediateAccess] = useState(true);
+   133→  const [enrollmentDate, setEnrollmentDate] = useState<'now' | 'scheduled'>('now');
+   134→  const [scheduledDate, setScheduledDate] = useState('');
+   135→  // Flow state
+   136→  const [currentStep, setCurrentStep] = useState<EnrollmentStep>('configure');
+   137→  const [progress, setProgress] = useState(0);
+   138→  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+   139→  // Results
+   140→  const [successCount, setSuccessCount] = useState(0);
+   141→  const [failCount, setFailCount] = useState(0);
+   142→
+   143→  const selectedCourse = demoCourses.find((c: any) => c.id === selectedCourseId);
+   144→
+   145→  const filteredUsers = bulkUsers.filter(
+   146→    (u) =>
+   147→      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+   148→      u.email.toLowerCase().includes(searchQuery.toLowerCase())
+   149→  );
+   150→
+   151→  const selectedUsers = bulkUsers.filter((u) => selectedUserIds.has(u.id));
+   152→  const usersToEnroll = selectionMode === 'manual' ? selectedUsers : csvRows.filter((r) => r.valid);
+   153→  const validCsvCount = csvRows.filter((r) => r.valid).length;
+   154→  const invalidCsvCount = csvRows.filter((r) => !r.valid).length;
+   155→
+   156→  const toggleUser = useCallback(
+   157→    (userId: string) => {
+   158→      setSelectedUserIds((prev) => {
+   159→        const next = new Set(prev);
+   160→        if (next.has(userId)) next.delete(userId);
+   161→        else next.add(userId);
+   162→        return next;
+   163→      });
+   164→    },
+   165→    []
+   166→  );
+   167→
+   168→  const toggleAllUsers = useCallback(() => {
+   169→    if (selectedUserIds.size === filteredUsers.length) {
+   170→      setSelectedUserIds(new Set());
+   171→    } else {
+   172→      setSelectedUserIds(new Set(filteredUsers.map((u) => u.id)));
+   173→    }
+   174→  }, [filteredUsers, selectedUserIds]);
+   175→
+   176→  const handleCSVUpload = useCallback((file: File) => {
+   177→    setCsvFileName(file.name);
+   178→    const reader = new FileReader();
+   179→    reader.onload = (e) => {
+   180→      const text = e.target?.result as string;
+   181→      const lines = text.split('\n').filter((l) => l.trim());
+   182→      const header = lines[0]?.toLowerCase() || '';
+   183→      const hasHeader = header.includes('email') || header.includes('name');
+   184→      const dataLines = hasHeader ? lines.slice(1) : lines;
+   185→      const rows: CSVRow[] = dataLines
+   186→        .map((line) => {
+   187→          const parts = line.split(',').map((p) => p.trim().replace(/"/g, ''));
+   188→          const email = parts[0] || '';
+   189→          const name = parts[1] || '';
+   190→          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+   191→          const valid = emailRegex.test(email);
+   192→          return { email, name, valid, error: valid ? undefined : 'Invalid email format' };
+   193→        })
+   194→        .filter((r) => r.email);
+   195→      setCsvRows(rows);
+   196→    };
+   197→    reader.readAsText(file);
+   198→  }, []);
+   199→
+   200→  const handleDrop = useCallback(
+   201→    (e: React.DragEvent) => {
+   202→      e.preventDefault();
+   203→      setIsDragging(false);
+   204→      const file = e.dataTransfer.files[0];
+   205→      if (file && (file.name.endsWith('.csv') || file.name.endsWith('.txt'))) {
+   206→        handleCSVUpload(file);
+   207→      }
+   208→    },
+   209→    [handleCSVUpload]
+   210→  );
+   211→
+   212→  const downloadCSVTemplate = useCallback(() => {
+   213→    const csv = 'email,name\njohn@example.com,John Doe\njane@example.com,Jane Smith';
+   214→    const blob = new Blob([csv], { type: 'text/csv' });
+   215→    const url = URL.createObjectURL(blob);
+   216→    const a = document.createElement('a');
+   217→    a.href = url;
+   218→    a.download = 'enrollment_template.csv';
+   219→    a.click();
+   220→    URL.revokeObjectURL(url);
+   221→  }, []);
+   222→
+   223→  const handleEnroll = useCallback(() => {
+   224→    setShowConfirmDialog(false);
+   225→    setCurrentStep('processing');
+   226→    setProgress(0);
+   227→    const total = usersToEnroll.length;
+   228→    let processed = 0;
+   229→    const interval = setInterval(() => {
+   230→      processed++;
+   231→      setProgress(Math.round((processed / total) * 100));
+   232→      if (processed >= total) {
+   233→        clearInterval(interval);
+   234→        setSuccessCount(Math.round(total * 0.92));
+   235→        setFailCount(total - Math.round(total * 0.92));
+   236→        setCurrentStep('complete');
+   237→      }
+   238→    }, 200);
+   239→  }, [usersToEnroll]);
+   240→
+   241→  const resetForm = useCallback(() => {
+   242→    setSelectedCourseId('');
+   243→    setSelectedUserIds(new Set());
+   244→    setCsvRows([]);
+   245→    setCsvFileName('');
+   246→    setSelectionMode('manual');
+   247→    setSearchQuery('');
+   248→    setCurrentStep('configure');
+   249→    setProgress(0);
+   250→  }, []);
+   251→
+   252→  // ─── Step indicator ──────────────────────────────────────
+   253→  const steps = [
+   254→    { id: 'configure', label: 'Configure' },
+   255→    { id: 'preview', label: 'Preview' },
+   256→    { id: 'processing', label: 'Processing' },
+   257→    { id: 'complete', label: 'Complete' },
+   258→  ];
+   259→
+   260→  const stepIndex: Record<EnrollmentStep, number> = {
+   261→    configure: 0,
+   262→    preview: 1,
+   263→    processing: 2,
+   264→    complete: 3,
+   265→  };
+   266→
+   267→  return (
+   268→    <div className="space-y-6">
+   269→      {/* Step Indicator */}
+   270→      <div className="flex items-center gap-2">
+   271→        {steps.map((s, i) => (
+   272→          <div key={s.id} className="flex items-center gap-2">
+   273→            <div
+   274→              className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition-all duration-300 ${
+   275→                i <= stepIndex[currentStep]
+   276→                  ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-md'
+   277→                  : 'bg-muted text-muted-foreground'
+   278→              }`}
+   279→            >
+   280→              {i < stepIndex[currentStep] ? (
+   281→                <CheckCircle2 className="h-4 w-4" />
+   282→              ) : (
+   283→                i + 1
+   284→              )}
+   285→            </div>
+   286→            <span
+   287→              className={`text-xs font-medium hidden sm:inline ${
+   288→                i <= stepIndex[currentStep] ? 'text-foreground' : 'text-muted-foreground'
+   289→              }`}
+   290→            >
+   291→              {s.label}
+   292→            </span>
+   293→            {i < steps.length - 1 && (
+   294→              <div
+   295→                className={`h-0.5 w-6 sm:w-10 rounded transition-colors ${
+   296→                  i < stepIndex[currentStep] ? 'bg-emerald-500' : 'bg-muted'
+   297→                }`}
+   298→              />
+   299→            )}
+   300→          </div>
+   301→        ))}
+   302→      </div>
+   303→
+   304→      <AnimatePresence mode="wait">
+   305→        {/* ─── CONFIGURE STEP ──────────────────────────── */}
+   306→        {currentStep === 'configure' && (
+   307→          <motion.div
+   308→            key="configure"
+   309→            initial={{ opacity: 0, x: 20 }}
+   310→            animate={{ opacity: 1, x: 0 }}
+   311→            exit={{ opacity: 0, x: -20 }}
+   312→            className="space-y-5"
+   313→          >
+   314→            {/* Course Selector */}
+   315→            <div className="space-y-2">
+   316→              <Label className="text-sm font-semibold flex items-center gap-2">
+   317→                <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
+   318→                Select Course
+   319→              </Label>
+   320→              <Select value={selectedCourseId} onValueChange={setSelectedCourseId}>
+   321→                <SelectTrigger className="w-full">
+   322→                  <SelectValue placeholder="Search and select a course..." />
+   323→                </SelectTrigger>
+   324→                <SelectContent>
+   325→                  {demoCourses.map((course: any) => (
+   326→                    <SelectItem key={course.id} value={course.id}>
+   327→                      <div className="flex items-center gap-2">
+   328→                        <span>{course.title}</span>
+   329→                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+   330→                          {course.enrollmentCount || 0} enrolled
+   331→                        </Badge>
+   332→                      </div>
+   333→                    </SelectItem>
+   334→                  ))}
+   335→                </SelectContent>
+   336→              </Select>
+   337→              {selectedCourse && (
+   338→                <motion.div
+   339→                  initial={{ opacity: 0, height: 0 }}
+   340→                  animate={{ opacity: 1, height: 'auto' }}
+   341→                  className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 p-3"
+   342→                >
+   343→                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">{selectedCourse.title}</p>
+   344→                  <p className="text-xs text-muted-foreground mt-0.5">
+   345→                    {selectedCourse.level} · {selectedCourse.durationHours}h · {selectedCourse.enrollmentCount} students
+   346→                  </p>
+   347→                </motion.div>
+   348→              )}
+   349→            </div>
+   350→
+   351→            <Separator />
+   352→
+   353→            {/* Selection Mode Toggle */}
+   354→            <div className="space-y-2">
+   355→              <Label className="text-sm font-semibold">User Selection Method</Label>
+   356→              <div className="flex gap-2">
+   357→                <Button
+   358→                  variant={selectionMode === 'manual' ? 'default' : 'outline'}
+   359→                  size="sm"
+   360→                  onClick={() => setSelectionMode('manual')}
+   361→                  className={selectionMode === 'manual' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+   362→                >
+   363→                  <Users className="h-4 w-4 mr-1.5" />
+   364→                  Select Users
+   365→                </Button>
+   366→                <Button
+   367→                  variant={selectionMode === 'csv' ? 'default' : 'outline'}
+   368→                  size="sm"
+   369→                  onClick={() => setSelectionMode('csv')}
+   370→                  className={selectionMode === 'csv' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+   371→                >
+   372→                  <Upload className="h-4 w-4 mr-1.5" />
+   373→                  Upload CSV
+   374→                </Button>
+   375→              </div>
+   376→            </div>
+   377→
+   378→            {/* Manual User Selection */}
+   379→            {selectionMode === 'manual' && (
+   380→              <motion.div
+   381→                initial={{ opacity: 0 }}
+   382→                animate={{ opacity: 1 }}
+   383→                className="space-y-3"
+   384→              >
+   385→                <div className="relative">
+   386→                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+   387→                  <Input
+   388→                    placeholder="Search users by name or email..."
+   389→                    value={searchQuery}
+   390→                    onChange={(e) => setSearchQuery(e.target.value)}
+   391→                    className="pl-9"
+   392→                  />
+   393→                </div>
+   394→
+   395→                <div className="flex items-center justify-between">
+   396→                  <span className="text-xs text-muted-foreground">
+   397→                    {usersLoading ? 'Loading users...' : `${selectedUserIds.size} of ${bulkUsers.length} users selected`}
+   398→                  </span>
+   399→                  {!usersLoading && (
+   400→                    <Button variant="ghost" size="sm" onClick={toggleAllUsers} className="text-xs h-7">
+   401→                      {selectedUserIds.size === filteredUsers.length ? 'Deselect All' : 'Select All'}
+   402→                    </Button>
+   403→                  )}
+   404→                </div>
+   405→
+   406→                <ScrollArea className="h-64 rounded-md border">
+   407→                  <div className="p-2 space-y-1">
+   408→                    {usersLoading ? (
+   409→                      Array.from({ length: 6 }).map((_, i) => (
+   410→                        <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-2">
+   411→                          <div className="h-4 w-4 bg-muted animate-pulse rounded" />
+   412→                          <div className="flex-1 space-y-1">
+   413→                            <div className="h-3.5 bg-muted animate-pulse rounded w-1/3" />
+   414→                            <div className="h-3 bg-muted animate-pulse rounded w-1/2" />
+   415→                          </div>
+   416→                        </div>
+   417→                      ))
+   418→                    ) : filteredUsers.length > 0 ? (
+   419→                      filteredUsers.map((user) => (
+   420→                        <div
+   421→                          key={user.id}
+   422→                          className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors cursor-pointer ${
+   423→                            selectedUserIds.has(user.id)
+   424→                              ? 'bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800'
+   425→                              : 'hover:bg-muted/50'
+   426→                          }`}
+   427→                          onClick={() => toggleUser(user.id)}
+   428→                        >
+   429→                          <Checkbox checked={selectedUserIds.has(user.id)} />
+   430→                          <div className="flex-1 min-w-0">
+   431→                            <p className="text-sm font-medium truncate">{user.name}</p>
+   432→                            <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+   433→                          </div>
+   434→                          <div className="flex items-center gap-2">
+   435→                            <Badge
+   436→                              variant="secondary"
+   437→                              className={`text-[10px] px-1.5 py-0 ${
+   438→                                user.status === 'active'
+   439→                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+   440→                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+   441→                              }`}
+   442→                            >
+   443→                              {user.status}
+   444→                            </Badge>
+   445→                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+   446→                              {user.role}
+   447→                            </Badge>
+   448→                          </div>
+   449→                        </div>
+   450→                      ))
+   451→                    ) : (
+   452→                      <div className="py-8 text-center">
+   453→                        <Users className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+   454→                        <p className="text-sm text-muted-foreground">No users found</p>
+   455→                      </div>
+   456→                    )}
+   457→                  </div>
+   458→                </ScrollArea>
+   459→              </motion.div>
+   460→            )}
+   461→
+   462→            {/* CSV Upload */}
+   463→            {selectionMode === 'csv' && (
+   464→              <motion.div
+   465→                initial={{ opacity: 0 }}
+   466→                animate={{ opacity: 1 }}
+   467→                className="space-y-3"
+   468→              >
+   469→                {/* Drop zone */}
+   470→                <motion.div
+   471→                  onDragOver={(e) => {
+   472→                    e.preventDefault();
+   473→                    setIsDragging(true);
+   474→                  }}
+   475→                  onDragLeave={() => setIsDragging(false)}
+   476→                  onDrop={handleDrop}
+   477→                  animate={{
+   478→                    scale: isDragging ? 1.02 : 1,
+   479→                    borderColor: isDragging ? '#10B981' : undefined,
+   480→                  }}
+   481→                  className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-colors cursor-pointer ${
+   482→                    isDragging
+   483→                      ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
+   484→                      : 'border-muted-foreground/25 hover:border-emerald-300 hover:bg-muted/30'
+   485→                  } ${csvFileName ? 'border-emerald-300 bg-emerald-50/30 dark:bg-emerald-950/10' : ''}`}
+   486→                  onClick={() => fileInputRef.current?.click()}
+   487→                >
+   488→                  <input
+   489→                    ref={fileInputRef}
+   490→                    type="file"
+   491→                    accept=".csv,.txt"
+   492→                    className="hidden"
+   493→                    onChange={(e) => {
+   494→                      const file = e.target.files?.[0];
+   495→                      if (file) handleCSVUpload(file);
+   496→                    }}
+   497→                  />
+   498→                  <motion.div
+   499→                    animate={{ y: isDragging ? -5 : 0 }}
+   500→                    transition={{ type: 'spring', stiffness: 300 }}
+   501→                  >
+   502→                    {csvFileName ? (
+   503→                      <FileSpreadsheet className="h-10 w-10 text-emerald-500" />
+   504→                    ) : (
+   505→                      <Upload className="h-10 w-10 text-muted-foreground/60" />
+   506→                    )}
+   507→                  </motion.div>
+   508→                  {csvFileName ? (
+   509→                    <div className="mt-3 text-center">
+   510→                      <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">{csvFileName}</p>
+   511→                      <p className="text-xs text-muted-foreground mt-0.5">
+   512→                        {csvRows.length} rows found · {validCsvCount} valid · {invalidCsvCount} invalid
+   513→                      </p>
+   514→                    </div>
+   515→                  ) : (
+   516→                    <div className="mt-3 text-center">
+   517→                      <p className="text-sm font-medium">Drag & drop your CSV file here</p>
+   518→                      <p className="text-xs text-muted-foreground mt-0.5">or click to browse</p>
+   519→                    </div>
+   520→                  )}
+   521→                </motion.div>
+   522→
+   523→                <div className="flex justify-center">
+   524→                  <Button variant="outline" size="sm" onClick={downloadCSVTemplate} className="text-xs">
+   525→                    <Download className="h-3.5 w-3.5 mr-1.5" />
+   526→                    Download CSV Template
+   527→                  </Button>
+   528→                </div>
+   529→
+   530→                {/* CSV Validation Preview */}
+   531→                {csvRows.length > 0 && (
+   532→                  <div className="space-y-2">
+   533→                    <Label className="text-sm font-semibold">CSV Preview & Validation</Label>
+   534→                    <div className="rounded-md border max-h-48 overflow-y-auto">
+   535→                      <Table>
+   536→                        <TableHeader>
+   537→                          <TableRow>
+   538→                            <TableHead className="w-10">Status</TableHead>
+   539→                            <TableHead>Email</TableHead>
+   540→                            <TableHead>Name</TableHead>
+   541→                            <TableHead>Issue</TableHead>
+   542→                          </TableRow>
+   543→                        </TableHeader>
+   544→                        <TableBody>
+   545→                          {csvRows.map((row, i) => (
+   546→                            <TableRow key={i}>
+   547→                              <TableCell>
+   548→                                {row.valid ? (
+   549→                                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+   550→                                ) : (
+   551→                                  <XCircle className="h-4 w-4 text-red-500" />
+   552→                                )}
+   553→                              </TableCell>
+   554→                              <TableCell className="text-sm">{row.email}</TableCell>
+   555→                              <TableCell className="text-sm">{row.name || '—'}</TableCell>
+   556→                              <TableCell className="text-xs text-red-500">{row.error || '—'}</TableCell>
+   557→                            </TableRow>
+   558→                          ))}
+   559→                        </TableBody>
+   560→                      </Table>
+   561→                    </div>
+   562→                  </div>
+   563→                )}
+   564→              </motion.div>
+   565→            )}
+   566→
+   567→            <Separator />
+   568→
+   569→            {/* Options */}
+   570→            <div className="space-y-4">
+   571→              <Label className="text-sm font-semibold">Enrollment Options</Label>
+   572→              <div className="space-y-3">
+   573→                <div className="flex items-center justify-between rounded-lg border p-3">
+   574→                  <div className="flex items-center gap-3">
+   575→                    <Mail className="h-4 w-4 text-emerald-500" />
+   576→                    <div>
+   577→                      <p className="text-sm font-medium">Send Welcome Email</p>
+   578→                      <p className="text-xs text-muted-foreground">Notify users about their enrollment</p>
+   579→                    </div>
+   580→                  </div>
+   581→                  <Switch checked={sendWelcomeEmail} onCheckedChange={setSendWelcomeEmail} />
+   582→                </div>
+   583→                <div className="flex items-center justify-between rounded-lg border p-3">
+   584→                  <div className="flex items-center gap-3">
+   585→                    <Shield className="h-4 w-4 text-emerald-500" />
+   586→                    <div>
+   587→                      <p className="text-sm font-medium">Grant Immediate Access</p>
+   588→                      <p className="text-xs text-muted-foreground">Allow users to start right away</p>
+   589→                    </div>
+   590→                  </div>
+   591→                  <Switch checked={grantImmediateAccess} onCheckedChange={setGrantImmediateAccess} />
+   592→                </div>
+   593→                <div className="flex items-center justify-between rounded-lg border p-3">
+   594→                  <div className="flex items-center gap-3">
+   595→                    <Calendar className="h-4 w-4 text-emerald-500" />
+   596→                    <div>
+   597→                      <p className="text-sm font-medium">Enrollment Date</p>
+   598→                      <p className="text-xs text-muted-foreground">Set when access begins</p>
+   599→                    </div>
+   600→                  </div>
+   601→                  <div className="flex items-center gap-2">
+   602→                    <Select value={enrollmentDate} onValueChange={(v: 'now' | 'scheduled') => setEnrollmentDate(v)}>
+   603→                      <SelectTrigger className="w-28 h-8 text-xs">
+   604→                        <SelectValue />
+   605→                      </SelectTrigger>
+   606→                      <SelectContent>
+   607→                        <SelectItem value="now">Now</SelectItem>
+   608→                        <SelectItem value="scheduled">Scheduled</SelectItem>
+   609→                      </SelectContent>
+   610→                    </Select>
+   611→                    {enrollmentDate === 'scheduled' && (
+   612→                      <Input
+   613→                        type="date"
+   614→                        value={scheduledDate}
+   615→                        onChange={(e) => setScheduledDate(e.target.value)}
+   616→                        className="w-36 h-8 text-xs"
+   617→                      />
+   618→                    )}
+   619→                  </div>
+   620→                </div>
+   621→              </div>
+   622→            </div>
+   623→
+   624→            {/* Action */}
+   625→            <div className="flex justify-end">
+   626→              <Button
+   627→                onClick={() => setCurrentStep('preview')}
+   628→                disabled={!selectedCourseId || usersToEnroll.length === 0}
+   629→                className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-lg"
+   630→              >
+   631→                Preview Enrollment
+   632→                <ChevronRight className="h-4 w-4 ml-1" />
+   633→              </Button>
+   634→            </div>
+   635→          </motion.div>
+   636→        )}
+   637→
+   638→        {/* ─── PREVIEW STEP ────────────────────────────── */}
+   639→        {currentStep === 'preview' && (
+   640→          <motion.div
+   641→            key="preview"
+   642→            initial={{ opacity: 0, x: 20 }}
+   643→            animate={{ opacity: 1, x: 0 }}
+   644→            exit={{ opacity: 0, x: -20 }}
+   645→            className="space-y-4"
+   646→          >
+   647→            <div className="rounded-xl border bg-gradient-to-br from-emerald-50/80 to-white dark:from-emerald-950/20 dark:to-card p-5">
+   648→              <h3 className="font-semibold text-base">Enrollment Summary</h3>
+   649→              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+   650→                <div className="rounded-lg bg-white/70 dark:bg-slate-900/60 p-3 text-center backdrop-blur-sm border">
+   651→                  <p className="text-2xl font-bold text-emerald-600">{usersToEnroll.length}</p>
+   652→                  <p className="text-xs text-muted-foreground">Users</p>
+   653→                </div>
+   654→                <div className="rounded-lg bg-white/70 dark:bg-slate-900/60 p-3 text-center backdrop-blur-sm border">
+   655→                  <p className="text-2xl font-bold text-foreground">{selectedCourse?.title?.split(' ').slice(0, 2).join(' ')}</p>
+   656→                  <p className="text-xs text-muted-foreground">Course</p>
+   657→                </div>
+   658→                <div className="rounded-lg bg-white/70 dark:bg-slate-900/60 p-3 text-center backdrop-blur-sm border">
+   659→                  <p className="text-2xl font-bold text-foreground">{sendWelcomeEmail ? 'Yes' : 'No'}</p>
+   660→                  <p className="text-xs text-muted-foreground">Welcome Email</p>
+   661→                </div>
+   662→                <div className="rounded-lg bg-white/70 dark:bg-slate-900/60 p-3 text-center backdrop-blur-sm border">
+   663→                  <p className="text-2xl font-bold text-foreground">{enrollmentDate === 'now' ? 'Now' : 'Scheduled'}</p>
+   664→                  <p className="text-xs text-muted-foreground">Start Date</p>
+   665→                </div>
+   666→              </div>
+   667→            </div>
+   668→
+   669→            {/* User Preview Table */}
+   670→            <div className="space-y-2">
+   671→              <Label className="text-sm font-semibold">Users to Enroll</Label>
+   672→              <div className="rounded-md border max-h-56 overflow-y-auto">
+   673→                <Table>
+   674→                  <TableHeader>
+   675→                    <TableRow>
+   676→                      <TableHead className="w-10">#</TableHead>
+   677→                      <TableHead>Name</TableHead>
+   678→                      <TableHead>Email</TableHead>
+   679→                      <TableHead>Status</TableHead>
+   680→                    </TableRow>
+   681→                  </TableHeader>
+   682→                  <TableBody>
+   683→                    {(selectionMode === 'manual' ? selectedUsers : csvRows.filter((r) => r.valid)).map((user, i) => {
+   684→                      const name = 'name' in user ? user.name : (user as CSVRow).name || 'Unknown';
+   685→                      const email = user.email;
+   686→                      const status = 'status' in user ? user.status : 'active';
+   687→                      return (
+   688→                        <TableRow key={i}>
+   689→                          <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
+   690→                          <TableCell className="text-sm font-medium">{name}</TableCell>
+   691→                          <TableCell className="text-sm text-muted-foreground">{email}</TableCell>
+   692→                          <TableCell>
+   693→                            <Badge
+   694→                              variant="secondary"
+   695→                              className={`text-[10px] ${
+   696→                                status === 'active'
+   697→                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+   698→                                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+   699→                              }`}
+   700→                            >
+   701→                              {status}
+   702→                            </Badge>
+   703→                          </TableCell>
+   704→                        </TableRow>
+   705→                      );
+   706→                    })}
+   707→                  </TableBody>
+   708→                </Table>
+   709→              </div>
+   710→            </div>
+   711→
+   712→            <div className="flex justify-between">
+   713→              <Button variant="outline" onClick={() => setCurrentStep('configure')}>
+   714→                Back
+   715→              </Button>
+   716→              <Button
+   717→                onClick={() => setShowConfirmDialog(true)}
+   718→                className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-lg"
+   719→              >
+   720→                <UserPlus className="h-4 w-4 mr-1.5" />
+   721→                Enroll {usersToEnroll.length} Users
+   722→              </Button>
+   723→            </div>
+   724→          </motion.div>
+   725→        )}
+   726→
+   727→        {/* ─── PROCESSING STEP ─────────────────────────── */}
+   728→        {currentStep === 'processing' && (
+   729→          <motion.div
+   730→            key="processing"
+   731→            initial={{ opacity: 0, scale: 0.95 }}
+   732→            animate={{ opacity: 1, scale: 1 }}
+   733→            className="flex flex-col items-center justify-center py-12 space-y-6"
+   734→          >
+   735→            <motion.div
+   736→              animate={{ rotate: 360 }}
+   737→              transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+   738→            >
+   739→              <Loader2 className="h-12 w-12 text-emerald-500" />
+   740→            </motion.div>
+   741→            <div className="text-center">
+   742→              <h3 className="text-lg font-semibold">Enrolling Users...</h3>
+   743→              <p className="text-sm text-muted-foreground mt-1">
+   744→                Processing {usersToEnroll.length} enrollments for {selectedCourse?.title}
+   745→              </p>
+   746→            </div>
+   747→            <div className="w-full max-w-sm">
+   748→              <Progress value={progress} className="h-3" />
+   749→              <div
+   750→                className="mt-2 h-3 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600 transition-all duration-300"
+   751→                style={{ width: `${progress}%` }}
+   752→              />
+   753→              <p className="text-xs text-muted-foreground text-center mt-2">{progress}% complete</p>
+   754→            </div>
+   755→          </motion.div>
+   756→        )}
+   757→
+   758→        {/* ─── COMPLETE STEP ───────────────────────────── */}
+   759→        {currentStep === 'complete' && (
+   760→          <motion.div
+   761→            key="complete"
+   762→            initial={{ opacity: 0, scale: 0.95 }}
+   763→            animate={{ opacity: 1, scale: 1 }}
+   764→            className="flex flex-col items-center py-8 space-y-6"
+   765→          >
+   766→            <motion.div
+   767→              initial={{ scale: 0 }}
+   768→              animate={{ scale: 1 }}
+   769→              transition={{ type: 'spring', stiffness: 200, delay: 0.2 }}
+   770→            >
+   771→              <CheckCircle2 className="h-16 w-16 text-emerald-500" />
+   772→            </motion.div>
+   773→            <div className="text-center">
+   774→              <h3 className="text-lg font-semibold">Enrollment Complete!</h3>
+   775→              <p className="text-sm text-muted-foreground mt-1">
+   776→                Successfully enrolled users in {selectedCourse?.title}
+   777→              </p>
+   778→            </div>
+   779→            <div className="grid grid-cols-2 gap-4 w-full max-w-xs">
+   780→              <div className="rounded-xl border bg-emerald-50 dark:bg-emerald-950/20 p-4 text-center">
+   781→                <p className="text-2xl font-bold text-emerald-600">{successCount}</p>
+   782→                <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1">
+   783→                  <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+   784→                  Successful
+   785→                </p>
+   786→              </div>
+   787→              {failCount > 0 && (
+   788→                <div className="rounded-xl border bg-red-50 dark:bg-red-950/20 p-4 text-center">
+   789→                  <p className="text-2xl font-bold text-red-600">{failCount}</p>
+   790→                  <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1">
+   791→                    <AlertCircle className="h-3 w-3 text-red-500" />
+   792→                    Failed
+   793→                  </p>
+   794→                </div>
+   795→              )}
+   796→            </div>
+   797→            <Button onClick={resetForm} className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white">
+   798→              <UserPlus className="h-4 w-4 mr-1.5" />
+   799→              Start New Enrollment
+   800→            </Button>
+   801→          </motion.div>
+   802→        )}
+   803→      </AnimatePresence>
+   804→
+   805→      {/* Confirmation Dialog */}
+   806→      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+   807→        <DialogContent className="sm:max-w-md">
+   808→          <DialogHeader>
+   809→            <DialogTitle className="flex items-center gap-2">
+   810→              <AlertCircle className="h-5 w-5 text-amber-500" />
+   811→              Confirm Bulk Enrollment
+   812→            </DialogTitle>
+   813→            <DialogDescription>
+   814→              You are about to enroll <strong>{usersToEnroll.length} users</strong> in{' '}
+   815→              <strong>{selectedCourse?.title}</strong>. This action cannot be undone.
+   816→            </DialogDescription>
+   817→          </DialogHeader>
+   818→          <div className="space-y-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-3">
+   819→            <p className="text-sm font-medium text-amber-700 dark:text-amber-300">Details:</p>
+   820→            <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+   821→              <li>Course: {selectedCourse?.title}</li>
+   822→              <li>Users: {usersToEnroll.length}</li>
+   823→              <li>Welcome Email: {sendWelcomeEmail ? 'Yes' : 'No'}</li>
+   824→              <li>Immediate Access: {grantImmediateAccess ? 'Yes' : 'No'}</li>
+   825→              <li>Enrollment Date: {enrollmentDate === 'now' ? 'Now' : scheduledDate}</li>
+   826→            </ul>
+   827→          </div>
+   828→          <DialogFooter className="gap-2">
+   829→            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
+   830→              Cancel
+   831→            </Button>
+   832→            <Button onClick={handleEnroll} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+   833→              <UserPlus className="h-4 w-4 mr-1.5" />
+   834→              Confirm Enrollment
+   835→            </Button>
+   836→          </DialogFooter>
+   837→        </DialogContent>
+   838→      </Dialog>
+   839→    </div>
+   840→  );
+   841→}
+   842→

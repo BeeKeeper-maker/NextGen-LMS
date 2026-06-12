@@ -28,9 +28,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify the learning path exists
+    // Verify the learning path exists and get constituent courses
     const path = await db.learningPath.findUnique({
       where: { id: learningPathId },
+      include: {
+        courses: {
+          select: { courseId: true },
+          orderBy: { orderIndex: 'asc' },
+        },
+      },
     });
 
     if (!path) {
@@ -38,6 +44,11 @@ export async function POST(request: Request) {
         { error: 'Learning path not found' },
         { status: 404 }
       );
+    }
+
+    // Verify the path belongs to the tenant
+    if (path.tenantId !== tenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const enrollment = await db.learningPathEnrollment.create({
@@ -49,6 +60,38 @@ export async function POST(request: Request) {
         progress: 0,
       },
     });
+
+    // Auto-enroll the user in all constituent courses of the path
+    try {
+      for (const pathCourse of path.courses) {
+        // Check if already enrolled in this course
+        const existingEnrollment = await db.enrollment.findUnique({
+          where: { userId_courseId: { userId, courseId: pathCourse.courseId } },
+        });
+
+        if (!existingEnrollment) {
+          await db.$transaction(async (tx) => {
+            await tx.enrollment.create({
+              data: {
+                userId,
+                courseId: pathCourse.courseId,
+                tenantId,
+                status: 'active',
+                progress: 0,
+              },
+            });
+
+            await tx.course.update({
+              where: { id: pathCourse.courseId },
+              data: { enrollmentCount: { increment: 1 } },
+            });
+          });
+        }
+      }
+    } catch (autoEnrollError) {
+      console.error('Auto-enrollment in path courses error:', autoEnrollError);
+      // Don't fail the path enrollment if course enrollment fails
+    }
 
     return NextResponse.json(enrollment, { status: 201 });
   } catch (error) {

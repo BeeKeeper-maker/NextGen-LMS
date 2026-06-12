@@ -1,0 +1,1954 @@
+     1→'use client';
+     2→
+     3→import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Search, Plus, Edit3, Trash2, Eye, Download, Ban,
+     7→  Award, FileText, Image as ImageIcon, Calendar, QrCode, PenTool,
+     8→  Type, Settings2, Save, X, CheckCircle2,
+     9→  ChevronLeft, GripVertical, Sparkles, Shield, Layout,
+    10→  Clock, BookOpen, Share2, Check,
+    11→  ZoomIn, ZoomOut, RotateCcw, TrendingUp, TrendingDown,
+    12→  BarChart3, Star, Droplets,
+    13→  Send, FileDown, AlertTriangle, ExternalLink, Loader2,
+    14→} from 'lucide-react';
+    15→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    16→import { Button } from '@/components/ui/button';
+    17→import { Input } from '@/components/ui/input';
+    18→import { Badge } from '@/components/ui/badge';
+    19→import { Switch } from '@/components/ui/switch';
+    20→import { Label } from '@/components/ui/label';
+    21→import { Separator } from '@/components/ui/separator';
+    22→import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    23→import { Checkbox } from '@/components/ui/checkbox';
+    24→import { Skeleton } from '@/components/ui/skeleton';
+    25→import {
+    26→  Dialog,
+    27→  DialogContent,
+    28→  DialogDescription,
+    29→  DialogHeader,
+    30→  DialogTitle,
+    31→  DialogFooter,
+    32→} from '@/components/ui/dialog';
+    33→import {
+    34→  Select,
+    35→  SelectContent,
+    36→  SelectItem,
+    37→  SelectTrigger,
+    38→  SelectValue,
+    39→} from '@/components/ui/select';
+    40→import {
+    41→  Table,
+    42→  TableBody,
+    43→  TableCell,
+    44→  TableHead,
+    45→  TableHeader,
+    46→  TableRow,
+    47→} from '@/components/ui/table';
+    48→import {
+    49→  Tooltip,
+    50→  TooltipContent,
+    51→  TooltipProvider,
+    52→  TooltipTrigger,
+    53→} from '@/components/ui/tooltip';
+    54→import type { Certificate, CertificateAward } from '@/types';
+    55→import {
+    56→  useCertificates,
+    57→  useCreateCertificate,
+    58→  useUpdateCertificate,
+    59→  useDeleteCertificate,
+    60→  useAwardCertificate,
+    61→  useCertificateAwards,
+    62→} from '@/hooks/use-data';
+    63→import { useAppStore } from '@/store/app-store';
+    64→
+    65→// ---- Extended Types ----
+    66→interface CertTemplate extends Certificate {
+    67→  elements: CertElement[];
+    68→  bg_color: string;
+    69→  font_family: string;
+    70→  width: number;
+    71→  height: number;
+    72→  borderStyle?: string;
+    73→  sealType?: string;
+    74→  hasWatermark?: boolean;
+    75→  backgroundTemplate?: string;
+    76→}
+    77→
+    78→interface CertElement {
+    79→  id: string;
+    80→  type: 'text' | 'image' | 'date' | 'qr_code' | 'signature_line';
+    81→  label: string;
+    82→  x: number;
+    83→  y: number;
+    84→  fontSize?: number;
+    85→  fontWeight?: string;
+    86→  color?: string;
+    87→  value: string;
+    88→  fontFamily?: string;
+    89→  size?: 'S' | 'M' | 'L' | 'XL';
+    90→  align?: 'left' | 'center' | 'right';
+    91→}
+    92→
+    93→type VerificationStatus = 'verified' | 'pending' | 'revoked';
+    94→
+    95→interface IssuedCert extends CertificateAward {
+    96→  recipientName: string;
+    97→  courseName: string;
+    98→  certName: string;
+    99→  status: VerificationStatus;
+   100→}
+   101→
+   102→// ---- Constants ----
+   103→const FONT_FAMILIES = [
+   104→  { value: 'Georgia, serif', label: 'Serif (Georgia)' },
+   105→  { value: 'system-ui, sans-serif', label: 'Sans-serif (System)' },
+   106→  { value: "'Brush Script MT', 'Segoe Script', cursive", label: 'Script (Brush)' },
+   107→  { value: "'Courier New', monospace", label: 'Monospace (Courier)' },
+   108→];
+   109→
+   110→const ELEMENT_SIZES: Record<string, number> = { S: 0.5, M: 0.65, L: 0.85, XL: 1.1 };
+   111→const ALIGN_OPTIONS = ['left', 'center', 'right'] as const;
+   112→
+   113→const BORDER_STYLES = [
+   114→  { value: 'classic', label: 'Classic Double' },
+   115→  { value: 'elegant', label: 'Elegant Filigree' },
+   116→  { value: 'modern', label: 'Modern Minimal' },
+   117→  { value: 'ornate', label: 'Ornate Baroque' },
+   118→  { value: 'simple', label: 'Simple Line' },
+   119→];
+   120→
+   121→const SEAL_TYPES = [
+   122→  { value: 'gold', label: 'Gold Seal', color: '#d4a017' },
+   123→  { value: 'silver', label: 'Silver Seal', color: '#a8a9ad' },
+   124→  { value: 'bronze', label: 'Bronze Seal', color: '#cd7f32' },
+   125→  { value: 'custom', label: 'Custom Seal', color: '#7c3aed' },
+   126→];
+   127→
+   128→const BG_TEMPLATES = [
+   129→  { value: 'classic', label: 'Classic', bg: 'linear-gradient(135deg, #fefefe 0%, #fafbfc 50%, #f1f5f9 100%)' },
+   130→  { value: 'modern', label: 'Modern', bg: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%)' },
+   131→  { value: 'elegant', label: 'Elegant', bg: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 50%, #fde68a 100%)' },
+   132→  { value: 'minimal', label: 'Minimal', bg: 'linear-gradient(135deg, #ffffff 0%, #fafafa 50%, #f5f5f5 100%)' },
+   133→  { value: 'bold', label: 'Bold', bg: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' },
+   134→];
+   135→
+   136→const TEMPLATE_LIBRARY = [
+   137→  {
+   138→    id: 'tpl-academic',
+   139→    name: 'Academic Excellence',
+   140→    category: 'Academic',
+   141→    description: 'Traditional academic certificate with formal styling and classic borders',
+   142→    bgTemplate: 'classic',
+   143→    borderStyle: 'classic',
+   144→    sealType: 'gold',
+   145→    fontFamily: 'Georgia, serif',
+   146→  },
+   147→  {
+   148→    id: 'tpl-professional',
+   149→    name: 'Professional Certification',
+   150→    category: 'Professional',
+   151→    description: 'Sleek professional design for industry certifications and credentials',
+   152→    bgTemplate: 'modern',
+   153→    borderStyle: 'modern',
+   154→    sealType: 'silver',
+   155→    fontFamily: 'system-ui, sans-serif',
+   156→  },
+   157→  {
+   158→    id: 'tpl-completion',
+   159→    name: 'Course Completion',
+   160→    category: 'Completion',
+   161→    description: 'Warm and inviting design for course completion acknowledgments',
+   162→    bgTemplate: 'elegant',
+   163→    borderStyle: 'elegant',
+   164→    sealType: 'bronze',
+   165→    fontFamily: 'Georgia, serif',
+   166→  },
+   167→  {
+   168→    id: 'tpl-achievement',
+   169→    name: 'Outstanding Achievement',
+   170→    category: 'Achievement',
+   171→    description: 'Bold design celebrating exceptional accomplishments',
+   172→    bgTemplate: 'bold',
+   173→    borderStyle: 'ornate',
+   174→    sealType: 'gold',
+   175→    fontFamily: "'Brush Script MT', 'Segoe Script', cursive",
+   176→  },
+   177→  {
+   178→    id: 'tpl-participation',
+   179→    name: 'Participation Award',
+   180→    category: 'Participation',
+   181→    description: 'Clean and modern design for participation and attendance',
+   182→    bgTemplate: 'minimal',
+   183→    borderStyle: 'simple',
+   184→    sealType: 'silver',
+   185→    fontFamily: 'system-ui, sans-serif',
+   186→  },
+   187→  {
+   188→    id: 'tpl-excellence',
+   189→    name: 'Excellence Award',
+   190→    category: 'Excellence',
+   191→    description: 'Premium design for top-tier excellence recognition',
+   192→    bgTemplate: 'elegant',
+   193→    borderStyle: 'ornate',
+   194→    sealType: 'gold',
+   195→    fontFamily: 'Georgia, serif',
+   196→  },
+   197→];
+   198→
+   199→// ---- Default Elements ----
+   200→const defaultElements: CertElement[] = [
+   201→  { id: 'el-1', type: 'text', label: 'Header', x: 50, y: 10, fontSize: 28, fontWeight: 'bold', color: '#1e293b', value: 'Certificate of Completion', fontFamily: 'Georgia, serif', size: 'XL', align: 'center' },
+   202→  { id: 'el-2', type: 'text', label: 'Subheader', x: 50, y: 22, fontSize: 14, fontWeight: 'normal', color: '#64748b', value: 'This is to certify that', fontFamily: 'system-ui, sans-serif', size: 'M', align: 'center' },
+   203→  { id: 'el-3', type: 'text', label: 'Recipient Name', x: 50, y: 35, fontSize: 24, fontWeight: 'bold', color: '#059669', value: '{{recipient_name}}', fontFamily: 'Georgia, serif', size: 'L', align: 'center' },
+   204→  { id: 'el-4', type: 'text', label: 'Course Label', x: 50, y: 48, fontSize: 12, fontWeight: 'normal', color: '#64748b', value: 'has successfully completed the course', fontFamily: 'system-ui, sans-serif', size: 'S', align: 'center' },
+   205→  { id: 'el-5', type: 'text', label: 'Course Name', x: 50, y: 58, fontSize: 20, fontWeight: 'bold', color: '#7c3aed', value: '{{course_name}}', fontFamily: 'system-ui, sans-serif', size: 'L', align: 'center' },
+   206→  { id: 'el-6', type: 'date', label: 'Issue Date', x: 30, y: 75, fontSize: 12, fontWeight: 'normal', color: '#475569', value: '{{issue_date}}', fontFamily: 'system-ui, sans-serif', size: 'S', align: 'left' },
+   207→  { id: 'el-7', type: 'text', label: 'Verification', x: 70, y: 75, fontSize: 10, fontWeight: 'normal', color: '#94a3b8', value: 'Verification: {{verification_code}}', fontFamily: "'Courier New', monospace", size: 'S', align: 'right' },
+   208→  { id: 'el-8', type: 'signature_line', label: 'Signature Line', x: 70, y: 85, fontSize: 12, fontWeight: 'normal', color: '#475569', value: 'Instructor Signature', fontFamily: 'system-ui, sans-serif', size: 'S', align: 'center' },
+   209→  { id: 'el-9', type: 'qr_code', label: 'QR Code', x: 88, y: 72, fontSize: 12, fontWeight: 'normal', color: '#000', value: 'QR Verification', fontFamily: 'system-ui, sans-serif', size: 'S', align: 'center' },
+   210→  { id: 'el-10', type: 'image', label: 'Tenant Logo', x: 50, y: 5, fontSize: 12, fontWeight: 'normal', color: '#000', value: 'NextGen LMS', fontFamily: 'system-ui, sans-serif', size: 'S', align: 'center' },
+   211→];
+   212→
+   213→// ---- Data Mapping Helpers ----
+   214→function apiCertToTemplate(cert: Record<string, unknown>): CertTemplate {
+   215→  let parsed: Record<string, unknown> = {};
+   216→  try {
+   217→    const templateField = cert.template;
+   218→    parsed = typeof templateField === 'string' ? JSON.parse(templateField) : (templateField as Record<string, unknown>) || {};
+   219→  } catch {
+   220→    parsed = {};
+   221→  }
+   222→  return {
+   223→    id: cert.id as string,
+   224→    tenantId: cert.tenantId as string,
+   225→    name: cert.name as string,
+   226→    template: cert.template as string,
+   227→    backgroundUrl: (cert.backgroundUrl as string) || '',
+   228→    isActive: cert.isActive as boolean,
+   229→    elements: (parsed.elements as CertElement[]) || defaultElements,
+   230→    bg_color: (parsed.bg_color as string) || '#fefefe',
+   231→    font_family: (parsed.font_family as string) || 'Georgia, serif',
+   232→    width: (parsed.width as number) || 800,
+   233→    height: (parsed.height as number) || 600,
+   234→    borderStyle: parsed.borderStyle as string | undefined,
+   235→    sealType: parsed.sealType as string | undefined,
+   236→    hasWatermark: parsed.hasWatermark as boolean | undefined,
+   237→    backgroundTemplate: parsed.backgroundTemplate as string | undefined,
+   238→  };
+   239→}
+   240→
+   241→function templateToApiData(t: CertTemplate) {
+   242→  const templateJson = JSON.stringify({
+   243→    elements: t.elements,
+   244→    bg_color: t.bg_color,
+   245→    font_family: t.font_family,
+   246→    width: t.width,
+   247→    height: t.height,
+   248→    borderStyle: t.borderStyle,
+   249→    sealType: t.sealType,
+   250→    hasWatermark: t.hasWatermark,
+   251→    backgroundTemplate: t.backgroundTemplate,
+   252→  });
+   253→  return {
+   254→    tenantId: t.tenantId,
+   255→    name: t.name,
+   256→    template: templateJson,
+   257→    backgroundUrl: t.backgroundUrl || null,
+   258→    isActive: t.isActive,
+   259→  };
+   260→}
+   261→
+   262→// ---- Helper: Element Icon ----
+   263→function ElementIcon({ type }: { type: CertElement['type'] }) {
+   264→  switch (type) {
+   265→    case 'text': return <Type className="h-4 w-4" />;
+   266→    case 'image': return <ImageIcon className="h-4 w-4" />;
+   267→    case 'date': return <Calendar className="h-4 w-4" />;
+   268→    case 'qr_code': return <QrCode className="h-4 w-4" />;
+   269→    case 'signature_line': return <PenTool className="h-4 w-4" />;
+   270→    default: return <FileText className="h-4 w-4" />;
+   271→  }
+   272→}
+   273→
+   274→// ---- Helper: Animated Counter ----
+   275→function AnimatedCounter({ target, duration = 1500 }: { target: number; duration?: number }) {
+   276→  const [count, setCount] = useState(0);
+   277→  const prevTarget = useRef(0);
+   278→
+   279→  useEffect(() => {
+   280→    if (target === prevTarget.current) return;
+   281→    prevTarget.current = target;
+   282→    let start = 0;
+   283→    const step = target / (duration / 16);
+   284→    const timer = setInterval(() => {
+   285→      start += step;
+   286→      if (start >= target) {
+   287→        setCount(target);
+   288→        clearInterval(timer);
+   289→      } else {
+   290→        setCount(Math.floor(start));
+   291→      }
+   292→    }, 16);
+   293→    return () => clearInterval(timer);
+   294→  }, [target, duration]);
+   295→
+   296→  return <span>{count}</span>;
+   297→}
+   298→
+   299→// ---- Helper: Certificate Border Renderer ----
+   300→function CertificateBorder({ style, isDark }: { style: string; isDark: boolean }) {
+   301→  const c = isDark ? '#475569' : '#c7d2da';
+   302→  const c2 = isDark ? '#334155' : '#d4dce4';
+   303→  const c3 = isDark ? '#64748b' : '#94a3b8';
+   304→
+   305→  switch (style) {
+   306→    case 'classic':
+   307→      return (
+   308→        <>
+   309→          <div className="absolute inset-3 border-2 rounded-sm" style={{ borderColor: c }}>
+   310→            <div className="absolute inset-1.5 border rounded-sm" style={{ borderColor: c2 }} />
+   311→          </div>
+   312→        </>
+   313→      );
+   314→    case 'elegant':
+   315→      return (
+   316→        <div className="absolute inset-3 border-2 rounded-lg" style={{ borderColor: c, borderStyle: 'double' }}>
+   317→          <div className="absolute inset-2 border rounded-md" style={{ borderColor: c3, borderStyle: 'dotted' }} />
+   318→        </div>
+   319→      );
+   320→    case 'modern':
+   321→      return (
+   322→        <>
+   323→          <div className="absolute top-3 left-3 right-3 h-0.5" style={{ background: `linear-gradient(to right, transparent, ${c}, transparent)` }} />
+   324→          <div className="absolute bottom-3 left-3 right-3 h-0.5" style={{ background: `linear-gradient(to right, transparent, ${c}, transparent)` }} />
+   325→          <div className="absolute left-3 top-3 bottom-3 w-0.5" style={{ background: `linear-gradient(to bottom, transparent, ${c}, transparent)` }} />
+   326→          <div className="absolute right-3 top-3 bottom-3 w-0.5" style={{ background: `linear-gradient(to bottom, transparent, ${c}, transparent)` }} />
+   327→        </>
+   328→      );
+   329→    case 'ornate':
+   330→      return (
+   331→        <>
+   332→          <div className="absolute inset-2 border-4 rounded-sm" style={{ borderColor: c }}>
+   333→            <div className="absolute inset-1.5 border-2 rounded-sm" style={{ borderColor: c2 }}>
+   334→              <div className="absolute inset-1 border rounded-sm" style={{ borderColor: c3 }} />
+   335→            </div>
+   336→          </div>
+   337→          {/* Corner ornaments */}
+   338→          {['top-4 left-4', 'top-4 right-4', 'bottom-4 left-4', 'bottom-4 right-4'].map((pos, i) => (
+   339→            <div key={i} className={`absolute ${pos} w-5 h-5`}>
+   340→              <div className={`w-full h-full ${isDark ? 'text-amber-400/50' : 'text-amber-600/40'}`}>
+   341→                <Sparkles className="h-4 w-4" />
+   342→              </div>
+   343→            </div>
+   344→          ))}
+   345→        </>
+   346→      );
+   347→    case 'simple':
+   348→    default:
+   349→      return (
+   350→        <div className="absolute inset-4 border rounded-sm" style={{ borderColor: c2 }} />
+   351→      );
+   352→  }
+   353→}
+   354→
+   355→// ---- Helper: Seal Renderer ----
+   356→function SealRenderer({ type, isDark }: { type: string; isDark: boolean }) {
+   357→  const seal = SEAL_TYPES.find(s => s.value === type) || SEAL_TYPES[0];
+   358→  return (
+   359→    <div className="flex flex-col items-center gap-0.5">
+   360→      <div
+   361→        className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
+   362→        style={{
+   363→          background: `conic-gradient(from 0deg, ${seal.color}, ${seal.color}dd, ${seal.color}, ${seal.color}dd, ${seal.color})`,
+   364→          border: `2px solid ${seal.color}`,
+   365→        }}
+   366→      >
+   367→        <div className={`w-9 h-9 rounded-full flex items-center justify-center ${isDark ? 'bg-slate-900' : 'bg-white/90'}`}>
+   368→          <Star className="h-5 w-5" style={{ color: seal.color }} />
+   369→        </div>
+   370→      </div>
+   371→      <span className="text-[6px] font-bold uppercase tracking-wider" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>Certified</span>
+   372→    </div>
+   373→  );
+   374→}
+   375→
+   376→// ---- Helper: Stats Skeleton ----
+   377→function StatsSkeleton() {
+   378→  return (
+   379→    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   380→      {Array.from({ length: 5 }).map((_, i) => (
+   381→        <Card key={i} className={i === 4 ? 'col-span-2 lg:col-span-4' : ''}>
+   382→          <CardContent className="p-4">
+   383→            <div className="flex items-start justify-between mb-3">
+   384→              <Skeleton className="h-10 w-10 rounded-xl" />
+   385→              <Skeleton className="h-4 w-12" />
+   386→            </div>
+   387→            <Skeleton className="h-8 w-16 mb-1" />
+   388→            <Skeleton className="h-3 w-24" />
+   389→          </CardContent>
+   390→        </Card>
+   391→      ))}
+   392→    </div>
+   393→  );
+   394→}
+   395→
+   396→// ---- Helper: Template Card Skeleton ----
+   397→function TemplateCardSkeleton() {
+   398→  return (
+   399→    <Card className="overflow-hidden h-full flex flex-col shadow-sm">
+   400→      <Skeleton className="h-48" />
+   401→      <CardContent className="p-4 flex-1 flex flex-col">
+   402→        <Skeleton className="h-5 w-3/4 mb-2" />
+   403→        <Skeleton className="h-3 w-1/2 mb-3" />
+   404→        <div className="flex gap-2 mt-auto">
+   405→          <Skeleton className="h-8 flex-1" />
+   406→          <Skeleton className="h-8 w-20" />
+   407→        </div>
+   408→      </CardContent>
+   409→    </Card>
+   410→  );
+   411→}
+   412→
+   413→// ---- Helper: Table Row Skeleton ----
+   414→function TableRowSkeleton() {
+   415→  return (
+   416→    <TableRow>
+   417→      <TableCell><Skeleton className="h-4 w-4" /></TableCell>
+   418→      <TableCell><div className="flex items-center gap-2"><Skeleton className="h-8 w-8 rounded-full" /><Skeleton className="h-4 w-24" /></div></TableCell>
+   419→      <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+   420→      <TableCell><Skeleton className="h-5 w-28" /></TableCell>
+   421→      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+   422→      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+   423→      <TableCell><Skeleton className="h-5 w-28" /></TableCell>
+   424→      <TableCell><Skeleton className="h-8 w-20" /></TableCell>
+   425→    </TableRow>
+   426→  );
+   427→}
+   428→
+   429→// ==========================
+   430→// STATS DASHBOARD
+   431→// ==========================
+   432→function StatsDashboard({ awards, templates }: { awards: IssuedCert[]; templates: CertTemplate[] }) {
+   433→  // Compute monthly issuance from real data
+   434→  const monthlyIssuance = useMemo(() => {
+   435→    const monthMap: Record<string, number> = {};
+   436→    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+   437→    const now = new Date();
+   438→    // Show last 7 months
+   439→    for (let i = 6; i >= 0; i--) {
+   440→      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+   441→      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+   442→      monthMap[key] = 0;
+   443→    }
+   444→    awards.forEach(a => {
+   445→      const d = new Date(a.issuedAt);
+   446→      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+   447→      if (key in monthMap) {
+   448→        monthMap[key]++;
+   449→      }
+   450→    });
+   451→    return Object.entries(monthMap).map(([key, count]) => {
+   452→      const [y, m] = key.split('-');
+   453→      return { month: monthNames[parseInt(m) - 1], count };
+   454→    });
+   455→  }, [awards]);
+   456→
+   457→  const maxMonthlyCount = Math.max(...monthlyIssuance.map(m => m.count), 1);
+   458→
+   459→  // Compute stats from real data
+   460→  const thisMonth = useMemo(() => {
+   461→    const now = new Date();
+   462→    return awards.filter(a => {
+   463→      const d = new Date(a.issuedAt);
+   464→      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+   465→    }).length;
+   466→  }, [awards]);
+   467→
+   468→  const topCourse = useMemo(() => {
+   469→    const courseCount: Record<string, number> = {};
+   470→    awards.forEach(a => {
+   471→      courseCount[a.courseName] = (courseCount[a.courseName] || 0) + 1;
+   472→    });
+   473→    const sorted = Object.entries(courseCount).sort(([, a], [, b]) => b - a);
+   474→    return sorted[0]?.[0] || 'N/A';
+   475→  }, [awards]);
+   476→
+   477→  const verifiedCount = awards.filter(a => a.status === 'verified').length;
+   478→  const verificationRate = awards.length > 0 ? Math.round((verifiedCount / awards.length) * 100) : 0;
+   479→
+   480→  const stats = [
+   481→    {
+   482→      label: 'Total Issued',
+   483→      value: awards.length,
+   484→      icon: Award,
+   485→      trend: 12,
+   486→      trendLabel: 'vs last month',
+   487→      gradient: 'from-amber-500/10 to-amber-600/5',
+   488→      iconBg: 'bg-amber-100 dark:bg-amber-900/30',
+   489→      iconColor: 'text-amber-600 dark:text-amber-400',
+   490→    },
+   491→    {
+   492→      label: 'This Month',
+   493→      value: thisMonth,
+   494→      icon: Calendar,
+   495→      trend: 8,
+   496→      trendLabel: 'vs last month',
+   497→      gradient: 'from-emerald-500/10 to-emerald-600/5',
+   498→      iconBg: 'bg-emerald-100 dark:bg-emerald-900/30',
+   499→      iconColor: 'text-emerald-600 dark:text-emerald-400',
+   500→    },
+   501→    {
+   502→      label: 'Verification Rate',
+   503→      value: verificationRate,
+   504→      icon: Shield,
+   505→      trend: 5,
+   506→      trendLabel: 'improvement',
+   507→      gradient: 'from-violet-500/10 to-violet-600/5',
+   508→      iconBg: 'bg-violet-100 dark:bg-violet-900/30',
+   509→      iconColor: 'text-violet-600 dark:text-violet-400',
+   510→      suffix: '%',
+   511→    },
+   512→    {
+   513→      label: 'Top Course',
+   514→      value: 0,
+   515→      icon: BookOpen,
+   516→      trend: 0,
+   517→      trendLabel: '',
+   518→      gradient: 'from-rose-500/10 to-rose-600/5',
+   519→      iconBg: 'bg-rose-100 dark:bg-rose-900/30',
+   520→      iconColor: 'text-rose-600 dark:text-rose-400',
+   521→      textValue: topCourse.length > 20 ? topCourse.substring(0, 18) + '...' : topCourse,
+   522→    },
+   523→  ];
+   524→
+   525→  return (
+   526→    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   527→      {stats.map((stat, i) => (
+   528→        <motion.div
+   529→          key={stat.label}
+   530→          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+   531→          animate={{ opacity: 1, y: 0, scale: 1 }}
+   532→          transition={{ delay: i * 0.1, duration: 0.4 }}
+   533→        >
+   534→          <Card className={`relative overflow-hidden bg-gradient-to-br ${stat.gradient} backdrop-blur-sm border-white/20 dark:border-white/10`}>
+   535→            <CardContent className="p-4">
+   536→              <div className="flex items-start justify-between mb-3">
+   537→                <div className={`p-2.5 rounded-xl ${stat.iconBg}`}>
+   538→                  <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
+   539→                </div>
+   540→                {stat.trend !== 0 && (
+   541→                  <div className={`flex items-center gap-0.5 text-xs font-medium ${stat.trend > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+   542→                    {stat.trend > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+   543→                    {stat.trend > 0 ? '+' : ''}{stat.trend}%
+   544→                  </div>
+   545→                )}
+   546→              </div>
+   547→              <div className="text-2xl font-bold text-foreground">
+   548→                {stat.textValue || <AnimatedCounter target={stat.value} />}
+   549→                {stat.suffix && <span className="text-lg">{stat.suffix}</span>}
+   550→              </div>
+   551→              <div className="text-xs text-muted-foreground mt-0.5">{stat.label}</div>
+   552→              {stat.trendLabel && (
+   553→                <div className="text-[10px] text-muted-foreground/60 mt-0.5">{stat.trendLabel}</div>
+   554→              )}
+   555→            </CardContent>
+   556→            {/* Glassmorphism shine effect */}
+   557→            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-white/10 to-transparent rounded-bl-full" />
+   558→          </Card>
+   559→        </motion.div>
+   560→      ))}
+   561→
+   562→      {/* Monthly trend chart card */}
+   563→      <motion.div
+   564→        className="col-span-2 lg:col-span-4"
+   565→        initial={{ opacity: 0, y: 20 }}
+   566→        animate={{ opacity: 1, y: 0 }}
+   567→        transition={{ delay: 0.5, duration: 0.4 }}
+   568→      >
+   569→        <Card className="bg-gradient-to-br from-amber-500/5 to-amber-600/5 backdrop-blur-sm border-white/20 dark:border-white/10">
+   570→          <CardContent className="p-4">
+   571→            <div className="flex items-center justify-between mb-3">
+   572→              <div>
+   573→                <h3 className="text-sm font-semibold text-foreground">Monthly Issuance Trend</h3>
+   574→                <p className="text-xs text-muted-foreground">Certificates issued per month</p>
+   575→              </div>
+   576→              <div className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+   577→                <TrendingUp className="h-3.5 w-3.5" /> {awards.length > 0 ? 'Live data' : 'No data yet'}
+   578→              </div>
+   579→            </div>
+   580→            <div className="flex items-end gap-2 h-20">
+   581→              {monthlyIssuance.map((d, i) => (
+   582→                <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
+   583→                  <motion.div
+   584→                    className="w-full rounded-t-md bg-gradient-to-t from-amber-500 to-amber-300 dark:from-amber-600 dark:to-amber-400"
+   585→                    initial={{ height: 0 }}
+   586→                    animate={{ height: d.count > 0 ? `${(d.count / maxMonthlyCount) * 100}%` : '4px' }}
+   587→                    transition={{ delay: 0.6 + i * 0.08, duration: 0.5 }}
+   588→                    style={{ minHeight: '4px' }}
+   589→                  />
+   590→                  <span className="text-[9px] text-muted-foreground">{d.month}</span>
+   591→                </div>
+   592→              ))}
+   593→            </div>
+   594→          </CardContent>
+   595→        </Card>
+   596→      </motion.div>
+   597→    </div>
+   598→  );
+   599→}
+   600→
+   601→// ==========================
+   602→// TEMPLATE LIBRARY
+   603→// ==========================
+   604→function TemplateLibrary({ onUseTemplate }: { onUseTemplate: (arg: typeof TEMPLATE_LIBRARY[number]) => void }) {
+   605→  const [previewId, setPreviewId] = useState<string | null>(null);
+   606→  const [confirmId, setConfirmId] = useState<string | null>(null);
+   607→
+   608→  const categoryColors: Record<string, string> = {
+   609→    Academic: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+   610→    Professional: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
+   611→    Completion: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+   612→    Achievement: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+   613→    Participation: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
+   614→    Excellence: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+   615→  };
+   616→
+   617→  const previewTemplate = TEMPLATE_LIBRARY.find(t => t.id === previewId);
+   618→
+   619→  return (
+   620→    <div className="space-y-6">
+   621→      <div>
+   622→        <h2 className="text-2xl font-bold text-foreground">Template Library</h2>
+   623→        <p className="text-muted-foreground text-sm mt-1">Browse and use professionally designed certificate templates</p>
+   624→      </div>
+   625→
+   626→      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+   627→        {TEMPLATE_LIBRARY.map((tpl, idx) => (
+   628→          <motion.div
+   629→            key={tpl.id}
+   630→            initial={{ opacity: 0, y: 20 }}
+   631→            animate={{ opacity: 1, y: 0 }}
+   632→            transition={{ delay: idx * 0.1 }}
+   633→            whileHover={{ y: -4 }}
+   634→          >
+   635→            <Card className="overflow-hidden group h-full flex flex-col shadow-sm hover:shadow-xl transition-all duration-300 border-white/30 dark:border-white/10">
+   636→              {/* Thumbnail preview */}
+   637→              <div
+   638→                className="h-40 relative overflow-hidden cursor-pointer"
+   639→                style={{ background: BG_TEMPLATES.find(b => b.value === tpl.bgTemplate)?.bg }}
+   640→                onClick={() => setPreviewId(tpl.id)}
+   641→              >
+   642→                <CertificateBorder style={tpl.borderStyle} isDark={tpl.bgTemplate === 'bold'} />
+   643→                {/* Mini certificate content */}
+   644→                <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center pointer-events-none">
+   645→                  <Award className={`h-5 w-5 mb-1 ${tpl.bgTemplate === 'bold' ? 'text-amber-400' : 'text-amber-600'}`} />
+   646→                  <div className={`text-[10px] font-bold mb-0.5 ${tpl.bgTemplate === 'bold' ? 'text-slate-100' : 'text-slate-800'}`} style={{ fontFamily: tpl.fontFamily }}>
+   647→                    {tpl.name}
+   648→                  </div>
+   649→                  <div className={`text-[8px] font-semibold ${tpl.bgTemplate === 'bold' ? 'text-emerald-400' : 'text-emerald-600'}`}>
+   650→                    Jane Doe
+   651→                  </div>
+   652→                  <div className={`text-[7px] mt-0.5 ${tpl.bgTemplate === 'bold' ? 'text-violet-400' : 'text-violet-600'}`}>
+   653→                    Course Name
+   654→                  </div>
+   655→                </div>
+   656→                {/* Seal */}
+   657→                <div className="absolute bottom-2 right-2 pointer-events-none">
+   658→                  <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: SEAL_TYPES.find(s => s.value === tpl.sealType)?.color }}>
+   659→                    <Star className="h-3 w-3 text-white" />
+   660→                  </div>
+   661→                </div>
+   662→                {/* Hover overlay */}
+   663→                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all duration-300 flex items-center justify-center">
+   664→                  <motion.div
+   665→                    initial={{ opacity: 0, scale: 0.8 }}
+   666→                    whileHover={{ opacity: 1, scale: 1 }}
+   667→                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+   668→                  >
+   669→                    <Eye className="h-8 w-8 text-white drop-shadow-lg" />
+   670→                  </motion.div>
+   671→                </div>
+   672→              </div>
+   673→
+   674→              <CardContent className="p-4 flex-1 flex flex-col">
+   675→                <div className="flex items-center gap-2 mb-2">
+   676→                  <Badge className={`text-[10px] ${categoryColors[tpl.category] || ''}`}>{tpl.category}</Badge>
+   677→                </div>
+   678→                <h3 className="font-semibold text-foreground mb-1">{tpl.name}</h3>
+   679→                <p className="text-xs text-muted-foreground mb-3 flex-1">{tpl.description}</p>
+   680→                <div className="flex items-center gap-2 mt-auto">
+   681→                  <Button
+   682→                    size="sm"
+   683→                    variant="outline"
+   684→                    className="flex-1 gap-1"
+   685→                    onClick={() => setPreviewId(tpl.id)}
+   686→                  >
+   687→                    <Eye className="h-3.5 w-3.5" /> Preview
+   688→                  </Button>
+   689→                  <Button
+   690→                    size="sm"
+   691→                    className="flex-1 gap-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white"
+   692→                    onClick={() => setConfirmId(tpl.id)}
+   693→                  >
+   694→                    <Sparkles className="h-3.5 w-3.5" /> Use
+   695→                  </Button>
+   696→                </div>
+   697→              </CardContent>
+   698→            </Card>
+   699→          </motion.div>
+   700→        ))}
+   701→      </div>
+   702→
+   703→      {/* Preview Dialog */}
+   704→      <Dialog open={!!previewId} onOpenChange={() => setPreviewId(null)}>
+   705→        <DialogContent className="max-w-2xl">
+   706→          <DialogHeader>
+   707→            <DialogTitle className="flex items-center gap-2">
+   708→              <Award className="h-5 w-5 text-amber-500" /> {previewTemplate?.name}
+   709→            </DialogTitle>
+   710→            <DialogDescription>{previewTemplate?.description}</DialogDescription>
+   711→          </DialogHeader>
+   712→          <div
+   713→            className="relative rounded-lg overflow-hidden shadow-2xl"
+   714→            style={{
+   715→              aspectRatio: '800/600',
+   716→              background: BG_TEMPLATES.find(b => b.value === previewTemplate?.bgTemplate)?.bg,
+   717→            }}
+   718→          >
+   719→            <CertificateBorder style={previewTemplate?.borderStyle || 'classic'} isDark={previewTemplate?.bgTemplate === 'bold'} />
+   720→            <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
+   721→              <Award className={`h-8 w-8 mb-2 ${previewTemplate?.bgTemplate === 'bold' ? 'text-amber-400' : 'text-amber-600'}`} />
+   722→              <div className={`text-lg font-bold mb-1 ${previewTemplate?.bgTemplate === 'bold' ? 'text-slate-100' : 'text-slate-800'}`} style={{ fontFamily: previewTemplate?.fontFamily }}>
+   723→                {previewTemplate?.name}
+   724→              </div>
+   725→              <div className={`text-sm mb-0.5 ${previewTemplate?.bgTemplate === 'bold' ? 'text-slate-300' : 'text-slate-500'}`}>This is to certify that</div>
+   726→              <div className={`text-xl font-bold ${previewTemplate?.bgTemplate === 'bold' ? 'text-emerald-400' : 'text-emerald-600'}`}>Jane Doe</div>
+   727→              <div className={`text-sm mt-1 ${previewTemplate?.bgTemplate === 'bold' ? 'text-slate-300' : 'text-slate-500'}`}>has successfully completed</div>
+   728→              <div className={`text-base font-semibold mt-0.5 ${previewTemplate?.bgTemplate === 'bold' ? 'text-violet-400' : 'text-violet-600'}`}>Advanced Course Title</div>
+   729→            </div>
+   730→          </div>
+   731→          <DialogFooter>
+   732→            <Button variant="outline" onClick={() => setPreviewId(null)}>Close</Button>
+   733→            <Button className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white gap-2" onClick={() => {
+   734→              if (previewTemplate) onUseTemplate(previewTemplate);
+   735→              setPreviewId(null);
+   736→            }}>
+   737→              <Sparkles className="h-4 w-4" /> Use This Template
+   738→            </Button>
+   739→          </DialogFooter>
+   740→        </DialogContent>
+   741→      </Dialog>
+   742→
+   743→      {/* Confirm Use Dialog */}
+   744→      <Dialog open={!!confirmId} onOpenChange={() => setConfirmId(null)}>
+   745→        <DialogContent className="max-w-sm">
+   746→          <DialogHeader>
+   747→            <DialogTitle>Use Template</DialogTitle>
+   748→            <DialogDescription>
+   749→              This will create a new certificate template based on &ldquo;{TEMPLATE_LIBRARY.find(t => t.id === confirmId)?.name}&rdquo;. Continue?
+   750→            </DialogDescription>
+   751→          </DialogHeader>
+   752→          <DialogFooter>
+   753→            <Button variant="outline" onClick={() => setConfirmId(null)}>Cancel</Button>
+   754→            <Button className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white gap-2" onClick={() => {
+   755→              const tpl = TEMPLATE_LIBRARY.find(t => t.id === confirmId);
+   756→              if (tpl) onUseTemplate(tpl);
+   757→              setConfirmId(null);
+   758→            }}>
+   759→              <CheckCircle2 className="h-4 w-4" /> Confirm
+   760→            </Button>
+   761→          </DialogFooter>
+   762→        </DialogContent>
+   763→      </Dialog>
+   764→    </div>
+   765→  );
+   766→}
+   767→
+   768→// ==========================
+   769→// CERTIFICATE TEMPLATES LIST
+   770→// ==========================
+   771→function TemplatesList({
+   772→  templates,
+   773→  onEdit,
+   774→  onCreateNew,
+   775→  onDelete,
+   776→  isLoading,
+   777→}: {
+   778→  templates: CertTemplate[];
+   779→  onEdit: (arg: CertTemplate) => void;
+   780→  onCreateNew: () => void;
+   781→  onDelete: (id: string) => void;
+   782→  isLoading: boolean;
+   783→}) {
+   784→  const [search, setSearch] = useState('');
+   785→  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+   786→
+   787→  const filtered = templates.filter(t =>
+   788→    t.name.toLowerCase().includes(search.toLowerCase())
+   789→  );
+   790→
+   791→  return (
+   792→    <div className="space-y-6">
+   793→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+   794→        <div>
+   795→          <h2 className="text-2xl font-bold text-foreground">Certificate Templates</h2>
+   796→          <p className="text-muted-foreground text-sm mt-1">Design and manage certificate templates for your courses</p>
+   797→        </div>
+   798→        <Button onClick={onCreateNew} className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white gap-2 shadow-md">
+   799→          <Plus className="h-4 w-4" /> Create Template
+   800→        </Button>
+   801→      </div>
+   802→
+   803→      <div className="relative max-w-md">
+   804→        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   805→        <Input placeholder="Search templates..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+   806→      </div>
+   807→
+   808→      {isLoading ? (
+   809→        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+   810→          {Array.from({ length: 6 }).map((_, i) => (
+   811→            <TemplateCardSkeleton key={i} />
+   812→          ))}
+   813→        </div>
+   814→      ) : filtered.length === 0 ? (
+   815→        <Card className="border-dashed">
+   816→          <CardContent className="p-12 text-center">
+   817→            <Award className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
+   818→            <h3 className="text-lg font-semibold text-foreground mb-1">No Certificate Templates</h3>
+   819→            <p className="text-sm text-muted-foreground mb-4">Get started by creating your first certificate template or pick one from the Library.</p>
+   820→            <Button onClick={onCreateNew} className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white gap-2">
+   821→              <Plus className="h-4 w-4" /> Create Template
+   822→            </Button>
+   823→          </CardContent>
+   824→        </Card>
+   825→      ) : (
+   826→        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+   827→          {filtered.map((template, idx) => {
+   828→            const isDark = template.bg_color === '#0f172a' || template.backgroundTemplate === 'bold';
+   829→            return (
+   830→              <motion.div
+   831→                key={template.id}
+   832→                initial={{ opacity: 0, y: 16 }}
+   833→                animate={{ opacity: 1, y: 0 }}
+   834→                transition={{ delay: idx * 0.08 }}
+   835→                whileHover={{ y: -4 }}
+   836→              >
+   837→                <Card className="overflow-hidden group hover:shadow-xl transition-all duration-300 h-full flex flex-col shadow-sm border-white/30 dark:border-white/10">
+   838→                  {/* Certificate preview thumbnail */}
+   839→                  <div
+   840→                    className="h-48 relative overflow-hidden cursor-pointer"
+   841→                    style={{
+   842→                      background: BG_TEMPLATES.find(b => b.value === template.backgroundTemplate)?.bg ||
+   843→                        (template.bg_color === '#0f172a'
+   844→                          ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)'
+   845→                          : template.bg_color === '#fefefe'
+   846→                          ? 'linear-gradient(135deg, #fefefe 0%, #f1f5f9 100%)'
+   847→                          : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)'),
+   848→                    }}
+   849→                  >
+   850→                    <CertificateBorder style={template.borderStyle || 'classic'} isDark={isDark} />
+   851→
+   852→                    {/* Preview text overlay */}
+   853→                    <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
+   854→                      <div className="mb-1 opacity-70">
+   855→                        <Award className={`h-6 w-6 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
+   856→                      </div>
+   857→                      <div className={`text-xs font-bold mb-0.5 ${isDark ? 'text-slate-100' : 'text-slate-800'}`}
+   858→                        style={{ fontFamily: template.font_family }}>
+   859→                        {template.elements.find(e => e.label === 'Header')?.value ?? 'Certificate'}
+   860→                      </div>
+   861→                      <div className={`text-[8px] ${isDark ? 'text-emerald-400' : 'text-emerald-600'} font-semibold`}>
+   862→                        John Doe
+   863→                      </div>
+   864→                      <div className={`text-[7px] ${isDark ? 'text-violet-400' : 'text-violet-600'} font-medium mt-0.5`}>
+   865→                        Course Name
+   866→                      </div>
+   867→                    </div>
+   868→
+   869→                    {/* Seal preview */}
+   870→                    {template.sealType && (
+   871→                      <div className="absolute bottom-2 right-2">
+   872→                        <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: SEAL_TYPES.find(s => s.value === template.sealType)?.color }}>
+   873→                          <Star className="h-2.5 w-2.5 text-white" />
+   874→                        </div>
+   875→                      </div>
+   876→                    )}
+   877→
+   878→                    {/* Watermark indicator */}
+   879→                    {template.hasWatermark && (
+   880→                      <div className="absolute top-2 left-2">
+   881→                        <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-[9px] gap-0.5">
+   882→                          <Droplets className="h-2.5 w-2.5" /> WM
+   883→                        </Badge>
+   884→                      </div>
+   885→                    )}
+   886→
+   887→                    {/* Status badge */}
+   888→                    <div className="absolute top-3 right-3">
+   889→                      {template.isActive ? (
+   890→                        <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">Active</Badge>
+   891→                      ) : (
+   892→                        <Badge variant="outline" className="text-[10px] text-muted-foreground">Inactive</Badge>
+   893→                      )}
+   894→                    </div>
+   895→                  </div>
+   896→
+   897→                  <CardContent className="p-4 flex-1 flex flex-col">
+   898→                    <h3 className="font-semibold text-foreground mb-1">{template.name}</h3>
+   899→                    <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3 flex-wrap">
+   900→                      <Badge variant="outline" className="text-[10px]">{template.template}</Badge>
+   901→                      <span>{template.width}×{template.height}</span>
+   902→                      <span>{template.elements.length} elements</span>
+   903→                      {template.borderStyle && <span className="capitalize">{template.borderStyle}</span>}
+   904→                    </div>
+   905→                    <div className="flex items-center gap-2 mt-auto">
+   906→                      <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => onEdit(template)}>
+   907→                        <Edit3 className="h-3.5 w-3.5" /> Edit
+   908→                      </Button>
+   909→                      <TooltipProvider>
+   910→                        <Tooltip>
+   911→                          <TooltipTrigger asChild>
+   912→                            <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => { /* sample download */ }}>
+   913→                              <Download className="h-3.5 w-3.5" /> Sample
+   914→                            </Button>
+   915→                          </TooltipTrigger>
+   916→                          <TooltipContent>Download Sample</TooltipContent>
+   917→                        </Tooltip>
+   918→                      </TooltipProvider>
+   919→                      <TooltipProvider>
+   920→                        <Tooltip>
+   921→                          <TooltipTrigger asChild>
+   922→                            <Button size="sm" variant="outline" className="h-8 w-8 p-0 text-red-500 hover:text-red-600" onClick={() => setDeleteConfirmId(template.id)}>
+   923→                              <Trash2 className="h-3.5 w-3.5" />
+   924→                            </Button>
+   925→                          </TooltipTrigger>
+   926→                          <TooltipContent>Delete</TooltipContent>
+   927→                        </Tooltip>
+   928→                      </TooltipProvider>
+   929→                    </div>
+   930→                  </CardContent>
+   931→                </Card>
+   932→              </motion.div>
+   933→            );
+   934→          })}
+   935→        </div>
+   936→      )}
+   937→
+   938→      {/* Delete Confirm Dialog */}
+   939→      <Dialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>
+   940→        <DialogContent className="max-w-sm">
+   941→          <DialogHeader>
+   942→            <DialogTitle className="flex items-center gap-2 text-red-600">
+   943→              <AlertTriangle className="h-5 w-5" /> Delete Template
+   944→            </DialogTitle>
+   945→            <DialogDescription>
+   946→              Are you sure you want to delete this certificate template? This action cannot be undone.
+   947→            </DialogDescription>
+   948→          </DialogHeader>
+   949→          <DialogFooter>
+   950→            <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
+   951→            <Button variant="destructive" className="gap-2" onClick={() => {
+   952→              if (deleteConfirmId) onDelete(deleteConfirmId);
+   953→              setDeleteConfirmId(null);
+   954→            }}>
+   955→              <Trash2 className="h-4 w-4" /> Delete
+   956→            </Button>
+   957→          </DialogFooter>
+   958→        </DialogContent>
+   959→      </Dialog>
+   960→    </div>
+   961→  );
+   962→}
+   963→
+   964→// ==========================
+   965→// CERTIFICATE BUILDER (Visual Template Designer)
+   966→// ==========================
+   967→function CertificateBuilder({
+   968→  template,
+   969→  onBack,
+   970→  onSave,
+   971→  isSaving,
+   972→}: {
+   973→  template: CertTemplate;
+   974→  onBack: () => void;
+   975→  onSave: (t: CertTemplate) => void;
+   976→  isSaving: boolean;
+   977→}) {
+   978→  const [form, setForm] = useState<CertTemplate>({ ...template, elements: template.elements.map(e => ({ ...e })) });
+   979→  const [selectedElement, setSelectedElement] = useState<string | null>(null);
+   980→  const [zoom, setZoom] = useState(75);
+   981→
+   982→  const updateField = useCallback(<K extends keyof CertTemplate>(key: K, value: CertTemplate[K]) => {
+   983→    setForm(prev => ({ ...prev, [key]: value }));
+   984→  }, []);
+   985→
+   986→  const updateElement = (id: string, updates: Partial<CertElement>) => {
+   987→    setForm(prev => ({
+   988→      ...prev,
+   989→      elements: prev.elements.map(el => el.id === id ? { ...el, ...updates } : el),
+   990→    }));
+   991→  };
+   992→
+   993→  const addElement = (type: CertElement['type']) => {
+   994→    const labels: Record<string, string> = { text: 'Text Block', image: 'Image', date: 'Date', qr_code: 'QR Code', signature_line: 'Signature Line' };
+   995→    const newEl: CertElement = {
+   996→      id: `el-${Date.now()}`,
+   997→      type,
+   998→      label: labels[type] ?? type,
+   999→      x: 50,
+  1000→      y: 50,
+  1001→      fontSize: 14,
+  1002→      fontWeight: 'normal',
+  1003→      color: '#1e293b',
+  1004→      value: type === 'text' ? 'New Text' : type === 'date' ? '{{issue_date}}' : type === 'qr_code' ? 'QR Code' : type === 'signature_line' ? 'Signature' : 'Image',
+  1005→      fontFamily: 'system-ui, sans-serif',
+  1006→      size: 'M',
+  1007→      align: 'center',
+  1008→    };
+  1009→    setForm(prev => ({ ...prev, elements: [...prev.elements, newEl] }));
+  1010→    setSelectedElement(newEl.id);
+  1011→  };
+  1012→
+  1013→  const removeElement = (id: string) => {
+  1014→    setForm(prev => ({ ...prev, elements: prev.elements.filter(el => el.id !== id) }));
+  1015→    if (selectedElement === id) setSelectedElement(null);
+  1016→  };
+  1017→
+  1018→  const paletteItems: { type: CertElement['type']; icon: React.ReactNode; label: string }[] = [
+  1019→    { type: 'text', icon: <Type className="h-4 w-4" />, label: 'Text' },
+  1020→    { type: 'image', icon: <ImageIcon className="h-4 w-4" />, label: 'Image' },
+  1021→    { type: 'date', icon: <Calendar className="h-4 w-4" />, label: 'Date' },
+  1022→    { type: 'qr_code', icon: <QrCode className="h-4 w-4" />, label: 'QR Code' },
+  1023→    { type: 'signature_line', icon: <PenTool className="h-4 w-4" />, label: 'Signature' },
+  1024→  ];
+  1025→
+  1026→  const selectedEl = form.elements.find(el => el.id === selectedElement);
+  1027→  const isDark = form.bg_color === '#0f172a' || form.backgroundTemplate === 'bold';
+  1028→  const zoomLevels = [50, 75, 100, 150];
+  1029→
+  1030→  return (
+  1031→    <div className="space-y-4">
+  1032→      {/* Header */}
+  1033→      <div className="flex items-center justify-between flex-wrap gap-2">
+  1034→        <div className="flex items-center gap-3">
+  1035→          <Button variant="ghost" size="icon" onClick={onBack}>
+  1036→            <ChevronLeft className="h-5 w-5" />
+  1037→          </Button>
+  1038→          <div>
+  1039→            <h2 className="text-2xl font-bold text-foreground">Visual Template Designer</h2>
+  1040→            <p className="text-sm text-muted-foreground">{form.name || 'New Template'}</p>
+  1041→          </div>
+  1042→        </div>
+  1043→        <div className="flex items-center gap-2">
+  1044→          <Button variant="outline" onClick={onBack} className="gap-2">
+  1045→            <X className="h-4 w-4" /> Cancel
+  1046→          </Button>
+  1047→          <Button className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white gap-2 shadow-md" onClick={() => onSave(form)} disabled={isSaving}>
+  1048→            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {isSaving ? 'Saving...' : 'Save Template'}
+  1049→          </Button>
+  1050→        </div>
+  1051→      </div>
+  1052→
+  1053→      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4" style={{ minHeight: '600px' }}>
+  1054→        {/* Left panel: Settings + Element palette + Element list + Properties */}
+  1055→        <div className="lg:col-span-3 space-y-3">
+  1056→          {/* Template Settings */}
+  1057→          <Card className="shadow-sm border-white/30 dark:border-white/10">
+  1058→            <CardHeader className="pb-3">
+  1059→              <CardTitle className="text-sm flex items-center gap-2">
+  1060→                <Settings2 className="h-4 w-4 text-violet-600" /> Template Settings
+  1061→              </CardTitle>
+  1062→            </CardHeader>
+  1063→            <CardContent className="space-y-3">
+  1064→              <div className="space-y-1">
+  1065→                <Label className="text-xs">Template Name</Label>
+  1066→                <Input value={form.name} onChange={e => updateField('name', e.target.value)} className="h-8 text-sm" />
+  1067→              </div>
+  1068→              <div className="space-y-1">
+  1069→                <Label className="text-xs">Background Template</Label>
+  1070→                <Select value={form.backgroundTemplate || 'classic'} onValueChange={v => {
+  1071→                  const bg = BG_TEMPLATES.find(b => b.value === v);
+  1072→                  updateField('backgroundTemplate', v);
+  1073→                  if (v === 'bold') updateField('bg_color', '#0f172a');
+  1074→                  else if (v === 'elegant') updateField('bg_color', '#fef9e7');
+  1075→                  else if (v === 'minimal') updateField('bg_color', '#ffffff');
+  1076→                  else if (v === 'modern') updateField('bg_color', '#f8fafc');
+  1077→                  else updateField('bg_color', '#fefefe');
+  1078→                }}>
+  1079→                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+  1080→                  <SelectContent>
+  1081→                    {BG_TEMPLATES.map(bg => (
+  1082→                      <SelectItem key={bg.value} value={bg.value}>{bg.label}</SelectItem>
+  1083→                    ))}
+  1084→                  </SelectContent>
+  1085→                </Select>
+  1086→              </div>
+  1087→              <div className="space-y-1">
+  1088→                <Label className="text-xs">Base Font</Label>
+  1089→                <Select value={form.font_family} onValueChange={v => updateField('font_family', v)}>
+  1090→                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+  1091→                  <SelectContent>
+  1092→                    {FONT_FAMILIES.map(f => (
+  1093→                      <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+  1094→                    ))}
+  1095→                  </SelectContent>
+  1096→                </Select>
+  1097→              </div>
+  1098→              <div className="space-y-1">
+  1099→                <Label className="text-xs">Border Style</Label>
+  1100→                <Select value={form.borderStyle || 'classic'} onValueChange={v => updateField('borderStyle', v)}>
+  1101→                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+  1102→                  <SelectContent>
+  1103→                    {BORDER_STYLES.map(b => (
+  1104→                      <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
+  1105→                    ))}
+  1106→                  </SelectContent>
+  1107→                </Select>
+  1108→              </div>
+  1109→              <div className="space-y-1">
+  1110→                <Label className="text-xs">Seal / Badge</Label>
+  1111→                <Select value={form.sealType || 'gold'} onValueChange={v => updateField('sealType', v)}>
+  1112→                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+  1113→                  <SelectContent>
+  1114→                    {SEAL_TYPES.map(s => (
+  1115→                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+  1116→                    ))}
+  1117→                  </SelectContent>
+  1118→                </Select>
+  1119→              </div>
+  1120→              <div className="flex items-center justify-between">
+  1121→                <Label className="text-xs flex items-center gap-1">
+  1122→                  <Droplets className="h-3 w-3" /> Watermark
+  1123→                </Label>
+  1124→                <Switch checked={form.hasWatermark || false} onCheckedChange={v => updateField('hasWatermark', v)} />
+  1125→              </div>
+  1126→              <div className="flex items-center justify-between">
+  1127→                <Label className="text-xs">Active</Label>
+  1128→                <Switch checked={form.isActive} onCheckedChange={v => updateField('isActive', v)} />
+  1129→              </div>
+  1130→            </CardContent>
+  1131→          </Card>
+  1132→
+  1133→          {/* Element palette */}
+  1134→          <Card className="shadow-sm border-white/30 dark:border-white/10">
+  1135→            <CardHeader className="pb-3">
+  1136→              <CardTitle className="text-sm flex items-center gap-2">
+  1137→                <Layout className="h-4 w-4 text-emerald-600" /> Add Elements
+  1138→              </CardTitle>
+  1139→            </CardHeader>
+  1140→            <CardContent>
+  1141→              <div className="grid grid-cols-2 gap-2">
+  1142→                {paletteItems.map(item => (
+  1143→                  <Button
+  1144→                    key={item.type}
+  1145→                    variant="outline"
+  1146→                    size="sm"
+  1147→                    className="flex items-center gap-1.5 h-9 text-xs"
+  1148→                    onClick={() => addElement(item.type)}
+  1149→                  >
+  1150→                    {item.icon} {item.label}
+  1151→                  </Button>
+  1152→                ))}
+  1153→              </div>
+  1154→            </CardContent>
+  1155→          </Card>
+  1156→
+  1157→          {/* Element list */}
+  1158→          <Card className="shadow-sm border-white/30 dark:border-white/10">
+  1159→            <CardHeader className="pb-3">
+  1160→              <CardTitle className="text-sm">Elements ({form.elements.length})</CardTitle>
+  1161→            </CardHeader>
+  1162→            <CardContent className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar">
+  1163→              {form.elements.map(el => (
+  1164→                <div
+  1165→                  key={el.id}
+  1166→                  onClick={() => setSelectedElement(el.id)}
+  1167→                  className={`flex items-center gap-2 p-2 rounded-md cursor-pointer text-xs transition-colors ${
+  1168→                    selectedElement === el.id
+  1169→                      ? 'bg-gradient-to-r from-violet-100 to-amber-50 dark:from-violet-950/30 dark:to-amber-950/20 border border-violet-300 dark:border-violet-700'
+  1170→                      : 'hover:bg-muted/50'
+  1171→                  }`}
+  1172→                >
+  1173→                  <GripVertical className="h-3 w-3 text-muted-foreground shrink-0" />
+  1174→                  <ElementIcon type={el.type} />
+  1175→                  <span className="flex-1 truncate">{el.label}</span>
+  1176→                  <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 text-red-500" onClick={e => { e.stopPropagation(); removeElement(el.id); }}>
+  1177→                    <Trash2 className="h-3 w-3" />
+  1178→                  </Button>
+  1179→                </div>
+  1180→              ))}
+  1181→            </CardContent>
+  1182→          </Card>
+  1183→
+  1184→          {/* Selected element properties */}
+  1185→          {selectedEl && (
+  1186→            <Card className="shadow-sm border-white/30 dark:border-white/10">
+  1187→              <CardHeader className="pb-3">
+  1188→                <CardTitle className="text-sm flex items-center gap-2">
+  1189→                  <Edit3 className="h-4 w-4 text-amber-600" /> Element Properties
+  1190→                </CardTitle>
+  1191→              </CardHeader>
+  1192→              <CardContent className="space-y-3">
+  1193→                <div className="space-y-1">
+  1194→                  <Label className="text-xs">Label</Label>
+  1195→                  <Input value={selectedEl.label} onChange={e => updateElement(selectedEl.id, { label: e.target.value })} className="h-8 text-sm" />
+  1196→                </div>
+  1197→                <div className="space-y-1">
+  1198→                  <Label className="text-xs">Value</Label>
+  1199→                  <Input value={selectedEl.value} onChange={e => updateElement(selectedEl.id, { value: e.target.value })} className="h-8 text-sm" />
+  1200→                </div>
+  1201→                <div className="grid grid-cols-2 gap-2">
+  1202→                  <div className="space-y-1">
+  1203→                    <Label className="text-xs">Position X (%)</Label>
+  1204→                    <Input type="number" min={0} max={100} value={selectedEl.x} onChange={e => updateElement(selectedEl.id, { x: Number(e.target.value) })} className="h-8 text-sm" />
+  1205→                  </div>
+  1206→                  <div className="space-y-1">
+  1207→                    <Label className="text-xs">Position Y (%)</Label>
+  1208→                    <Input type="number" min={0} max={100} value={selectedEl.y} onChange={e => updateElement(selectedEl.id, { y: Number(e.target.value) })} className="h-8 text-sm" />
+  1209→                  </div>
+  1210→                </div>
+  1211→                <div className="space-y-1">
+  1212→                  <Label className="text-xs">Font Family</Label>
+  1213→                  <Select value={selectedEl.fontFamily || 'system-ui, sans-serif'} onValueChange={v => updateElement(selectedEl.id, { fontFamily: v })}>
+  1214→                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+  1215→                    <SelectContent>
+  1216→                      {FONT_FAMILIES.map(f => (
+  1217→                        <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+  1218→                      ))}
+  1219→                    </SelectContent>
+  1220→                  </Select>
+  1221→                </div>
+  1222→                <div className="grid grid-cols-2 gap-2">
+  1223→                  <div className="space-y-1">
+  1224→                    <Label className="text-xs">Size</Label>
+  1225→                    <Select value={selectedEl.size || 'M'} onValueChange={v => updateElement(selectedEl.id, { size: v as CertElement['size'] })}>
+  1226→                      <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+  1227→                      <SelectContent>
+  1228→                        <SelectItem value="S">Small</SelectItem>
+  1229→                        <SelectItem value="M">Medium</SelectItem>
+  1230→                        <SelectItem value="L">Large</SelectItem>
+  1231→                        <SelectItem value="XL">Extra Large</SelectItem>
+  1232→                      </SelectContent>
+  1233→                    </Select>
+  1234→                  </div>
+  1235→                  <div className="space-y-1">
+  1236→                    <Label className="text-xs">Weight</Label>
+  1237→                    <Select value={selectedEl.fontWeight ?? 'normal'} onValueChange={v => updateElement(selectedEl.id, { fontWeight: v })}>
+  1238→                      <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+  1239→                      <SelectContent>
+  1240→                        <SelectItem value="normal">Normal</SelectItem>
+  1241→                        <SelectItem value="bold">Bold</SelectItem>
+  1242→                      </SelectContent>
+  1243→                    </Select>
+  1244→                  </div>
+  1245→                </div>
+  1246→                <div className="space-y-1">
+  1247→                  <Label className="text-xs">Alignment</Label>
+  1248→                  <div className="flex gap-1">
+  1249→                    {ALIGN_OPTIONS.map(a => (
+  1250→                      <Button
+  1251→                        key={a}
+  1252→                        variant={selectedEl.align === a ? 'default' : 'outline'}
+  1253→                        size="sm"
+  1254→                        className="flex-1 h-7 text-xs capitalize"
+  1255→                        onClick={() => updateElement(selectedEl.id, { align: a })}
+  1256→                      >
+  1257→                        {a === 'left' ? '←' : a === 'center' ? '↔' : '→'} {a}
+  1258→                      </Button>
+  1259→                    ))}
+  1260→                  </div>
+  1261→                </div>
+  1262→                <div className="space-y-1">
+  1263→                  <Label className="text-xs">Color</Label>
+  1264→                  <div className="flex items-center gap-2">
+  1265→                    <input type="color" value={selectedEl.color ?? '#1e293b'} onChange={e => updateElement(selectedEl.id, { color: e.target.value })} className="h-8 w-8 rounded border cursor-pointer" />
+  1266→                    <Input value={selectedEl.color ?? '#1e293b'} onChange={e => updateElement(selectedEl.id, { color: e.target.value })} className="h-8 text-sm flex-1" />
+  1267→                  </div>
+  1268→                </div>
+  1269→                <div className="space-y-1">
+  1270→                  <Label className="text-xs">Custom Font Size</Label>
+  1271→                  <Input type="number" min={6} max={72} value={selectedEl.fontSize ?? 14} onChange={e => updateElement(selectedEl.id, { fontSize: Number(e.target.value) })} className="h-8 text-sm" />
+  1272→                </div>
+  1273→              </CardContent>
+  1274→            </Card>
+  1275→          )}
+  1276→        </div>
+  1277→
+  1278→        {/* Right panel: Certificate Preview with Zoom */}
+  1279→        <div className="lg:col-span-9">
+  1280→          <Card className="h-full shadow-sm border-white/30 dark:border-white/10">
+  1281→            <CardHeader className="pb-3">
+  1282→              <div className="flex items-center justify-between">
+  1283→                <CardTitle className="text-sm flex items-center gap-2">
+  1284→                  <Eye className="h-4 w-4 text-emerald-600" /> Live Preview
+  1285→                </CardTitle>
+  1286→                <div className="flex items-center gap-2">
+  1287→                  {/* Zoom Controls */}
+  1288→                  <div className="flex items-center gap-1 bg-muted/50 rounded-md p-0.5">
+  1289→                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom(Math.max(50, zoom - 25))}>
+  1290→                      <ZoomOut className="h-3.5 w-3.5" />
+  1291→                    </Button>
+  1292→                    {zoomLevels.map(z => (
+  1293→                      <Button
+  1294→                        key={z}
+  1295→                        variant={zoom === z ? 'default' : 'ghost'}
+  1296→                        size="sm"
+  1297→                        className={`h-7 text-xs px-2 ${zoom === z ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white' : ''}`}
+  1298→                        onClick={() => setZoom(z)}
+  1299→                      >
+  1300→                        {z}%
+  1301→                      </Button>
+  1302→                    ))}
+  1303→                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom(Math.min(150, zoom + 25))}>
+  1304→                      <ZoomIn className="h-3.5 w-3.5" />
+  1305→                    </Button>
+  1306→                  </div>
+  1307→                  <Separator orientation="vertical" className="h-6" />
+  1308→                  {/* Download Sample */}
+  1309→                  <TooltipProvider>
+  1310→                    <Tooltip>
+  1311→                      <TooltipTrigger asChild>
+  1312→                        <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs">
+  1313→                          <Download className="h-3.5 w-3.5" /> Download Sample
+  1314→                        </Button>
+  1315→                      </TooltipTrigger>
+  1316→                      <TooltipContent>Download a sample certificate</TooltipContent>
+  1317→                    </Tooltip>
+  1318→                  </TooltipProvider>
+  1319→                </div>
+  1320→              </div>
+  1321→            </CardHeader>
+  1322→            <CardContent className="flex items-center justify-center p-6 bg-slate-100/80 dark:bg-slate-900/50 rounded-b-lg min-h-[500px] overflow-auto">
+  1323→              <div
+  1324→                className="relative shadow-2xl rounded-lg overflow-hidden transition-transform duration-300"
+  1325→                style={{
+  1326→                  width: '100%',
+  1327→                  maxWidth: `${form.width * (zoom / 100)}px`,
+  1328→                  aspectRatio: `${form.width}/${form.height}`,
+  1329→                  background: BG_TEMPLATES.find(b => b.value === form.backgroundTemplate)?.bg ||
+  1330→                    (isDark
+  1331→                      ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)'
+  1332→                      : form.bg_color === '#fefefe'
+  1333→                      ? 'linear-gradient(135deg, #fefefe 0%, #fafbfc 50%, #f1f5f9 100%)'
+  1334→                      : 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%)'),
+  1335→                  fontFamily: form.font_family,
+  1336→                }}
+  1337→              >
+  1338→                {/* Border */}
+  1339→                <CertificateBorder style={form.borderStyle || 'classic'} isDark={isDark} />
+  1340→
+  1341→                {/* Decorative line at top */}
+  1342→                <div className="absolute top-10 left-16 right-16 h-0.5" style={{
+  1343→                  background: 'linear-gradient(to right, transparent, #7c3aed, #10b981, transparent)',
+  1344→                  opacity: 0.5,
+  1345→                }} />
+  1346→
+  1347→                {/* Watermark */}
+  1348→                {form.hasWatermark && (
+  1349→                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ opacity: 0.04 }}>
+  1350→                    <div className="text-[80px] font-bold text-foreground -rotate-45" style={{ fontFamily: form.font_family }}>
+  1351→                      NEXTGEN LMS
+  1352→                    </div>
+  1353→                  </div>
+  1354→                )}
+  1355→
+  1356→                {/* Elements */}
+  1357→                {form.elements.map(el => {
+  1358→                  const isSelected = selectedElement === el.id;
+  1359→                  const sizeMultiplier = ELEMENT_SIZES[el.size || 'M'];
+  1360→                  return (
+  1361→                    <div
+  1362→                      key={el.id}
+  1363→                      className={`absolute cursor-pointer transition-all ${isSelected ? 'ring-2 ring-amber-500 ring-offset-1 rounded' : 'hover:ring-1 hover:ring-amber-300 hover:rounded'}`}
+  1364→                      style={{
+  1365→                        left: `${el.x}%`,
+  1366→                        top: `${el.y}%`,
+  1367→                        transform: 'translate(-50%, -50%)',
+  1368→                        fontSize: `${(el.fontSize ?? 14) * sizeMultiplier * 0.65}px`,
+  1369→                        fontWeight: el.fontWeight ?? 'normal',
+  1370→                        color: el.color ?? '#1e293b',
+  1371→                        textAlign: el.align || 'center',
+  1372→                        maxWidth: '80%',
+  1373→                        whiteSpace: el.type === 'text' ? 'pre-wrap' : 'nowrap',
+  1374→                        fontFamily: el.fontFamily || form.font_family,
+  1375→                      }}
+  1376→                      onClick={() => setSelectedElement(el.id)}
+  1377→                    >
+  1378→                      {el.type === 'image' && (
+  1379→                        <div className="flex flex-col items-center gap-1">
+  1380→                          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`}>
+  1381→                            <Shield className={`h-6 w-6 ${isDark ? 'text-amber-400' : 'text-violet-600'}`} />
+  1382→                          </div>
+  1383→                          <span className="text-[8px]" style={{ color: isDark ? '#94a3b8' : '#94a3b8' }}>{el.value}</span>
+  1384→                        </div>
+  1385→                      )}
+  1386→                      {el.type === 'qr_code' && (
+  1387→                        <div className="flex flex-col items-center gap-1">
+  1388→                          <div className={`w-10 h-10 rounded border ${isDark ? 'border-slate-600 bg-slate-800' : 'border-slate-300 bg-white'} flex items-center justify-center`}>
+  1389→                            <QrCode className={`h-7 w-7 ${isDark ? 'text-slate-300' : 'text-slate-700'}`} />
+  1390→                          </div>
+  1391→                          <span className="text-[7px]" style={{ color: isDark ? '#64748b' : '#94a3b8' }}>Verify</span>
+  1392→                        </div>
+  1393→                      )}
+  1394→                      {el.type === 'signature_line' && (
+  1395→                        <div className="flex flex-col items-center gap-1 min-w-[100px]">
+  1396→                          <div className="w-20 h-0.5" style={{ backgroundColor: isDark ? '#475569' : '#94a3b8' }} />
+  1397→                          <span className="text-[8px]" style={{ color: isDark ? '#64748b' : '#64748b' }}>{el.value}</span>
+  1398→                        </div>
+  1399→                      )}
+  1400→                      {el.type === 'date' && (
+  1401→                        <div className="flex items-center gap-1">
+  1402→                          <Calendar className="h-3 w-3 opacity-50" style={{ color: el.color }} />
+  1403→                          <span>{el.value.includes('{{') ? new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : el.value}</span>
+  1404→                        </div>
+  1405→                      )}
+  1406→                      {el.type === 'text' && <span>{el.value.includes('{{recipient_name}}') ? 'Jane Doe' : el.value.includes('{{course_name}}') ? 'Advanced Course Title' : el.value.includes('{{verification_code}}') ? 'NG-LMS-2024-ABC123' : el.value.includes('{{issue_date}}') ? new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : el.value}</span>}
+  1407→                    </div>
+  1408→                  );
+  1409→                })}
+  1410→
+  1411→                {/* Seal */}
+  1412→                {form.sealType && (
+  1413→                  <div className="absolute bottom-8 left-8">
+  1414→                    <SealRenderer type={form.sealType} isDark={isDark} />
+  1415→                  </div>
+  1416→                )}
+  1417→
+  1418→                {/* Decorative line at bottom */}
+  1419→                <div className="absolute bottom-10 left-16 right-16 h-0.5" style={{
+  1420→                  background: 'linear-gradient(to right, transparent, #7c3aed, #10b981, transparent)',
+  1421→                  opacity: 0.5,
+  1422→                }} />
+  1423→
+  1424→                {/* Corner ornaments */}
+  1425→                {form.borderStyle === 'ornate' && ['top-6 left-6', 'top-6 right-6', 'bottom-6 left-6', 'bottom-6 right-6'].map((pos, i) => (
+  1426→                  <div key={i} className={`absolute ${pos} w-4 h-4`}>
+  1427→                    <Sparkles className={`h-3 w-3 ${isDark ? 'text-amber-400/40' : 'text-amber-600/30'}`} />
+  1428→                  </div>
+  1429→                ))}
+  1430→              </div>
+  1431→            </CardContent>
+  1432→          </Card>
+  1433→        </div>
+  1434→      </div>
+  1435→    </div>
+  1436→  );
+  1437→}
+  1438→
+  1439→// ==========================
+  1440→// ISSUED CERTIFICATES TABLE (Enhanced)
+  1441→// ==========================
+  1442→function IssuedCertificatesTable() {
+  1443→  const currentTenant = useAppStore((s) => s.currentTenant);
+  1444→  const { data: awardsData, isLoading: awardsLoading } = useCertificateAwards(currentTenant?.id);
+  1445→  const [search, setSearch] = useState('');
+  1446→  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  1447→  const [filterStatus, setFilterStatus] = useState<string>('all');
+  1448→  const [verifyDialogId, setVerifyDialogId] = useState<string | null>(null);
+  1449→  const [copiedId, setCopiedId] = useState<string | null>(null);
+  1450→  const [dateFilter, setDateFilter] = useState('');
+  1451→
+  1452→  // Map API awards data to IssuedCert format
+  1453→  const certs: IssuedCert[] = useMemo(() => {
+  1454→    if (!awardsData) return [];
+  1455→    return awardsData.map((a: Record<string, unknown>) => ({
+  1456→      id: a.id as string,
+  1457→      userId: a.userId as string,
+  1458→      certificateId: a.certificateId as string,
+  1459→      tenantId: a.tenantId as string,
+  1460→      courseId: a.courseId as string | undefined,
+  1461→      verificationCode: a.verificationCode as string,
+  1462→      issuedAt: a.issuedAt as string,
+  1463→      recipientName: (a.recipientName as string) || 'Unknown',
+  1464→      courseName: (a.courseName as string) || 'General',
+  1465→      certName: (a.certName as string) || 'Certificate',
+  1466→      // Default to 'verified' since the model doesn't have a status field;
+  1467→      // all awarded certificates are considered verified
+  1468→      status: 'verified' as VerificationStatus,
+  1469→    }));
+  1470→  }, [awardsData]);
+  1471→
+  1472→  const filtered = certs.filter(c => {
+  1473→    const matchSearch = c.recipientName.toLowerCase().includes(search.toLowerCase()) ||
+  1474→      c.courseName.toLowerCase().includes(search.toLowerCase()) ||
+  1475→      c.verificationCode.toLowerCase().includes(search.toLowerCase());
+  1476→    const matchStatus = filterStatus === 'all' || c.status === filterStatus;
+  1477→    const matchDate = !dateFilter || c.issuedAt.startsWith(dateFilter);
+  1478→    return matchSearch && matchStatus && matchDate;
+  1479→  });
+  1480→
+  1481→  const toggleSelect = (id: string) => {
+  1482→    setSelectedIds(prev => {
+  1483→      const next = new Set(prev);
+  1484→      if (next.has(id)) next.delete(id);
+  1485→      else next.add(id);
+  1486→      return next;
+  1487→    });
+  1488→  };
+  1489→
+  1490→  const toggleSelectAll = () => {
+  1491→    if (selectedIds.size === filtered.length) {
+  1492→      setSelectedIds(new Set());
+  1493→    } else {
+  1494→      setSelectedIds(new Set(filtered.map(c => c.id)));
+  1495→    }
+  1496→  };
+  1497→
+  1498→  const handleBulkResend = () => {
+  1499→    setSelectedIds(new Set());
+  1500→  };
+  1501→
+  1502→  const handleCopyLink = (code: string, id: string) => {
+  1503→    const link = `https://lms.nextgen.dev/verify/${code}`;
+  1504→    navigator.clipboard?.writeText(link).catch(() => {});
+  1505→    setCopiedId(id);
+  1506→    setTimeout(() => setCopiedId(null), 2000);
+  1507→  };
+  1508→
+  1509→  const handleExportCSV = () => {
+  1510→    const headers = ['Recipient', 'Course', 'Certificate', 'Issued Date', 'Verification Code', 'Status'];
+  1511→    const rows = filtered.map(c => [
+  1512→      c.recipientName, c.courseName, c.certName,
+  1513→      new Date(c.issuedAt).toLocaleDateString('en-US'),
+  1514→      c.verificationCode, c.status,
+  1515→    ]);
+  1516→    const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  1517→    const blob = new Blob([csv], { type: 'text/csv' });
+  1518→    const url = URL.createObjectURL(blob);
+  1519→    const a = document.createElement('a');
+  1520→    a.href = url;
+  1521→    a.download = 'certificates.csv';
+  1522→    a.click();
+  1523→    URL.revokeObjectURL(url);
+  1524→  };
+  1525→
+  1526→  const verifyCert = certs.find(c => c.id === verifyDialogId);
+  1527→
+  1528→  const statusColors: Record<VerificationStatus, string> = {
+  1529→    verified: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  1530→    pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  1531→    revoked: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  1532→  };
+  1533→
+  1534→  const rowBg: Record<VerificationStatus, string> = {
+  1535→    verified: '',
+  1536→    pending: 'bg-amber-50/40 dark:bg-amber-950/10',
+  1537→    revoked: 'bg-red-50/40 dark:bg-red-950/10',
+  1538→  };
+  1539→
+  1540→  return (
+  1541→    <div className="space-y-4">
+  1542→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+  1543→        <div>
+  1544→          <h2 className="text-2xl font-bold text-foreground">Issued Certificates</h2>
+  1545→          <p className="text-muted-foreground text-sm mt-1">Track and manage all issued certificates</p>
+  1546→        </div>
+  1547→        <div className="flex items-center gap-2 flex-wrap">
+  1548→          <Button variant="outline" size="sm" className="gap-1.5 h-8" onClick={handleExportCSV} disabled={certs.length === 0}>
+  1549→            <FileDown className="h-3.5 w-3.5" /> Export CSV
+  1550→          </Button>
+  1551→        </div>
+  1552→      </div>
+  1553→
+  1554→      {/* Search & Filters */}
+  1555→      <div className="flex flex-col sm:flex-row gap-3">
+  1556→        <div className="relative flex-1 max-w-md">
+  1557→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1558→          <Input placeholder="Search by recipient, course, code..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+  1559→        </div>
+  1560→        <Select value={filterStatus} onValueChange={setFilterStatus}>
+  1561→          <SelectTrigger className="w-36 h-9 text-sm">
+  1562→            <SelectValue placeholder="Status" />
+  1563→          </SelectTrigger>
+  1564→          <SelectContent>
+  1565→            <SelectItem value="all">All Status</SelectItem>
+  1566→            <SelectItem value="verified">Verified</SelectItem>
+  1567→            <SelectItem value="pending">Pending</SelectItem>
+  1568→            <SelectItem value="revoked">Revoked</SelectItem>
+  1569→          </SelectContent>
+  1570→        </Select>
+  1571→        <Input type="month" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="w-40 h-9 text-sm" placeholder="Filter by date" />
+  1572→      </div>
+  1573→
+  1574→      {/* Bulk Actions */}
+  1575→      {selectedIds.size > 0 && (
+  1576→        <motion.div
+  1577→          initial={{ opacity: 0, y: -10 }}
+  1578→          animate={{ opacity: 1, y: 0 }}
+  1579→          className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800"
+  1580→        >
+  1581→          <span className="text-sm font-medium text-amber-800 dark:text-amber-300">{selectedIds.size} selected</span>
+  1582→          <Button size="sm" variant="outline" className="gap-1.5 h-8 text-blue-600 border-blue-200 hover:bg-blue-50 dark:border-blue-800 dark:hover:bg-blue-950/30" onClick={handleBulkResend}>
+  1583→            <Send className="h-3.5 w-3.5" /> Resend Selected
+  1584→          </Button>
+  1585→        </motion.div>
+  1586→      )}
+  1587→
+  1588→      <Card className="shadow-sm border-white/30 dark:border-white/10 overflow-hidden">
+  1589→        <CardContent className="p-0">
+  1590→          <div className="overflow-x-auto">
+  1591→            <Table>
+  1592→              <TableHeader>
+  1593→                <TableRow>
+  1594→                  <TableHead className="w-10">
+  1595→                    <Checkbox
+  1596→                      checked={selectedIds.size === filtered.length && filtered.length > 0}
+  1597→                      onCheckedChange={toggleSelectAll}
+  1598→                    />
+  1599→                  </TableHead>
+  1600→                  <TableHead>Recipient</TableHead>
+  1601→                  <TableHead>Course</TableHead>
+  1602→                  <TableHead>Certificate</TableHead>
+  1603→                  <TableHead>Issued Date</TableHead>
+  1604→                  <TableHead>Status</TableHead>
+  1605→                  <TableHead>Verification Code</TableHead>
+  1606→                  <TableHead className="text-right">Actions</TableHead>
+  1607→                </TableRow>
+  1608→              </TableHeader>
+  1609→              <TableBody>
+  1610→                {awardsLoading ? (
+  1611→                  Array.from({ length: 5 }).map((_, i) => (
+  1612→                    <TableRowSkeleton key={i} />
+  1613→                  ))
+  1614→                ) : filtered.length === 0 ? (
+  1615→                  <TableRow>
+  1616→                    <TableCell colSpan={8} className="h-32 text-center">
+  1617→                      <div className="flex flex-col items-center gap-2">
+  1618→                        <Award className="h-10 w-10 text-muted-foreground/40" />
+  1619→                        <p className="text-muted-foreground">
+  1620→                          {certs.length === 0 ? 'No certificates have been issued yet' : 'No certificates match your filters'}
+  1621→                        </p>
+  1622→                      </div>
+  1623→                    </TableCell>
+  1624→                  </TableRow>
+  1625→                ) : (
+  1626→                  filtered.map((cert, idx) => (
+  1627→                    <motion.tr
+  1628→                      key={cert.id}
+  1629→                      initial={{ opacity: 0, x: -10 }}
+  1630→                      animate={{ opacity: 1, x: 0 }}
+  1631→                      transition={{ delay: idx * 0.03 }}
+  1632→                      className={`border-b transition-colors hover:bg-muted/50 ${rowBg[cert.status]}`}
+  1633→                    >
+  1634→                      <TableCell>
+  1635→                        <Checkbox
+  1636→                          checked={selectedIds.has(cert.id)}
+  1637→                          onCheckedChange={() => toggleSelect(cert.id)}
+  1638→                        />
+  1639→                      </TableCell>
+  1640→                      <TableCell>
+  1641→                        <div className="flex items-center gap-2">
+  1642→                          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+  1643→                            {cert.recipientName.split(' ').map(n => n[0]).join('')}
+  1644→                          </div>
+  1645→                          <span className="font-medium text-sm">{cert.recipientName}</span>
+  1646→                        </div>
+  1647→                      </TableCell>
+  1648→                      <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">{cert.courseName}</TableCell>
+  1649→                      <TableCell>
+  1650→                        <Badge variant="outline" className="text-xs gap-1">
+  1651→                          <Award className="h-3 w-3" /> {cert.certName}
+  1652→                        </Badge>
+  1653→                      </TableCell>
+  1654→                      <TableCell className="text-sm text-muted-foreground">
+  1655→                        {new Date(cert.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+  1656→                      </TableCell>
+  1657→                      <TableCell>
+  1658→                        <Badge className={`text-[10px] gap-0.5 ${statusColors[cert.status]}`}>
+  1659→                          {cert.status === 'verified' && <CheckCircle2 className="h-3 w-3" />}
+  1660→                          {cert.status === 'pending' && <Clock className="h-3 w-3" />}
+  1661→                          {cert.status === 'revoked' && <AlertTriangle className="h-3 w-3" />}
+  1662→                          {cert.status.charAt(0).toUpperCase() + cert.status.slice(1)}
+  1663→                        </Badge>
+  1664→                      </TableCell>
+  1665→                      <TableCell>
+  1666→                        <code className="text-xs bg-muted px-2 py-1 rounded font-mono">{cert.verificationCode}</code>
+  1667→                      </TableCell>
+  1668→                      <TableCell className="text-right">
+  1669→                        <div className="flex items-center justify-end gap-1">
+  1670→                          <TooltipProvider>
+  1671→                            <Tooltip>
+  1672→                              <TooltipTrigger asChild>
+  1673→                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setVerifyDialogId(cert.id)}>
+  1674→                                  <Shield className="h-4 w-4" />
+  1675→                                </Button>
+  1676→                              </TooltipTrigger>
+  1677→                              <TooltipContent>Verify</TooltipContent>
+  1678→                            </Tooltip>
+  1679→                          </TooltipProvider>
+  1680→                          <TooltipProvider>
+  1681→                            <Tooltip>
+  1682→                              <TooltipTrigger asChild>
+  1683→                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCopyLink(cert.verificationCode, cert.id)}>
+  1684→                                  {copiedId === cert.id ? <Check className="h-4 w-4 text-emerald-500" /> : <Share2 className="h-4 w-4" />}
+  1685→                                </Button>
+  1686→                              </TooltipTrigger>
+  1687→                              <TooltipContent>{copiedId === cert.id ? 'Copied!' : 'Share / Copy Link'}</TooltipContent>
+  1688→                            </Tooltip>
+  1689→                          </TooltipProvider>
+  1690→                          <TooltipProvider>
+  1691→                            <Tooltip>
+  1692→                              <TooltipTrigger asChild>
+  1693→                                <Button variant="ghost" size="icon" className="h-8 w-8">
+  1694→                                  <Download className="h-4 w-4" />
+  1695→                                </Button>
+  1696→                              </TooltipTrigger>
+  1697→                              <TooltipContent>Download PDF</TooltipContent>
+  1698→                            </Tooltip>
+  1699→                          </TooltipProvider>
+  1700→                        </div>
+  1701→                      </TableCell>
+  1702→                    </motion.tr>
+  1703→                  ))
+  1704→                )}
+  1705→              </TableBody>
+  1706→            </Table>
+  1707→          </div>
+  1708→        </CardContent>
+  1709→      </Card>
+  1710→
+  1711→      {/* Verify Dialog */}
+  1712→      <Dialog open={!!verifyDialogId} onOpenChange={() => setVerifyDialogId(null)}>
+  1713→        <DialogContent className="max-w-md">
+  1714→          <DialogHeader>
+  1715→            <DialogTitle className="flex items-center gap-2">
+  1716→              <Shield className="h-5 w-5 text-emerald-600" /> Certificate Verification
+  1717→            </DialogTitle>
+  1718→            <DialogDescription>Verification details for this certificate</DialogDescription>
+  1719→          </DialogHeader>
+  1720→          {verifyCert && (
+  1721→            <div className="space-y-4">
+  1722→              <div className={`p-4 rounded-lg border ${verifyCert.status === 'verified' ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800' : verifyCert.status === 'pending' ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800' : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'}`}>
+  1723→                <div className="flex items-center gap-2 mb-2">
+  1724→                  {verifyCert.status === 'verified' ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : verifyCert.status === 'pending' ? <Clock className="h-5 w-5 text-amber-600" /> : <AlertTriangle className="h-5 w-5 text-red-600" />}
+  1725→                  <span className="font-semibold capitalize">{verifyCert.status}</span>
+  1726→                </div>
+  1727→                <p className="text-sm text-muted-foreground">
+  1728→                  {verifyCert.status === 'verified' && 'This certificate has been verified and is authentic.'}
+  1729→                  {verifyCert.status === 'pending' && 'This certificate is awaiting verification.'}
+  1730→                  {verifyCert.status === 'revoked' && 'This certificate has been revoked and is no longer valid.'}
+  1731→                </p>
+  1732→              </div>
+  1733→              <div className="space-y-2 text-sm">
+  1734→                <div className="flex justify-between">
+  1735→                  <span className="text-muted-foreground">Recipient</span>
+  1736→                  <span className="font-medium">{verifyCert.recipientName}</span>
+  1737→                </div>
+  1738→                <div className="flex justify-between">
+  1739→                  <span className="text-muted-foreground">Course</span>
+  1740→                  <span className="font-medium text-right max-w-[200px] truncate">{verifyCert.courseName}</span>
+  1741→                </div>
+  1742→                <div className="flex justify-between">
+  1743→                  <span className="text-muted-foreground">Certificate</span>
+  1744→                  <span className="font-medium">{verifyCert.certName}</span>
+  1745→                </div>
+  1746→                <Separator />
+  1747→                <div className="flex justify-between">
+  1748→                  <span className="text-muted-foreground">Code</span>
+  1749→                  <code className="text-xs bg-muted px-2 py-1 rounded font-mono">{verifyCert.verificationCode}</code>
+  1750→                </div>
+  1751→                <div className="flex justify-between">
+  1752→                  <span className="text-muted-foreground">Issued</span>
+  1753→                  <span>{new Date(verifyCert.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+  1754→                </div>
+  1755→              </div>
+  1756→            </div>
+  1757→          )}
+  1758→          <DialogFooter>
+  1759→            <Button variant="outline" onClick={() => setVerifyDialogId(null)}>Close</Button>
+  1760→            {verifyCert && (
+  1761→              <Button className="gap-1.5" onClick={() => { handleCopyLink(verifyCert.verificationCode, verifyCert.id); setVerifyDialogId(null); }}>
+  1762→                <ExternalLink className="h-4 w-4" /> Copy Verify Link
+  1763→              </Button>
+  1764→            )}
+  1765→          </DialogFooter>
+  1766→        </DialogContent>
+  1767→      </Dialog>
+  1768→    </div>
+  1769→  );
+  1770→}
+  1771→
+  1772→// ==========================
+  1773→// MAIN COMPONENT
+  1774→// ==========================
+  1775→export function AdminCertificates() {
+  1776→  const currentTenant = useAppStore((s) => s.currentTenant);
+  1777→  const tenantId = currentTenant?.id || '';
+  1778→
+  1779→  // Fetch certificate templates from API
+  1780→  const { data: certificatesData, isLoading: certsLoading } = useCertificates(tenantId);
+  1781→
+  1782→  // Fetch certificate awards from API
+  1783→  const { data: awardsData } = useCertificateAwards(tenantId);
+  1784→
+  1785→  // Mutations
+  1786→  const createMutation = useCreateCertificate();
+  1787→  const updateMutation = useUpdateCertificate();
+  1788→  const deleteMutation = useDeleteCertificate();
+  1789→
+  1790→  const [activeTab, setActiveTab] = useState('dashboard');
+  1791→  const [editingTemplate, setEditingTemplate] = useState<CertTemplate | null>(null);
+  1792→
+  1793→  // Map API data to CertTemplate[]
+  1794→  const templates: CertTemplate[] = useMemo(() => {
+  1795→    if (!certificatesData) return [];
+  1796→    return certificatesData.map(apiCertToTemplate);
+  1797→  }, [certificatesData]);
+  1798→
+  1799→  // Map API awards data to IssuedCert[]
+  1800→  const awards: IssuedCert[] = useMemo(() => {
+  1801→    if (!awardsData) return [];
+  1802→    return awardsData.map((a: Record<string, unknown>) => ({
+  1803→      id: a.id as string,
+  1804→      userId: a.userId as string,
+  1805→      certificateId: a.certificateId as string,
+  1806→      tenantId: a.tenantId as string,
+  1807→      courseId: a.courseId as string | undefined,
+  1808→      verificationCode: a.verificationCode as string,
+  1809→      issuedAt: a.issuedAt as string,
+  1810→      recipientName: (a.recipientName as string) || 'Unknown',
+  1811→      courseName: (a.courseName as string) || 'General',
+  1812→      certName: (a.certName as string) || 'Certificate',
+  1813→      status: 'verified' as VerificationStatus,
+  1814→    }));
+  1815→  }, [awardsData]);
+  1816→
+  1817→  const handleEdit = (t: CertTemplate) => {
+  1818→    setEditingTemplate({ ...t, elements: t.elements.map(e => ({ ...e })) });
+  1819→    setActiveTab('builder');
+  1820→  };
+  1821→
+  1822→  const handleCreateNew = () => {
+  1823→    const newTemplate: CertTemplate = {
+  1824→      id: '',
+  1825→      tenantId,
+  1826→      name: '',
+  1827→      template: 'custom',
+  1828→      backgroundUrl: '',
+  1829→      isActive: false,
+  1830→      bg_color: '#fefefe',
+  1831→      font_family: 'Georgia, serif',
+  1832→      width: 800,
+  1833→      height: 600,
+  1834→      borderStyle: 'classic',
+  1835→      sealType: 'gold',
+  1836→      hasWatermark: false,
+  1837→      backgroundTemplate: 'classic',
+  1838→      elements: [...defaultElements],
+  1839→    };
+  1840→    setEditingTemplate(newTemplate);
+  1841→    setActiveTab('builder');
+  1842→  };
+  1843→
+  1844→  const handleSave = (t: CertTemplate) => {
+  1845→    const apiData = templateToApiData(t);
+  1846→    if (t.id) {
+  1847→      // Update existing
+  1848→      updateMutation.mutate(
+  1849→        { id: t.id, ...apiData },
+  1850→        {
+  1851→          onSuccess: () => {
+  1852→            setEditingTemplate(null);
+  1853→            setActiveTab('templates');
+  1854→          },
+  1855→        }
+  1856→      );
+  1857→    } else {
+  1858→      // Create new
+  1859→      createMutation.mutate(
+  1860→        apiData,
+  1861→        {
+  1862→          onSuccess: () => {
+  1863→            setEditingTemplate(null);
+  1864→            setActiveTab('templates');
+  1865→          },
+  1866→        }
+  1867→      );
+  1868→    }
+  1869→  };
+  1870→
+  1871→  const handleDelete = (id: string) => {
+  1872→    deleteMutation.mutate(id);
+  1873→  };
+  1874→
+  1875→  const handleBackFromBuilder = () => {
+  1876→    setEditingTemplate(null);
+  1877→    setActiveTab('templates');
+  1878→  };
+  1879→
+  1880→  const handleUseLibraryTemplate = (tpl: typeof TEMPLATE_LIBRARY[number]) => {
+  1881→    const newTemplate: CertTemplate = {
+  1882→      id: '',
+  1883→      tenantId,
+  1884→      name: tpl.name,
+  1885→      template: tpl.category.toLowerCase(),
+  1886→      backgroundUrl: '',
+  1887→      isActive: true,
+  1888→      bg_color: tpl.bgTemplate === 'bold' ? '#0f172a' : tpl.bgTemplate === 'elegant' ? '#fef9e7' : tpl.bgTemplate === 'minimal' ? '#ffffff' : tpl.bgTemplate === 'modern' ? '#f8fafc' : '#fefefe',
+  1889→      font_family: tpl.fontFamily,
+  1890→      width: 800,
+  1891→      height: 600,
+  1892→      borderStyle: tpl.borderStyle,
+  1893→      sealType: tpl.sealType,
+  1894→      hasWatermark: false,
+  1895→      backgroundTemplate: tpl.bgTemplate,
+  1896→      elements: defaultElements.map(el => ({
+  1897→        ...el,
+  1898→        fontFamily: tpl.fontFamily,
+  1899→        color: tpl.bgTemplate === 'bold'
+  1900→          ? (el.label === 'Header' ? '#f8fafc' : el.label === 'Recipient Name' ? '#10b981' : el.label === 'Course Name' ? '#a78bfa' : el.color?.startsWith('#64748b') ? '#94a3b8' : el.color?.startsWith('#475569') ? '#94a3b8' : el.color)
+  1901→          : el.color,
+  1902→      })),
+  1903→    };
+  1904→    setEditingTemplate(newTemplate);
+  1905→    setActiveTab('builder');
+  1906→  };
+  1907→
+  1908→  const isSaving = createMutation.isPending || updateMutation.isPending;
+  1909→
+  1910→  return (
+  1911→    <div className="p-6">
+  1912→      <Tabs value={activeTab} onValueChange={setActiveTab}>
+  1913→        <TabsList className="mb-6">
+  1914→          <TabsTrigger value="dashboard" className="gap-1.5">
+  1915→            <BarChart3 className="h-4 w-4" /> Dashboard
+  1916→          </TabsTrigger>
+  1917→          <TabsTrigger value="templates" className="gap-1.5">
+  1918→            <Award className="h-4 w-4" /> Templates
+  1919→          </TabsTrigger>
+  1920→          <TabsTrigger value="library" className="gap-1.5">
+  1921→            <Sparkles className="h-4 w-4" /> Library
+  1922→          </TabsTrigger>
+  1923→          <TabsTrigger value="builder" className="gap-1.5" disabled={!editingTemplate}>
+  1924→            <Layout className="h-4 w-4" /> Designer
+  1925→          </TabsTrigger>
+  1926→          <TabsTrigger value="issued" className="gap-1.5">
+  1927→            <FileText className="h-4 w-4" /> Issued
+  1928→          </TabsTrigger>
+  1929→        </TabsList>
+  1930→
+  1931→        <AnimatePresence mode="wait">
+  1932→          <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
+  1933→            {activeTab === 'dashboard' && (
+  1934→              certsLoading ? <StatsSkeleton /> : <StatsDashboard awards={awards} templates={templates} />
+  1935→            )}
+  1936→            {activeTab === 'templates' && (
+  1937→              <TemplatesList templates={templates} onEdit={handleEdit} onCreateNew={handleCreateNew} onDelete={handleDelete} isLoading={certsLoading} />
+  1938→            )}
+  1939→            {activeTab === 'library' && (
+  1940→              <TemplateLibrary onUseTemplate={handleUseLibraryTemplate} />
+  1941→            )}
+  1942→            {activeTab === 'builder' && editingTemplate && (
+  1943→              <CertificateBuilder template={editingTemplate} onBack={handleBackFromBuilder} onSave={handleSave} isSaving={isSaving} />
+  1944→            )}
+  1945→            {activeTab === 'issued' && (
+  1946→              <IssuedCertificatesTable />
+  1947→            )}
+  1948→          </motion.div>
+  1949→        </AnimatePresence>
+  1950→      </Tabs>
+  1951→    </div>
+  1952→  );
+  1953→}
+  1954→

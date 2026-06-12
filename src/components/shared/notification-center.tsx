@@ -364,8 +364,27 @@ export function NotificationCenter() {
 
   // ── Action handler ───────────────────────────────────────────
   const handleAction = useCallback((action: ActionType, _notifId: string) => {
-    // In a real app, these would navigate or open modals
-    console.log(`Action: ${action} on notification ${_notifId}`);
+    // Navigate to relevant views based on action type
+    const { setView } = useAppStore.getState();
+    switch (action) {
+      case 'View Student':
+        setView('admin-users');
+        break;
+      case 'Share':
+        // Copy a share link or open share dialog
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(window.location.href).then(() => {
+            // Use a brief visual feedback
+          }).catch(() => {});
+        }
+        break;
+      case 'Reply':
+        setView('admin-community');
+        break;
+      case 'Review':
+        setView('admin-assessments');
+        break;
+    }
   }, []);
 
   // ── Empty state for current filter ───────────────────────────

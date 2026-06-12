@@ -680,7 +680,13 @@ function Integrations() {
                 <CheckCircle2 className="h-3 w-3 mr-1" />
                 Connected
               </Badge>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={() => {
+                const key = prompt('Enter your Stripe API Key (demo mode - key will be saved locally):');
+                if (key) {
+                  localStorage.setItem('lms_stripe_api_key', key);
+                  toast.success('Stripe configured', { description: 'Your Stripe API key has been saved locally. In production, this would be securely stored server-side.' });
+                }
+              }}>
                 Configure
               </Button>
             </div>
@@ -695,7 +701,13 @@ function Integrations() {
                 <p className="text-xs text-muted-foreground">Accept PayPal and credit cards</p>
               </div>
             </div>
-            <Button variant="outline" size="sm" className="gap-1">
+            <Button variant="outline" size="sm" className="gap-1" onClick={() => {
+              const key = prompt('Enter your PayPal Client ID (demo mode - key will be saved locally):');
+              if (key) {
+                localStorage.setItem('lms_paypal_client_id', key);
+                toast.success('PayPal connected', { description: 'Your PayPal credentials have been saved locally. In production, this would be securely stored server-side.' });
+              }
+            }}>
               <Link className="h-3 w-3" />
               Connect
             </Button>
@@ -710,7 +722,13 @@ function Integrations() {
                 <p className="text-xs text-muted-foreground">Global payment solutions</p>
               </div>
             </div>
-            <Button variant="outline" size="sm" className="gap-1">
+            <Button variant="outline" size="sm" className="gap-1" onClick={() => {
+              const key = prompt('Enter your Adyen API Key (demo mode - key will be saved locally):');
+              if (key) {
+                localStorage.setItem('lms_adyen_api_key', key);
+                toast.success('Adyen connected', { description: 'Your Adyen credentials have been saved locally. In production, this would be securely stored server-side.' });
+              }
+            }}>
               <Link className="h-3 w-3" />
               Connect
             </Button>
@@ -862,21 +880,27 @@ function Integrations() {
 // Tab 5: Team & Roles
 // ============================================================
 function TeamRoles() {
-  const [teamMembers, setTeamMembers] = useState([
-    { id: '1', name: 'Sarah Mitchell', email: 'sarah@nextgen-lms.com', role: 'Super Admin', status: 'active' },
-    { id: '2', name: 'James Wilson', email: 'james@nextgen-lms.com', role: 'Admin', status: 'active' },
-    { id: '3', name: 'Emily Chen', email: 'emily@nextgen-lms.com', role: 'Instructor', status: 'active' },
-    { id: '4', name: 'Michael Brown', email: 'michael@nextgen-lms.com', role: 'Content Creator', status: 'active' },
-    { id: '5', name: 'Lisa Park', email: 'lisa@nextgen-lms.com', role: 'Instructor', status: 'invited' },
-  ]);
+  const [teamMembers, setTeamMembers] = useState(() => {
+    const saved = localStorage.getItem('lms_team_members');
+    if (saved) {
+      try { return JSON.parse(saved); } catch { /* fall through */ }
+    }
+    return [
+      { id: '1', name: 'Sarah Mitchell', email: 'sarah@nextgen-lms.com', role: 'Super Admin', status: 'active' },
+      { id: '2', name: 'James Wilson', email: 'james@nextgen-lms.com', role: 'Admin', status: 'active' },
+      { id: '3', name: 'Emily Chen', email: 'emily@nextgen-lms.com', role: 'Instructor', status: 'active' },
+      { id: '4', name: 'Michael Brown', email: 'michael@nextgen-lms.com', role: 'Content Creator', status: 'active' },
+      { id: '5', name: 'Lisa Park', email: 'lisa@nextgen-lms.com', role: 'Instructor', status: 'invited' },
+    ];
+  });
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('instructor');
   const [removeMemberId, setRemoveMemberId] = useState<string | null>(null);
 
   const inviteMember = () => {
     if (!inviteEmail.trim()) return;
-    setTeamMembers((prev) => [
-      ...prev,
+    const newMembers = [
+      ...teamMembers,
       {
         id: Date.now().toString(),
         name: inviteEmail.split('@')[0],
@@ -884,13 +908,17 @@ function TeamRoles() {
         role: inviteRole.charAt(0).toUpperCase() + inviteRole.slice(1),
         status: 'invited',
       },
-    ]);
+    ];
+    setTeamMembers(newMembers);
+    localStorage.setItem('lms_team_members', JSON.stringify(newMembers));
     setInviteEmail('');
     toast.success('Invitation sent!');
   };
 
   const removeMember = (id: string) => {
-    setTeamMembers((prev) => prev.filter((m) => m.id !== id));
+    const newMembers = teamMembers.filter((m: any) => m.id !== id);
+    setTeamMembers(newMembers);
+    localStorage.setItem('lms_team_members', JSON.stringify(newMembers));
     toast.success('Team member removed');
   };
 
@@ -1589,7 +1617,13 @@ function EmailPreviewFrame({
 }
 
 function EmailTemplates() {
-  const [templates, setTemplates] = useState<EmailTemplate[]>(getDefaultTemplates);
+  const [templates, setTemplates] = useState<EmailTemplate[]>(() => {
+    const saved = localStorage.getItem('lms_email_templates');
+    if (saved) {
+      try { return JSON.parse(saved); } catch { /* fall through */ }
+    }
+    return getDefaultTemplates();
+  });
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1656,12 +1690,20 @@ function EmailTemplates() {
       status: 'draft',
       lastModified: new Date().toISOString().split('T')[0],
     };
-    setTemplates((prev) => [...prev, dup]);
+    setTemplates((prev) => {
+      const updated = [...prev, dup];
+      localStorage.setItem('lms_email_templates', JSON.stringify(updated));
+      return updated;
+    });
     toast.success('Template duplicated!', { description: `"${dup.name}" has been created as a draft.` });
   };
 
   const handleDeleteTemplate = (id: string) => {
-    setTemplates((prev) => prev.filter((t) => t.id !== id));
+    setTemplates((prev) => {
+      const updated = prev.filter((t) => t.id !== id);
+      localStorage.setItem('lms_email_templates', JSON.stringify(updated));
+      return updated;
+    });
     setDeleteConfirmId(null);
     if (selectedTemplate?.id === id) {
       setIsEditing(false);
@@ -1676,7 +1718,7 @@ function EmailTemplates() {
     if (!selectedTemplate) return;
     setSavingTemplate(true);
     try {
-      const updated: EmailTemplate = {
+      const updatedTpl: EmailTemplate = {
         ...selectedTemplate,
         name: editName,
         type: editType,
@@ -1686,8 +1728,12 @@ function EmailTemplates() {
         triggerEvent: editTrigger,
         lastModified: new Date().toISOString().split('T')[0],
       };
-      setTemplates((prev) => prev.map((t) => (t.id === selectedTemplate.id ? updated : updated)));
-      setSelectedTemplate(updated);
+      setTemplates((prev) => {
+        const updated = prev.map((t) => (t.id === selectedTemplate.id ? updatedTpl : t));
+        localStorage.setItem('lms_email_templates', JSON.stringify(updated));
+        return updated;
+      });
+      setSelectedTemplate(updatedTpl);
       toast.success('Template saved!', { description: `"${editName}" has been updated.` });
     } catch {
       toast.error('Failed to save template');
@@ -2998,47 +3044,53 @@ function generateApiKey(): string {
 }
 
 function ApiKeysSettings() {
-  const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([
-    {
-      id: 'key_1',
-      name: 'Production API',
-      key: 'sk_live_abc123def456ghi789jkl012',
-      prefix: 'sk_live_****jkl012',
-      permissions: ['read', 'write'],
-      createdAt: '2025-01-10',
-      lastUsed: new Date(Date.now() - 1800000).toISOString(),
-      active: true,
-      expiresAt: null,
-      usageThisMonth: 12847,
-      rateLimit: 1000,
-    },
-    {
-      id: 'key_2',
-      name: 'Staging API',
-      key: 'sk_live_mno345pqr678stu901vwx234',
-      prefix: 'sk_live_****vwx234',
-      permissions: ['read'],
-      createdAt: '2025-02-15',
-      lastUsed: new Date(Date.now() - 86400000).toISOString(),
-      active: true,
-      expiresAt: '2025-12-31',
-      usageThisMonth: 3421,
-      rateLimit: 500,
-    },
-    {
-      id: 'key_3',
-      name: 'Admin CLI',
-      key: 'sk_live_yza567bcd890efg123hij456',
-      prefix: 'sk_live_****hij456',
-      permissions: ['read', 'write', 'admin'],
-      createdAt: '2024-11-05',
-      lastUsed: new Date(Date.now() - 604800000).toISOString(),
-      active: false,
-      expiresAt: null,
-      usageThisMonth: 0,
-      rateLimit: 2000,
-    },
-  ]);
+  const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>(() => {
+    const saved = localStorage.getItem('lms_api_keys');
+    if (saved) {
+      try { return JSON.parse(saved); } catch { /* fall through */ }
+    }
+    return [
+      {
+        id: 'key_1',
+        name: 'Production API',
+        key: 'sk_live_abc123def456ghi789jkl012',
+        prefix: 'sk_live_****jkl012',
+        permissions: ['read', 'write'],
+        createdAt: '2025-01-10',
+        lastUsed: new Date(Date.now() - 1800000).toISOString(),
+        active: true,
+        expiresAt: null,
+        usageThisMonth: 12847,
+        rateLimit: 1000,
+      },
+      {
+        id: 'key_2',
+        name: 'Staging API',
+        key: 'sk_live_mno345pqr678stu901vwx234',
+        prefix: 'sk_live_****vwx234',
+        permissions: ['read'],
+        createdAt: '2025-02-15',
+        lastUsed: new Date(Date.now() - 86400000).toISOString(),
+        active: true,
+        expiresAt: '2025-12-31',
+        usageThisMonth: 3421,
+        rateLimit: 500,
+      },
+      {
+        id: 'key_3',
+        name: 'Admin CLI',
+        key: 'sk_live_yza567bcd890efg123hij456',
+        prefix: 'sk_live_****hij456',
+        permissions: ['read', 'write', 'admin'],
+        createdAt: '2024-11-05',
+        lastUsed: new Date(Date.now() - 604800000).toISOString(),
+        active: false,
+        expiresAt: null,
+        usageThisMonth: 0,
+        rateLimit: 2000,
+      },
+    ];
+  });
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showKeyDialog, setShowKeyDialog] = useState(false);
@@ -3104,7 +3156,11 @@ function ApiKeysSettings() {
       rateLimit: 1000,
     };
 
-    setApiKeys((prev) => [...prev, newKey]);
+    setApiKeys((prev) => {
+      const updated = [...prev, newKey];
+      localStorage.setItem('lms_api_keys', JSON.stringify(updated));
+      return updated;
+    });
     setNewlyCreatedKey(fullKey);
     setShowCreateDialog(false);
     setShowKeyDialog(true);
@@ -3117,13 +3173,15 @@ function ApiKeysSettings() {
 
   const handleRegenerate = (keyItem: ApiKeyItem) => {
     const fullKey = generateApiKey();
-    setApiKeys((prev) =>
-      prev.map((k) =>
+    setApiKeys((prev) => {
+      const updated = prev.map((k) =>
         k.id === keyItem.id
           ? { ...k, key: fullKey, prefix: maskKey(fullKey) }
           : k
-      )
-    );
+      );
+      localStorage.setItem('lms_api_keys', JSON.stringify(updated));
+      return updated;
+    });
     setNewlyCreatedKey(fullKey);
     setShowKeyDialog(true);
     toast.success(`API key regenerated for ${keyItem.name}`);
@@ -3131,7 +3189,11 @@ function ApiKeysSettings() {
 
   const handleRevoke = () => {
     if (!revokeKey) return;
-    setApiKeys((prev) => prev.filter((k) => k.id !== revokeKey.id));
+    setApiKeys((prev) => {
+      const updated = prev.filter((k) => k.id !== revokeKey.id);
+      localStorage.setItem('lms_api_keys', JSON.stringify(updated));
+      return updated;
+    });
     setRevokeKey(null);
     toast.success(`API key "${revokeKey.name}" has been revoked`);
   };
@@ -4507,7 +4569,9 @@ function TwoFactorAuth() {
                           className="gap-2 shrink-0"
                           onClick={() => {
                             setSmsCodeSent(true);
-                            toast.success('Verification code sent to your phone!');
+                            toast.success('Verification code sent to your phone', {
+                              description: 'A 6-digit code has been sent. In demo mode, any 6-digit code will work.',
+                            });
                           }}
                         >
                           <Send className="h-3.5 w-3.5" /> Send Code
@@ -4554,11 +4618,15 @@ function TwoFactorAuth() {
                   </Button>
                   <Button
                     onClick={() => {
-                      setTwoFAEnabled(true);
-                      setSetupStep(3);
-                      toast.success('2FA enabled successfully!', {
-                        description: 'Your account is now protected with two-factor authentication.',
-                      });
+                      // In demo mode, accept any 6-digit code as valid
+                      const code = verificationCode.join('');
+                      if (code.length === 6) {
+                        setTwoFAEnabled(true);
+                        setSetupStep(3);
+                        toast.success('2FA enabled successfully!', {
+                          description: 'Your account is now protected with two-factor authentication.',
+                        });
+                      }
                     }}
                     disabled={verificationCode.some((c) => c === '')}
                     className="gap-2 bg-emerald-600 hover:bg-emerald-700"
@@ -4600,7 +4668,17 @@ function TwoFactorAuth() {
                   <Button variant="outline" size="sm" onClick={copyAllRecoveryCodes} className="gap-2">
                     <Copy className="h-3.5 w-3.5" /> Copy All
                   </Button>
-                  <Button variant="outline" size="sm" className="gap-2" onClick={() => toast.success('Codes downloaded!')}>
+                  <Button variant="outline" size="sm" className="gap-2" onClick={() => {
+                    const content = 'NextGen LMS - Backup Recovery Codes\n\n' + recoveryCodes.map((c, i) => `${i + 1}. ${c}`).join('\n') + '\n\nStore these codes in a safe place. Each code can only be used once.';
+                    const blob = new Blob([content], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'lms-backup-codes.txt';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast.success('Codes downloaded!');
+                  }}>
                     <Download className="h-3.5 w-3.5" /> Download Codes
                   </Button>
                 </div>
@@ -4660,7 +4738,17 @@ function TwoFactorAuth() {
               <Button variant="outline" size="sm" onClick={copyAllRecoveryCodes} className="gap-2">
                 <Copy className="h-3.5 w-3.5" /> Copy All
               </Button>
-              <Button variant="outline" size="sm" className="gap-2" onClick={() => toast.success('Codes downloaded!')}>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => {
+                const content = 'NextGen LMS - Backup Recovery Codes\n\n' + recoveryCodes.map((c, i) => `${i + 1}. ${c}`).join('\n') + '\n\nStore these codes in a safe place. Each code can only be used once.';
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'lms-backup-codes.txt';
+                a.click();
+                URL.revokeObjectURL(url);
+                toast.success('Codes downloaded!');
+              }}>
                 <Download className="h-3.5 w-3.5" /> Download Codes
               </Button>
             </div>
@@ -6005,8 +6093,11 @@ function DataPrivacySettings() {
                       onClick={() => {
                         setShowEraseDialog(false);
                         setEraseConfirmText('');
+                        // In demo mode, log out the user to simulate data erasure
+                        const { logout } = useAppStore.getState();
+                        logout();
                         toast.success('User data erased successfully', {
-                          description: 'All associated data has been permanently removed.',
+                          description: 'All associated data has been permanently removed. You have been logged out.',
                         });
                       }}
                     >

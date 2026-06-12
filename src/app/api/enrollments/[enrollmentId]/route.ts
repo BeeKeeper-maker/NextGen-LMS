@@ -48,12 +48,18 @@ export async function PUT(
   try {
     const { enrollmentId } = await params;
     const body = await request.json();
+    const { searchParams } = new URL(request.url);
+    const tenantId = searchParams.get('tenantId');
 
     const existing = await db.enrollment.findUnique({
       where: { id: enrollmentId },
     });
     if (!existing) {
       return NextResponse.json({ error: 'Enrollment not found' }, { status: 404 });
+    }
+
+    if (tenantId && existing.tenantId !== tenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const updateData: Record<string, unknown> = {};
@@ -87,7 +93,7 @@ export async function PUT(
       },
     });
 
-    // === FIX 2: Auto-Certificate on Course Completion ===
+    // === Auto-Certificate on Course Completion ===
     if (isCompleting && enrollment.course.certificateTemplateId) {
       try {
         // Check if certificate already awarded for this course and user
@@ -152,12 +158,18 @@ export async function DELETE(
 ) {
   try {
     const { enrollmentId } = await params;
+    const { searchParams } = new URL(request.url);
+    const tenantId = searchParams.get('tenantId');
 
     const existing = await db.enrollment.findUnique({
       where: { id: enrollmentId },
     });
     if (!existing) {
       return NextResponse.json({ error: 'Enrollment not found' }, { status: 404 });
+    }
+
+    if (tenantId && existing.tenantId !== tenantId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Delete enrollment and decrement course enrollment count

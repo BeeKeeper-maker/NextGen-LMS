@@ -1,0 +1,703 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import { useState } from 'react';
+     4→     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→     5→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+     6→     6→import { Button } from '@/components/ui/button';
+     7→     7→import { Input } from '@/components/ui/input';
+     8→     8→import { Textarea } from '@/components/ui/textarea';
+     9→     9→import { Label } from '@/components/ui/label';
+    10→    10→import { Badge } from '@/components/ui/badge';
+    11→    11→import { Separator } from '@/components/ui/separator';
+    12→    12→import { Checkbox } from '@/components/ui/checkbox';
+    13→    13→import {
+    14→    14→  Select,
+    15→    15→  SelectContent,
+    16→    16→  SelectItem,
+    17→    17→  SelectTrigger,
+    18→    18→  SelectValue,
+    19→    19→} from '@/components/ui/select';
+    20→    20→import {
+    21→    21→  BookOpen,
+    22→    22→  HelpCircle,
+    23→    23→  FileText,
+    24→    24→  ClipboardCheck,
+    25→    25→  Mail,
+    26→    26→  Sparkles,
+    27→    27→  Copy,
+    28→    28→  RotateCcw,
+    29→    29→  Edit3,
+    30→    30→  Check,
+    31→    31→  Loader2,
+    32→    32→  ArrowLeft,
+    33→    33→  Users,
+    34→    34→  BarChart3,
+    35→    35→  GraduationCap,
+    36→    36→} from 'lucide-react';
+    37→    37→import { toast } from 'sonner';
+    38→    38→
+    39→    39→// ============================================================
+    40→    40→// Types
+    41→    41→// ============================================================
+    42→    42→type ContentType = 'outline' | 'quiz' | 'transcript' | 'assessment' | 'email';
+    43→    43→
+    44→    44→interface ContentTypeInfo {
+    45→    45→  type: ContentType;
+    46→    46→  title: string;
+    47→    47→  description: string;
+    48→    48→  icon: React.ElementType;
+    49→    49→  color: string;
+    50→    50→  bgGradient: string;
+    51→    51→}
+    52→    52→
+    53→    53→const contentTypes: ContentTypeInfo[] = [
+    54→    54→  {
+    55→    55→    type: 'outline',
+    56→    56→    title: 'Course Outline',
+    57→    57→    description: 'Generate a structured course outline from a topic',
+    58→    58→    icon: BookOpen,
+    59→    59→    color: 'text-emerald-600',
+    60→    60→    bgGradient: 'from-emerald-500/10 to-emerald-600/10',
+    61→    61→  },
+    62→    62→  {
+    63→    63→    type: 'quiz',
+    64→    64→    title: 'Quiz Questions',
+    65→    65→    description: 'Create quiz questions from a topic or lesson',
+    66→    66→    icon: HelpCircle,
+    67→    67→    color: 'text-violet-600',
+    68→    68→    bgGradient: 'from-violet-500/10 to-violet-600/10',
+    69→    69→  },
+    70→    70→  {
+    71→    71→    type: 'transcript',
+    72→    72→    title: 'Lesson Transcript',
+    73→    73→    description: 'Generate a lesson transcript from a video URL',
+    74→    74→    icon: FileText,
+    75→    75→    color: 'text-slate-600',
+    76→    76→    bgGradient: 'from-slate-500/10 to-slate-600/10',
+    77→    77→  },
+    78→    78→  {
+    79→    79→    type: 'assessment',
+    80→    80→    title: 'Assessment',
+    81→    81→    description: 'Create an assessment from course content',
+    82→    82→    icon: ClipboardCheck,
+    83→    83→    color: 'text-amber-600',
+    84→    84→    bgGradient: 'from-amber-500/10 to-amber-600/10',
+    85→    85→  },
+    86→    86→  {
+    87→    87→    type: 'email',
+    88→    88→    title: 'Email Template',
+    89→    89→    description: 'Generate course announcement emails',
+    90→    90→    icon: Mail,
+    91→    91→    color: 'text-rose-600',
+    92→    92→    bgGradient: 'from-rose-500/10 to-rose-600/10',
+    93→    93→  },
+    94→    94→];
+    95→    95→
+    96→    96→// ============================================================
+    97→    97→// Main Component
+    98→    98→// ============================================================
+    99→    99→export function AIContentGeneration() {
+   100→   100→  const [selectedType, setSelectedType] = useState<ContentType | null>(null);
+   101→   101→  const [isGenerating, setIsGenerating] = useState(false);
+   102→   102→  const [generatedContent, setGeneratedContent] = useState<string | null>(null);
+   103→   103→  const [isEditing, setIsEditing] = useState(false);
+   104→   104→  const [editedContent, setEditedContent] = useState('');
+   105→   105→  const [copied, setCopied] = useState(false);
+   106→   106→
+   107→   107→  // Form state
+   108→   108→  const [topic, setTopic] = useState('');
+   109→   109→  const [targetAudience, setTargetAudience] = useState('beginner');
+   110→   110→  const [difficulty, setDifficulty] = useState('beginner');
+   111→   111→  const [numModules, setNumModules] = useState('6');
+   112→   112→  const [numQuestions, setNumQuestions] = useState('5');
+   113→   113→  const [questionTypes, setQuestionTypes] = useState({
+   114→   114→    multipleChoice: true,
+   115→   115→    trueFalse: true,
+   116→   116→    shortAnswer: false,
+   117→   117→  });
+   118→   118→  const [videoUrl, setVideoUrl] = useState('');
+   119→   119→  const [emailSubject, setEmailSubject] = useState('');
+   120→   120→  const [emailAudience, setEmailAudience] = useState('all');
+   121→   121→
+   122→   122→  const resetForm = () => {
+   123→   123→    setGeneratedContent(null);
+   124→   124→    setIsEditing(false);
+   125→   125→    setEditedContent('');
+   126→   126→    setTopic('');
+   127→   127→    setTargetAudience('beginner');
+   128→   128→    setDifficulty('beginner');
+   129→   129→    setNumModules('6');
+   130→   130→    setNumQuestions('5');
+   131→   131→    setQuestionTypes({ multipleChoice: true, trueFalse: true, shortAnswer: false });
+   132→   132→    setVideoUrl('');
+   133→   133→    setEmailSubject('');
+   134→   134→    setEmailAudience('all');
+   135→   135→  };
+   136→   136→
+   137→   137→  const buildPrompt = (): string => {
+   138→   138→    switch (selectedType) {
+   139→   139→      case 'outline':
+   140→   140→        return `Create a detailed course outline for the topic: "${topic}". Target audience: ${targetAudience}. Difficulty level: ${difficulty}. Include ${numModules} modules with lesson titles and brief descriptions for each. Format with clear headings and bullet points.`;
+   141→   141→      case 'quiz':
+   142→   142→        return `Generate ${numQuestions} quiz questions about: "${topic}". Question types: ${questionTypes.multipleChoice ? 'Multiple Choice, ' : ''}${questionTypes.trueFalse ? 'True/False, ' : ''}${questionTypes.shortAnswer ? 'Short Answer, ' : ''}Difficulty: ${difficulty}. For each question, include the question, options (if applicable), the correct answer, and a brief explanation.`;
+   143→   143→      case 'transcript':
+   144→   144→        return `Generate a detailed lesson transcript based on this video concept: "${videoUrl || topic}". Include a clear introduction, main content sections with examples, and a summary. Make it educational and engaging with a natural speaking tone.`;
+   145→   145→      case 'assessment':
+   146→   146→        return `Create a comprehensive assessment for the course/topic: "${topic}". Include a mix of question types (multiple choice, true/false, short answer, and one essay question). Difficulty: ${difficulty}. Include a grading rubric and point values for each question.`;
+   147→   147→      case 'email':
+   148→   148→        return `Write a professional email template for a course announcement. Subject: "${emailSubject || topic}". Target audience: ${emailAudience}. Include a compelling subject line, greeting, main announcement body, call-to-action, and professional sign-off. Make it engaging and actionable.`;
+   149→   149→      default:
+   150→   150→        return topic;
+   151→   151→    }
+   152→   152→  };
+   153→   153→
+   154→   154→  const handleGenerate = async () => {
+   155→   155→    if (!topic && selectedType !== 'transcript') {
+   156→   156→      toast.error('Please enter a topic');
+   157→   157→      return;
+   158→   158→    }
+   159→   159→    if (selectedType === 'transcript' && !videoUrl && !topic) {
+   160→   160→      toast.error('Please enter a video URL or topic');
+   161→   161→      return;
+   162→   162→    }
+   163→   163→
+   164→   164→    setIsGenerating(true);
+   165→   165→    setGeneratedContent(null);
+   166→   166→    setIsEditing(false);
+   167→   167→
+   168→   168→    try {
+   169→   169→      const res = await fetch('/api/ai', {
+   170→   170→        method: 'POST',
+   171→   171→        headers: { 'Content-Type': 'application/json' },
+   172→   172→        body: JSON.stringify({
+   173→   173→          message: buildPrompt(),
+   174→   174→          context: `Content generation - ${selectedType}`,
+   175→   175→        }),
+   176→   176→      });
+   177→   177→
+   178→   178→      if (!res.ok) throw new Error('Generation failed');
+   179→   179→
+   180→   180→      const data = await res.json();
+   181→   181→      setGeneratedContent(data.response);
+   182→   182→      setEditedContent(data.response);
+   183→   183→    } catch {
+   184→   184→      toast.error('Failed to generate content. Please try again.');
+   185→   185→    } finally {
+   186→   186→      setIsGenerating(false);
+   187→   187→    }
+   188→   188→  };
+   189→   189→
+   190→   190→  const handleCopy = async () => {
+   191→   191→    const contentToCopy = isEditing ? editedContent : generatedContent || '';
+   192→   192→    await navigator.clipboard.writeText(contentToCopy);
+   193→   193→    setCopied(true);
+   194→   194→    toast.success('Copied to clipboard!');
+   195→   195→    setTimeout(() => setCopied(false), 2000);
+   196→   196→  };
+   197→   197→
+   198→   198→  const handleUseContent = () => {
+   199→   199→    toast.success('Content ready to use in Course Builder!', {
+   200→   200→      description: 'The generated content has been prepared for your course.',
+   201→   201→    });
+   202→   202→  };
+   203→   203→
+   204→   204→  const handleRegenerate = () => {
+   205→   205→    handleGenerate();
+   206→   206→  };
+   207→   207→
+   208→   208→  const handleSaveEdit = () => {
+   209→   209→    setGeneratedContent(editedContent);
+   210→   210→    setIsEditing(false);
+   211→   211→    toast.success('Content updated!');
+   212→   212→  };
+   213→   213→
+   214→   214→  const selectedTypeInfo = contentTypes.find((ct) => ct.type === selectedType);
+   215→   215→
+   216→   216→  return (
+   217→   217→    <div className="p-6 space-y-6">
+   218→   218→      {/* Header */}
+   219→   219→      <div>
+   220→   220→        <h1 className="text-2xl font-bold text-foreground">AI Content Generation</h1>
+   221→   221→        <p className="text-muted-foreground mt-1">
+   222→   222→          Generate course content, quizzes, assessments, and more with AI assistance
+   223→   223→        </p>
+   224→   224→      </div>
+   225→   225→
+   226→   226→      <Separator />
+   227→   227→
+   228→   228→      {/* Back button when content type selected */}
+   229→   229→      {selectedType && !generatedContent && (
+   230→   230→        <Button
+   231→   231→          variant="ghost"
+   232→   232→          size="sm"
+   233→   233→          onClick={() => {
+   234→   234→            setSelectedType(null);
+   235→   235→            resetForm();
+   236→   236→          }}
+   237→   237→          className="gap-2"
+   238→   238→        >
+   239→   239→          <ArrowLeft className="h-4 w-4" />
+   240→   240→          Back to content types
+   241→   241→        </Button>
+   242→   242→      )}
+   243→   243→
+   244→   244→      {/* Step 1: Content Type Selector */}
+   245→   245→      {!selectedType && (
+   246→   246→        <motion.div
+   247→   247→          initial={{ opacity: 0, y: 10 }}
+   248→   248→          animate={{ opacity: 1, y: 0 }}
+   249→   249→        >
+   250→   250→          <h2 className="text-lg font-semibold text-foreground mb-4">
+   251→   251→            What would you like to generate?
+   252→   252→          </h2>
+   253→   253→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   254→   254→            {contentTypes.map((ct) => (
+   255→   255→              <Card
+   256→   256→                key={ct.type}
+   257→   257→                className="cursor-pointer hover:border-emerald-300 hover:shadow-lg transition-all group"
+   258→   258→                onClick={() => setSelectedType(ct.type)}
+   259→   259→              >
+   260→   260→                <CardContent className="p-6">
+   261→   261→                  <div
+   262→   262→                    className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${ct.bgGradient} mb-4 group-hover:scale-110 transition-transform`}
+   263→   263→                  >
+   264→   264→                    <ct.icon className={`h-6 w-6 ${ct.color}`} />
+   265→   265→                  </div>
+   266→   266→                  <h3 className="font-semibold text-foreground">{ct.title}</h3>
+   267→   267→                  <p className="text-sm text-muted-foreground mt-1">{ct.description}</p>
+   268→   268→                </CardContent>
+   269→   269→              </Card>
+   270→   270→            ))}
+   271→   271→          </div>
+   272→   272→        </motion.div>
+   273→   273→      )}
+   274→   274→
+   275→   275→      {/* Step 2: Generation Form */}
+   276→   276→      {selectedType && !generatedContent && !isGenerating && selectedTypeInfo && (
+   277→   277→        <motion.div
+   278→   278→          initial={{ opacity: 0, y: 10 }}
+   279→   279→          animate={{ opacity: 1, y: 0 }}
+   280→   280→          className="max-w-2xl"
+   281→   281→        >
+   282→   282→          <Card>
+   283→   283→            <CardHeader>
+   284→   284→              <div className="flex items-center gap-3">
+   285→   285→                <div
+   286→   286→                  className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${selectedTypeInfo.bgGradient}`}
+   287→   287→                >
+   288→   288→                  <selectedTypeInfo.icon className={`h-5 w-5 ${selectedTypeInfo.color}`} />
+   289→   289→                </div>
+   290→   290→                <div>
+   291→   291→                  <CardTitle className="text-lg">{selectedTypeInfo.title}</CardTitle>
+   292→   292→                  <CardDescription>{selectedTypeInfo.description}</CardDescription>
+   293→   293→                </div>
+   294→   294→              </div>
+   295→   295→            </CardHeader>
+   296→   296→            <CardContent className="space-y-5">
+   297→   297→              {/* Common: Topic */}
+   298→   298→              {selectedType !== 'transcript' && (
+   299→   299→                <div className="space-y-2">
+   300→   300→                  <Label htmlFor="topic">Topic / Subject</Label>
+   301→   301→                  <Input
+   302→   302→                    id="topic"
+   303→   303→                    value={topic}
+   304→   304→                    onChange={(e) => setTopic(e.target.value)}
+   305→   305→                    placeholder="e.g., Introduction to React Hooks"
+   306→   306→                  />
+   307→   307→                </div>
+   308→   308→              )}
+   309→   309→
+   310→   310→              {/* Course Outline Form */}
+   311→   311→              {selectedType === 'outline' && (
+   312→   312→                <>
+   313→   313→                  <div className="space-y-2">
+   314→   314→                    <Label>Target Audience</Label>
+   315→   315→                    <Select value={targetAudience} onValueChange={setTargetAudience}>
+   316→   316→                      <SelectTrigger>
+   317→   317→                        <SelectValue />
+   318→   318→                      </SelectTrigger>
+   319→   319→                      <SelectContent>
+   320→   320→                        <SelectItem value="beginner">Beginners</SelectItem>
+   321→   321→                        <SelectItem value="intermediate">Intermediate Learners</SelectItem>
+   322→   322→                        <SelectItem value="advanced">Advanced Practitioners</SelectItem>
+   323→   323→                        <SelectItem value="professional">Working Professionals</SelectItem>
+   324→   324→                        <SelectItem value="students">College Students</SelectItem>
+   325→   325→                      </SelectContent>
+   326→   326→                    </Select>
+   327→   327→                  </div>
+   328→   328→                  <div className="space-y-2">
+   329→   329→                    <Label>Difficulty Level</Label>
+   330→   330→                    <Select value={difficulty} onValueChange={setDifficulty}>
+   331→   331→                      <SelectTrigger>
+   332→   332→                        <SelectValue />
+   333→   333→                      </SelectTrigger>
+   334→   334→                      <SelectContent>
+   335→   335→                        <SelectItem value="beginner">Beginner</SelectItem>
+   336→   336→                        <SelectItem value="intermediate">Intermediate</SelectItem>
+   337→   337→                        <SelectItem value="advanced">Advanced</SelectItem>
+   338→   338→                        <SelectItem value="expert">Expert</SelectItem>
+   339→   339→                      </SelectContent>
+   340→   340→                    </Select>
+   341→   341→                  </div>
+   342→   342→                  <div className="space-y-2">
+   343→   343→                    <Label htmlFor="numModules">Number of Modules</Label>
+   344→   344→                    <Select value={numModules} onValueChange={setNumModules}>
+   345→   345→                      <SelectTrigger>
+   346→   346→                        <SelectValue />
+   347→   347→                      </SelectTrigger>
+   348→   348→                      <SelectContent>
+   349→   349→                        <SelectItem value="4">4 Modules</SelectItem>
+   350→   350→                        <SelectItem value="6">6 Modules</SelectItem>
+   351→   351→                        <SelectItem value="8">8 Modules</SelectItem>
+   352→   352→                        <SelectItem value="10">10 Modules</SelectItem>
+   353→   353→                        <SelectItem value="12">12 Modules</SelectItem>
+   354→   354→                      </SelectContent>
+   355→   355→                    </Select>
+   356→   356→                  </div>
+   357→   357→                </>
+   358→   358→              )}
+   359→   359→
+   360→   360→              {/* Quiz Questions Form */}
+   361→   361→              {selectedType === 'quiz' && (
+   362→   362→                <>
+   363→   363→                  <div className="space-y-2">
+   364→   364→                    <Label htmlFor="numQuestions">Number of Questions</Label>
+   365→   365→                    <Select value={numQuestions} onValueChange={setNumQuestions}>
+   366→   366→                      <SelectTrigger>
+   367→   367→                        <SelectValue />
+   368→   368→                      </SelectTrigger>
+   369→   369→                      <SelectContent>
+   370→   370→                        <SelectItem value="3">3 Questions</SelectItem>
+   371→   371→                        <SelectItem value="5">5 Questions</SelectItem>
+   372→   372→                        <SelectItem value="10">10 Questions</SelectItem>
+   373→   373→                        <SelectItem value="15">15 Questions</SelectItem>
+   374→   374→                        <SelectItem value="20">20 Questions</SelectItem>
+   375→   375→                      </SelectContent>
+   376→   376→                    </Select>
+   377→   377→                  </div>
+   378→   378→                  <div className="space-y-3">
+   379→   379→                    <Label>Question Types</Label>
+   380→   380→                    <div className="space-y-2">
+   381→   381→                      <div className="flex items-center gap-2">
+   382→   382→                        <Checkbox
+   383→   383→                          id="mc"
+   384→   384→                          checked={questionTypes.multipleChoice}
+   385→   385→                          onCheckedChange={(v) =>
+   386→   386→                            setQuestionTypes((prev) => ({
+   387→   387→                              ...prev,
+   388→   388→                              multipleChoice: v === true,
+   389→   389→                            }))
+   390→   390→                          }
+   391→   391→                        />
+   392→   392→                        <Label htmlFor="mc" className="text-sm font-normal cursor-pointer">
+   393→   393→                          Multiple Choice
+   394→   394→                        </Label>
+   395→   395→                      </div>
+   396→   396→                      <div className="flex items-center gap-2">
+   397→   397→                        <Checkbox
+   398→   398→                          id="tf"
+   399→   399→                          checked={questionTypes.trueFalse}
+   400→   400→                          onCheckedChange={(v) =>
+   401→   401→                            setQuestionTypes((prev) => ({
+   402→   402→                              ...prev,
+   403→   403→                              trueFalse: v === true,
+   404→   404→                            }))
+   405→   405→                          }
+   406→   406→                        />
+   407→   407→                        <Label htmlFor="tf" className="text-sm font-normal cursor-pointer">
+   408→   408→                          True / False
+   409→   409→                        </Label>
+   410→   410→                      </div>
+   411→   411→                      <div className="flex items-center gap-2">
+   412→   412→                        <Checkbox
+   413→   413→                          id="sa"
+   414→   414→                          checked={questionTypes.shortAnswer}
+   415→   415→                          onCheckedChange={(v) =>
+   416→   416→                            setQuestionTypes((prev) => ({
+   417→   417→                              ...prev,
+   418→   418→                              shortAnswer: v === true,
+   419→   419→                            }))
+   420→   420→                          }
+   421→   421→                        />
+   422→   422→                        <Label htmlFor="sa" className="text-sm font-normal cursor-pointer">
+   423→   423→                          Short Answer
+   424→   424→                        </Label>
+   425→   425→                      </div>
+   426→   426→                    </div>
+   427→   427→                  </div>
+   428→   428→                  <div className="space-y-2">
+   429→   429→                    <Label>Difficulty Level</Label>
+   430→   430→                    <Select value={difficulty} onValueChange={setDifficulty}>
+   431→   431→                      <SelectTrigger>
+   432→   432→                        <SelectValue />
+   433→   433→                      </SelectTrigger>
+   434→   434→                      <SelectContent>
+   435→   435→                        <SelectItem value="easy">Easy</SelectItem>
+   436→   436→                        <SelectItem value="medium">Medium</SelectItem>
+   437→   437→                        <SelectItem value="hard">Hard</SelectItem>
+   438→   438→                        <SelectItem value="mixed">Mixed</SelectItem>
+   439→   439→                      </SelectContent>
+   440→   440→                    </Select>
+   441→   441→                  </div>
+   442→   442→                </>
+   443→   443→              )}
+   444→   444→
+   445→   445→              {/* Transcript Form */}
+   446→   446→              {selectedType === 'transcript' && (
+   447→   447→                <>
+   448→   448→                  <div className="space-y-2">
+   449→   449→                    <Label htmlFor="videoUrl">Video URL or Topic</Label>
+   450→   450→                    <Input
+   451→   451→                      id="videoUrl"
+   452→   452→                      value={videoUrl}
+   453→   453→                      onChange={(e) => setVideoUrl(e.target.value)}
+   454→   454→                      placeholder="e.g., https://youtube.com/watch?v=... or topic name"
+   455→   455→                    />
+   456→   456→                  </div>
+   457→   457→                  <div className="space-y-2">
+   458→   458→                    <Label htmlFor="topicTranscript">Additional Context (optional)</Label>
+   459→   459→                    <Input
+   460→   460→                      id="topicTranscript"
+   461→   461→                      value={topic}
+   462→   462→                      onChange={(e) => setTopic(e.target.value)}
+   463→   463→                      placeholder="Any additional context for the transcript"
+   464→   464→                    />
+   465→   465→                  </div>
+   466→   466→                </>
+   467→   467→              )}
+   468→   468→
+   469→   469→              {/* Assessment Form */}
+   470→   470→              {selectedType === 'assessment' && (
+   471→   471→                <div className="space-y-2">
+   472→   472→                  <Label>Assessment Difficulty</Label>
+   473→   473→                  <Select value={difficulty} onValueChange={setDifficulty}>
+   474→   474→                    <SelectTrigger>
+   475→   475→                      <SelectValue />
+   476→   476→                    </SelectTrigger>
+   477→   477→                    <SelectContent>
+   478→   478→                      <SelectItem value="beginner">Beginner</SelectItem>
+   479→   479→                      <SelectItem value="intermediate">Intermediate</SelectItem>
+   480→   480→                      <SelectItem value="advanced">Advanced</SelectItem>
+   481→   481→                    </SelectContent>
+   482→   482→                  </Select>
+   483→   483→                </div>
+   484→   484→              )}
+   485→   485→
+   486→   486→              {/* Email Template Form */}
+   487→   487→              {selectedType === 'email' && (
+   488→   488→                <>
+   489→   489→                  <div className="space-y-2">
+   490→   490→                    <Label htmlFor="emailSubject">Email Subject / Announcement</Label>
+   491→   491→                    <Input
+   492→   492→                      id="emailSubject"
+   493→   493→                      value={emailSubject}
+   494→   494→                      onChange={(e) => setEmailSubject(e.target.value)}
+   495→   495→                      placeholder="e.g., New Course Launch: Advanced React Patterns"
+   496→   496→                    />
+   497→   497→                  </div>
+   498→   498→                  <div className="space-y-2">
+   499→   499→                    <Label>Target Audience</Label>
+   500→   500→                    <Select value={emailAudience} onValueChange={setEmailAudience}>
+   501→   501→                      <SelectTrigger>
+   502→   502→                        <SelectValue />
+   503→   503→                      </SelectTrigger>
+   504→   504→                      <SelectContent>
+   505→   505→                        <SelectItem value="all">All Students</SelectItem>
+   506→   506→                        <SelectItem value="enrolled">Enrolled Students</SelectItem>
+   507→   507→                        <SelectItem value="new">New Prospects</SelectItem>
+   508→   508→                        <SelectItem value="inactive">Inactive Students</SelectItem>
+   509→   509→                      </SelectContent>
+   510→   510→                    </Select>
+   511→   511→                  </div>
+   512→   512→                </>
+   513→   513→              )}
+   514→   514→
+   515→   515→              <Button
+   516→   516→                onClick={handleGenerate}
+   517→   517→                className="w-full bg-gradient-to-r from-emerald-500 to-violet-600 hover:from-emerald-600 hover:to-violet-700 text-white gap-2"
+   518→   518→                size="lg"
+   519→   519→              >
+   520→   520→                <Sparkles className="h-4 w-4" />
+   521→   521→                Generate {selectedTypeInfo.title}
+   522→   522→              </Button>
+   523→   523→            </CardContent>
+   524→   524→          </Card>
+   525→   525→        </motion.div>
+   526→   526→      )}
+   527→   527→
+   528→   528→      {/* Loading State */}
+   529→   529→      {isGenerating && (
+   530→   530→        <motion.div
+   531→   531→          initial={{ opacity: 0 }}
+   532→   532→          animate={{ opacity: 1 }}
+   533→   533→          className="max-w-2xl"
+   534→   534→        >
+   535→   535→          <Card className="border-emerald-200 dark:border-emerald-800">
+   536→   536→            <CardContent className="p-8">
+   537→   537→              <div className="flex flex-col items-center gap-4">
+   538→   538→                <div className="relative">
+   539→   539→                  <motion.div
+   540→   540→                    animate={{ rotate: 360 }}
+   541→   541→                    transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+   542→   542→                    className="h-16 w-16 rounded-full border-4 border-emerald-200 border-t-emerald-500"
+   543→   543→                  />
+   544→   544→                  <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-6 w-6 text-emerald-500" />
+   545→   545→                </div>
+   546→   546→                <div className="text-center">
+   547→   547→                  <h3 className="text-lg font-semibold text-foreground">
+   548→   548→                    Generating your {selectedTypeInfo?.title.toLowerCase()}...
+   549→   549→                  </h3>
+   550→   550→                  <p className="text-sm text-muted-foreground mt-1">
+   551→   551→                    AI is crafting high-quality content for you
+   552→   552→                  </p>
+   553→   553→                </div>
+   554→   554→                <div className="flex gap-1.5">
+   555→   555→                  <motion.span
+   556→   556→                    animate={{ opacity: [0.3, 1, 0.3] }}
+   557→   557→                    transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+   558→   558→                    className="h-3 w-3 rounded-full bg-emerald-500"
+   559→   559→                  />
+   560→   560→                  <motion.span
+   561→   561→                    animate={{ opacity: [0.3, 1, 0.3] }}
+   562→   562→                    transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
+   563→   563→                    className="h-3 w-3 rounded-full bg-violet-500"
+   564→   564→                  />
+   565→   565→                  <motion.span
+   566→   566→                    animate={{ opacity: [0.3, 1, 0.3] }}
+   567→   567→                    transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
+   568→   568→                    className="h-3 w-3 rounded-full bg-emerald-500"
+   569→   569→                  />
+   570→   570→                </div>
+   571→   571→              </div>
+   572→   572→            </CardContent>
+   573→   573→          </Card>
+   574→   574→        </motion.div>
+   575→   575→      )}
+   576→   576→
+   577→   577→      {/* Generated Content Preview */}
+   578→   578→      {generatedContent && selectedTypeInfo && (
+   579→   579→        <motion.div
+   580→   580→          initial={{ opacity: 0, y: 10 }}
+   581→   581→          animate={{ opacity: 1, y: 0 }}
+   582→   582→          className="space-y-4"
+   583→   583→        >
+   584→   584→          <div className="flex items-center justify-between">
+   585→   585→            <div className="flex items-center gap-3">
+   586→   586→              <Button
+   587→   587→                variant="ghost"
+   588→   588→                size="sm"
+   589→   589→                onClick={() => {
+   590→   590→                  resetForm();
+   591→   591→                  setSelectedType(null);
+   592→   592→                }}
+   593→   593→                className="gap-2"
+   594→   594→              >
+   595→   595→                <ArrowLeft className="h-4 w-4" />
+   596→   596→                New Generation
+   597→   597→              </Button>
+   598→   598→            </div>
+   599→   599→            <div className="flex items-center gap-2">
+   600→   600→              <Button
+   601→   601→                variant="outline"
+   602→   602→                size="sm"
+   603→   603→                onClick={handleCopy}
+   604→   604→                className="gap-2"
+   605→   605→              >
+   606→   606→                {copied ? (
+   607→   607→                  <Check className="h-3.5 w-3.5 text-emerald-500" />
+   608→   608→                ) : (
+   609→   609→                  <Copy className="h-3.5 w-3.5" />
+   610→   610→                )}
+   611→   611→                {copied ? 'Copied!' : 'Copy'}
+   612→   612→              </Button>
+   613→   613→              <Button
+   614→   614→                variant="outline"
+   615→   615→                size="sm"
+   616→   616→                onClick={() => setIsEditing(!isEditing)}
+   617→   617→                className="gap-2"
+   618→   618→              >
+   619→   619→                <Edit3 className="h-3.5 w-3.5" />
+   620→   620→                {isEditing ? 'Preview' : 'Edit'}
+   621→   621→              </Button>
+   622→   622→              <Button
+   623→   623→                variant="outline"
+   624→   624→                size="sm"
+   625→   625→                onClick={handleRegenerate}
+   626→   626→                className="gap-2"
+   627→   627→              >
+   628→   628→                <RotateCcw className="h-3.5 w-3.5" />
+   629→   629→                Regenerate
+   630→   630→              </Button>
+   631→   631→              <Button
+   632→   632→                size="sm"
+   633→   633→                onClick={handleUseContent}
+   634→   634→                className="gap-2 bg-gradient-to-r from-emerald-500 to-violet-600 hover:from-emerald-600 hover:to-violet-700 text-white"
+   635→   635→              >
+   636→   636→                <Sparkles className="h-3.5 w-3.5" />
+   637→   637→                Use This Content
+   638→   638→              </Button>
+   639→   639→            </div>
+   640→   640→          </div>
+   641→   641→
+   642→   642→          <Card className="border-emerald-200 dark:border-emerald-800">
+   643→   643→            <CardHeader className="pb-3">
+   644→   644→              <div className="flex items-center gap-3">
+   645→   645→                <div
+   646→   646→                  className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${selectedTypeInfo.bgGradient}`}
+   647→   647→                >
+   648→   648→                  <selectedTypeInfo.icon className={`h-5 w-5 ${selectedTypeInfo.color}`} />
+   649→   649→                </div>
+   650→   650→                <div>
+   651→   651→                  <CardTitle className="text-lg">
+   652→   652→                    Generated {selectedTypeInfo.title}
+   653→   653→                  </CardTitle>
+   654→   654→                  <CardDescription>
+   655→   655→                    {isEditing ? 'Edit the content below' : 'AI-generated content ready for review'}
+   656→   656→                  </CardDescription>
+   657→   657→                </div>
+   658→   658→                <Badge variant="secondary" className="ml-auto gap-1">
+   659→   659→                  <Sparkles className="h-3 w-3" />
+   660→   660→                  AI Generated
+   661→   661→                </Badge>
+   662→   662→              </div>
+   663→   663→            </CardHeader>
+   664→   664→            <CardContent>
+   665→   665→              {isEditing ? (
+   666→   666→                <div className="space-y-3">
+   667→   667→                  <Textarea
+   668→   668→                    value={editedContent}
+   669→   669→                    onChange={(e) => setEditedContent(e.target.value)}
+   670→   670→                    className="min-h-[400px] font-mono text-sm"
+   671→   671→                  />
+   672→   672→                  <div className="flex justify-end gap-2">
+   673→   673→                    <Button
+   674→   674→                      variant="outline"
+   675→   675→                      size="sm"
+   676→   676→                      onClick={() => setIsEditing(false)}
+   677→   677→                    >
+   678→   678→                      Cancel
+   679→   679→                    </Button>
+   680→   680→                    <Button
+   681→   681→                      size="sm"
+   682→   682→                      onClick={handleSaveEdit}
+   683→   683→                      className="bg-emerald-600 hover:bg-emerald-700"
+   684→   684→                    >
+   685→   685→                      Save Changes
+   686→   686→                    </Button>
+   687→   687→                  </div>
+   688→   688→                </div>
+   689→   689→              ) : (
+   690→   690→                <div className="prose prose-sm max-w-none">
+   691→   691→                  <div className="whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
+   692→   692→                    {generatedContent}
+   693→   693→                  </div>
+   694→   694→                </div>
+   695→   695→              )}
+   696→   696→            </CardContent>
+   697→   697→          </Card>
+   698→   698→        </motion.div>
+   699→   699→      )}
+   700→   700→    </div>
+   701→   701→  );
+   702→   702→}
+   703→   703→

@@ -1,0 +1,895 @@
+     1→'use client';
+     2→
+     3→import { useState, useMemo } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Map,
+     7→  Check,
+     8→  Lock,
+     9→  Clock,
+    10→  BookOpen,
+    11→  Users,
+    12→  Star,
+    13→  ArrowRight,
+    14→  Trophy,
+    15→  Award,
+    16→  Flag,
+    17→  Play,
+    18→  Circle,
+    19→  ChevronRight,
+    20→  Search,
+    21→  Sparkles,
+    22→  Zap,
+    23→  Target,
+    24→  RotateCcw,
+    25→  X,
+    26→} from 'lucide-react';
+    27→import { Button } from '@/components/ui/button';
+    28→import { Input } from '@/components/ui/input';
+    29→import { Badge } from '@/components/ui/badge';
+    30→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    31→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    32→import { Progress } from '@/components/ui/progress';
+    33→import { Separator } from '@/components/ui/separator';
+    34→import {
+    35→  Dialog,
+    36→  DialogContent,
+    37→  DialogHeader,
+    38→  DialogTitle,
+    39→  DialogDescription,
+    40→} from '@/components/ui/dialog';
+    41→import { cn } from '@/lib/utils';
+    42→import { useLearningPaths } from '@/hooks/use-data';
+    43→import { useAppStore } from '@/store/app-store';
+    44→import { useQueryClient } from '@tanstack/react-query';
+    45→import { apiPost } from '@/lib/api';
+    46→import { toast } from 'sonner';
+    47→
+    48→// ---- Types ----
+    49→type CourseStatus = 'completed' | 'current' | 'locked';
+    50→
+    51→interface LearnerCourse {
+    52→  id: string;
+    53→  title: string;
+    54→  duration: number;
+    55→  level: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+    56→  status: CourseStatus;
+    57→  isRequired: boolean;
+    58→  prerequisiteIds: string[];
+    59→  milestone?: string;
+    60→  progress?: number;
+    61→}
+    62→
+    63→interface LearnerPath {
+    64→  id: string;
+    65→  name: string;
+    66→  description: string;
+    67→  category: string;
+    68→  difficulty: 'beginner' | 'intermediate' | 'advanced';
+    69→  courses: LearnerCourse[];
+    70→  enrolledAt: string;
+    71→  estimatedDuration: number;
+    72→  overallProgress: number;
+    73→  certificateEarned: boolean;
+    74→  nextCourse?: string;
+    75→}
+    76→
+    77→interface AvailablePath {
+    78→  id: string;
+    79→  name: string;
+    80→  description: string;
+    81→  category: string;
+    82→  difficulty: 'beginner' | 'intermediate' | 'advanced';
+    83→  courseCount: number;
+    84→  enrolledCount: number;
+    85→  estimatedDuration: number;
+    86→  rating: number;
+    87→}
+    88→
+    89→// ---- Helper to map API path data to LearnerPath ----
+    90→function mapApiPathToLearnerPath(apiPath: any, userEnrollment: any): LearnerPath {
+    91→  const progress = userEnrollment?.progress || 0;
+    92→  const courses: LearnerCourse[] = (apiPath.courses || []).map((pc: any, idx: number) => {
+    93→    const course = pc.course || {};
+    94→    let status: CourseStatus = 'locked';
+    95→    if (progress >= 100 || (userEnrollment?.status === 'completed')) {
+    96→      status = 'completed';
+    97→    } else if (idx === 0 || progress > (idx / apiPath.courses.length) * 100) {
+    98→      const courseProgress = Math.min(100, Math.max(0, Math.round((progress - (idx / apiPath.courses.length) * 100) / (1 / apiPath.courses.length) * 100)));
+    99→      if (courseProgress >= 100) status = 'completed';
+   100→      else status = 'current';
+   101→    }
+   102→    return {
+   103→      id: pc.id || course.id || `c-${idx}`,
+   104→      title: course.title || 'Untitled Course',
+   105→      duration: Math.round(course.durationHours || 0),
+   106→      level: (course.level || 'beginner') as LearnerCourse['level'],
+   107→      status,
+   108→      isRequired: pc.isRequired ?? true,
+   109→      prerequisiteIds: pc.prerequisiteIds ? pc.prerequisiteIds.split(',') : [],
+   110→      milestone: pc.milestone || undefined,
+   111→      progress: status === 'completed' ? 100 : status === 'current' ? Math.round((progress % (100 / apiPath.courses.length)) / (100 / apiPath.courses.length) * 100) : undefined,
+   112→    };
+   113→  });
+   114→  const currentCourse = courses.find(c => c.status === 'current');
+   115→  return {
+   116→    id: apiPath.id,
+   117→    name: apiPath.title,
+   118→    description: apiPath.description || '',
+   119→    category: apiPath.category || 'General',
+   120→    difficulty: (apiPath.level || 'beginner') as LearnerPath['difficulty'],
+   121→    courses,
+   122→    enrolledAt: userEnrollment?.startedAt || new Date().toISOString(),
+   123→    estimatedDuration: apiPath.estimatedDuration || 0,
+   124→    overallProgress: Math.round(progress),
+   125→    certificateEarned: userEnrollment?.status === 'completed',
+   126→    nextCourse: currentCourse?.title,
+   127→  };
+   128→}
+   129→
+   130→function mapApiPathToAvailablePath(apiPath: any): AvailablePath {
+   131→  return {
+   132→    id: apiPath.id,
+   133→    name: apiPath.title,
+   134→    description: apiPath.description || '',
+   135→    category: apiPath.category || 'General',
+   136→    difficulty: (apiPath.level || 'beginner') as AvailablePath['difficulty'],
+   137→    courseCount: apiPath.courseCount || 0,
+   138→    enrolledCount: apiPath.enrolledCount || 0,
+   139→    estimatedDuration: apiPath.estimatedDuration || 0,
+   140→    rating: 4.5, // Default rating since API doesn't provide this
+   141→  };
+   142→}
+   143→
+   144→// ---- Helper Components ----
+   145→
+   146→function ProgressRing({ progress, size = 48, strokeWidth = 4 }: { progress: number; size?: number; strokeWidth?: number }) {
+   147→  const radius = (size - strokeWidth) / 2;
+   148→  const circumference = radius * 2 * Math.PI;
+   149→  const offset = circumference - (progress / 100) * circumference;
+   150→
+   151→  return (
+   152→    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+   153→      <svg className="transform -rotate-90" width={size} height={size}>
+   154→        <circle
+   155→          cx={size / 2}
+   156→          cy={size / 2}
+   157→          r={radius}
+   158→          stroke="currentColor"
+   159→          strokeWidth={strokeWidth}
+   160→          fill="none"
+   161→          className="text-muted/30"
+   162→        />
+   163→        <circle
+   164→          cx={size / 2}
+   165→          cy={size / 2}
+   166→          r={radius}
+   167→          stroke="url(#progressGradient)"
+   168→          strokeWidth={strokeWidth}
+   169→          fill="none"
+   170→          strokeDasharray={circumference}
+   171→          strokeDashoffset={offset}
+   172→          strokeLinecap="round"
+   173→          className="transition-all duration-700"
+   174→        />
+   175→        <defs>
+   176→          <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+   177→            <stop offset="0%" stopColor="#10b981" />
+   178→            <stop offset="100%" stopColor="#14b8a6" />
+   179→          </linearGradient>
+   180→        </defs>
+   181→      </svg>
+   182→      <span className="absolute text-xs font-bold">{progress}%</span>
+   183→    </div>
+   184→  );
+   185→}
+   186→
+   187→function RoadmapNode({ course, index, total }: { course: LearnerCourse; index: number; total: number }) {
+   188→  const statusConfig = {
+   189→    completed: {
+   190→      bg: 'bg-emerald-100 dark:bg-emerald-900/50',
+   191→      border: 'border-emerald-300 dark:border-emerald-700',
+   192→      icon: <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />,
+   193→      lineColor: 'bg-emerald-400',
+   194→      text: 'text-emerald-700 dark:text-emerald-300',
+   195→      glow: '',
+   196→    },
+   197→    current: {
+   198→      bg: 'bg-amber-100 dark:bg-amber-900/30',
+   199→      border: 'border-amber-300 dark:border-amber-700',
+   200→      icon: <Play className="h-4 w-4 text-amber-600 dark:text-amber-400" />,
+   201→      lineColor: 'bg-amber-400',
+   202→      text: 'text-amber-700 dark:text-amber-300',
+   203→      glow: 'shadow-amber-200 dark:shadow-amber-900/50 shadow-lg',
+   204→    },
+   205→    locked: {
+   206→      bg: 'bg-slate-100 dark:bg-slate-800/50',
+   207→      border: 'border-slate-200 dark:border-slate-700',
+   208→      icon: <Lock className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />,
+   209→      lineColor: 'bg-slate-200 dark:bg-slate-700',
+   210→      text: 'text-slate-500 dark:text-slate-400',
+   211→      glow: '',
+   212→    },
+   213→  };
+   214→
+   215→  const config = statusConfig[course.status];
+   216→  const isLast = index === total - 1;
+   217→
+   218→  return (
+   219→    <div className="flex gap-4">
+   220→      {/* Timeline */}
+   221→      <div className="flex flex-col items-center">
+   222→        <motion.div
+   223→          initial={{ scale: 0 }}
+   224→          animate={{ scale: 1 }}
+   225→          transition={{ delay: index * 0.1, type: 'spring', stiffness: 300, damping: 20 }}
+   226→          className={cn(
+   227→            'h-10 w-10 rounded-full flex items-center justify-center border-2 shrink-0',
+   228→            config.bg,
+   229→            config.border,
+   230→            config.glow,
+   231→            course.status === 'current' && 'animate-pulse'
+   232→          )}
+   233→        >
+   234→          {config.icon}
+   235→        </motion.div>
+   236→        {!isLast && (
+   237→          <div className={cn('w-0.5 flex-1 min-h-[40px] my-1', config.lineColor,
+   238→            course.status === 'locked' ? 'border-l-2 border-dashed border-slate-200 dark:border-slate-700 bg-transparent' : ''
+   239→          )} />
+   240→        )}
+   241→      </div>
+   242→
+   243→      {/* Content */}
+   244→      <motion.div
+   245→        initial={{ opacity: 0, x: -10 }}
+   246→        animate={{ opacity: 1, x: 0 }}
+   247→        transition={{ delay: index * 0.1 + 0.05 }}
+   248→        className={cn(
+   249→          'flex-1 pb-6 min-w-0',
+   250→          isLast && 'pb-0'
+   251→        )}
+   252→      >
+   253→        <div className={cn(
+   254→          'rounded-xl border p-3 transition-all',
+   255→          config.bg,
+   256→          config.border,
+   257→          course.status === 'current' && 'ring-2 ring-amber-300/50 dark:ring-amber-700/50'
+   258→        )}>
+   259→          <div className="flex items-start justify-between gap-2">
+   260→            <div className="flex-1 min-w-0">
+   261→              <div className="flex items-center gap-2">
+   262→                <span className={cn('text-sm font-medium', config.text)}>{course.title}</span>
+   263→                {course.isRequired ? (
+   264→                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
+   265→                    Required
+   266→                  </Badge>
+   267→                ) : (
+   268→                  <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4">
+   269→                    Optional
+   270→                  </Badge>
+   271→                )}
+   272→              </div>
+   273→              <div className="flex items-center gap-3 mt-1.5">
+   274→                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+   275→                  <Clock className="h-2.5 w-2.5" /> {course.duration}h
+   276→                </span>
+   277→                <span className="text-[10px] text-muted-foreground capitalize">{course.level}</span>
+   278→                {course.status === 'locked' && course.prerequisiteIds.length > 0 && (
+   279→                  <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+   280→                    <Lock className="h-2.5 w-2.5" /> Complete prerequisites to unlock
+   281→                  </span>
+   282→                )}
+   283→              </div>
+   284→              {course.status === 'current' && course.progress !== undefined && (
+   285→                <div className="mt-2">
+   286→                  <div className="flex items-center justify-between text-[10px] mb-1">
+   287→                    <span className="text-muted-foreground">Progress</span>
+   288→                    <span className="font-medium text-amber-600 dark:text-amber-400">{course.progress}%</span>
+   289→                  </div>
+   290→                  <Progress value={course.progress} className="h-1.5" />
+   291→                </div>
+   292→              )}
+   293→            </div>
+   294→            {course.status !== 'locked' && (
+   295→              <Button
+   296→                variant={course.status === 'current' ? 'default' : 'ghost'}
+   297→                size="sm"
+   298→                className={cn(
+   299→                  'shrink-0 h-7 text-xs gap-1',
+   300→                  course.status === 'current' && 'bg-amber-500 hover:bg-amber-600 text-white'
+   301→                )}
+   302→              >
+   303→                {course.status === 'current' ? (
+   304→                  <><Play className="h-3 w-3" /> Continue</>
+   305→                ) : (
+   306→                  <><RotateCcw className="h-3 w-3" /> Review</>
+   307→                )}
+   308→              </Button>
+   309→            )}
+   310→          </div>
+   311→        </div>
+   312→
+   313→        {/* Milestone */}
+   314→        {course.milestone && (
+   315→          <motion.div
+   316→            initial={{ opacity: 0, y: 5 }}
+   317→            animate={{ opacity: 1, y: 0 }}
+   318→            transition={{ delay: index * 0.1 + 0.2 }}
+   319→            className="mt-2 ml-2"
+   320→          >
+   321→            <div className={cn(
+   322→              'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium',
+   323→              course.status === 'completed'
+   324→                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300'
+   325→                : course.status === 'current'
+   326→                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'
+   327→                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+   328→            )}>
+   329→              <Flag className="h-3 w-3" />
+   330→              {course.milestone}
+   331→              {course.status === 'completed' && <Check className="h-3 w-3" />}
+   332→            </div>
+   333→          </motion.div>
+   334→        )}
+   335→      </motion.div>
+   336→    </div>
+   337→  );
+   338→}
+   339→
+   340→function PathCard({ path, onClick }: { path: LearnerPath; onClick: () => void }) {
+   341→  const completedCourses = path.courses.filter((c) => c.status === 'completed').length;
+   342→
+   343→  return (
+   344→    <motion.div
+   345→      whileHover={{ y: -2 }}
+   346→      transition={{ duration: 0.2 }}
+   347→    >
+   348→      <Card
+   349→        className="cursor-pointer border-border/50 bg-card/80 backdrop-blur-sm hover:shadow-lg transition-all duration-300 overflow-hidden group"
+   350→        onClick={onClick}
+   351→      >
+   352→        <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 to-teal-500" />
+   353→        <CardContent className="p-4">
+   354→          <div className="flex items-start gap-4">
+   355→            <ProgressRing progress={path.overallProgress} />
+   356→            <div className="flex-1 min-w-0">
+   357→              <h3 className="text-sm font-semibold truncate">{path.name}</h3>
+   358→              <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{path.description}</p>
+   359→              <div className="flex items-center gap-3 mt-2">
+   360→                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+   361→                  <BookOpen className="h-3 w-3" /> {completedCourses}/{path.courses.length} courses
+   362→                </span>
+   363→                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+   364→                  <Clock className="h-3 w-3" /> {path.estimatedDuration}h
+   365→                </span>
+   366→              </div>
+   367→              {path.nextCourse && (
+   368→                <div className="mt-2 flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400">
+   369→                  <Play className="h-2.5 w-2.5" /> Next: {path.nextCourse}
+   370→                </div>
+   371→              )}
+   372→            </div>
+   373→            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 mt-1 group-hover:text-foreground transition-colors" />
+   374→          </div>
+   375→        </CardContent>
+   376→      </Card>
+   377→    </motion.div>
+   378→  );
+   379→}
+   380→
+   381→function AvailablePathCard({ path, onEnroll }: { path: AvailablePath; onEnroll: (id: string) => void }) {
+   382→  const difficultyColor = {
+   383→    beginner: 'text-emerald-600',
+   384→    intermediate: 'text-amber-600',
+   385→    advanced: 'text-rose-600',
+   386→  };
+   387→
+   388→  return (
+   389→    <motion.div
+   390→      whileHover={{ y: -2 }}
+   391→      transition={{ duration: 0.2 }}
+   392→    >
+   393→      <Card className="border-border/50 bg-card/80 backdrop-blur-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
+   394→        <div className="h-1.5 w-full bg-gradient-to-r from-blue-400 to-cyan-400" />
+   395→        <CardContent className="p-4">
+   396→          <h3 className="text-sm font-semibold">{path.name}</h3>
+   397→          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{path.description}</p>
+   398→          <div className="flex items-center gap-3 mt-3">
+   399→            <Badge variant="outline" className="text-[10px] px-2 py-0.5">{path.category}</Badge>
+   400→            <span className={cn('text-[10px] font-medium', difficultyColor[path.difficulty])}>
+   401→              {path.difficulty.charAt(0).toUpperCase() + path.difficulty.slice(1)}
+   402→            </span>
+   403→          </div>
+   404→          <div className="flex items-center gap-4 mt-3 text-[10px] text-muted-foreground">
+   405→            <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {path.courseCount} courses</span>
+   406→            <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {path.enrolledCount}</span>
+   407→            <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {path.estimatedDuration}h</span>
+   408→            <span className="flex items-center gap-1"><Star className="h-3 w-3 text-amber-500" /> {path.rating}</span>
+   409→          </div>
+   410→          <Button
+   411→            size="sm"
+   412→            className="w-full mt-3 bg-emerald-600 hover:bg-emerald-700 gap-1.5 h-8 text-xs"
+   413→            onClick={() => onEnroll(path.id)}
+   414→          >
+   415→            <Zap className="h-3 w-3" /> Enroll Now
+   416→          </Button>
+   417→        </CardContent>
+   418→      </Card>
+   419→    </motion.div>
+   420→  );
+   421→}
+   422→
+   423→function PathDetailView({ path, onBack }: { path: LearnerPath; onBack: () => void }) {
+   424→  const completedCourses = path.courses.filter((c) => c.status === 'completed').length;
+   425→  const currentCourse = path.courses.find((c) => c.status === 'current');
+   426→  const earnedMilestones = path.courses.filter((c) => c.milestone && c.status === 'completed');
+   427→
+   428→  return (
+   429→    <div className="space-y-6">
+   430→      {/* Header */}
+   431→      <div className="flex items-start justify-between gap-4">
+   432→        <div>
+   433→          <Button variant="ghost" size="sm" onClick={onBack} className="gap-1 mb-2 -ml-2 text-muted-foreground">
+   434→            <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Back to Paths
+   435→          </Button>
+   436→          <h2 className="text-xl font-bold">{path.name}</h2>
+   437→          <p className="text-sm text-muted-foreground mt-1">{path.description}</p>
+   438→        </div>
+   439→        <ProgressRing progress={path.overallProgress} size={64} strokeWidth={5} />
+   440→      </div>
+   441→
+   442→      {/* Stats Row */}
+   443→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   444→        {[
+   445→          { label: 'Progress', value: `${path.overallProgress}%`, icon: Target, color: 'text-emerald-600' },
+   446→          { label: 'Completed', value: `${completedCourses}/${path.courses.length}`, icon: Check, color: 'text-emerald-600' },
+   447→          { label: 'Est. Time Left', value: `${Math.round(path.estimatedDuration * (1 - path.overallProgress / 100))}h`, icon: Clock, color: 'text-amber-600' },
+   448→          { label: 'Milestones', value: `${earnedMilestones.length}`, icon: Flag, color: 'text-purple-600' },
+   449→        ].map((stat) => (
+   450→          <Card key={stat.label} className="border-border/50 bg-card/80 backdrop-blur-sm">
+   451→            <CardContent className="p-3 text-center">
+   452→              <stat.icon className={cn('h-4 w-4 mx-auto mb-1', stat.color)} />
+   453→              <p className="text-lg font-bold">{stat.value}</p>
+   454→              <p className="text-[10px] text-muted-foreground">{stat.label}</p>
+   455→            </CardContent>
+   456→          </Card>
+   457→        ))}
+   458→      </div>
+   459→
+   460→      {/* Current Course Callout */}
+   461→      {currentCourse && (
+   462→        <Card className="border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20 backdrop-blur-sm">
+   463→          <CardContent className="p-4">
+   464→            <div className="flex items-center justify-between">
+   465→              <div>
+   466→                <div className="flex items-center gap-2 mb-1">
+   467→                  <Play className="h-4 w-4 text-amber-600" />
+   468→                  <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">Continue Learning</span>
+   469→                </div>
+   470→                <p className="text-sm text-foreground">{currentCourse.title}</p>
+   471→                <div className="flex items-center gap-3 mt-1">
+   472→                  <span className="text-[10px] text-muted-foreground">{currentCourse.duration}h</span>
+   473→                  {currentCourse.progress !== undefined && (
+   474→                    <span className="text-[10px] font-medium text-amber-600">{currentCourse.progress}% complete</span>
+   475→                  )}
+   476→                </div>
+   477→              </div>
+   478→              <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white gap-1">
+   479→                <Play className="h-3.5 w-3.5" /> Resume
+   480→              </Button>
+   481→            </div>
+   482→            {currentCourse.progress !== undefined && (
+   483→              <Progress value={currentCourse.progress} className="h-1.5 mt-3" />
+   484→            )}
+   485→          </CardContent>
+   486→        </Card>
+   487→      )}
+   488→
+   489→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   490→        {/* Roadmap */}
+   491→        <div className="lg:col-span-2">
+   492→          <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   493→            <CardHeader className="pb-3">
+   494→              <CardTitle className="text-sm flex items-center gap-2">
+   495→                <Map className="h-4 w-4 text-emerald-600" /> Your Roadmap
+   496→              </CardTitle>
+   497→            </CardHeader>
+   498→            <CardContent>
+   499→              <div className="space-y-0">
+   500→                {path.courses.map((course, idx) => (
+   501→                  <RoadmapNode key={course.id} course={course} index={idx} total={path.courses.length} />
+   502→                ))}
+   503→              </div>
+   504→            </CardContent>
+   505→          </Card>
+   506→        </div>
+   507→
+   508→        {/* Sidebar */}
+   509→        <div className="space-y-4">
+   510→          {/* Milestones & Achievements */}
+   511→          <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   512→            <CardHeader className="pb-3">
+   513→              <CardTitle className="text-sm flex items-center gap-2">
+   514→                <Trophy className="h-4 w-4 text-amber-600" /> Milestones
+   515→              </CardTitle>
+   516→            </CardHeader>
+   517→            <CardContent className="space-y-3">
+   518→              {path.courses.filter((c) => c.milestone).map((course) => (
+   519→                <div
+   520→                  key={course.id}
+   521→                  className={cn(
+   522→                    'flex items-center gap-3 p-2.5 rounded-lg',
+   523→                    course.status === 'completed'
+   524→                      ? 'bg-emerald-50 dark:bg-emerald-950/30'
+   525→                      : course.status === 'current'
+   526→                      ? 'bg-amber-50 dark:bg-amber-950/30'
+   527→                      : 'bg-slate-50 dark:bg-slate-800/30'
+   528→                  )}
+   529→                >
+   530→                  <div className={cn(
+   531→                    'h-8 w-8 rounded-full flex items-center justify-center shrink-0',
+   532→                    course.status === 'completed'
+   533→                      ? 'bg-emerald-100 dark:bg-emerald-900 text-emerald-600'
+   534→                      : course.status === 'current'
+   535→                      ? 'bg-amber-100 dark:bg-amber-900 text-amber-600 animate-pulse'
+   536→                      : 'bg-slate-100 dark:bg-slate-700 text-slate-400'
+   537→                  )}>
+   538→                    {course.status === 'completed' ? (
+   539→                      <Check className="h-4 w-4" />
+   540→                    ) : course.status === 'current' ? (
+   541→                      <Flag className="h-4 w-4" />
+   542→                    ) : (
+   543→                      <Lock className="h-3.5 w-3.5" />
+   544→                    )}
+   545→                  </div>
+   546→                  <div className="flex-1 min-w-0">
+   547→                    <p className={cn(
+   548→                      'text-xs font-medium',
+   549→                      course.status === 'locked' && 'text-muted-foreground'
+   550→                    )}>
+   551→                      {course.milestone}
+   552→                    </p>
+   553→                    <p className="text-[10px] text-muted-foreground">{course.title}</p>
+   554→                  </div>
+   555→                </div>
+   556→              ))}
+   557→            </CardContent>
+   558→          </Card>
+   559→
+   560→          {/* Certificate */}
+   561→          <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   562→            <CardHeader className="pb-3">
+   563→              <CardTitle className="text-sm flex items-center gap-2">
+   564→                <Award className="h-4 w-4 text-purple-600" /> Certificate
+   565→              </CardTitle>
+   566→            </CardHeader>
+   567→            <CardContent>
+   568→              {path.certificateEarned ? (
+   569→                <div className="text-center p-4 bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950/30 dark:to-amber-900/20 rounded-xl">
+   570→                  <Award className="h-10 w-10 mx-auto text-amber-500 mb-2" />
+   571→                  <p className="text-sm font-semibold">Certificate Earned!</p>
+   572→                  <p className="text-[10px] text-muted-foreground mt-1">Full-Stack Web Developer</p>
+   573→                  <Button variant="outline" size="sm" className="mt-3 h-7 text-xs gap-1">
+   574→                    View Certificate
+   575→                  </Button>
+   576→                </div>
+   577→              ) : (
+   578→                <div className="text-center p-4 bg-muted/30 rounded-xl">
+   579→                  <Award className="h-10 w-10 mx-auto text-muted-foreground/30 mb-2" />
+   580→                  <p className="text-xs text-muted-foreground">Complete all required courses to earn your certificate</p>
+   581→                  <p className="text-[10px] text-muted-foreground mt-1">
+   582→                    {path.courses.filter((c) => c.status !== 'completed' && c.isRequired).length} courses remaining
+   583→                  </p>
+   584→                </div>
+   585→              )}
+   586→            </CardContent>
+   587→          </Card>
+   588→
+   589→          {/* Course List */}
+   590→          <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   591→            <CardHeader className="pb-3">
+   592→              <CardTitle className="text-sm">Course List</CardTitle>
+   593→            </CardHeader>
+   594→            <CardContent className="space-y-1.5">
+   595→              {path.courses.map((course, idx) => (
+   596→                <div
+   597→                  key={course.id}
+   598→                  className={cn(
+   599→                    'flex items-center gap-2 p-2 rounded-lg text-xs',
+   600→                    course.status === 'current' && 'bg-amber-50 dark:bg-amber-950/30'
+   601→                  )}
+   602→                >
+   603→                  <span className={cn(
+   604→                    'h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0',
+   605→                    course.status === 'completed' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+   606→                    course.status === 'current' && 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+   607→                    course.status === 'locked' && 'bg-slate-100 text-slate-400 dark:bg-slate-800'
+   608→                  )}>
+   609→                    {course.status === 'completed' ? '✓' : idx + 1}
+   610→                  </span>
+   611→                  <span className={cn(
+   612→                    'flex-1 truncate',
+   613→                    course.status === 'locked' && 'text-muted-foreground'
+   614→                  )}>
+   615→                    {course.title}
+   616→                  </span>
+   617→                  <span className="text-[10px] text-muted-foreground shrink-0">{course.duration}h</span>
+   618→                </div>
+   619→              ))}
+   620→            </CardContent>
+   621→          </Card>
+   622→        </div>
+   623→      </div>
+   624→    </div>
+   625→  );
+   626→}
+   627→
+   628→// ---- Main Component ----
+   629→export function LearnerLearningPaths() {
+   630→  const { currentUser, currentTenant } = useAppStore();
+   631→  const userId = currentUser?.id || '';
+   632→  const tenantId = currentTenant?.id || '';
+   633→  const queryClient = useQueryClient();
+   634→
+   635→  const { data: learningPathsData, isLoading } = useLearningPaths(tenantId);
+   636→
+   637→  // Derive enrolled and available paths from API data
+   638→  const { enrolled, availablePaths } = useMemo(() => {
+   639→    if (!learningPathsData) return { enrolled: [] as LearnerPath[], availablePaths: [] as AvailablePath[] };
+   640→    const enrolledList: LearnerPath[] = [];
+   641→    const availableList: AvailablePath[] = [];
+   642→    learningPathsData.forEach((apiPath: any) => {
+   643→      const userEnrollment = apiPath.enrollments?.find((e: any) => {
+   644→        return e.userId === currentUser?.id;
+   645→      });
+   646→      if (userEnrollment) {
+   647→        enrolledList.push(mapApiPathToLearnerPath(apiPath, userEnrollment));
+   648→      }
+   649→      if (apiPath.isPublished) {
+   650→        availableList.push(mapApiPathToAvailablePath(apiPath));
+   651→      }
+   652→    });
+   653→    return { enrolled: enrolledList, availablePaths: availableList };
+   654→  }, [learningPathsData, currentUser?.id]);
+   655→
+   656→  const recommendedPaths = useMemo(() => availablePaths.slice(0, 2), [availablePaths]);
+   657→
+   658→  const [activeTab, setActiveTab] = useState('enrolled');
+   659→  const [selectedPath, setSelectedPath] = useState<LearnerPath | null>(null);
+   660→  const [searchQuery, setSearchQuery] = useState('');
+   661→  const [enrollDialogId, setEnrollDialogId] = useState<string | null>(null);
+   662→  const [isEnrolling, setIsEnrolling] = useState(false);
+   663→
+   664→  const filteredAvailable = availablePaths.filter((p) =>
+   665→    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+   666→    p.description.toLowerCase().includes(searchQuery.toLowerCase())
+   667→  );
+   668→
+   669→  const handleEnroll = (id: string) => {
+   670→    setEnrollDialogId(id);
+   671→  };
+   672→
+   673→  const confirmEnroll = async () => {
+   674→    if (!enrollDialogId || !userId || !tenantId) return;
+   675→    setIsEnrolling(true);
+   676→    try {
+   677→      await apiPost('/learning-paths/enroll', {
+   678→        learningPathId: enrollDialogId,
+   679→        userId,
+   680→        tenantId,
+   681→      });
+   682→      toast.success('Enrolled in learning path!');
+   683→      queryClient.invalidateQueries({ queryKey: ['learning-paths'] });
+   684→      setEnrollDialogId(null);
+   685→    } catch {
+   686→      toast.error('Failed to enroll in learning path');
+   687→    } finally {
+   688→      setIsEnrolling(false);
+   689→    }
+   690→  };
+   691→
+   692→  if (selectedPath) {
+   693→    return (
+   694→      <div className="p-4 sm:p-6">
+   695→        <PathDetailView path={selectedPath} onBack={() => setSelectedPath(null)} />
+   696→      </div>
+   697→    );
+   698→  }
+   699→
+   700→  if (isLoading) {
+   701→    return (
+   702→      <div className="p-4 sm:p-6 space-y-6">
+   703→        <div>
+   704→          <h1 className="text-2xl font-bold flex items-center gap-2">
+   705→            <Map className="h-6 w-6 text-emerald-600" /> Learning Paths
+   706→          </h1>
+   707→          <p className="text-sm text-muted-foreground mt-1">Follow guided roadmaps to master new skills</p>
+   708→        </div>
+   709→        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   710→          {[1, 2, 3, 4].map(i => (
+   711→            <Card key={i} className="border-border/50 bg-card/80 backdrop-blur-sm animate-pulse">
+   712→              <CardContent className="p-3 flex items-center gap-3">
+   713→                <div className="h-9 w-9 rounded-lg bg-muted" />
+   714→                <div className="space-y-1.5 flex-1">
+   715→                  <div className="h-5 w-10 bg-muted rounded" />
+   716→                  <div className="h-3 w-16 bg-muted rounded" />
+   717→                </div>
+   718→              </CardContent>
+   719→            </Card>
+   720→          ))}
+   721→        </div>
+   722→        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   723→          {[1, 2].map(i => (
+   724→            <Card key={i} className="animate-pulse">
+   725→              <div className="h-1.5 w-full bg-muted" />
+   726→              <CardContent className="p-4 space-y-3">
+   727→                <div className="h-4 w-3/4 bg-muted rounded" />
+   728→                <div className="h-3 w-1/2 bg-muted rounded" />
+   729→                <div className="h-3 w-1/3 bg-muted rounded" />
+   730→              </CardContent>
+   731→            </Card>
+   732→          ))}
+   733→        </div>
+   734→      </div>
+   735→    );
+   736→  }
+   737→
+   738→  return (
+   739→    <div className="p-4 sm:p-6 space-y-6">
+   740→      {/* Header */}
+   741→      <div>
+   742→        <h1 className="text-2xl font-bold flex items-center gap-2">
+   743→          <Map className="h-6 w-6 text-emerald-600" /> Learning Paths
+   744→        </h1>
+   745→        <p className="text-sm text-muted-foreground mt-1">Follow guided roadmaps to master new skills</p>
+   746→      </div>
+   747→
+   748→      {/* Quick Stats */}
+   749→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   750→        {[
+   751→          { label: 'Enrolled Paths', value: enrolled.length, icon: Map, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/30' },
+   752→          { label: 'In Progress', value: enrolled.filter((p) => p.overallProgress > 0 && p.overallProgress < 100).length, icon: Play, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-950/30' },
+   753→          { label: 'Completed', value: enrolled.filter((p) => p.overallProgress === 100).length, icon: Check, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-950/30' },
+   754→          { label: 'Certificates', value: enrolled.filter((p) => p.certificateEarned).length, icon: Award, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-950/30' },
+   755→        ].map((stat) => (
+   756→          <Card key={stat.label} className="border-border/50 bg-card/80 backdrop-blur-sm">
+   757→            <CardContent className="p-3 flex items-center gap-3">
+   758→              <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center', stat.bg)}>
+   759→                <stat.icon className={cn('h-4 w-4', stat.color)} />
+   760→              </div>
+   761→              <div>
+   762→                <p className="text-lg font-bold">{stat.value}</p>
+   763→                <p className="text-[10px] text-muted-foreground">{stat.label}</p>
+   764→              </div>
+   765→            </CardContent>
+   766→          </Card>
+   767→        ))}
+   768→      </div>
+   769→
+   770→      {/* Recommended */}
+   771→      {recommendedPaths.length > 0 && activeTab !== 'browse' && (
+   772→        <Card className="border-purple-200 dark:border-purple-800 bg-gradient-to-r from-purple-50/50 to-pink-50/50 dark:from-purple-950/20 dark:to-pink-950/20 backdrop-blur-sm">
+   773→          <CardContent className="p-4">
+   774→            <div className="flex items-center gap-2 mb-3">
+   775→              <Sparkles className="h-4 w-4 text-purple-600" />
+   776→              <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">Recommended for You</span>
+   777→            </div>
+   778→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   779→              {recommendedPaths.map((path) => (
+   780→                <div
+   781→                  key={path.id}
+   782→                  className="flex items-center justify-between p-2.5 rounded-lg bg-background/50 border border-border/50"
+   783→                >
+   784→                  <div className="flex-1 min-w-0">
+   785→                    <p className="text-xs font-medium truncate">{path.name}</p>
+   786→                    <p className="text-[10px] text-muted-foreground">{path.courseCount} courses · {path.estimatedDuration}h</p>
+   787→                  </div>
+   788→                  <Button
+   789→                    size="sm"
+   790→                    variant="outline"
+   791→                    className="shrink-0 h-7 text-[10px] ml-2 gap-1"
+   792→                    onClick={() => handleEnroll(path.id)}
+   793→                  >
+   794→                    <Zap className="h-3 w-3" /> Enroll
+   795→                  </Button>
+   796→                </div>
+   797→              ))}
+   798→            </div>
+   799→          </CardContent>
+   800→        </Card>
+   801→      )}
+   802→
+   803→      <Tabs value={activeTab} onValueChange={setActiveTab}>
+   804→        <TabsList>
+   805→          <TabsTrigger value="enrolled" className="gap-1.5">
+   806→            <BookOpen className="h-3.5 w-3.5" /> My Paths
+   807→          </TabsTrigger>
+   808→          <TabsTrigger value="browse" className="gap-1.5">
+   809→            <Search className="h-3.5 w-3.5" /> Browse All
+   810→          </TabsTrigger>
+   811→        </TabsList>
+   812→
+   813→        <TabsContent value="enrolled" className="mt-4">
+   814→          {enrolled.length === 0 ? (
+   815→            <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+   816→              <CardContent className="p-8 text-center">
+   817→                <Map className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
+   818→                <p className="text-sm font-medium">No learning paths yet</p>
+   819→                <p className="text-xs text-muted-foreground mt-1">Browse available paths and enroll to start your journey</p>
+   820→                <Button
+   821→                  variant="outline"
+   822→                  size="sm"
+   823→                  className="mt-4 gap-1.5"
+   824→                  onClick={() => setActiveTab('browse')}
+   825→                >
+   826→                  <Search className="h-3.5 w-3.5" /> Browse Paths
+   827→                </Button>
+   828→              </CardContent>
+   829→            </Card>
+   830→          ) : (
+   831→            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   832→              {enrolled.map((path) => (
+   833→                <PathCard key={path.id} path={path} onClick={() => setSelectedPath(path)} />
+   834→              ))}
+   835→            </div>
+   836→          )}
+   837→        </TabsContent>
+   838→
+   839→        <TabsContent value="browse" className="mt-4 space-y-4">
+   840→          <div className="relative">
+   841→            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   842→            <Input
+   843→              value={searchQuery}
+   844→              onChange={(e) => setSearchQuery(e.target.value)}
+   845→              placeholder="Search available paths..."
+   846→              className="h-9 pl-9"
+   847→            />
+   848→          </div>
+   849→
+   850→          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+   851→            <AnimatePresence mode="popLayout">
+   852→              {filteredAvailable.map((path) => (
+   853→                <motion.div
+   854→                  key={path.id}
+   855→                  initial={{ opacity: 0, y: 20 }}
+   856→                  animate={{ opacity: 1, y: 0 }}
+   857→                  exit={{ opacity: 0, y: -10 }}
+   858→                >
+   859→                  <AvailablePathCard path={path} onEnroll={handleEnroll} />
+   860→                </motion.div>
+   861→              ))}
+   862→            </AnimatePresence>
+   863→          </div>
+   864→
+   865→          {filteredAvailable.length === 0 && (
+   866→            <div className="text-center py-12">
+   867→              <Search className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
+   868→              <p className="text-sm text-muted-foreground">No paths found matching your search</p>
+   869→            </div>
+   870→          )}
+   871→        </TabsContent>
+   872→      </Tabs>
+   873→
+   874→      {/* Enroll Confirmation Dialog */}
+   875→      <Dialog open={!!enrollDialogId} onOpenChange={() => setEnrollDialogId(null)}>
+   876→        <DialogContent>
+   877→          <DialogHeader>
+   878→            <DialogTitle>Enroll in Learning Path</DialogTitle>
+   879→            <DialogDescription>
+   880→              Are you sure you want to enroll in &quot;{availablePaths.find((p) => p.id === enrollDialogId)?.name || 'this path'}&quot;?
+   881→              You&apos;ll be guided through each course in sequence.
+   882→            </DialogDescription>
+   883→          </DialogHeader>
+   884→          <div className="flex justify-end gap-2">
+   885→            <Button variant="outline" onClick={() => setEnrollDialogId(null)}>Cancel</Button>
+   886→            <Button className="bg-emerald-600 hover:bg-emerald-700 gap-1.5" onClick={confirmEnroll} disabled={isEnrolling}>
+   887→              <Zap className="h-4 w-4" /> {isEnrolling ? 'Enrolling...' : 'Enroll Now'}
+   888→            </Button>
+   889→          </div>
+   890→        </DialogContent>
+   891→      </Dialog>
+   892→    </div>
+   893→  );
+   894→}
+   895→

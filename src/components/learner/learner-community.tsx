@@ -44,6 +44,8 @@ import {
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { useAppStore } from '@/store/app-store';
 import { validateFields, required, minLength } from '@/lib/validations';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import type { CommunityPost } from '@/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -445,7 +447,12 @@ export function LearnerCommunity() {
   // ── UI State ───────────────────────────────────────────────────────────────
   const [activeCategory, setActiveCategory] = useState('all');
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
-  const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('nextgen-lms-bookmarks');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch { return new Set(); }
+  });
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newPost, setNewPost] = useState({
     title: '',
@@ -478,9 +485,14 @@ export function LearnerCommunity() {
   // Delete confirmation state
   const [deletePostId, setDeletePostId] = useState<string | null>(null);
 
-  // Filter posts by category
+  // Trending topic filter
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+
+  // Filter posts by category and tag
   const filteredPosts = posts.filter((post) => {
-    return activeCategory === 'all' || post.categoryId === activeCategory;
+    if (activeCategory !== 'all' && post.categoryId !== activeCategory) return false;
+    if (activeTag && !(post.tags || []).some((t: string) => t.toLowerCase().includes(activeTag.toLowerCase()))) return false;
+    return true;
   });
 
   const toggleComments = (postId: string) => {
@@ -501,6 +513,7 @@ export function LearnerCommunity() {
       const next = new Set(prev);
       if (next.has(postId)) next.delete(postId);
       else next.add(postId);
+      try { localStorage.setItem('nextgen-lms-bookmarks', JSON.stringify([...next])); } catch {}
       return next;
     });
   };
@@ -778,7 +791,11 @@ export function LearnerCommunity() {
                   <motion.div
                     key={topic.tag}
                     whileHover={{ x: 4 }}
-                    className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group"
+                    className={cn(
+                      "flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group",
+                      activeTag === topic.tag && "bg-emerald-50 dark:bg-emerald-950/30"
+                    )}
+                    onClick={() => setActiveTag(activeTag === topic.tag ? null : topic.tag)}
                   >
                     <div className="flex items-center gap-2.5">
                       <span className="text-xs font-bold text-slate-400 w-5">{idx + 1}</span>
@@ -1338,6 +1355,16 @@ function PostFeedCard({
                 variant="ghost"
                 size="sm"
                 className="flex-1 gap-1.5 text-sm text-slate-500 hover:text-violet-600 hover:bg-violet-50 rounded-lg"
+                onClick={() => {
+                  const url = `${window.location.origin}/community/${post.id}`;
+                  if (navigator.share) {
+                    navigator.share({ title: post.title, url }).catch(() => {});
+                  } else {
+                    navigator.clipboard?.writeText(url).then(() => {
+                      toast.success('Link copied to clipboard!');
+                    }).catch(() => {});
+                  }
+                }}
               >
                 <Share2 className="h-4 w-4" />
                 <span>Share</span>
@@ -1392,7 +1419,9 @@ function PostFeedCard({
                               <span className="text-[10px] text-slate-400 dark:text-slate-500">{timeAgo(comment.createdAt)}</span>
                             </div>
                             <p className="text-sm text-slate-600 leading-relaxed">{comment.content}</p>
-                            <button className="text-xs text-slate-400 hover:text-red-500 mt-1 flex items-center gap-1">
+                            <button className="text-xs text-slate-400 hover:text-red-500 mt-1 flex items-center gap-1" onClick={() => {
+                              toggleReactionMutation.mutate({ postId: comment.id, userId: currentUserId, type: 'like' });
+                            }}>
                               <Heart className="h-3 w-3" /> {comment.likeCount}
                             </button>
                           </div>
