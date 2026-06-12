@@ -28,7 +28,7 @@ export async function GET(request: Request) {
           orderBy: { orderIndex: 'asc' },
         },
         enrollments: {
-          select: { id: true, status: true, progress: true },
+          select: { id: true, userId: true, status: true, progress: true },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
           orderBy: { orderIndex: 'asc' },
         },
         enrollments: {
-          select: { id: true, status: true, progress: true },
+          select: { id: true, userId: true, status: true, progress: true },
         },
       },
     });

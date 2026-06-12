@@ -641,8 +641,7 @@ export function LearnerLearningPaths() {
     const availableList: AvailablePath[] = [];
     learningPathsData.forEach((apiPath: any) => {
       const userEnrollment = apiPath.enrollments?.find((e: any) => {
-        // Match by userId if available in enrollment data
-        return true; // Show all paths with enrollments as enrolled for now
+        return e.userId === currentUser?.id;
       });
       if (userEnrollment) {
         enrolledList.push(mapApiPathToLearnerPath(apiPath, userEnrollment));
@@ -652,7 +651,7 @@ export function LearnerLearningPaths() {
       }
     });
     return { enrolled: enrolledList, availablePaths: availableList };
-  }, [learningPathsData]);
+  }, [learningPathsData, currentUser?.id]);
 
   const recommendedPaths = useMemo(() => availablePaths.slice(0, 2), [availablePaths]);
 

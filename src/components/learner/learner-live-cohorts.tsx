@@ -28,7 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useCourses, useLiveCohorts } from '@/hooks/use-data';
+import { useCourses, useLiveCohorts, useLiveCohortRSVPs, useToggleRSVP } from '@/hooks/use-data';
 import { useAppStore } from '@/store/app-store';
 import type { CalendarEvent } from '@/types';
 
@@ -81,12 +81,24 @@ function mapCohortToRecording(cohort: any): SessionRecording {
 }
 
 export function LearnerLiveCohorts() {
-  const [rsvpIds, setRsvpIds] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'upcoming' | 'schedule' | 'recordings'>('upcoming');
+  const currentUser = useAppStore((s) => s.currentUser);
   const tenantId = useAppStore((s) => s.currentTenant?.id) || '';
-  const { data: coursesData } = useCourses();
+  const { data: coursesData } = useCourses(tenantId || undefined);
   const { data: cohortsData, isLoading: cohortsLoading } = useLiveCohorts(tenantId || undefined);
+  const { data: rsvpsData } = useLiveCohortRSVPs(currentUser?.id || undefined);
+  const toggleRSVP = useToggleRSVP();
   const demoCourses = coursesData || [];
+
+  // Derive RSVP set from API data
+  const rsvpIds = useMemo(() => {
+    if (!rsvpsData) return new Set<string>();
+    return new Set(
+      (rsvpsData as any[])
+        .filter((r) => r.status === 'going')
+        .map((r) => r.cohortId)
+    );
+  }, [rsvpsData]);
 
   // Map API cohort data to CalendarEvent format (API already returns CalendarEvent-like shape)
   const calendarEvents: CalendarEvent[] = useMemo(() => {
@@ -145,16 +157,16 @@ export function LearnerLiveCohorts() {
     });
   }, [calendarEvents, weekDays]);
 
-  // RSVP toggle
-  const toggleRsvp = (id: string) => {
-    setRsvpIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
+  // RSVP toggle - backed by API
+  const handleToggleRsvp = (cohortId: string) => {
+    if (!currentUser?.id || !tenantId) return;
+
+    const isRsvp = rsvpIds.has(cohortId);
+    toggleRSVP.mutate({
+      cohortId,
+      userId: currentUser.id,
+      tenantId,
+      status: isRsvp ? 'cancelled' : 'going',
     });
   };
 
@@ -218,6 +230,7 @@ export function LearnerLiveCohorts() {
                         <Button
                           className="bg-white text-emerald-700 hover:bg-emerald-50 gap-1.5 font-semibold"
                           size="sm"
+                          onClick={() => window.open(session.meetingUrl, '_blank')}
                         >
                           <Video className="h-4 w-4" />
                           Join Session
@@ -337,9 +350,12 @@ export function LearnerLiveCohorts() {
                             size="sm"
                             variant={isRsvp ? 'default' : 'outline'}
                             className={isRsvp ? 'bg-emerald-600 hover:bg-emerald-700 gap-1.5' : 'gap-1.5'}
-                            onClick={() => toggleRsvp(event.id)}
+                            onClick={() => handleToggleRsvp(event.id)}
+                            disabled={toggleRSVP.isPending}
                           >
-                            {isRsvp ? (
+                            {toggleRSVP.isPending ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : isRsvp ? (
                               <>
                                 <CheckCircle2 className="h-3.5 w-3.5" />
                                 Going
@@ -351,7 +367,20 @@ export function LearnerLiveCohorts() {
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button variant="outline" size="icon" className="h-9 w-9">
+                                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => {
+                                  const start = parseISO(event.startDate);
+                                  const end = parseISO(event.endDate);
+                                  const pad = (n: number) => n.toString().padStart(2, '0');
+                                  const formatDate = (d: Date) => `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
+                                  const ics = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:${formatDate(start)}\nDTEND:${formatDate(end)}\nSUMMARY:${event.title}\nDESCRIPTION:${event.description || ''}\nLOCATION:${event.meetingUrl || ''}\nEND:VEVENT\nEND:VCALENDAR`;
+                                  const blob = new Blob([ics], { type: 'text/calendar' });
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = `${event.title.replace(/\s+/g, '-')}.ics`;
+                                  a.click();
+                                  URL.revokeObjectURL(url);
+                                }}>
                                   <CalendarPlus className="h-4 w-4" />
                                 </Button>
                               </TooltipTrigger>
@@ -527,7 +556,10 @@ export function LearnerLiveCohorts() {
                         </div>
 
                         {/* Watch Button */}
-                        <Button variant="outline" size="sm" className="gap-1.5 shrink-0">
+                        <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => {
+                          const recordingUrl = `/api/live-cohorts/${recording.id}`;
+                          window.open(recordingUrl, '_blank');
+                        }}>
                           <Play className="h-3.5 w-3.5" />
                           Watch Recording
                         </Button>

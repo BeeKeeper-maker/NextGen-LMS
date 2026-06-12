@@ -1987,7 +1987,7 @@ export function AdminDashboard() {
     isLoading: coursesLoading,
     error: coursesError,
     refetch: refetchCourses,
-  } = useCourses();
+  } = useCourses(tenantId);
 
   const {
     data: analyticsResponse,
@@ -2008,7 +2008,7 @@ export function AdminDashboard() {
 
   const {
     data: communityData,
-  } = useCommunityPosts();
+  } = useCommunityPosts(tenantId);
 
   // ─── Extract analytics data ────────────────────────────────
   const analyticsMetrics = analyticsResponse?.metrics ?? [];

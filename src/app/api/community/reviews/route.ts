@@ -1,6 +1,22 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+// Helper: recalculate course metrics after review changes
+async function recalculateCourseMetrics(courseId: string) {
+  const stats = await db.courseReview.aggregate({
+    where: { courseId, status: 'approved' },
+    _avg: { rating: true },
+    _count: { rating: true },
+  });
+  await db.course.update({
+    where: { id: courseId },
+    data: {
+      avgRating: stats._avg.rating || 0,
+      totalRatings: stats._count.rating || 0,
+    },
+  });
+}
+
 // GET /api/community/reviews - List course reviews with filtering and sorting
 export async function GET(request: Request) {
   try {
@@ -127,6 +143,9 @@ export async function POST(request: Request) {
         },
       },
     });
+
+    // === FIX 4: Recalculate course review metrics after review creation ===
+    await recalculateCourseMetrics(courseId);
 
     return NextResponse.json(review, { status: 201 });
   } catch (error) {

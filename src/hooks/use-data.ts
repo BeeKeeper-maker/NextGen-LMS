@@ -23,10 +23,11 @@ function useCurrentUser() {
 
 // ─── Courses ──────────────────────────────────────────────────
 
-export function useCourses() {
+export function useCourses(tenantId?: string) {
+  const params = tenantId ? `?tenantId=${tenantId}` : '';
   return useQuery({
-    queryKey: ['courses'],
-    queryFn: () => apiGet<any[]>('/courses'),
+    queryKey: ['courses', tenantId],
+    queryFn: () => apiGet<any[]>(`/courses${params}`),
   });
 }
 
@@ -184,10 +185,11 @@ export function useEnroll() {
 
 // ─── Community ────────────────────────────────────────────────
 
-export function useCommunityPosts() {
+export function useCommunityPosts(tenantId?: string) {
+  const params = tenantId ? `?tenantId=${tenantId}` : '';
   return useQuery({
-    queryKey: ['community'],
-    queryFn: () => apiGet<{ posts: any[]; categories: any[] }>('/community'),
+    queryKey: ['community', tenantId],
+    queryFn: () => apiGet<{ posts: any[]; categories: any[] }>(`/community${params}`),
   });
 }
 
@@ -381,9 +383,23 @@ export function useSubmitQuiz() {
       apiPost(`/assessments/${assessmentId}/submit`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assessments'] });
+      queryClient.invalidateQueries({ queryKey: ['quiz-submissions'] });
       toast.success('Quiz submitted successfully');
     },
     onError: () => toast.error('Failed to submit quiz'),
+  });
+}
+
+export function useQuizSubmissions(userId?: string, assessmentId?: string) {
+  const params = new URLSearchParams();
+  if (userId) params.set('userId', userId);
+  if (assessmentId) params.set('assessmentId', assessmentId);
+  const qs = params.toString();
+
+  return useQuery({
+    queryKey: ['quiz-submissions', userId, assessmentId],
+    queryFn: () => apiGet<any[]>(`/quiz-submissions${qs ? `?${qs}` : ''}`),
+    enabled: !!userId,
   });
 }
 
@@ -748,6 +764,28 @@ export function useDeleteLiveCohort() {
       toast.success('Live cohort deleted successfully');
     },
     onError: () => toast.error('Failed to delete live cohort'),
+  });
+}
+
+// ─── Live Cohort RSVPs ──────────────────────────────────────
+
+export function useLiveCohortRSVPs(userId?: string) {
+  return useQuery({
+    queryKey: ['live-cohort-rsvps', userId],
+    queryFn: () => apiGet<any[]>(`/live-cohorts/rsvp?userId=${userId}`),
+    enabled: !!userId,
+  });
+}
+
+export function useToggleRSVP() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { cohortId: string; userId: string; tenantId: string; status: string }) =>
+      apiPost('/live-cohorts/rsvp', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['live-cohort-rsvps'] });
+      queryClient.invalidateQueries({ queryKey: ['live-cohorts'] });
+    },
   });
 }
 

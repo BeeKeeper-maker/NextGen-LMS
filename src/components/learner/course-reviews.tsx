@@ -869,7 +869,7 @@ export function CourseReviews({
     setVisibleCount(5);
   }, []);
 
-  const { data: coursesData } = useCourses();
+  const { data: coursesData } = useCourses(tenantId || undefined);
   const demoCourses = coursesData || [];
   const courseName = demoCourses.find((c: any) => c.id === courseId)?.title || 'Course';
 

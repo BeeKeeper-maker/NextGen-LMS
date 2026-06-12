@@ -244,14 +244,18 @@ function TopBar() {
   );
 }
 
-// Fetch tenant data on app init and keep store in sync
+// Fetch tenant & user data on app init and keep store in sync
 function TenantLoader({ children }: { children: React.ReactNode }) {
-  const { currentTenant, setCurrentTenant } = useAppStore();
-  const hasFetched = useRef(false);
+  const { currentTenant, setCurrentTenant, currentUser, setCurrentUser, appMode } = useAppStore();
+  const hasFetchedTenant = useRef(false);
+  const hasFetchedUser = useRef(false);
 
+  // Fetch tenant if currentTenant is null or needs fresh data
   useEffect(() => {
-    if (hasFetched.current) return;
-    hasFetched.current = true;
+    if (hasFetchedTenant.current) return;
+    // Only fetch tenant when we're not in marketing mode without persisted tenant
+    if (!currentTenant && appMode === 'marketing') return;
+    hasFetchedTenant.current = true;
 
     const slug = currentTenant?.slug || 'nextgen-academy';
     fetch(`/api/tenants?slug=${slug}`)
@@ -281,7 +285,43 @@ function TenantLoader({ children }: { children: React.ReactNode }) {
       .catch((err) => {
         console.error('Failed to fetch tenant data:', err);
       });
-  }, [currentTenant?.slug, setCurrentTenant]);
+  }, [currentTenant, setCurrentTenant, appMode]);
+
+  // Fetch full user profile if currentUser has an ID but may lack full data
+  useEffect(() => {
+    if (!currentUser?.id || hasFetchedUser.current) return;
+    hasFetchedUser.current = true;
+
+    fetch(`/api/users/${currentUser.id}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('User not found');
+        return res.json();
+      })
+      .then((data) => {
+        if (data && data.id) {
+          setCurrentUser({
+            id: data.id,
+            tenantId: data.tenantId,
+            email: data.email,
+            name: data.name || undefined,
+            avatarUrl: data.avatarUrl || undefined,
+            role: data.role,
+            bio: data.bio || undefined,
+            timezone: data.timezone || 'UTC',
+            locale: data.locale || 'en',
+            streakDays: data.streakDays || 0,
+            totalPoints: data.totalPoints || 0,
+            isActive: data.isActive ?? true,
+            lastLoginAt: data.lastLoginAt || undefined,
+            createdAt: data.createdAt,
+          });
+        }
+      })
+      .catch((err) => {
+        // User may not exist in DB yet (e.g., demo user) — silently ignore
+        console.warn('Could not fetch user profile:', err?.message || err);
+      });
+  }, [currentUser, setCurrentUser]);
 
   return <>{children}</>;
 }

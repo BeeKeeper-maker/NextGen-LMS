@@ -1,6 +1,35 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+// Helper: update daily metrics for analytics
+async function updateDailyMetric(tenantId: string, field: 'activeUsers' | 'newEnrollments' | 'completions' | 'revenue' | 'quizAttempts', increment: number = 1) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  try {
+    const existing = await db.dailyMetric.findUnique({
+      where: { tenantId_date: { tenantId, date: today.toISOString() } },
+    });
+
+    if (existing) {
+      await db.dailyMetric.update({
+        where: { id: existing.id },
+        data: { [field]: { increment } },
+      });
+    } else {
+      await db.dailyMetric.create({
+        data: {
+          tenantId,
+          date: today.toISOString(),
+          [field]: increment,
+        },
+      });
+    }
+  } catch (error) {
+    console.error('Daily metric update error:', error);
+  }
+}
+
 // GET /api/enrollments?userId=xxx - List user enrollments
 export async function GET(request: Request) {
   try {
@@ -103,6 +132,21 @@ export async function POST(request: Request) {
 
       return enr;
     });
+
+    // === FIX 5: Track enrollment analytics event ===
+    try {
+      await db.analyticsEvent.create({
+        data: {
+          tenantId,
+          userId,
+          eventType: 'enrollment',
+          eventData: JSON.stringify({ courseId, enrollmentId: enrollment.id, source: 'direct' }),
+        },
+      });
+      await updateDailyMetric(tenantId, 'newEnrollments', 1);
+    } catch (analyticsError) {
+      console.error('Enrollment analytics tracking error:', analyticsError);
+    }
 
     return NextResponse.json(enrollment, { status: 201 });
   } catch (error) {

@@ -959,7 +959,7 @@ export function AdminLearningPaths() {
 
   // API data hooks
   const { data: apiPaths, isLoading: pathsLoading, error: pathsError } = useLearningPaths(tenantId);
-  const { data: apiCourses } = useCourses();
+  const { data: apiCourses } = useCourses(tenantId);
   const createPathMutation = useCreateLearningPath();
   const updatePathMutation = useUpdateLearningPath();
   const deletePathMutation = useDeleteLearningPath();

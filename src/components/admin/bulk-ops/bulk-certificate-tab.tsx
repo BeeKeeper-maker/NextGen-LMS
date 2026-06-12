@@ -83,7 +83,7 @@ export function BulkCertificateTab() {
   const [subTab, setSubTab] = useState<CertSubTab>('issue');
   const { currentTenant } = useAppStore();
   const tenantId = currentTenant?.id || '';
-  const { data: coursesData } = useCourses();
+  const { data: coursesData } = useCourses(tenantId || undefined);
   const { data: awardsData } = useCertificateAwards(tenantId);
   const demoCourses = coursesData || [];
 

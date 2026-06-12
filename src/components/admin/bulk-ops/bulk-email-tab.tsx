@@ -162,9 +162,9 @@ export function BulkEmailTab() {
   const [testSent, setTestSent] = useState(false);
   // History filters
   const [dateFilter, setDateFilter] = useState('all');
-  const { data: coursesData } = useCourses();
-  const demoCourses = coursesData || [];
   const tenantId = useAppStore((s) => s.currentTenant?.id) || '';
+  const { data: coursesData } = useCourses(tenantId || undefined);
+  const demoCourses = coursesData || [];
   const { data: usersData, isLoading: usersLoading } = useUsers(tenantId || undefined);
   // Map API users to display type
   const bulkUsers: BulkUser[] = useMemo(() => {

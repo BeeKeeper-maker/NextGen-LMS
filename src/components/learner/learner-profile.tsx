@@ -540,7 +540,7 @@ export function LearnerProfile() {
 
   // Portfolio state
   // ─── Fetch courses for recommendations ─────────────────
-  const { data: coursesData } = useCourses();
+  const { data: coursesData } = useCourses(tenantId || undefined);
 
   // ─── Compute skills from enrollments ────────────────────
   const skillsFromApi = useMemo(() => {

@@ -353,7 +353,7 @@ export function LearnerCommunity() {
   const { currentUser, currentTenant } = useAppStore();
 
   // ── Data Hooks ─────────────────────────────────────────────────────────────
-  const { data: communityData, isLoading } = useCommunityPosts();
+  const { data: communityData, isLoading } = useCommunityPosts(tenantId);
   const { data: usersData } = useUsers(tenantId);
 
   // ── Mutation Hooks ─────────────────────────────────────────────────────────

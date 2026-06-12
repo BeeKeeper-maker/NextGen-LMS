@@ -46,6 +46,7 @@ import {
 import { useAppStore } from '@/store/app-store';
 import { useCourses, useProducts, useCreateOrder } from '@/hooks/use-data';
 import { validEmail } from '@/lib/validations';
+import { toast } from 'sonner';
 import type { CurrencyOption } from '@/types';
 
 // Default product fallback when no products are in the database
@@ -312,7 +313,7 @@ export function CheckoutPage() {
   const { setView, currentUser, currentTenant } = useAppStore();
   const userId = currentUser?.id || '';
   const tenantId = currentTenant?.id || '';
-  const { data: coursesData } = useCourses();
+  const { data: coursesData } = useCourses(tenantId || undefined);
   const { data: productsData } = useProducts(tenantId);
   const createOrderMutation = useCreateOrder();
   const courses = coursesData || [];
@@ -461,8 +462,10 @@ export function CheckoutPage() {
           paymentProvider: paymentMethod === 'card' ? 'stripe' : paymentMethod === 'paypal' ? 'paypal' : 'apple_pay',
           paymentId: `pay_${Date.now()}`,
         });
-      } catch {
-        // Order creation failed but still show success for demo
+      } catch (err) {
+        toast.error('Payment processing failed. Please try again.');
+        setIsProcessing(false);
+        return;
       }
       setIsProcessing(false);
       setPaymentSuccess(true);

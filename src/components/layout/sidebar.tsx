@@ -26,6 +26,7 @@ import {
   FileText,
   Sun,
   Map,
+  ShoppingCart,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -79,6 +80,7 @@ const learnerNavItems: NavItem[] = [
   { label: 'Community', view: 'learner-community', icon: MessageCircle },
   { label: 'Live Cohorts', view: 'learner-live-cohorts', icon: Calendar },
   { label: 'Achievements', view: 'learner-achievements', icon: Trophy },
+  { label: 'Checkout', view: 'checkout' as AppView, icon: ShoppingCart },
   { label: 'Profile', view: 'learner-profile', icon: User },
   { label: 'AI Tutor', view: 'ai-assistant', icon: Sparkles },
 ];

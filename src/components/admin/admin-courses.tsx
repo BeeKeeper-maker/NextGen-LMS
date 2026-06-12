@@ -3864,7 +3864,7 @@ function ReviewManagementTab() {
 
 export function AdminCourses() {
   const tenantId = useAppStore((s) => s.currentTenant?.id) || 'demo-tenant-1';
-  const { data: coursesData, isLoading: loading, refetch } = useCourses();
+  const { data: coursesData, isLoading: loading, refetch } = useCourses(tenantId);
   const createCourseMutation = useCreateCourse();
   const updateCourseMutation = useUpdateCourse();
   const deleteCourseMutation = useDeleteCourse();

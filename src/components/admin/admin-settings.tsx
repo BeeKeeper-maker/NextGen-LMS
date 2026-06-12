@@ -5388,7 +5388,7 @@ function DataPrivacySettings() {
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toast.success('Download started!')}>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { window.open(`/api/data-exports?id=${exp.id}&action=download`, '_blank'); toast.success('Download started!'); }}>
                                       <Download className="h-3.5 w-3.5" />
                                     </Button>
                                   </TooltipTrigger>
@@ -6125,7 +6125,7 @@ function DataPrivacySettings() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              onClick={() => toast.success('Download started', { description: `${backup.date} backup` })}
+                              onClick={() => { window.open(`/api/backups?id=${backup.id}&action=download`, '_blank'); toast.success('Download started', { description: `${backup.date} backup` }); }}
                             >
                               <Download className="h-3.5 w-3.5" />
                             </Button>

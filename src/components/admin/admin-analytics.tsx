@@ -837,7 +837,7 @@ export function AdminAnalytics() {
 
   // Fetch real data from API using React Query hooks
   const { data: analyticsData, isLoading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useAnalytics();
-  const { data: coursesData, isLoading: coursesLoading, error: coursesError, refetch: refetchCourses } = useCourses();
+  const { data: coursesData, isLoading: coursesLoading, error: coursesError, refetch: refetchCourses } = useCourses(tenantId);
   const { data: enrollmentsData } = useEnrollments();
   const { data: usersData } = useUsers(tenantId);
 

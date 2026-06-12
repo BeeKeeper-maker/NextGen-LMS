@@ -175,8 +175,49 @@ function MarkdownRenderer({ content }: { content: string }) {
 }
 
 // ============================================================
-// Floating Chat Widget
+// Persistent Chat Hook - localStorage persistence for chat history
 // ============================================================
+const WELCOME_MESSAGE: ChatMessage = {
+  id: 'welcome',
+  role: 'assistant',
+  content:
+    "Hi! I'm your AI Learning Assistant. I can help you understand concepts, debug code, create study plans, and more. What would you like to learn today?",
+  timestamp: new Date().toISOString(),
+};
+
+function loadMessagesFromStorage(storageKey: string): ChatMessage[] {
+  if (typeof window === 'undefined') return [WELCOME_MESSAGE];
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      const data = JSON.parse(saved);
+      if (Array.isArray(data.messages) && data.messages.length > 0) {
+        return data.messages;
+      }
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return [WELCOME_MESSAGE];
+}
+
+function usePersistentChat(storageKey: string) {
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadMessagesFromStorage(storageKey));
+
+  // Save to localStorage on changes
+  useEffect(() => {
+    if (messages.length > 0) {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify({ messages }));
+      } catch {
+        // ignore storage errors
+      }
+    }
+  }, [storageKey, messages]);
+
+  return { messages, setMessages };
+}
+
 interface Conversation {
   id: string;
   title: string;
@@ -185,17 +226,63 @@ interface Conversation {
   courseContext?: string;
 }
 
+const DEFAULT_CONVERSATIONS: Conversation[] = [
+  {
+    id: 'conv-1',
+    title: 'Getting Started',
+    messages: [
+      {
+        id: 'welcome-full',
+        role: 'assistant',
+        content:
+          "Welcome to your AI Learning Assistant! I can help you with:\n\n- **Understanding concepts** — Ask me to explain any topic\n- **Code help** — Debug issues or learn new patterns\n- **Study plans** — Create personalized learning paths\n- **Quiz prep** — Review and practice for assessments\n\nWhat would you like to explore today?",
+        timestamp: new Date().toISOString(),
+      },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+];
+
+function loadConversationsFromStorage(storageKey: string): Conversation[] {
+  if (typeof window === 'undefined') return DEFAULT_CONVERSATIONS;
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      const data = JSON.parse(saved);
+      if (Array.isArray(data.conversations) && data.conversations.length > 0) {
+        return data.conversations;
+      }
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return DEFAULT_CONVERSATIONS;
+}
+
+function usePersistentConversations(storageKey: string) {
+  const [conversations, setConversations] = useState<Conversation[]>(() => loadConversationsFromStorage(storageKey));
+
+  // Save to localStorage on changes
+  useEffect(() => {
+    if (conversations.length > 0) {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify({ conversations }));
+      } catch {
+        // ignore storage errors
+      }
+    }
+  }, [storageKey, conversations]);
+
+  return { conversations, setConversations };
+}
+
+// ============================================================
+// Floating Chat Widget
+// ============================================================
+
 export function AITutorFloatingWidget() {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content:
-        "Hi! I'm your AI Learning Assistant. I can help you understand concepts, debug code, create study plans, and more. What would you like to learn today?",
-      timestamp: new Date().toISOString(),
-    },
-  ]);
+  const { messages, setMessages } = usePersistentChat('nextgen-lms-floating-chat');
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -443,22 +530,7 @@ export function AITutorFloatingWidget() {
 // Full-Page AI Tutor
 // ============================================================
 export function AITutorFullPage() {
-  const [conversations, setConversations] = useState<Conversation[]>([
-    {
-      id: 'conv-1',
-      title: 'Getting Started',
-      messages: [
-        {
-          id: 'welcome-full',
-          role: 'assistant',
-          content:
-            "Welcome to your AI Learning Assistant! I can help you with:\n\n- **Understanding concepts** — Ask me to explain any topic\n- **Code help** — Debug issues or learn new patterns\n- **Study plans** — Create personalized learning paths\n- **Quiz prep** — Review and practice for assessments\n\nWhat would you like to explore today?",
-          timestamp: new Date().toISOString(),
-        },
-      ],
-      createdAt: new Date().toISOString(),
-    },
-  ]);
+  const { conversations, setConversations } = usePersistentConversations('nextgen-lms-full-chat');
   const [activeConvId, setActiveConvId] = useState('conv-1');
   const [confirmDeleteConv, setConfirmDeleteConv] = useState<string | null>(null);
   const [input, setInput] = useState('');
@@ -467,7 +539,8 @@ export function AITutorFullPage() {
   const [selectedCourse, setSelectedCourse] = useState<string>('all');
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const { data: coursesData } = useCourses();
+  const tenantId = useAppStore((s) => s.currentTenant?.id) || '';
+  const { data: coursesData } = useCourses(tenantId || undefined);
   const demoCourses = coursesData || [];
 
   const activeConv = conversations.find((c) => c.id === activeConvId);

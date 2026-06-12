@@ -108,9 +108,9 @@ type EnrollmentStep = 'configure' | 'preview' | 'processing' | 'complete';
 export function BulkEnrollmentTab() {
   // Course selection
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
-  const { data: coursesData } = useCourses();
-  const demoCourses = coursesData || [];
   const tenantId = useAppStore((s) => s.currentTenant?.id) || '';
+  const { data: coursesData } = useCourses(tenantId || undefined);
+  const demoCourses = coursesData || [];
   const { data: usersData, isLoading: usersLoading } = useUsers(tenantId || undefined);
   // Map API users to display type
   const bulkUsers: BulkUser[] = useMemo(() => {

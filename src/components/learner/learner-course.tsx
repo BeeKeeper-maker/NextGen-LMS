@@ -16,8 +16,12 @@ import {
   useCommunityReviews,
   useLessonDiscussions,
   useCreateDiscussion,
+  useAssessments,
+  useQuizSubmissions,
 } from '@/hooks/use-data';
 import { validateFields, required, minLength } from '@/lib/validations';
+import { apiDelete } from '@/lib/api';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -32,6 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { VideoPlayer } from '@/components/shared/video-player';
 import type { Chapter } from '@/components/shared/video-player';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { AssessmentPlayer } from '@/components/learner/assessment-player';
 import {
   Play,
   FileText,
@@ -95,6 +100,9 @@ import {
   Milestone,
   MessageCircleQuestion,
   Plus,
+  FileCheck,
+  ClipboardCheck,
+  RotateCcw,
   Bold,
   Italic,
   Link2,
@@ -1982,11 +1990,13 @@ export function LearnerCourse() {
   const userId = useAppStore(s => s.currentUser?.id) || '';
   const currentUser = useAppStore(s => s.currentUser);
   const tenantId = useAppStore(s => s.currentTenant?.id) || '';
+  const setView = useAppStore(s => s.setView);
   const [showUnenrollConfirm, setShowUnenrollConfirm] = useState(false);
 
   // Fetch courses to determine the first course ID
-  const { data: coursesData, isLoading: coursesLoading } = useCourses();
-  const firstCourseId = coursesData && coursesData.length > 0 ? coursesData[0].id : null;
+  const { data: coursesData, isLoading: coursesLoading } = useCourses(tenantId || undefined);
+  const selectedCourseId = useAppStore(s => s.selectedCourseId);
+  const firstCourseId = selectedCourseId || (coursesData && coursesData.length > 0 ? coursesData[0].id : null);
 
   // Fetch course with modules/lessons
   const { data: course, isLoading: courseLoading } = useCourse(firstCourseId);
@@ -2046,7 +2056,14 @@ export function LearnerCourse() {
   const [activeTab, setActiveTab] = useState('overview');
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
   const [activeLessonModuleName, setActiveLessonModuleName] = useState('');
+  const [activeAssessmentId, setActiveAssessmentId] = useState<string | null>(null);
   const curriculumRef = useRef<HTMLDivElement>(null);
+
+  // Fetch assessments for this course
+  const { data: assessmentsData, isLoading: assessmentsLoading } = useAssessments(firstCourseId || undefined);
+
+  // Fetch user's quiz submissions
+  const { data: quizSubmissionsData } = useQuizSubmissions(userId || undefined);
 
   // Calculate total lessons and completed
   const allLessons = modules.flatMap((m: any) => m.lessons || []);
@@ -2109,7 +2126,7 @@ export function LearnerCourse() {
   }, [modules, lessonProgressState]);
 
   // Derive other courses for "Students Also Taking"
-  const { data: otherCourses } = useCourses();
+  const { data: otherCourses } = useCourses(tenantId || undefined);
   const studentsAlsoTaking = useMemo(() => {
     if (!otherCourses || !course) return [];
     return otherCourses
@@ -2275,8 +2292,18 @@ export function LearnerCourse() {
           description="Are you sure you want to unenroll? Your progress will be saved, but you will lose access to the course content. This action can be undone by re-enrolling."
           confirmLabel="Unenroll"
           variant="destructive"
-          onConfirm={() => {
-            setShowUnenrollConfirm(false);
+          onConfirm={async () => {
+            try {
+              const enrollmentId = enrollment?.id;
+              if (enrollmentId) {
+                await apiDelete(`/enrollments/${enrollmentId}`);
+              }
+              toast.success('Successfully unenrolled from course');
+              setShowUnenrollConfirm(false);
+              setView('learner-dashboard');
+            } catch (err) {
+              toast.error('Failed to unenroll');
+            }
           }}
         />
       </>
@@ -2434,6 +2461,10 @@ export function LearnerCourse() {
             <TabsTrigger value="qa" className="gap-1.5 shrink-0">
               <MessageCircleQuestion className="h-4 w-4" />
               Q&amp;A
+            </TabsTrigger>
+            <TabsTrigger value="assessments" className="gap-1.5 shrink-0">
+              <ClipboardCheck className="h-4 w-4" />
+              Assessments
             </TabsTrigger>
           </TabsList>
 
@@ -3051,6 +3082,172 @@ export function LearnerCourse() {
               </motion.div>
             </AnimatePresence>
           </TabsContent>
+
+          {/* ─── Tab: Assessments ──────────────────────────── */}
+          <TabsContent value="assessments" className="mt-6">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key="assessments"
+                variants={tabContentVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+              >
+                {activeAssessmentId ? (
+                  <Card className={cn(glassCard, 'min-h-[60vh]')}>
+                    <CardContent className="p-0">
+                      <AssessmentPlayer
+                        assessmentId={activeAssessmentId}
+                        onClose={() => setActiveAssessmentId(null)}
+                        previousSubmissions={quizSubmissionsData?.filter((s: any) => s.assessmentId === activeAssessmentId) || []}
+                      />
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-semibold">Course Assessments</h3>
+                        <p className="text-sm text-muted-foreground">Test your knowledge with quizzes and assessments</p>
+                      </div>
+                      <Badge variant="secondary">
+                        {(assessmentsData as any[])?.filter((a: any) => a.isPublished).length || 0} Available
+                      </Badge>
+                    </div>
+
+                    {assessmentsLoading ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {[1, 2, 3].map((i) => (
+                          <Card key={i} className={cn(glassCard, 'animate-pulse')}>
+                            <CardContent className="p-4 space-y-3">
+                              <div className="h-4 bg-muted rounded w-3/4" />
+                              <div className="h-3 bg-muted rounded w-1/2" />
+                              <div className="h-8 bg-muted rounded w-1/3" />
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    ) : !assessmentsData || (assessmentsData as any[]).filter((a: any) => a.isPublished).length === 0 ? (
+                      <Card className={cn(glassCard, 'border-dashed')}>
+                        <CardContent className="p-8 text-center">
+                          <ClipboardCheck className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+                          <h4 className="text-sm font-medium mb-1">No Assessments Available</h4>
+                          <p className="text-xs text-muted-foreground">There are no published assessments for this course yet.</p>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {(assessmentsData as any[])
+                          .filter((a: any) => a.isPublished)
+                          .map((assessment: any) => {
+                            const questionCount = assessment._count?.questions || assessment.questions?.length || 0;
+                            const totalPts = (assessment.questions || []).reduce((s: number, q: any) => s + (q.points || 1), 0);
+                            const userSubmissions = (quizSubmissionsData || []).filter((s: any) => s.assessmentId === assessment.id);
+                            const bestSubmission = userSubmissions.length > 0
+                              ? userSubmissions.reduce((best: any, curr: any) =>
+                                  (curr.percentScore || 0) > (best.percentScore || 0) ? curr : best
+                                )
+                              : null;
+                            const hasPassed = bestSubmission?.passed;
+                            const attemptsUsed = userSubmissions.length;
+                            const attemptsRemaining = assessment.maxAttempts - attemptsUsed;
+
+                            return (
+                              <Card key={assessment.id} className={cn(glassCard, 'hover:shadow-md transition-all duration-200 group')}>
+                                <CardContent className="p-4 md:p-5">
+                                  <div className="flex items-start justify-between gap-3 mb-3">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <FileCheck className="h-4 w-4 text-violet-600 shrink-0" />
+                                        <h4 className="text-sm font-semibold truncate">{assessment.title}</h4>
+                                      </div>
+                                      {assessment.description && (
+                                        <p className="text-xs text-muted-foreground line-clamp-2">{assessment.description}</p>
+                                      )}
+                                    </div>
+                                    {hasPassed ? (
+                                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 shrink-0">
+                                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                                        Passed
+                                      </Badge>
+                                    ) : attemptsUsed > 0 ? (
+                                      <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0">
+                                        <RotateCcw className="h-3 w-3 mr-1" />
+                                        {attemptsUsed}/{assessment.maxAttempts}
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="secondary" className="shrink-0">New</Badge>
+                                    )}
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mb-3">
+                                    <span className="flex items-center gap-1">
+                                      <BookOpen className="h-3 w-3" />
+                                      {questionCount} question{questionCount !== 1 ? 's' : ''}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <Target className="h-3 w-3" />
+                                      {totalPts} pts
+                                    </span>
+                                    {assessment.timeLimit && (
+                                      <span className="flex items-center gap-1">
+                                        <Timer className="h-3 w-3" />
+                                        {assessment.timeLimit} min
+                                      </span>
+                                    )}
+                                    <span className="flex items-center gap-1">
+                                      <Award className="h-3 w-3" />
+                                      {assessment.passingScore}% pass
+                                    </span>
+                                  </div>
+
+                                  {bestSubmission && (
+                                    <div className="text-xs text-muted-foreground mb-3 p-2 rounded bg-muted/30">
+                                      Best score: <span className={cn('font-medium', hasPassed ? 'text-emerald-600' : 'text-amber-600')}>{bestSubmission.percentScore}%</span>
+                                      {bestSubmission.timeTaken && (
+                                        <span className="ml-2">Time: {Math.floor(bestSubmission.timeTaken / 60)}m {bestSubmission.timeTaken % 60}s</span>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  <Button
+                                    onClick={() => setActiveAssessmentId(assessment.id)}
+                                    disabled={attemptsRemaining <= 0}
+                                    className={cn(
+                                      'w-full gap-1.5 text-xs h-8',
+                                      hasPassed
+                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                        : 'bg-gradient-to-r from-violet-600 to-purple-700 hover:from-violet-700 hover:to-purple-800 text-white'
+                                    )}
+                                  >
+                                    {hasPassed ? (
+                                      <>
+                                        <Eye className="h-3.5 w-3.5" />
+                                        Retake Quiz
+                                      </>
+                                    ) : attemptsUsed > 0 ? (
+                                      <>
+                                        <RotateCcw className="h-3.5 w-3.5" />
+                                        Try Again ({attemptsRemaining} left)
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Play className="h-3.5 w-3.5" />
+                                        Start Quiz
+                                      </>
+                                    )}
+                                  </Button>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </TabsContent>
         </Tabs>
       </motion.div>
 
@@ -3062,8 +3259,18 @@ export function LearnerCourse() {
         description="Are you sure you want to unenroll? Your progress will be saved, but you will lose access to the course content. This action can be undone by re-enrolling."
         confirmLabel="Unenroll"
         variant="destructive"
-        onConfirm={() => {
-          setShowUnenrollConfirm(false);
+        onConfirm={async () => {
+          try {
+            const enrollmentId = enrollment?.id;
+            if (enrollmentId) {
+              await apiDelete(`/enrollments/${enrollmentId}`);
+            }
+            toast.success('Successfully unenrolled from course');
+            setShowUnenrollConfirm(false);
+            setView('learner-dashboard');
+          } catch (err) {
+            toast.error('Failed to unenroll');
+          }
         }}
       />
     </motion.div>

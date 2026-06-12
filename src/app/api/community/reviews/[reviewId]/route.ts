@@ -1,6 +1,22 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+// Helper: recalculate course metrics after review changes
+async function recalculateCourseMetrics(courseId: string) {
+  const stats = await db.courseReview.aggregate({
+    where: { courseId, status: 'approved' },
+    _avg: { rating: true },
+    _count: { rating: true },
+  });
+  await db.course.update({
+    where: { id: courseId },
+    data: {
+      avgRating: stats._avg.rating || 0,
+      totalRatings: stats._count.rating || 0,
+    },
+  });
+}
+
 // PATCH /api/community/reviews/[reviewId] - Moderate a review (approve, reject, flag, respond)
 export async function PATCH(
   request: Request,
@@ -91,6 +107,11 @@ export async function PATCH(
         },
       },
     });
+
+    // === FIX 4: Recalculate course review metrics after status change ===
+    if (action === 'approved' || action === 'rejected') {
+      await recalculateCourseMetrics(existing.courseId);
+    }
 
     return NextResponse.json(review);
   } catch (error) {
@@ -198,6 +219,11 @@ export async function PUT(
       },
     });
 
+    // === FIX 4: Recalculate course review metrics after rating update ===
+    if (rating !== undefined && existing.status === 'approved') {
+      await recalculateCourseMetrics(existing.courseId);
+    }
+
     return NextResponse.json(review);
   } catch (error) {
     console.error('Review update error:', error);
@@ -222,6 +248,9 @@ export async function DELETE(
     }
 
     await db.courseReview.delete({ where: { id: reviewId } });
+
+    // === FIX 4: Recalculate course review metrics after review deletion ===
+    await recalculateCourseMetrics(existing.courseId);
 
     return NextResponse.json({ success: true, message: 'Review deleted successfully' });
   } catch (error) {

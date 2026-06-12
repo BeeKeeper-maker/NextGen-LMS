@@ -1,0 +1,898 @@
+     1→'use client';
+     2→
+     3→import { useState, useRef, useEffect, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { Button } from '@/components/ui/button';
+     6→import { Input } from '@/components/ui/input';
+     7→import { ScrollArea } from '@/components/ui/scroll-area';
+     8→import { Card } from '@/components/ui/card';
+     9→import { Badge } from '@/components/ui/badge';
+    10→import { Separator } from '@/components/ui/separator';
+    11→import {
+    12→  Bot,
+    13→  Send,
+    14→  X,
+    15→  Minus,
+    16→  Maximize2,
+    17→  Sparkles,
+    18→  User,
+    19→  Loader2,
+    20→  BookOpen,
+    21→  HelpCircle,
+    22→  Code,
+    23→  GraduationCap,
+    24→  MessageSquare,
+    25→  ChevronLeft,
+    26→  Plus,
+    27→  Trash2,
+    28→} from 'lucide-react';
+    29→import { toast } from 'sonner';
+    30→import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+    31→import type { ChatMessage } from '@/types';
+    32→import { useAppStore } from '@/store/app-store';
+    33→import { useCourses } from '@/hooks/use-data';
+    34→
+    35→// ============================================================
+    36→// Markdown Renderer (simplified - handles code, bold, lists)
+    37→// ============================================================
+    38→function MarkdownRenderer({ content }: { content: string }) {
+    39→  const lines = content.split('\n');
+    40→  const elements: React.ReactNode[] = [];
+    41→  let inCodeBlock = false;
+    42→  let codeContent = '';
+    43→  let codeLang = '';
+    44→  let inList = false;
+    45→
+    46→  for (let i = 0; i < lines.length; i++) {
+    47→    const line = lines[i];
+    48→
+    49→    if (line.startsWith('```')) {
+    50→      if (inCodeBlock) {
+    51→        elements.push(
+    52→          <pre
+    53→            key={`code-${i}`}
+    54→            className="my-2 rounded-lg bg-slate-900 p-3 text-sm text-emerald-300 overflow-x-auto font-mono"
+    55→          >
+    56→            {codeLang && (
+    57→              <div className="text-xs text-slate-500 mb-1">{codeLang}</div>
+    58→            )}
+    59→            <code>{codeContent.trim()}</code>
+    60→          </pre>
+    61→        );
+    62→        codeContent = '';
+    63→        codeLang = '';
+    64→        inCodeBlock = false;
+    65→      } else {
+    66→        inCodeBlock = true;
+    67→        codeLang = line.slice(3).trim();
+    68→      }
+    69→      continue;
+    70→    }
+    71→
+    72→    if (inCodeBlock) {
+    73→      codeContent += line + '\n';
+    74→      continue;
+    75→    }
+    76→
+    77→    // Inline formatting
+    78→    const formatInline = (text: string): React.ReactNode => {
+    79→      // Bold
+    80→      const parts = text.split(/(\*\*[^*]+\*\*)/g);
+    81→      return parts.map((part, idx) => {
+    82→        if (part.startsWith('**') && part.endsWith('**')) {
+    83→          return (
+    84→            <strong key={idx} className="font-semibold text-foreground">
+    85→              {part.slice(2, -2)}
+    86→            </strong>
+    87→          );
+    88→        }
+    89→        // Inline code
+    90→        const codeParts = part.split(/(`[^`]+`)/g);
+    91→        return codeParts.map((cp, cidx) => {
+    92→          if (cp.startsWith('`') && cp.endsWith('`')) {
+    93→            return (
+    94→              <code
+    95→                key={`${idx}-${cidx}`}
+    96→                className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-mono text-violet-700 dark:bg-slate-800 dark:text-violet-300"
+    97→              >
+    98→                {cp.slice(1, -1)}
+    99→              </code>
+   100→            );
+   101→          }
+   102→          return cp;
+   103→        });
+   104→      });
+   105→    };
+   106→
+   107→    // Headers
+   108→    if (line.startsWith('### ')) {
+   109→      if (inList) { inList = false; }
+   110→      elements.push(
+   111→        <h4 key={`h3-${i}`} className="font-semibold text-foreground mt-3 mb-1">
+   112→          {formatInline(line.slice(4))}
+   113→        </h4>
+   114→      );
+   115→      continue;
+   116→    }
+   117→    if (line.startsWith('## ')) {
+   118→      if (inList) { inList = false; }
+   119→      elements.push(
+   120→        <h3 key={`h2-${i}`} className="text-base font-semibold text-foreground mt-3 mb-1">
+   121→          {formatInline(line.slice(3))}
+   122→        </h3>
+   123→      );
+   124→      continue;
+   125→    }
+   126→    if (line.startsWith('# ')) {
+   127→      if (inList) { inList = false; }
+   128→      elements.push(
+   129→        <h2 key={`h1-${i}`} className="text-lg font-bold text-foreground mt-3 mb-1">
+   130→          {formatInline(line.slice(2))}
+   131→        </h2>
+   132→      );
+   133→      continue;
+   134→    }
+   135→
+   136→    // Unordered list
+   137→    if (line.match(/^[-*]\s/)) {
+   138→      inList = true;
+   139→      elements.push(
+   140→        <li key={`li-${i}`} className="ml-4 list-disc text-sm text-muted-foreground">
+   141→          {formatInline(line.replace(/^[-*]\s/, ''))}
+   142→        </li>
+   143→      );
+   144→      continue;
+   145→    }
+   146→
+   147→    // Ordered list
+   148→    if (line.match(/^\d+\.\s/)) {
+   149→      inList = true;
+   150→      elements.push(
+   151→        <li key={`oli-${i}`} className="ml-4 list-decimal text-sm text-muted-foreground">
+   152→          {formatInline(line.replace(/^\d+\.\s/, ''))}
+   153→        </li>
+   154→      );
+   155→      continue;
+   156→    }
+   157→
+   158→    if (inList) { inList = false; }
+   159→
+   160→    // Empty line
+   161→    if (line.trim() === '') {
+   162→      elements.push(<div key={`br-${i}`} className="h-2" />);
+   163→      continue;
+   164→    }
+   165→
+   166→    // Paragraph
+   167→    elements.push(
+   168→      <p key={`p-${i}`} className="text-sm text-muted-foreground leading-relaxed">
+   169→        {formatInline(line)}
+   170→      </p>
+   171→    );
+   172→  }
+   173→
+   174→  return <div className="space-y-0.5">{elements}</div>;
+   175→}
+   176→
+   177→// ============================================================
+   178→// Floating Chat Widget
+   179→// ============================================================
+   180→interface Conversation {
+   181→  id: string;
+   182→  title: string;
+   183→  messages: ChatMessage[];
+   184→  createdAt: string;
+   185→  courseContext?: string;
+   186→}
+   187→
+   188→export function AITutorFloatingWidget() {
+   189→  const [isOpen, setIsOpen] = useState(false);
+   190→  const [messages, setMessages] = useState<ChatMessage[]>([
+   191→    {
+   192→      id: 'welcome',
+   193→      role: 'assistant',
+   194→      content:
+   195→        "Hi! I'm your AI Learning Assistant. I can help you understand concepts, debug code, create study plans, and more. What would you like to learn today?",
+   196→      timestamp: new Date().toISOString(),
+   197→    },
+   198→  ]);
+   199→  const [input, setInput] = useState('');
+   200→  const [isLoading, setIsLoading] = useState(false);
+   201→  const scrollRef = useRef<HTMLDivElement>(null);
+   202→  const inputRef = useRef<HTMLInputElement>(null);
+   203→
+   204→  const scrollToBottom = useCallback(() => {
+   205→    if (scrollRef.current) {
+   206→      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+   207→    }
+   208→  }, []);
+   209→
+   210→  useEffect(() => {
+   211→    scrollToBottom();
+   212→  }, [messages, scrollToBottom]);
+   213→
+   214→  useEffect(() => {
+   215→    if (isOpen && inputRef.current) {
+   216→      inputRef.current.focus();
+   217→    }
+   218→  }, [isOpen]);
+   219→
+   220→  const sendMessage = useCallback(
+   221→    async (messageText?: string) => {
+   222→      const text = messageText || input.trim();
+   223→      if (!text || isLoading) return;
+   224→
+   225→      const userMsg: ChatMessage = {
+   226→        id: `user-${Date.now()}`,
+   227→        role: 'user',
+   228→        content: text,
+   229→        timestamp: new Date().toISOString(),
+   230→      };
+   231→
+   232→      setMessages((prev) => [...prev, userMsg]);
+   233→      setInput('');
+   234→      setIsLoading(true);
+   235→
+   236→      try {
+   237→        const res = await fetch('/api/ai', {
+   238→          method: 'POST',
+   239→          headers: { 'Content-Type': 'application/json' },
+   240→          body: JSON.stringify({
+   241→            message: text,
+   242→            sessionId: 'floating-chat',
+   243→          }),
+   244→        });
+   245→
+   246→        if (!res.ok) throw new Error('Failed to get response');
+   247→
+   248→        const data = await res.json();
+   249→
+   250→        const aiMsg: ChatMessage = {
+   251→          id: `ai-${Date.now()}`,
+   252→          role: 'assistant',
+   253→          content: data.response || 'I apologize, but I could not generate a response. Please try again.',
+   254→          timestamp: new Date().toISOString(),
+   255→        };
+   256→
+   257→        setMessages((prev) => [...prev, aiMsg]);
+   258→      } catch {
+   259→        toast.error('Failed to get AI response. Please try again.');
+   260→        setMessages((prev) => [
+   261→          ...prev,
+   262→          {
+   263→            id: `error-${Date.now()}`,
+   264→            role: 'assistant',
+   265→            content: 'Sorry, I encountered an error. Please try again in a moment.',
+   266→            timestamp: new Date().toISOString(),
+   267→          },
+   268→        ]);
+   269→      } finally {
+   270→        setIsLoading(false);
+   271→      }
+   272→    },
+   273→    [input, isLoading]
+   274→  );
+   275→
+   276→  return (
+   277→    <>
+   278→      {/* Floating Button */}
+   279→      <AnimatePresence>
+   280→        {!isOpen && (
+   281→          <motion.button
+   282→            initial={{ scale: 0, opacity: 0 }}
+   283→            animate={{ scale: 1, opacity: 1 }}
+   284→            exit={{ scale: 0, opacity: 0 }}
+   285→            whileHover={{ scale: 1.1 }}
+   286→            whileTap={{ scale: 0.9 }}
+   287→            onClick={() => setIsOpen(true)}
+   288→            className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-violet-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-shadow"
+   289→            aria-label="Open AI Learning Assistant"
+   290→          >
+   291→            <Bot className="h-6 w-6" />
+   292→          </motion.button>
+   293→        )}
+   294→      </AnimatePresence>
+   295→
+   296→      {/* Chat Panel */}
+   297→      <AnimatePresence>
+   298→        {isOpen && (
+   299→          <motion.div
+   300→            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+   301→            animate={{ opacity: 1, y: 0, scale: 1 }}
+   302→            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+   303→            transition={{ duration: 0.2 }}
+   304→            className="fixed bottom-6 right-6 z-50 flex h-[520px] w-[380px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+   305→          >
+   306→            {/* Header */}
+   307→            <div className="flex items-center justify-between bg-gradient-to-r from-emerald-600 to-violet-600 px-4 py-3 text-white">
+   308→              <div className="flex items-center gap-2">
+   309→                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
+   310→                  <Bot className="h-4 w-4" />
+   311→                </div>
+   312→                <div>
+   313→                  <p className="text-sm font-semibold">AI Learning Assistant</p>
+   314→                  <p className="text-[10px] text-white/70">Always here to help</p>
+   315→                </div>
+   316→              </div>
+   317→              <div className="flex items-center gap-1">
+   318→                <Button
+   319→                  variant="ghost"
+   320→                  size="icon"
+   321→                  className="h-7 w-7 text-white/80 hover:text-white hover:bg-white/10"
+   322→                  onClick={() => {
+   323→                    const store = useAppStore.getState();
+   324→                    store.setView('ai-assistant');
+   325→                    setIsOpen(false);
+   326→                  }}
+   327→                >
+   328→                  <Maximize2 className="h-3.5 w-3.5" />
+   329→                </Button>
+   330→                <Button
+   331→                  variant="ghost"
+   332→                  size="icon"
+   333→                  className="h-7 w-7 text-white/80 hover:text-white hover:bg-white/10"
+   334→                  onClick={() => setIsOpen(false)}
+   335→                >
+   336→                  <X className="h-3.5 w-3.5" />
+   337→                </Button>
+   338→              </div>
+   339→            </div>
+   340→
+   341→            {/* Messages */}
+   342→            <div
+   343→              ref={scrollRef}
+   344→              className="flex-1 overflow-y-auto p-4 space-y-4"
+   345→            >
+   346→              {messages.map((msg) => (
+   347→                <div
+   348→                  key={msg.id}
+   349→                  className={`flex gap-2 ${
+   350→                    msg.role === 'user' ? 'justify-end' : 'justify-start'
+   351→                  }`}
+   352→                >
+   353→                  {msg.role === 'assistant' && (
+   354→                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-100 to-violet-100 dark:from-emerald-900 dark:to-violet-900">
+   355→                      <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+   356→                    </div>
+   357→                  )}
+   358→                  <div
+   359→                    className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm ${
+   360→                      msg.role === 'user'
+   361→                        ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
+   362→                        : 'bg-muted text-muted-foreground'
+   363→                    }`}
+   364→                  >
+   365→                    {msg.role === 'assistant' ? (
+   366→                      <MarkdownRenderer content={msg.content} />
+   367→                    ) : (
+   368→                      msg.content
+   369→                    )}
+   370→                  </div>
+   371→                  {msg.role === 'user' && (
+   372→                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+   373→                      <User className="h-3.5 w-3.5" />
+   374→                    </div>
+   375→                  )}
+   376→                </div>
+   377→              ))}
+   378→
+   379→              {/* Typing Indicator */}
+   380→              {isLoading && (
+   381→                <div className="flex gap-2 justify-start">
+   382→                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-100 to-violet-100 dark:from-emerald-900 dark:to-violet-900">
+   383→                    <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+   384→                  </div>
+   385→                  <div className="rounded-2xl bg-muted px-4 py-3">
+   386→                    <div className="flex gap-1.5">
+   387→                      <motion.span
+   388→                        animate={{ opacity: [0.3, 1, 0.3] }}
+   389→                        transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+   390→                        className="h-2 w-2 rounded-full bg-emerald-500"
+   391→                      />
+   392→                      <motion.span
+   393→                        animate={{ opacity: [0.3, 1, 0.3] }}
+   394→                        transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
+   395→                        className="h-2 w-2 rounded-full bg-violet-500"
+   396→                      />
+   397→                      <motion.span
+   398→                        animate={{ opacity: [0.3, 1, 0.3] }}
+   399→                        transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
+   400→                        className="h-2 w-2 rounded-full bg-emerald-500"
+   401→                      />
+   402→                    </div>
+   403→                  </div>
+   404→                </div>
+   405→              )}
+   406→            </div>
+   407→
+   408→            {/* Input */}
+   409→            <div className="border-t border-border p-3">
+   410→              <form
+   411→                onSubmit={(e) => {
+   412→                  e.preventDefault();
+   413→                  sendMessage();
+   414→                }}
+   415→                className="flex gap-2"
+   416→              >
+   417→                <Input
+   418→                  ref={inputRef}
+   419→                  value={input}
+   420→                  onChange={(e) => setInput(e.target.value)}
+   421→                  placeholder="Ask me anything..."
+   422→                  className="flex-1 rounded-xl text-sm"
+   423→                  disabled={isLoading}
+   424→                />
+   425→                <Button
+   426→                  type="submit"
+   427→                  size="icon"
+   428→                  disabled={!input.trim() || isLoading}
+   429→                  className="h-9 w-9 rounded-xl bg-gradient-to-br from-emerald-500 to-violet-600 hover:from-emerald-600 hover:to-violet-700"
+   430→                >
+   431→                  <Send className="h-4 w-4" />
+   432→                </Button>
+   433→              </form>
+   434→            </div>
+   435→          </motion.div>
+   436→        )}
+   437→      </AnimatePresence>
+   438→    </>
+   439→  );
+   440→}
+   441→
+   442→// ============================================================
+   443→// Full-Page AI Tutor
+   444→// ============================================================
+   445→export function AITutorFullPage() {
+   446→  const [conversations, setConversations] = useState<Conversation[]>([
+   447→    {
+   448→      id: 'conv-1',
+   449→      title: 'Getting Started',
+   450→      messages: [
+   451→        {
+   452→          id: 'welcome-full',
+   453→          role: 'assistant',
+   454→          content:
+   455→            "Welcome to your AI Learning Assistant! I can help you with:\n\n- **Understanding concepts** — Ask me to explain any topic\n- **Code help** — Debug issues or learn new patterns\n- **Study plans** — Create personalized learning paths\n- **Quiz prep** — Review and practice for assessments\n\nWhat would you like to explore today?",
+   456→          timestamp: new Date().toISOString(),
+   457→        },
+   458→      ],
+   459→      createdAt: new Date().toISOString(),
+   460→    },
+   461→  ]);
+   462→  const [activeConvId, setActiveConvId] = useState('conv-1');
+   463→  const [confirmDeleteConv, setConfirmDeleteConv] = useState<string | null>(null);
+   464→  const [input, setInput] = useState('');
+   465→  const [isLoading, setIsLoading] = useState(false);
+   466→  const [sidebarOpen, setSidebarOpen] = useState(true);
+   467→  const [selectedCourse, setSelectedCourse] = useState<string>('all');
+   468→  const scrollRef = useRef<HTMLDivElement>(null);
+   469→  const inputRef = useRef<HTMLTextAreaElement>(null);
+   470→  const { data: coursesData } = useCourses();
+   471→  const demoCourses = coursesData || [];
+   472→
+   473→  const activeConv = conversations.find((c) => c.id === activeConvId);
+   474→
+   475→  const scrollToBottom = useCallback(() => {
+   476→    if (scrollRef.current) {
+   477→      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+   478→    }
+   479→  }, []);
+   480→
+   481→  useEffect(() => {
+   482→    scrollToBottom();
+   483→  }, [activeConv?.messages, scrollToBottom]);
+   484→
+   485→  const suggestedPrompts = [
+   486→    { icon: Code, label: 'Explain Server Components', prompt: 'Explain how React Server Components work in Next.js, with practical examples and when to use them vs client components.' },
+   487→    { icon: HelpCircle, label: 'Help me with this quiz', prompt: 'I need help preparing for a quiz. Can you give me some practice questions on web development fundamentals and explain the answers?' },
+   488→    { icon: GraduationCap, label: 'Create a study plan', prompt: 'Create a 4-week study plan for learning full-stack web development, starting from the basics and progressing to advanced topics.' },
+   489→    { icon: MessageSquare, label: 'Review my code', prompt: 'I want to learn best practices for code review. Can you explain common patterns and anti-patterns in React/Next.js code?' },
+   490→  ];
+   491→
+   492→  const sendMessage = useCallback(
+   493→    async (messageText?: string) => {
+   494→      const text = messageText || input.trim();
+   495→      if (!text || isLoading) return;
+   496→
+   497→      const userMsg: ChatMessage = {
+   498→        id: `user-${Date.now()}`,
+   499→        role: 'user',
+   500→        content: text,
+   501→        timestamp: new Date().toISOString(),
+   502→      };
+   503→
+   504→      setConversations((prev) =>
+   505→        prev.map((conv) =>
+   506→          conv.id === activeConvId
+   507→            ? { ...conv, messages: [...conv.messages, userMsg], title: conv.messages.length <= 1 ? text.slice(0, 40) + (text.length > 40 ? '...' : '') : conv.title }
+   508→            : conv
+   509→        )
+   510→      );
+   511→      setInput('');
+   512→      setIsLoading(true);
+   513→
+   514→      const courseContext =
+   515→        selectedCourse !== 'all'
+   516→          ? demoCourses.find((c: any) => c.id === selectedCourse)?.title
+   517→          : undefined;
+   518→
+   519→      try {
+   520→        const res = await fetch('/api/ai', {
+   521→          method: 'POST',
+   522→          headers: { 'Content-Type': 'application/json' },
+   523→          body: JSON.stringify({
+   524→            message: text,
+   525→            context: courseContext,
+   526→            sessionId: activeConvId,
+   527→          }),
+   528→        });
+   529→
+   530→        if (!res.ok) throw new Error('Failed to get response');
+   531→
+   532→        const data = await res.json();
+   533→
+   534→        const aiMsg: ChatMessage = {
+   535→          id: `ai-${Date.now()}`,
+   536→          role: 'assistant',
+   537→          content: data.response || 'I apologize, but I could not generate a response. Please try again.',
+   538→          timestamp: new Date().toISOString(),
+   539→        };
+   540→
+   541→        setConversations((prev) =>
+   542→          prev.map((conv) =>
+   543→            conv.id === activeConvId
+   544→              ? { ...conv, messages: [...conv.messages, aiMsg] }
+   545→              : conv
+   546→          )
+   547→        );
+   548→      } catch {
+   549→        toast.error('Failed to get AI response. Please try again.');
+   550→        setConversations((prev) =>
+   551→          prev.map((conv) =>
+   552→            conv.id === activeConvId
+   553→              ? {
+   554→                  ...conv,
+   555→                  messages: [
+   556→                    ...conv.messages,
+   557→                    {
+   558→                      id: `error-${Date.now()}`,
+   559→                      role: 'assistant',
+   560→                      content: 'Sorry, I encountered an error. Please try again in a moment.',
+   561→                      timestamp: new Date().toISOString(),
+   562→                    },
+   563→                  ],
+   564→                }
+   565→              : conv
+   566→          )
+   567→        );
+   568→      } finally {
+   569→        setIsLoading(false);
+   570→      }
+   571→    },
+   572→    [input, isLoading, activeConvId, selectedCourse]
+   573→  );
+   574→
+   575→  const createNewConversation = () => {
+   576→    const newConv: Conversation = {
+   577→      id: `conv-${Date.now()}`,
+   578→      title: 'New Chat',
+   579→      messages: [
+   580→        {
+   581→          id: `welcome-${Date.now()}`,
+   582→          role: 'assistant',
+   583→          content: "Hello! I'm your AI Learning Assistant. How can I help you today?",
+   584→          timestamp: new Date().toISOString(),
+   585→        },
+   586→      ],
+   587→      createdAt: new Date().toISOString(),
+   588→    };
+   589→    setConversations((prev) => [newConv, ...prev]);
+   590→    setActiveConvId(newConv.id);
+   591→  };
+   592→
+   593→  const deleteConversation = (convId: string) => {
+   594→    if (conversations.length <= 1) {
+   595→      toast.error("Can't delete the last conversation");
+   596→      return;
+   597→    }
+   598→    setConversations((prev) => prev.filter((c) => c.id !== convId));
+   599→    if (activeConvId === convId) {
+   600→      setActiveConvId(conversations.find((c) => c.id !== convId)?.id || '');
+   601→    }
+   602→  };
+   603→
+   604→  return (
+   605→    <div className="flex h-full">
+   606→      {/* Left Sidebar - Conversation History */}
+   607→      <AnimatePresence mode="wait">
+   608→        {sidebarOpen && (
+   609→          <motion.div
+   610→            initial={{ width: 0, opacity: 0 }}
+   611→            animate={{ width: 280, opacity: 1 }}
+   612→            exit={{ width: 0, opacity: 0 }}
+   613→            transition={{ duration: 0.2 }}
+   614→            className="border-r border-border bg-card/50 flex flex-col shrink-0 overflow-hidden"
+   615→          >
+   616→            {/* Sidebar Header */}
+   617→            <div className="p-4 border-b border-border">
+   618→              <div className="flex items-center justify-between mb-3">
+   619→                <div className="flex items-center gap-2">
+   620→                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-violet-600">
+   621→                    <Sparkles className="h-3.5 w-3.5 text-white" />
+   622→                  </div>
+   623→                  <span className="font-semibold text-sm text-foreground">AI Tutor</span>
+   624→                </div>
+   625→                <Button
+   626→                  variant="ghost"
+   627→                  size="icon"
+   628→                  className="h-7 w-7"
+   629→                  onClick={() => setSidebarOpen(false)}
+   630→                >
+   631→                  <Minus className="h-3.5 w-3.5" />
+   632→                </Button>
+   633→              </div>
+   634→              <Button
+   635→                onClick={createNewConversation}
+   636→                className="w-full justify-start gap-2 text-sm"
+   637→                variant="outline"
+   638→                size="sm"
+   639→              >
+   640→                <Plus className="h-3.5 w-3.5" />
+   641→                New Chat
+   642→              </Button>
+   643→            </div>
+   644→
+   645→            {/* Course Context Selector */}
+   646→            <div className="px-4 py-3 border-b border-border">
+   647→              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-2">
+   648→                Course Focus
+   649→              </p>
+   650→              <select
+   651→                value={selectedCourse}
+   652→                onChange={(e) => setSelectedCourse(e.target.value)}
+   653→                className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500"
+   654→              >
+   655→                <option value="all">All Courses</option>
+   656→                {demoCourses.map((course: any) => (
+   657→                  <option key={course.id} value={course.id}>
+   658→                    {course.title}
+   659→                  </option>
+   660→                ))}
+   661→              </select>
+   662→            </div>
+   663→
+   664→            {/* Conversation List */}
+   665→            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+   666→              {conversations.map((conv) => (
+   667→                <div
+   668→                  key={conv.id}
+   669→                  className={`group flex items-center gap-2 rounded-lg px-3 py-2 text-sm cursor-pointer transition-colors ${
+   670→                    conv.id === activeConvId
+   671→                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+   672→                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+   673→                  }`}
+   674→                  onClick={() => setActiveConvId(conv.id)}
+   675→                >
+   676→                  <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+   677→                  <span className="truncate flex-1 text-xs">{conv.title}</span>
+   678→                  <button
+   679→                    onClick={(e) => {
+   680→                      e.stopPropagation();
+   681→                      setConfirmDeleteConv(conv.id);
+   682→                    }}
+   683→                    className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+   684→                  >
+   685→                    <Trash2 className="h-3 w-3 text-red-400 hover:text-red-600" />
+   686→                  </button>
+   687→                </div>
+   688→              ))}
+   689→            </div>
+   690→          </motion.div>
+   691→        )}
+   692→      </AnimatePresence>
+   693→
+   694→      {/* Main Chat Area */}
+   695→      <div className="flex-1 flex flex-col min-w-0">
+   696→        {/* Chat Header */}
+   697→        <div className="flex items-center justify-between border-b border-border px-6 py-3 bg-card/50">
+   698→          <div className="flex items-center gap-3">
+   699→            {!sidebarOpen && (
+   700→              <Button
+   701→                variant="ghost"
+   702→                size="icon"
+   703→                className="h-8 w-8"
+   704→                onClick={() => setSidebarOpen(true)}
+   705→              >
+   706→                <ChevronLeft className="h-4 w-4" />
+   707→              </Button>
+   708→            )}
+   709→            <div>
+   710→              <h2 className="text-sm font-semibold text-foreground">AI Learning Assistant</h2>
+   711→              <p className="text-xs text-muted-foreground">
+   712→                {selectedCourse !== 'all'
+   713→                  ? `Focused on: ${demoCourses.find((c: any) => c.id === selectedCourse)?.title}`
+   714→                  : 'General learning mode'}
+   715→              </p>
+   716→            </div>
+   717→          </div>
+   718→          <Badge variant="secondary" className="text-xs gap-1">
+   719→            <Sparkles className="h-3 w-3" />
+   720→            Powered by AI
+   721→          </Badge>
+   722→        </div>
+   723→
+   724→        {/* Messages */}
+   725→        <div
+   726→          ref={scrollRef}
+   727→          className="flex-1 overflow-y-auto px-6 py-4"
+   728→        >
+   729→          {activeConv && activeConv.messages.length <= 1 && (
+   730→            /* Suggested Prompts */
+   731→            <div className="mb-8">
+   732→              <p className="text-sm font-medium text-muted-foreground mb-4 text-center">
+   733→                Try one of these to get started
+   734→              </p>
+   735→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto">
+   736→                {suggestedPrompts.map((prompt) => (
+   737→                  <Card
+   738→                    key={prompt.label}
+   739→                    className="p-4 cursor-pointer hover:border-emerald-300 hover:shadow-md transition-all group"
+   740→                    onClick={() => sendMessage(prompt.prompt)}
+   741→                  >
+   742→                    <div className="flex items-start gap-3">
+   743→                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-400 shrink-0">
+   744→                        <prompt.icon className="h-4 w-4" />
+   745→                      </div>
+   746→                      <div>
+   747→                        <p className="text-sm font-medium text-foreground">{prompt.label}</p>
+   748→                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+   749→                          {prompt.prompt.slice(0, 80)}...
+   750→                        </p>
+   751→                      </div>
+   752→                    </div>
+   753→                  </Card>
+   754→                ))}
+   755→              </div>
+   756→            </div>
+   757→          )}
+   758→
+   759→          {/* Message List */}
+   760→          <div className="space-y-6 max-w-3xl mx-auto">
+   761→            {activeConv?.messages.map((msg) => (
+   762→              <motion.div
+   763→                key={msg.id}
+   764→                initial={{ opacity: 0, y: 10 }}
+   765→                animate={{ opacity: 1, y: 0 }}
+   766→                className={`flex gap-3 ${
+   767→                  msg.role === 'user' ? 'justify-end' : 'justify-start'
+   768→                }`}
+   769→              >
+   770→                {msg.role === 'assistant' && (
+   771→                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-100 to-violet-100 dark:from-emerald-900 dark:to-violet-900 mt-0.5">
+   772→                    <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+   773→                  </div>
+   774→                )}
+   775→                <div
+   776→                  className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+   777→                    msg.role === 'user'
+   778→                      ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
+   779→                      : 'bg-muted'
+   780→                  }`}
+   781→                >
+   782→                  {msg.role === 'assistant' ? (
+   783→                    <MarkdownRenderer content={msg.content} />
+   784→                  ) : (
+   785→                    <p className="text-sm leading-relaxed">{msg.content}</p>
+   786→                  )}
+   787→                  <p
+   788→                    className={`text-[10px] mt-1.5 ${
+   789→                      msg.role === 'user' ? 'text-white/60' : 'text-muted-foreground/60'
+   790→                    }`}
+   791→                  >
+   792→                    {new Date(msg.timestamp).toLocaleTimeString([], {
+   793→                      hour: '2-digit',
+   794→                      minute: '2-digit',
+   795→                    })}
+   796→                  </p>
+   797→                </div>
+   798→                {msg.role === 'user' && (
+   799→                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white mt-0.5">
+   800→                    <User className="h-4 w-4" />
+   801→                  </div>
+   802→                )}
+   803→              </motion.div>
+   804→            ))}
+   805→
+   806→            {/* Typing Indicator */}
+   807→            {isLoading && (
+   808→              <div className="flex gap-3 justify-start">
+   809→                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-100 to-violet-100 dark:from-emerald-900 dark:to-violet-900">
+   810→                  <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+   811→                </div>
+   812→                <div className="rounded-2xl bg-muted px-4 py-3">
+   813→                  <div className="flex gap-2">
+   814→                    <motion.span
+   815→                      animate={{ opacity: [0.3, 1, 0.3] }}
+   816→                      transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+   817→                      className="h-2.5 w-2.5 rounded-full bg-emerald-500"
+   818→                    />
+   819→                    <motion.span
+   820→                      animate={{ opacity: [0.3, 1, 0.3] }}
+   821→                      transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
+   822→                      className="h-2.5 w-2.5 rounded-full bg-violet-500"
+   823→                    />
+   824→                    <motion.span
+   825→                      animate={{ opacity: [0.3, 1, 0.3] }}
+   826→                      transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
+   827→                      className="h-2.5 w-2.5 rounded-full bg-emerald-500"
+   828→                    />
+   829→                  </div>
+   830→                </div>
+   831→              </div>
+   832→            )}
+   833→          </div>
+   834→        </div>
+   835→
+   836→        {/* Input Area */}
+   837→        <div className="border-t border-border px-6 py-4 bg-card/50">
+   838→          <div className="max-w-3xl mx-auto">
+   839→            <form
+   840→              onSubmit={(e) => {
+   841→                e.preventDefault();
+   842→                sendMessage();
+   843→              }}
+   844→              className="flex gap-3 items-end"
+   845→            >
+   846→              <div className="flex-1 relative">
+   847→                <textarea
+   848→                  ref={inputRef}
+   849→                  value={input}
+   850→                  onChange={(e) => setInput(e.target.value)}
+   851→                  onKeyDown={(e) => {
+   852→                    if (e.key === 'Enter' && !e.shiftKey) {
+   853→                      e.preventDefault();
+   854→                      sendMessage();
+   855→                    }
+   856→                  }}
+   857→                  placeholder="Ask anything about your courses..."
+   858→                  className="w-full resize-none rounded-xl border border-border bg-background px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[44px] max-h-[120px]"
+   859→                  rows={1}
+   860→                  disabled={isLoading}
+   861→                />
+   862→              </div>
+   863→              <Button
+   864→                type="submit"
+   865→                disabled={!input.trim() || isLoading}
+   866→                className="h-11 w-11 rounded-xl bg-gradient-to-br from-emerald-500 to-violet-600 hover:from-emerald-600 hover:to-violet-700 shrink-0"
+   867→                size="icon"
+   868→              >
+   869→                {isLoading ? (
+   870→                  <Loader2 className="h-4 w-4 animate-spin" />
+   871→                ) : (
+   872→                  <Send className="h-4 w-4" />
+   873→                )}
+   874→              </Button>
+   875→            </form>
+   876→            <p className="text-[10px] text-muted-foreground/60 mt-2 text-center">
+   877→              AI can make mistakes. Verify important information.
+   878→            </p>
+   879→          </div>
+   880→        </div>
+   881→      </div>
+   882→
+   883→      <ConfirmDialog
+   884→        open={!!confirmDeleteConv}
+   885→        onOpenChange={(open) => { if (!open) setConfirmDeleteConv(null); }}
+   886→        title="Delete Conversation"
+   887→        description="Are you sure you want to delete this conversation? All messages will be permanently lost."
+   888→        confirmLabel="Delete"
+   889→        variant="destructive"
+   890→        onConfirm={() => {
+   891→          if (confirmDeleteConv) deleteConversation(confirmDeleteConv);
+   892→          setConfirmDeleteConv(null);
+   893→        }}
+   894→      />
+   895→    </div>
+   896→  );
+   897→}
+   898→

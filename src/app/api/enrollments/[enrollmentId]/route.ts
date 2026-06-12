@@ -1,6 +1,45 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+// Helper: generate a unique verification code
+function generateVerificationCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let randomStr = '';
+  for (let i = 0; i < 8; i++) {
+    randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `CERT-${Date.now()}-${randomStr}`;
+}
+
+// Helper: update daily metrics for analytics
+async function updateDailyMetric(tenantId: string, field: 'activeUsers' | 'newEnrollments' | 'completions' | 'revenue' | 'quizAttempts', increment: number = 1) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  try {
+    const existing = await db.dailyMetric.findUnique({
+      where: { tenantId_date: { tenantId, date: today.toISOString() } },
+    });
+
+    if (existing) {
+      await db.dailyMetric.update({
+        where: { id: existing.id },
+        data: { [field]: { increment } },
+      });
+    } else {
+      await db.dailyMetric.create({
+        data: {
+          tenantId,
+          date: today.toISOString(),
+          [field]: increment,
+        },
+      });
+    }
+  } catch (error) {
+    console.error('Daily metric update error:', error);
+  }
+}
+
 // PUT /api/enrollments/[enrollmentId] - Update enrollment progress
 export async function PUT(
   request: Request,
@@ -26,7 +65,8 @@ export async function PUT(
     }
 
     // If progress is 100%, auto-complete
-    if (body.progress !== undefined && body.progress >= 100) {
+    const isCompleting = body.progress !== undefined && body.progress >= 100 && existing.status !== 'completed';
+    if (isCompleting) {
       updateData.progress = 100;
       updateData.status = 'completed';
       updateData.completedAt = new Date().toISOString();
@@ -42,10 +82,61 @@ export async function PUT(
       data: updateData,
       include: {
         course: {
-          select: { id: true, title: true, slug: true, thumbnailUrl: true },
+          select: { id: true, title: true, slug: true, thumbnailUrl: true, certificateTemplateId: true, tenantId: true },
         },
       },
     });
+
+    // === FIX 2: Auto-Certificate on Course Completion ===
+    if (isCompleting && enrollment.course.certificateTemplateId) {
+      try {
+        // Check if certificate already awarded for this course and user
+        const existingCert = await db.certificateAward.findFirst({
+          where: {
+            userId: existing.userId,
+            courseId: existing.courseId,
+            certificateId: enrollment.course.certificateTemplateId,
+          },
+        });
+
+        if (!existingCert) {
+          await db.certificateAward.create({
+            data: {
+              userId: existing.userId,
+              certificateId: enrollment.course.certificateTemplateId,
+              tenantId: existing.tenantId,
+              courseId: existing.courseId,
+              enrollmentId: enrollment.id,
+              verificationCode: generateVerificationCode(),
+              issuedAt: new Date(),
+            },
+          });
+
+          // Award bonus points for course completion
+          await db.user.update({
+            where: { id: existing.userId },
+            data: { totalPoints: { increment: 50 } },
+          });
+        }
+      } catch (certError) {
+        console.error('Auto-certificate error:', certError);
+      }
+
+      // Track completion analytics event
+      try {
+        await db.analyticsEvent.create({
+          data: {
+            tenantId: existing.tenantId,
+            userId: existing.userId,
+            eventType: 'completion',
+            eventData: JSON.stringify({ courseId: existing.courseId, enrollmentId }),
+          },
+        });
+        await updateDailyMetric(existing.tenantId, 'completions', 1);
+      } catch (analyticsError) {
+        console.error('Completion analytics tracking error:', analyticsError);
+      }
+    }
 
     return NextResponse.json(enrollment);
   } catch (error) {

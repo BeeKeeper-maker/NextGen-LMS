@@ -2395,7 +2395,7 @@ function QuizPreview({
 export function AdminAssessments() {
   const tenantId = useAppStore(s => s.currentTenant?.id);
   const { data: rawAssessments = [], isLoading: assessmentsLoading } = useAssessments();
-  const { data: rawCourses = [], isLoading: coursesLoading } = useCourses();
+  const { data: rawCourses = [], isLoading: coursesLoading } = useCourses(tenantId);
   const createAssessment = useCreateAssessment();
   const updateAssessment = useUpdateAssessment();
   const deleteAssessment = useDeleteAssessment();

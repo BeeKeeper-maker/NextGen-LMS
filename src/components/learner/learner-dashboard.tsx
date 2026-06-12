@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '@/store/app-store';
 import { apiPost } from '@/lib/api';
-import { useEnrollments, useCourses, useUser, useUsers, useAchievements } from '@/hooks/use-data';
+import { useEnrollments, useCourses, useUser, useUsers, useAchievements, useEnroll } from '@/hooks/use-data';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -1022,7 +1022,8 @@ function KPIShimmer({ className }: { className?: string }) {
 export function LearnerDashboard() {
   const userId = useAppStore(s => s.currentUser?.id) || '';
   const tenantId = useAppStore(s => s.currentTenant?.id) || '';
-  const { currentUser, currentTenant } = useAppStore();
+  const { currentUser, currentTenant, setView, setSelectedCourseId, setSelectedCheckoutItemId } = useAppStore();
+  const enrollMutation = useEnroll();
   const [showAllActivities, setShowAllActivities] = useState(false);
   const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
   const [hoveredRecommendation, setHoveredRecommendation] = useState<string | null>(null);
@@ -1032,7 +1033,7 @@ export function LearnerDashboard() {
 
   // Fetch real data from API via React Query hooks
   const { data: enrollmentsData, isLoading: enrollmentsLoading } = useEnrollments(userId || undefined);
-  const { data: coursesData, isLoading: coursesLoading } = useCourses();
+  const { data: coursesData, isLoading: coursesLoading } = useCourses(tenantId || undefined);
   const { data: userData, isLoading: userLoading } = useUser(userId || null);
   const { data: usersData, isLoading: usersLoading } = useUsers(tenantId || undefined);
   const { data: achievementsData, isLoading: achievementsLoading } = useAchievements(tenantId || undefined);
@@ -1971,7 +1972,10 @@ export function LearnerDashboard() {
                     onMouseLeave={() => setHoveredRecommendation(null)}
                   >
                     <TiltCard>
-                      <Card className="overflow-hidden border-border dark:border-slate-800 hover:shadow-xl transition-all duration-300 group cursor-pointer relative">
+                      <Card className="overflow-hidden border-border dark:border-slate-800 hover:shadow-xl transition-all duration-300 group cursor-pointer relative" onClick={() => {
+                        setSelectedCourseId(course.id);
+                        setView('learner-course');
+                      }}>
                         {/* Course colored header */}
                         <div className="relative">
                           <div className={cn(
@@ -2042,7 +2046,15 @@ export function LearnerDashboard() {
                                 <span className="text-xs text-muted-foreground line-through">${course.compareAtPrice}</span>
                               )}
                             </div>
-                            <Button size="sm" className="h-7 gap-1 bg-emerald-600 text-white hover:bg-emerald-700 text-xs px-3">
+                            <Button size="sm" className="h-7 gap-1 bg-emerald-600 text-white hover:bg-emerald-700 text-xs px-3" onClick={(e) => {
+                              e.stopPropagation();
+                              if (!course.price || course.price === 0) {
+                                enrollMutation.mutate({ userId, courseId: course.id, tenantId });
+                              } else {
+                                setSelectedCheckoutItemId(course.id);
+                                setView('checkout');
+                              }
+                            }}>
                               Enroll Now
                               <ChevronRight className="h-3 w-3" />
                             </Button>

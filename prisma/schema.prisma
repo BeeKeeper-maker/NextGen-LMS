@@ -47,6 +47,7 @@ model Tenant {
   courseReviews     CourseReview[]
   learningPaths     LearningPath[]
   learningPathEnrollments LearningPathEnrollment[]
+  liveCohortRSVPs   LiveCohortRSVP[]
   dataExports    DataExport[]
   dataImports    DataImport[]
   backups        Backup[]
@@ -100,6 +101,7 @@ model User {
   liveCohorts        LiveCohort[]
   courseReviews      CourseReview[]
   learningPathEnrollments LearningPathEnrollment[]
+  liveCohortRSVPs    LiveCohortRSVP[]
 
   @@unique([tenantId, email])
 }
@@ -354,6 +356,7 @@ model CertificateAward {
   certificateId  String
   tenantId       String
   courseId       String?
+  enrollmentId   String?
   verificationCode String @unique
   issuedAt       DateTime @default(now())
 
@@ -649,6 +652,22 @@ model LiveCohort {
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   course        Course?  @relation(fields: [courseId], references: [id])
   instructor    User?    @relation(fields: [instructorId], references: [id])
+  rsvps         LiveCohortRSVP[]
+}
+
+model LiveCohortRSVP {
+  id          String     @id @default(cuid())
+  cohortId    String
+  userId      String
+  tenantId    String
+  status      String     @default("going") // going, interested, cancelled
+  cohort      LiveCohort @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([cohortId, userId])
 }
 
 // ============================================================
@@ -662,7 +681,9 @@ model DataExport {
   type        String   // course, user, financial, community, assessment, analytics
   format      String   // csv, json, xlsx
   size        String   @default("0 KB")
+  recordCount Int      @default(0)
   status      String   @default("processing") // completed, processing, failed
+  data        String?  // stores the actual export content (CSV/JSON text)
   createdAt   DateTime @default(now())
 
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -686,6 +707,7 @@ model Backup {
   size        String   @default("0 GB")
   type        String   @default("Manual") // Manual, Automatic
   status      String   @default("completed") // completed, processing, failed
+  filePath    String?  // path to the backup file on disk
   createdAt   DateTime @default(now())
 
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)

@@ -94,7 +94,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useCourses, useLiveCohorts, useCreateLiveCohort, useDeleteLiveCohort } from '@/hooks/use-data';
+import { useCourses, useLiveCohorts, useCreateLiveCohort, useUpdateLiveCohort, useDeleteLiveCohort } from '@/hooks/use-data';
 import { useAppStore } from '@/store/app-store';
 import { validateFields, required, minLength, futureDate, positiveNumber } from '@/lib/validations';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -273,13 +273,15 @@ export function AdminLiveCohorts() {
   const [filterType, setFilterType] = useState<string>('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
-  const { data: coursesData } = useCourses();
-  const demoCourses = coursesData || [];
   const currentTenant = useAppStore((s) => s.currentTenant);
   const tenantId = currentTenant?.id || '';
+  const { data: coursesData } = useCourses(tenantId);
+  const demoCourses = coursesData || [];
   const { data: cohortsData, isLoading: cohortsLoading } = useLiveCohorts(tenantId);
   const createCohort = useCreateLiveCohort();
+  const updateCohort = useUpdateLiveCohort();
   const deleteCohort = useDeleteLiveCohort();
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const events: CalendarEvent[] = (cohortsData || []).map((c: any) => ({
     id: c.id,
     title: c.title,
@@ -408,32 +410,62 @@ export function AdminLiveCohorts() {
     startDateVal.setHours(sh, sm, 0);
     const endDateVal = addMinutes(startDateVal, duration);
 
-    createCohort.mutate(
-      {
-        tenantId,
-        title: newEvent.title || '',
-        description: newEvent.description || null,
-        category: newEvent.type || 'live_session',
-        startDate: startDateVal.toISOString(),
-        endDate: endDateVal.toISOString(),
-        courseId: newEvent.courseId || null,
-        instructorName: newEvent.instructorName || null,
-        meetingUrl: newEvent.meetingUrl || null,
-        color: newEvent.color || '#6366F1',
-        capacity: newEvent.maxAttendees || 50,
-        status: 'upcoming',
-      },
-      {
-        onSuccess: () => {
-          setShowSuccess(true);
-          setTimeout(() => {
-            setShowSuccess(false);
-            setShowCreateDialog(false);
-            resetForm();
-          }, 1500);
+    if (editingEventId) {
+      updateCohort.mutate(
+        {
+          id: editingEventId,
+          tenantId,
+          title: newEvent.title || '',
+          description: newEvent.description || null,
+          category: newEvent.type || 'live_session',
+          startDate: startDateVal.toISOString(),
+          endDate: endDateVal.toISOString(),
+          courseId: newEvent.courseId || null,
+          instructorName: newEvent.instructorName || null,
+          meetingUrl: newEvent.meetingUrl || null,
+          color: newEvent.color || '#6366F1',
+          capacity: newEvent.maxAttendees || 50,
         },
-      }
-    );
+        {
+          onSuccess: () => {
+            setShowSuccess(true);
+            setTimeout(() => {
+              setShowSuccess(false);
+              setShowCreateDialog(false);
+              setEditingEventId(null);
+              resetForm();
+            }, 1500);
+          },
+        }
+      );
+    } else {
+      createCohort.mutate(
+        {
+          tenantId,
+          title: newEvent.title || '',
+          description: newEvent.description || null,
+          category: newEvent.type || 'live_session',
+          startDate: startDateVal.toISOString(),
+          endDate: endDateVal.toISOString(),
+          courseId: newEvent.courseId || null,
+          instructorName: newEvent.instructorName || null,
+          meetingUrl: newEvent.meetingUrl || null,
+          color: newEvent.color || '#6366F1',
+          capacity: newEvent.maxAttendees || 50,
+          status: 'upcoming',
+        },
+        {
+          onSuccess: () => {
+            setShowSuccess(true);
+            setTimeout(() => {
+              setShowSuccess(false);
+              setShowCreateDialog(false);
+              resetForm();
+            }, 1500);
+          },
+        }
+      );
+    }
   };
 
   const resetForm = () => {
@@ -460,6 +492,31 @@ export function AdminLiveCohorts() {
     navigator.clipboard.writeText(url);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Open edit dialog for an event
+  const handleEditEvent = (event: CalendarEvent) => {
+    setEditingEventId(event.id);
+    const start = parseISO(event.startDate);
+    const end = parseISO(event.endDate);
+    const dur = differenceInMinutes(end, start);
+    setNewEvent({
+      title: event.title,
+      description: event.description,
+      type: event.type,
+      color: event.color || eventTypeColors[event.type],
+      courseId: event.courseId,
+      instructorName: event.instructorName,
+      meetingUrl: event.meetingUrl,
+      maxAttendees: event.maxAttendees || 50,
+      isRecurring: event.isRecurring,
+      recurrencePattern: event.recurrencePattern,
+    });
+    setEventDate(start);
+    setStartTime(format(start, 'HH:mm'));
+    setDuration(dur);
+    setFormErrors({});
+    setShowCreateDialog(true);
   };
 
   // Check if event starts within 15 minutes
@@ -1041,7 +1098,7 @@ export function AdminLiveCohorts() {
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7">
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditEvent(event)}>
                                   <Edit3 className="h-3.5 w-3.5" />
                                 </Button>
                               </TooltipTrigger>
@@ -1249,7 +1306,7 @@ export function AdminLiveCohorts() {
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7">
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditEvent(event)}>
                                   <Edit3 className="h-3.5 w-3.5" />
                                 </Button>
                               </TooltipTrigger>
@@ -1284,15 +1341,15 @@ export function AdminLiveCohorts() {
       )}
 
       {/* Schedule Session Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={(open) => { if (!open) resetForm(); setShowCreateDialog(open); }}>
+      <Dialog open={showCreateDialog} onOpenChange={(open) => { if (!open) { setEditingEventId(null); resetForm(); } setShowCreateDialog(open); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CalendarIcon className="h-5 w-5 text-emerald-600" />
-              Schedule New Session
+              {editingEventId ? 'Edit Session' : 'Schedule New Session'}
             </DialogTitle>
             <DialogDescription>
-              Create a new live session, workshop, or event for your cohorts.
+              {editingEventId ? 'Update the details of this session.' : 'Create a new live session, workshop, or event for your cohorts.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -1318,7 +1375,7 @@ export function AdminLiveCohorts() {
                   transition={{ delay: 0.3 }}
                   className="text-lg font-semibold text-foreground"
                 >
-                  Session Scheduled!
+                  {editingEventId ? 'Session Updated!' : 'Session Scheduled!'}
                 </motion.p>
                 <motion.p
                   initial={{ opacity: 0 }}
@@ -1326,7 +1383,7 @@ export function AdminLiveCohorts() {
                   transition={{ delay: 0.5 }}
                   className="text-sm text-muted-foreground"
                 >
-                  Your session has been added to the calendar.
+                  {editingEventId ? 'Your session has been updated.' : 'Your session has been added to the calendar.'}
                 </motion.p>
               </motion.div>
             )}

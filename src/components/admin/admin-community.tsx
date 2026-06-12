@@ -285,7 +285,7 @@ export function AdminCommunity() {
   const userId = currentUser?.id || '';
 
   // ── Real API data hooks ──
-  const { data: communityData, isLoading: postsLoading, refetch: refetchPosts } = useCommunityPosts();
+  const { data: communityData, isLoading: postsLoading, refetch: refetchPosts } = useCommunityPosts(tenantId);
   const posts = useMemo(() => communityData?.posts || [], [communityData?.posts]);
   const apiCategories = useMemo(() => communityData?.categories || [], [communityData?.categories]);
 
