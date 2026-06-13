@@ -27,6 +27,8 @@ import {
   BadgeCheck,
   PartyPopper,
   ArrowRight,
+  Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -330,6 +332,29 @@ export function CheckoutPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [showCvv, setShowCvv] = useState(false);
+
+  // Gateway config
+  const [gatewayConfig, setGatewayConfig] = useState<{ stripePublishableKey: string | null; paypalClientId: string | null } | null>(null);
+  const [loadingConfig, setLoadingConfig] = useState(true);
+
+  useEffect(() => {
+    if (tenantId) {
+      setLoadingConfig(true);
+      fetch(`/api/checkout/config?tenantId=${tenantId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          setGatewayConfig(data);
+        })
+        .catch((err) => {
+          console.error('Failed to load gateway config:', err);
+        })
+        .finally(() => {
+          setLoadingConfig(false);
+        });
+    } else {
+      setLoadingConfig(false);
+    }
+  }, [tenantId]);
 
   // Form state
   const [cardholderName, setCardholderName] = useState('');
@@ -959,6 +984,26 @@ export function CheckoutPage() {
                                   />
                                 </div>
 
+                                {/* Stripe config indicator */}
+                                <div className="space-y-1">
+                                  {loadingConfig ? (
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 p-2 rounded-lg">
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      Loading secure payment gateway configuration...
+                                    </div>
+                                  ) : gatewayConfig?.stripePublishableKey ? (
+                                    <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 p-2 rounded-lg border border-emerald-500/10">
+                                      <ShieldCheck className="h-4 w-4" />
+                                      Stripe Elements loaded securely via tenant config.
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-2 rounded-lg border border-amber-500/10">
+                                      <AlertTriangle className="h-4 w-4" />
+                                      Stripe credentials missing. Using sandbox payment gateway.
+                                    </div>
+                                  )}
+                                </div>
+
                                 {/* Email */}
                                 <div className="space-y-1.5">
                                   <Label htmlFor="email" className="text-sm">Email for receipt</Label>
@@ -1062,6 +1107,26 @@ export function CheckoutPage() {
                                   <p className="text-sm text-muted-foreground">
                                     You&apos;ll be redirected to PayPal to complete your purchase securely.
                                   </p>
+                                </div>
+
+                                {/* PayPal config indicator */}
+                                <div className="space-y-1">
+                                  {loadingConfig ? (
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 p-2 rounded-lg">
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      Loading secure PayPal configuration...
+                                    </div>
+                                  ) : gatewayConfig?.paypalClientId ? (
+                                    <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 p-2 rounded-lg border border-emerald-500/10">
+                                      <ShieldCheck className="h-4 w-4" />
+                                      PayPal Smart Buttons loaded securely via tenant config.
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-2 rounded-lg border border-amber-500/10">
+                                      <AlertTriangle className="h-4 w-4" />
+                                      PayPal credentials missing. Using sandbox payment gateway.
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="space-y-1.5">
                                   <Label htmlFor="paypal-email" className="text-sm">PayPal email</Label>

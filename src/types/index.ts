@@ -6,6 +6,7 @@
 export type AppView = 
   | 'landing' 
   | 'admin-dashboard' 
+  | 'super-admin-dashboard'
   | 'admin-courses' 
   | 'admin-community'
   | 'admin-assessments'
@@ -29,7 +30,7 @@ export type AppView =
 
 export type UserRole = 'super_admin' | 'tenant_admin' | 'instructor' | 'content_creator' | 'learner';
 
-export type AppMode = 'marketing' | 'admin' | 'learner';
+export type AppMode = 'marketing' | 'admin' | 'learner' | 'super-admin';
 
 // Tenant & Organization
 export interface Tenant {

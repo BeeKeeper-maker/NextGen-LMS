@@ -27,6 +27,7 @@ import {
   Sun,
   Map,
   ShoppingCart,
+  Shield,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -86,6 +87,10 @@ const learnerNavItems: NavItem[] = [
   { label: 'AI Tutor', view: 'ai-assistant', icon: Sparkles },
 ];
 
+const superAdminNavItems: NavItem[] = [
+  { label: 'Super Admin', view: 'super-admin-dashboard', icon: Shield },
+];
+
 // Quick Create menu items
 const quickCreateItems = [
   { label: 'New Course', icon: BookOpen, view: 'admin-courses' as AppView },
@@ -108,14 +113,21 @@ export function Sidebar() {
     toggleSidebarCollapse,
     enterAdminMode,
     enterLearnerMode,
+    enterSuperAdminMode,
     goToLanding,
     logout,
   } = useAppStore();
 
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
 
-  const navItems = appMode === 'admin' ? adminNavItems : learnerNavItems;
+  const navItems = 
+    appMode === 'super-admin'
+      ? superAdminNavItems
+      : appMode === 'admin'
+        ? adminNavItems
+        : learnerNavItems;
   const isAdmin = appMode === 'admin';
+  const isSuperAdmin = appMode === 'super-admin';
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
@@ -147,7 +159,7 @@ export function Sidebar() {
                   {currentTenant?.name || 'NextGen LMS'}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {isAdmin ? 'Admin Portal' : 'Learner Portal'}
+                  {isSuperAdmin ? 'Super Admin' : isAdmin ? 'Admin Portal' : 'Learner Portal'}
                 </p>
               </div>
               {/* Notification Center in sidebar header */}
@@ -297,14 +309,31 @@ export function Sidebar() {
                     <p className="text-xs text-muted-foreground">{currentUser.email}</p>
                   </div>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setView(isAdmin ? 'admin-settings' : 'learner-profile')}>
+                  <DropdownMenuItem onClick={() => setView(isSuperAdmin ? 'super-admin-dashboard' : isAdmin ? 'admin-settings' : 'learner-profile')}>
                     <User className="mr-2 h-4 w-4" />
                     Profile
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setView('admin-settings')}>
+                  <DropdownMenuItem onClick={() => setView(isSuperAdmin ? 'super-admin-dashboard' : 'admin-settings')}>
                     <Settings className="mr-2 h-4 w-4" />
                     Settings
                   </DropdownMenuItem>
+                  {currentUser.role === 'super_admin' && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={enterSuperAdminMode} className={cn(appMode === 'super-admin' && "bg-muted font-bold")}>
+                        <Shield className="mr-2 h-4 w-4 text-emerald-600" />
+                        Super Admin Mode
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={enterAdminMode} className={cn(appMode === 'admin' && "bg-muted font-bold")}>
+                        <GraduationCap className="mr-2 h-4 w-4 text-emerald-600" />
+                        Admin Mode
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={enterLearnerMode} className={cn(appMode === 'learner' && "bg-muted font-bold")}>
+                        <BookOpen className="mr-2 h-4 w-4 text-emerald-600" />
+                        Learner Mode
+                      </DropdownMenuItem>
+                    </>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="cursor-default">
                     <div className="flex items-center justify-between w-full">
@@ -340,7 +369,16 @@ export function Sidebar() {
                   'w-full',
                   !sidebarCollapsed && 'justify-start gap-3 px-3'
                 )}
-                onClick={isAdmin ? enterLearnerMode : enterAdminMode}
+                onClick={() => {
+                  if (currentUser?.role === 'super_admin') {
+                    if (appMode === 'super-admin') enterAdminMode();
+                    else if (appMode === 'admin') enterLearnerMode();
+                    else enterSuperAdminMode();
+                  } else {
+                    if (appMode === 'admin') enterLearnerMode();
+                    else enterAdminMode();
+                  }
+                }}
               >
                 <Repeat className="h-4 w-4 shrink-0" />
                 {!sidebarCollapsed && (
@@ -350,14 +388,34 @@ export function Sidebar() {
                     transition={{ duration: 0.15 }}
                     className="text-sm"
                   >
-                    Switch to {isAdmin ? 'Learner' : 'Admin'}
+                    Switch to {
+                      currentUser?.role === 'super_admin'
+                        ? appMode === 'super-admin'
+                          ? 'Admin'
+                          : appMode === 'admin'
+                            ? 'Learner'
+                            : 'Super Admin'
+                        : appMode === 'admin'
+                          ? 'Learner'
+                          : 'Admin'
+                    }
                   </motion.span>
                 )}
               </Button>
             </TooltipTrigger>
             {sidebarCollapsed && (
               <TooltipContent side="right">
-                Switch to {isAdmin ? 'Learner' : 'Admin'}
+                Switch to {
+                  currentUser?.role === 'super_admin'
+                    ? appMode === 'super-admin'
+                      ? 'Admin'
+                      : appMode === 'admin'
+                        ? 'Learner'
+                        : 'Super Admin'
+                    : appMode === 'admin'
+                      ? 'Learner'
+                      : 'Admin'
+                }
               </TooltipContent>
             )}
           </Tooltip>

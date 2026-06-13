@@ -58,6 +58,7 @@ interface AppState {
   setActiveModal: (modal: string | null) => void;
   enterAdminMode: () => void;
   enterLearnerMode: () => void;
+  enterSuperAdminMode: () => void;
   loginAsAdmin: (user: User) => void;
   loginAsLearner: (user: User) => void;
   logout: () => void;
@@ -151,7 +152,7 @@ export const useAppStore = create<AppState>()(
       setIsLoading: (loading) => set({ isLoading: loading }),
       setActiveModal: (modal) => set({ activeModal: modal }),
       
-      enterAdminMode: () => set({ 
+  enterAdminMode: () => set({ 
         appMode: 'admin', 
         currentView: 'admin-dashboard',
         sidebarOpen: true,
@@ -163,6 +164,13 @@ export const useAppStore = create<AppState>()(
         currentView: 'learner-dashboard',
         sidebarOpen: true,
         userRole: 'learner',
+      }),
+
+      enterSuperAdminMode: () => set({ 
+        appMode: 'super-admin', 
+        currentView: 'super-admin-dashboard',
+        sidebarOpen: true,
+        userRole: 'super_admin',
       }),
 
       loginAsAdmin: (user) => set({

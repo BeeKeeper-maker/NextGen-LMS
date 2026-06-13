@@ -1,8 +1,22 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { auth } from '@/lib/auth';
+import { sendEmail } from '@/lib/email';
 
 export async function POST(request: Request) {
   try {
+    const session = await auth();
+    if (!session || !session.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userRole = (session.user as any).role;
+    const userTenantId = (session.user as any).tenantId;
+
+    if (userRole !== 'super_admin' && userRole !== 'tenant_admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { operation, data } = body;
 
@@ -20,6 +34,11 @@ export async function POST(request: Request) {
         const course = await db.course.findUnique({ where: { id: courseId }, select: { tenantId: true } });
         if (!course) {
           return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+        }
+
+        // Secure tenant isolation
+        if (userRole !== 'super_admin' && course.tenantId !== userTenantId) {
+          return NextResponse.json({ error: 'Forbidden: cross-tenant access denied' }, { status: 403 });
         }
 
         // Check for existing enrollments
@@ -82,7 +101,7 @@ export async function POST(request: Request) {
       }
 
       case 'bulk-email': {
-        const { subject, body: emailBody, recipientType, recipientCount, scheduled } = data;
+        const { subject, body: emailBody, recipientType, scheduled } = data;
         if (!subject || !emailBody) {
           return NextResponse.json(
             { error: 'Missing required fields: subject, body' },
@@ -90,16 +109,52 @@ export async function POST(request: Request) {
           );
         }
 
-        // In demo mode, store the email campaign record in localStorage via a simple approach
-        // Since we can't send real emails, we just return success with a note
+        const targetTenantId = userRole === 'super_admin' ? (data.tenantId || userTenantId) : userTenantId;
+
+        let whereClause: any = { tenantId: targetTenantId, isActive: true };
+        if (recipientType === 'all_students') {
+          whereClause.role = 'learner';
+        } else if (recipientType === 'all_instructors') {
+          whereClause.role = 'instructor';
+        } else if (recipientType === 'all_admins') {
+          whereClause.role = 'tenant_admin';
+        }
+
+        const users = await db.user.findMany({
+          where: whereClause,
+          select: { email: true }
+        });
+        const emails = users.map((u) => u.email).filter(Boolean);
+
+        let sentCount = 0;
+        let emailError = null;
+
+        if (emails.length > 0 && !scheduled) {
+          const emailResult = await sendEmail({
+            tenantId: targetTenantId,
+            to: emails,
+            subject,
+            html: emailBody,
+          });
+          if (emailResult.success) {
+            sentCount = emails.length;
+          } else {
+            emailError = emailResult.error;
+          }
+        }
+
         return NextResponse.json({
-          success: true,
+          success: !emailError,
           operation: 'bulk-email',
           subject,
           recipientType,
-          recipientCount: recipientCount || 0,
+          recipientCount: emails.length,
+          sentCount,
           scheduled,
-          message: `Email "${subject}" ${scheduled ? 'scheduled' : 'sent'} to ${recipientCount || 0} recipients (demo mode)`,
+          error: emailError,
+          message: emailError
+            ? `Failed to send email: ${emailError}`
+            : `Email "${subject}" ${scheduled ? 'scheduled' : 'sent'} to ${emails.length} recipients`,
         });
       }
 
@@ -116,6 +171,11 @@ export async function POST(request: Request) {
         const course = await db.course.findUnique({ where: { id: courseId }, select: { tenantId: true } });
         if (!course) {
           return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+        }
+
+        // Secure tenant isolation
+        if (userRole !== 'super_admin' && course.tenantId !== userTenantId) {
+          return NextResponse.json({ error: 'Forbidden: cross-tenant access denied' }, { status: 403 });
         }
 
         // Verify template exists
@@ -226,6 +286,22 @@ export async function POST(request: Request) {
             { error: 'Missing required field: certificateIds' },
             { status: 400 }
           );
+        }
+
+        if (userRole !== 'super_admin') {
+          // Verify all certificates belong to the user's tenant
+          const certCount = await db.certificateAward.count({
+            where: {
+              id: { in: certificateIds },
+              tenantId: userTenantId,
+            },
+          });
+          if (certCount !== certificateIds.length) {
+            return NextResponse.json(
+              { error: 'Forbidden: cross-tenant access denied' },
+              { status: 403 }
+            );
+          }
         }
 
         // Delete certificate awards from database

@@ -23,6 +23,7 @@ import { AdminLearningPaths } from '@/components/admin/admin-learning-paths';
 import { CheckoutPage } from '@/components/checkout/checkout-page';
 import { AITutorFullPage, AITutorFloatingWidget } from '@/components/ai/ai-tutor-chat';
 import { AIContentGeneration } from '@/components/ai/ai-content-generation';
+import { SuperAdminDashboard } from '@/components/admin/super-admin-dashboard';
 import { ThemeSync } from '@/lib/theme-sync';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -74,6 +75,7 @@ const viewLabels: Record<string, string> = {
   'learner-profile': 'Profile',
   'ai-assistant': 'AI Tutor',
   'ai-content-gen': 'AI Content Generation',
+  'super-admin-dashboard': 'Super Admin Dashboard',
 };
 
 function MainContent() {
@@ -99,6 +101,7 @@ function MainContent() {
     'checkout': <CheckoutPage />,
     'ai-assistant': <AITutorFullPage />,
     'ai-content-gen': <AIContentGeneration />,
+    'super-admin-dashboard': <SuperAdminDashboard />,
   };
 
   const isFullPageView = currentView === 'ai-assistant';
@@ -126,6 +129,7 @@ function TopBar() {
   const unreadCount = notifications.filter((n) => !n.read).length;
   const breadcrumb = viewLabels[currentView] || 'Dashboard';
   const isAdmin = appMode === 'admin';
+  const isSuperAdmin = appMode === 'super-admin';
 
   const handleSignOut = async () => {
     logout();
@@ -151,7 +155,7 @@ function TopBar() {
     <div className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-background/95 backdrop-blur-sm px-4 sm:px-6 h-14 shrink-0">
       {/* Left: Breadcrumb */}
       <div className="flex items-center gap-2 text-sm">
-        <span className="text-muted-foreground">{isAdmin ? 'Admin' : 'Learner'}</span>
+        <span className="text-muted-foreground">{isSuperAdmin ? 'Platform' : isAdmin ? 'Admin' : 'Learner'}</span>
         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="font-medium text-foreground">{breadcrumb}</span>
       </div>
