@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/store/app-store';
 import type { AppView } from '@/types';
 import {
@@ -100,6 +101,7 @@ const quickCreateItems = [
 ];
 
 export function Sidebar() {
+  const router = useRouter();
   const {
     appMode,
     currentView,
@@ -119,6 +121,40 @@ export function Sidebar() {
   } = useAppStore();
 
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+
+  // Map app view to URL path
+  const getViewPath = (view: AppView): string => {
+    // Admin views
+    const adminViews: Record<string, string> = {
+      'admin-dashboard': '/admin',
+      'admin-courses': '/admin?view=courses',
+      'admin-learning-paths': '/admin?view=learning-paths',
+      'admin-community': '/admin?view=community',
+      'admin-live-cohorts': '/admin?view=cohorts',
+      'admin-assessments': '/admin?view=assessments',
+      'admin-certificates': '/admin?view=certificates',
+      'admin-analytics': '/admin?view=analytics',
+      'admin-settings': '/admin?view=settings',
+      'ai-content-gen': '/admin?view=ai-gen',
+    };
+
+    // Learner views
+    const learnerViews: Record<string, string> = {
+      'learner-dashboard': '/dashboard',
+      'learner-course': '/dashboard?view=courses',
+      'learner-learning-paths': '/dashboard?view=learning-paths',
+      'learner-community': '/dashboard?view=community',
+      'learner-live-cohorts': '/dashboard?view=cohorts',
+      'learner-achievements': '/dashboard?view=achievements',
+      'learner-profile': '/dashboard?view=profile',
+      'ai-assistant': '/dashboard?view=ai-tutor',
+    };
+
+    if (view === 'super-admin-dashboard') return '/super-admin';
+    if (view === 'checkout') return '/checkout';
+
+    return adminViews[view] || learnerViews[view] || '/dashboard';
+  };
 
   const navItems = 
     appMode === 'super-admin'
@@ -190,7 +226,7 @@ export function Sidebar() {
                     <button
                       key={item.label}
                       onClick={() => {
-                        setView(item.view);
+                        router.push(getViewPath(item.view));
                         setQuickCreateOpen(false);
                       }}
                       className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
@@ -233,7 +269,7 @@ export function Sidebar() {
               const button = (
                 <button
                   key={item.view}
-                  onClick={() => setView(item.view)}
+                  onClick={() => router.push(getViewPath(item.view))}
                   className={cn(
                     'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
                     isActive
@@ -309,11 +345,11 @@ export function Sidebar() {
                     <p className="text-xs text-muted-foreground">{currentUser.email}</p>
                   </div>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setView(isSuperAdmin ? 'super-admin-dashboard' : isAdmin ? 'admin-settings' : 'learner-profile')}>
+                  <DropdownMenuItem onClick={() => router.push(isSuperAdmin ? '/super-admin' : isAdmin ? '/admin?view=settings' : '/dashboard?view=profile')}>
                     <User className="mr-2 h-4 w-4" />
                     Profile
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setView(isSuperAdmin ? 'super-admin-dashboard' : 'admin-settings')}>
+                  <DropdownMenuItem onClick={() => router.push(isSuperAdmin ? '/super-admin' : '/admin?view=settings')}>
                     <Settings className="mr-2 h-4 w-4" />
                     Settings
                   </DropdownMenuItem>
@@ -324,16 +360,16 @@ export function Sidebar() {
                     <>
                       <DropdownMenuSeparator />
                       {currentUser.role === 'super_admin' && (
-                        <DropdownMenuItem onClick={enterSuperAdminMode} className={cn(appMode === 'super-admin' && "bg-muted font-bold")}>
+                        <DropdownMenuItem onClick={() => router.push('/super-admin')} className={cn(appMode === 'super-admin' && "bg-muted font-bold")}>
                           <Shield className="mr-2 h-4 w-4 text-emerald-600" />
                           Super Admin Mode
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuItem onClick={enterAdminMode} className={cn(appMode === 'admin' && "bg-muted font-bold")}>
+                      <DropdownMenuItem onClick={() => router.push('/admin')} className={cn(appMode === 'admin' && "bg-muted font-bold")}>
                         <GraduationCap className="mr-2 h-4 w-4 text-emerald-600" />
                         Admin Mode
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={enterLearnerMode} className={cn(appMode === 'learner' && "bg-muted font-bold")}>
+                      <DropdownMenuItem onClick={() => router.push('/dashboard')} className={cn(appMode === 'learner' && "bg-muted font-bold")}>
                         <BookOpen className="mr-2 h-4 w-4 text-emerald-600" />
                         Learner Mode
                       </DropdownMenuItem>
@@ -377,12 +413,12 @@ export function Sidebar() {
                   )}
                   onClick={() => {
                     if (currentUser.role === 'super_admin') {
-                      if (appMode === 'super-admin') enterAdminMode();
-                      else if (appMode === 'admin') enterLearnerMode();
-                      else enterSuperAdminMode();
+                      if (appMode === 'super-admin') router.push('/admin');
+                      else if (appMode === 'admin') router.push('/dashboard');
+                      else router.push('/super-admin');
                     } else if (currentUser.role === 'tenant_admin' || currentUser.role === 'instructor' || currentUser.role === 'content_creator') {
-                      if (appMode === 'admin') enterLearnerMode();
-                      else enterAdminMode();
+                      if (appMode === 'admin') router.push('/dashboard');
+                      else router.push('/admin');
                     }
                   }}
                 >

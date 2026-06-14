@@ -29,6 +29,29 @@ export default auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Role-Based Access Control (RBAC) server-side protections
+  const user = req.auth.user as any;
+  const role = user?.role;
+
+  // Protect platform super-admin routes
+  if (pathname.startsWith('/super-admin')) {
+    if (role !== 'super_admin') {
+      return NextResponse.redirect(new URL('/dashboard', req.url));
+    }
+  }
+
+  // Protect tenant admin routes
+  if (pathname.startsWith('/admin')) {
+    if (
+      role !== 'super_admin' &&
+      role !== 'tenant_admin' &&
+      role !== 'instructor' &&
+      role !== 'content_creator'
+    ) {
+      return NextResponse.redirect(new URL('/dashboard', req.url));
+    }
+  }
+
   return NextResponse.next();
 });
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useAppStore } from '@/store/app-store';
 import { Sidebar } from '@/components/layout/sidebar';
 import { LandingPage } from '@/components/landing/landing-page';
@@ -365,7 +366,63 @@ function TenantLoader({ children }: { children: React.ReactNode }) {
 }
 
 export function AppLayout() {
-  const { appMode } = useAppStore();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { appMode, setAppMode, currentView, setView } = useAppStore();
+
+  useEffect(() => {
+    // Only synchronize if we are NOT in marketing mode (or if logged in)
+    if (appMode === 'marketing') return;
+
+    const viewParam = searchParams.get('view');
+
+    if (pathname.startsWith('/super-admin')) {
+      if (appMode !== 'super-admin') setAppMode('super-admin');
+      if (currentView !== 'super-admin-dashboard') setView('super-admin-dashboard');
+    } else if (pathname.startsWith('/admin')) {
+      if (appMode !== 'admin') setAppMode('admin');
+      
+      const defaultAdminView = 'admin-dashboard';
+      const validAdminViews: Record<string, string> = {
+        dashboard: 'admin-dashboard',
+        courses: 'admin-courses',
+        'learning-paths': 'admin-learning-paths',
+        community: 'admin-community',
+        cohorts: 'admin-live-cohorts',
+        assessments: 'admin-assessments',
+        certificates: 'admin-certificates',
+        analytics: 'admin-analytics',
+        settings: 'admin-settings',
+        'ai-gen': 'ai-content-gen',
+      };
+      
+      const targetView = viewParam ? validAdminViews[viewParam] : defaultAdminView;
+      if (targetView && currentView !== targetView) {
+        setView(targetView as any);
+      }
+    } else if (pathname.startsWith('/dashboard')) {
+      if (appMode !== 'learner') setAppMode('learner');
+
+      const defaultLearnerView = 'learner-dashboard';
+      const validLearnerViews: Record<string, string> = {
+        dashboard: 'learner-dashboard',
+        courses: 'learner-course',
+        'learning-paths': 'learner-learning-paths',
+        community: 'learner-community',
+        cohorts: 'learner-live-cohorts',
+        achievements: 'learner-achievements',
+        profile: 'learner-profile',
+        'ai-tutor': 'ai-assistant',
+      };
+
+      const targetView = viewParam ? validLearnerViews[viewParam] : defaultLearnerView;
+      if (targetView && currentView !== targetView) {
+        setView(targetView as any);
+      }
+    } else if (pathname.startsWith('/checkout')) {
+      if (currentView !== 'checkout') setView('checkout');
+    }
+  }, [pathname, searchParams, appMode, currentView, setAppMode, setView]);
 
   // Marketing mode: just the landing page (no sidebar)
   if (appMode === 'marketing') {
