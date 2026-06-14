@@ -31,7 +31,6 @@ export async function GET(request: Request) {
 
     // List all tenants if no slug specified
     const tenants = await db.tenant.findMany({
-      where: { isActive: true },
       include: {
         _count: {
           select: {

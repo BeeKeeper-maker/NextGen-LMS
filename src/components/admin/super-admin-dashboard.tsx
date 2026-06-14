@@ -64,6 +64,12 @@ import {
   Cpu,
   HardDrive,
   Settings,
+  Mail,
+  DollarSign,
+  CreditCard,
+  Download,
+  UserCheck,
+  UserX,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Tenant } from '@/types';
@@ -131,6 +137,21 @@ export function SuperAdminDashboard() {
   const [secondaryColor, setSecondaryColor] = useState('#6366F1');
   const [accentColor, setAccentColor] = useState('#10B981');
   const [maxUsers, setMaxUsers] = useState('1000');
+
+  // Users state
+  const [users, setUsers] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [searchUserQuery, setSearchUserQuery] = useState('');
+
+  // Transactions state
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [searchTxQuery, setSearchTxQuery] = useState('');
+
+  // Backups state
+  const [backups, setBackups] = useState<any[]>([]);
+  const [loadingBackups, setLoadingBackups] = useState(false);
+  const [creatingBackup, setCreatingBackup] = useState(false);
 
   // System Config / Flags (Simulated globally in localStorage)
   const [flags, setFlags] = useState({
@@ -228,6 +249,122 @@ export function SuperAdminDashboard() {
       setLoadingCoolify(false);
     }
   }, []);
+  // Fetch users globally
+  const fetchUsers = useCallback(async () => {
+    setLoadingUsers(true);
+    try {
+      const res = await fetch('/api/admin/users');
+      if (!res.ok) throw new Error('Failed to fetch users');
+      const data = await res.json();
+      setUsers(data);
+    } catch (error: any) {
+      toast.error('Failed to load users', { description: error.message });
+    } finally {
+      setLoadingUsers(false);
+    }
+  }, []);
+
+  // Update user role
+  const handleUserRoleChange = async (userId: string, newRole: string) => {
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, role: newRole }),
+      });
+      if (!res.ok) throw new Error('Failed to update user role');
+      const updatedUser = await res.json();
+      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: updatedUser.role } : u)));
+      toast.success('User role updated successfully');
+    } catch (error: any) {
+      toast.error('Failed to update user role', { description: error.message });
+    }
+  };
+
+  // Delete/Ban user account
+  const handleUserDelete = async (userId: string) => {
+    if (!confirm('Are you sure you want to permanently delete this user account? This cannot be undone.')) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/admin/users?userId=${userId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to delete user');
+      }
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+      toast.success('User account deleted permanently');
+    } catch (error: any) {
+      toast.error('Failed to delete user', { description: error.message });
+    }
+  };
+
+  // Fetch transactions globally
+  const fetchTransactions = useCallback(async () => {
+    setLoadingTransactions(true);
+    try {
+      const res = await fetch('/api/admin/billing');
+      if (!res.ok) throw new Error('Failed to fetch transactions');
+      const data = await res.json();
+      setTransactions(data);
+    } catch (error: any) {
+      toast.error('Failed to load transactions', { description: error.message });
+    } finally {
+      setLoadingTransactions(false);
+    }
+  }, []);
+
+  // Fetch backups for active tenant
+  const fetchBackups = useCallback(async (tenantId: string) => {
+    setLoadingBackups(true);
+    try {
+      const res = await fetch(`/api/backups?tenantId=${tenantId}`);
+      if (!res.ok) throw new Error('Failed to fetch backups');
+      const data = await res.json();
+      setBackups(data);
+    } catch (error: any) {
+      toast.error('Failed to load backups', { description: error.message });
+    } finally {
+      setLoadingBackups(false);
+    }
+  }, []);
+
+  // Create manual backup
+  const handleCreateBackup = async (tenantId: string) => {
+    setCreatingBackup(true);
+    try {
+      const res = await fetch('/api/backups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId, type: 'Manual' }),
+      });
+      if (!res.ok) throw new Error('Failed to create backup');
+      const newBackup = await res.json();
+      setBackups((prev) => [newBackup, ...prev]);
+      toast.success('Database backup completed successfully!');
+    } catch (error: any) {
+      toast.error('Failed to trigger backup', { description: error.message });
+    } finally {
+      setCreatingBackup(false);
+    }
+  };
+
+  // Delete backup
+  const handleDeleteBackup = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this backup file?')) return;
+    try {
+      const res = await fetch(`/api/backups?id=${id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete backup');
+      setBackups((prev) => prev.filter((b) => b.id !== id));
+      toast.success('Backup deleted successfully');
+    } catch (error: any) {
+      toast.error('Failed to delete backup', { description: error.message });
+    }
+  };
 
   // Fetch initial data
   useEffect(() => {
@@ -244,6 +381,24 @@ export function SuperAdminDashboard() {
       }
     }
   }, [fetchTenants, fetchCoolifyProjects]);
+
+  // Load tab-specific data when active tab changes
+  useEffect(() => {
+    if (activeTab === 'users') {
+      fetchUsers();
+    } else if (activeTab === 'transactions') {
+      fetchTransactions();
+    } else if (activeTab === 'overview' && tenants.length > 0) {
+      fetchBackups(tenants[0].id);
+    }
+  }, [activeTab, fetchUsers, fetchTransactions, fetchBackups, tenants]);
+
+  // Load backups when tenants first load if active tab is overview
+  useEffect(() => {
+    if (tenants.length > 0 && activeTab === 'overview') {
+      fetchBackups(tenants[0].id);
+    }
+  }, [tenants, activeTab, fetchBackups]);
 
   // Handle Project Selection Change
   useEffect(() => {
@@ -278,10 +433,10 @@ export function SuperAdminDashboard() {
   // Toggle Tenant Activation
   const handleToggleTenant = async (id: string, currentStatus: boolean) => {
     try {
-      const res = await fetch(`/api/tenants`, {
-        method: 'POST', // Normally PATCH/PUT but since we are modifying tenant, we check what route handles this
+      const res = await fetch(`/api/tenants/${id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, isActive: !currentStatus }),
+        body: JSON.stringify({ isActive: !currentStatus }),
       });
       if (!res.ok) throw new Error('Failed to update tenant status');
       
@@ -290,11 +445,7 @@ export function SuperAdminDashboard() {
       );
       toast.success(`Tenant ${!currentStatus ? 'Activated' : 'Suspended'}`);
     } catch (error: any) {
-      // Fallback update on local state for simulation
-      setTenants((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, isActive: !currentStatus } : t))
-      );
-      toast.success(`Tenant simulated ${!currentStatus ? 'activation' : 'suspension'}`);
+      toast.error('Failed to toggle tenant status', { description: error.message });
     }
   };
 
@@ -371,6 +522,57 @@ export function SuperAdminDashboard() {
 
   const activeTenantCount = tenants.filter((t) => t.isActive).length;
 
+  // Filtered Users
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      const q = searchUserQuery.toLowerCase();
+      return (
+        (u.name && u.name.toLowerCase().includes(q)) ||
+        (u.email && u.email.toLowerCase().includes(q)) ||
+        (u.role && u.role.toLowerCase().includes(q)) ||
+        (u.tenant?.name && u.tenant.name.toLowerCase().includes(q))
+      );
+    });
+  }, [users, searchUserQuery]);
+
+  // Filtered Transactions
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((t) => {
+      const q = searchTxQuery.toLowerCase();
+      return (
+        (t.user?.name && t.user.name.toLowerCase().includes(q)) ||
+        (t.user?.email && t.user.email.toLowerCase().includes(q)) ||
+        (t.product?.title && t.product.title.toLowerCase().includes(q)) ||
+        (t.tenant?.name && t.tenant.name.toLowerCase().includes(q)) ||
+        (t.paymentProvider && t.paymentProvider.toLowerCase().includes(q)) ||
+        (t.status && t.status.toLowerCase().includes(q))
+      );
+    });
+  }, [transactions, searchTxQuery]);
+
+  // Total Platform Revenue
+  const totalPlatformRevenue = useMemo(() => {
+    return transactions
+      .filter((t) => t.status === 'completed')
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [transactions]);
+
+  // Provider Breakdown
+  const providerBreakdown = useMemo(() => {
+    const counts = { stripe: 0, paypal: 0, sslcommerz: 0, bkash: 0, other: 0 };
+    transactions.forEach((t) => {
+      if (t.status === 'completed') {
+        const prov = (t.paymentProvider || 'other').toLowerCase();
+        if (prov.includes('stripe')) counts.stripe += t.amount;
+        else if (prov.includes('paypal')) counts.paypal += t.amount;
+        else if (prov.includes('sslcommerz') || prov.includes('ssl')) counts.sslcommerz += t.amount;
+        else if (prov.includes('bkash')) counts.bkash += t.amount;
+        else counts.other += t.amount;
+      }
+    });
+    return counts;
+  }, [transactions]);
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -401,12 +603,18 @@ export function SuperAdminDashboard() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="bg-muted/50 p-1 border border-border/50">
+        <TabsList className="bg-muted/50 p-1 border border-border/50 flex flex-wrap gap-1">
           <TabsTrigger value="overview" className="gap-1.5">
             <Activity className="h-3.5 w-3.5" /> System Overview
           </TabsTrigger>
           <TabsTrigger value="tenants" className="gap-1.5">
-            <Users className="h-3.5 w-3.5" /> Tenant Management
+            <Globe className="h-3.5 w-3.5" /> Tenant Management
+          </TabsTrigger>
+          <TabsTrigger value="users" className="gap-1.5">
+            <Users className="h-3.5 w-3.5" /> Users Directory
+          </TabsTrigger>
+          <TabsTrigger value="transactions" className="gap-1.5">
+            <CreditCard className="h-3.5 w-3.5" /> Billing & Invoices
           </TabsTrigger>
           <TabsTrigger value="coolify" className="gap-1.5">
             <Server className="h-3.5 w-3.5" /> LMS Containers
@@ -568,6 +776,109 @@ export function SuperAdminDashboard() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Database Backups Manager */}
+            <motion.div variants={itemVariants} className="mt-6">
+              <Card className="shadow-sm border-border">
+                <CardHeader className="pb-3 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-base font-semibold flex items-center gap-1.5">
+                      <Database className="h-4 w-4 text-emerald-500" /> Database Backup Archives
+                    </CardTitle>
+                    <CardDescription>Create manual backups and manage historical database archives.</CardDescription>
+                  </div>
+                  <div>
+                    <Button 
+                      size="sm" 
+                      onClick={() => {
+                        if (tenants[0]?.id) {
+                          handleCreateBackup(tenants[0].id);
+                        } else {
+                          toast.error("No tenant available to associate backup");
+                        }
+                      }}
+                      disabled={creatingBackup}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 animate-in fade-in zoom-in-95 duration-200"
+                    >
+                      {creatingBackup ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Database className="h-3.5 w-3.5" />}
+                      Create Database Backup
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {loadingBackups ? (
+                    <div className="py-8 flex flex-col items-center gap-2">
+                      <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+                      <p className="text-xs text-muted-foreground">Loading backup logs...</p>
+                    </div>
+                  ) : backups.length === 0 ? (
+                    <div className="py-8 text-center border border-dashed rounded-lg">
+                      <p className="text-xs text-muted-foreground">No historical backups found. Trigger a backup above.</p>
+                    </div>
+                  ) : (
+                    <div className="border rounded-lg overflow-hidden border-border bg-card">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Filename / ID</TableHead>
+                            <TableHead>Backup Date</TableHead>
+                            <TableHead>Size</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {backups.map((backup) => (
+                            <TableRow key={backup.id} className="hover:bg-muted/30">
+                              <TableCell className="font-mono text-xs max-w-[250px] truncate" title={backup.id}>
+                                {backup.filePath ? backup.filePath.split('/').pop() : `backup-${backup.id}`}
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground">
+                                {new Date(backup.createdAt).toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-xs font-medium">{backup.size}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-[10px] capitalize">
+                                  {backup.type}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[10px] border-0 capitalize font-medium">
+                                  {backup.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-1.5">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    asChild
+                                  >
+                                    <a href={`/api/backups?id=${backup.id}&action=download`} download>
+                                      <Download className="h-3.5 w-3.5 text-muted-foreground hover:text-emerald-600 transition-colors" />
+                                    </a>
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeleteBackup(backup.id)}
+                                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
           </motion.div>
         </TabsContent>
 
@@ -896,6 +1207,305 @@ export function SuperAdminDashboard() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ============================================================
+            5. USERS TAB
+            ============================================================ */}
+        <TabsContent value="users">
+          <Card className="shadow-sm border-border bg-card/60 backdrop-blur-md">
+            <CardHeader className="pb-3 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <Users className="h-4.5 w-4.5 text-emerald-500" /> Platform-Wide Users Directory
+                </CardTitle>
+                <CardDescription>Search, audit roles, and revoke account access across all academy databases.</CardDescription>
+              </div>
+              <div className="relative w-full md:w-72">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search user email, name, role or academy..."
+                  className="pl-8 h-9 bg-background/50"
+                  value={searchUserQuery}
+                  onChange={(e) => setSearchUserQuery(e.target.value)}
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingUsers ? (
+                <div className="py-20 flex flex-col items-center gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+                  <p className="text-sm text-muted-foreground">Syncing user registers...</p>
+                </div>
+              ) : filteredUsers.length === 0 ? (
+                <div className="py-20 text-center">
+                  <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto mb-2" />
+                  <h3 className="font-semibold text-foreground">No users found</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    No active accounts match your search parameters.
+                  </p>
+                </div>
+              ) : (
+                <div className="border rounded-lg overflow-x-auto border-border bg-card shadow-inner">
+                  <Table>
+                    <TableHeader className="bg-muted/30">
+                      <TableRow>
+                        <TableHead>User Details</TableHead>
+                        <TableHead>Academy / Tenant</TableHead>
+                        <TableHead>Global Role</TableHead>
+                        <TableHead>Created Date</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredUsers.map((user) => (
+                        <TableRow key={user.id} className="hover:bg-muted/30 transition-colors">
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2.5">
+                              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 flex items-center justify-center text-xs font-bold text-emerald-700 dark:text-emerald-300 uppercase">
+                                {user.name ? user.name.substring(0, 2) : 'US'}
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold">{user.name || 'Anonymous User'}</p>
+                                <p className="text-xs text-muted-foreground">{user.email}</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground font-sans">
+                              <Globe className="h-3.5 w-3.5 text-slate-400" />
+                              {user.tenant?.name || 'Platform Hub'}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={user.role}
+                              onValueChange={(newRole) => handleUserRoleChange(user.id, newRole)}
+                            >
+                              <SelectTrigger className="w-[160px] h-8 text-xs bg-background/50 border-border">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="super_admin">
+                                  <span className="flex items-center gap-1">
+                                    <Badge className="bg-violet-100 text-violet-800 dark:bg-violet-950/40 dark:text-violet-300 text-[10px] border-0 font-medium">Super Admin</Badge>
+                                  </span>
+                                </SelectItem>
+                                <SelectItem value="tenant_admin">
+                                  <span className="flex items-center gap-1">
+                                    <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 text-[10px] border-0 font-medium">Tenant Admin</Badge>
+                                  </span>
+                                </SelectItem>
+                                <SelectItem value="instructor">
+                                  <span className="flex items-center gap-1">
+                                    <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 text-[10px] border-0 font-medium">Instructor</Badge>
+                                  </span>
+                                </SelectItem>
+                                <SelectItem value="content_creator">
+                                  <span className="flex items-center gap-1">
+                                    <Badge className="bg-cyan-100 text-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-300 text-[10px] border-0 font-medium">Creator</Badge>
+                                  </span>
+                                </SelectItem>
+                                <SelectItem value="learner">
+                                  <span className="flex items-center gap-1">
+                                    <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 text-[10px] border-0 font-medium">Learner</Badge>
+                                  </span>
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {new Date(user.createdAt || user.updatedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleUserDelete(user.id)}
+                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                              title="Delete/Ban User Account"
+                            >
+                              <UserX className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ============================================================
+            6. BILLING & TRANSACTIONS TAB
+            ============================================================ */}
+        <TabsContent value="transactions">
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="space-y-6"
+          >
+            {/* Transactions Aggregate KPI Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <motion.div variants={itemVariants}>
+                <Card className="bg-gradient-to-br from-emerald-500/10 to-transparent border-emerald-500/20 shadow-sm relative overflow-hidden">
+                  <CardContent className="p-5">
+                    <div className="flex justify-between items-center">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase">Global Course Revenue</p>
+                      <DollarSign className="h-4 w-4 text-emerald-500" />
+                    </div>
+                    <p className="text-3xl font-bold mt-2">${totalPlatformRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <p className="text-xs text-muted-foreground mt-2">Platform sales total volume</p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+              <motion.div variants={itemVariants}>
+                <Card className="bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/20 shadow-sm relative overflow-hidden">
+                  <CardContent className="p-5">
+                    <div className="flex justify-between items-center">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase">Enrollment Sales</p>
+                      <TrendingUp className="h-4 w-4 text-blue-500" />
+                    </div>
+                    <p className="text-3xl font-bold mt-2">
+                      {transactions.filter(t => t.status === 'completed').length}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">Total successful payments</p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+              <motion.div variants={itemVariants}>
+                <Card className="bg-gradient-to-br from-indigo-500/10 to-transparent border-indigo-500/20 shadow-sm relative overflow-hidden">
+                  <CardContent className="p-5">
+                    <div className="flex justify-between items-center">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase">Stripe & PayPal</p>
+                      <CreditCard className="h-4 w-4 text-indigo-500" />
+                    </div>
+                    <p className="text-3xl font-bold mt-2">
+                      ${(providerBreakdown.stripe + providerBreakdown.paypal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">Stripe: ${providerBreakdown.stripe.toFixed(0)} | PayPal: ${providerBreakdown.paypal.toFixed(0)}</p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+              <motion.div variants={itemVariants}>
+                <Card className="bg-gradient-to-br from-pink-500/10 to-transparent border-pink-500/20 shadow-sm relative overflow-hidden">
+                  <CardContent className="p-5">
+                    <div className="flex justify-between items-center">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase">SSLCommerz & bKash</p>
+                      <DollarSign className="h-4 w-4 text-pink-500" />
+                    </div>
+                    <p className="text-3xl font-bold mt-2">
+                      ${(providerBreakdown.sslcommerz + providerBreakdown.bkash).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">SSL: ${providerBreakdown.sslcommerz.toFixed(0)} | bKash: ${providerBreakdown.bkash.toFixed(0)}</p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </div>
+
+            {/* Transactions Ledger Card */}
+            <motion.div variants={itemVariants}>
+              <Card className="shadow-sm border-border bg-card/60 backdrop-blur-md">
+                <CardHeader className="pb-3 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-base font-semibold font-sans">Financial Audit Ledger</CardTitle>
+                    <CardDescription>Platform transaction order ledger spanning all tenant academies.</CardDescription>
+                  </div>
+                  <div className="relative w-full md:w-72">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search transactions..."
+                      className="pl-8 h-9 bg-background/50"
+                      value={searchTxQuery}
+                      onChange={(e) => setSearchTxQuery(e.target.value)}
+                    />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {loadingTransactions ? (
+                    <div className="py-20 flex flex-col items-center gap-3">
+                      <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+                      <p className="text-sm text-muted-foreground">Retrieving financial ledger...</p>
+                    </div>
+                  ) : filteredTransactions.length === 0 ? (
+                    <div className="py-20 text-center">
+                      <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto mb-2" />
+                      <h3 className="font-semibold text-foreground">No transactions found</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        No financial records match your criteria.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="border rounded-lg overflow-x-auto border-border bg-card shadow-inner">
+                      <Table>
+                        <TableHeader className="bg-muted/30">
+                          <TableRow>
+                            <TableHead>Transaction ID</TableHead>
+                            <TableHead>Purchaser</TableHead>
+                            <TableHead>Academy</TableHead>
+                            <TableHead>Product / Course</TableHead>
+                            <TableHead>Amount</TableHead>
+                            <TableHead>Gateway</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Transaction Date</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredTransactions.map((tx) => (
+                            <TableRow key={tx.id} className="hover:bg-muted/30 transition-colors">
+                              <TableCell className="font-mono text-xs max-w-[120px] truncate" title={tx.id}>
+                                {tx.id}
+                              </TableCell>
+                              <TableCell>
+                                <div>
+                                  <p className="text-sm font-semibold">{tx.user?.name || 'Unknown User'}</p>
+                                  <p className="text-xs text-muted-foreground">{tx.user?.email || 'N/A'}</p>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground">
+                                {tx.tenant?.name || 'Platform Hub'}
+                              </TableCell>
+                              <TableCell className="text-xs font-medium max-w-[150px] truncate font-sans" title={tx.product?.title}>
+                                {tx.product?.title || 'Unknown Course'}
+                              </TableCell>
+                              <TableCell className="text-sm font-semibold text-foreground font-mono">
+                                {tx.amount.toLocaleString(undefined, { style: 'currency', currency: tx.currency || 'USD' })}
+                              </TableCell>
+                              <TableCell className="capitalize text-xs font-medium text-muted-foreground">
+                                {tx.paymentProvider || 'other'}
+                              </TableCell>
+                              <TableCell>
+                                <Badge 
+                                  className={`border-0 text-[10px] capitalize font-medium ${
+                                    tx.status === 'completed' 
+                                      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' 
+                                      : tx.status === 'pending'
+                                      ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                                      : 'bg-red-500/10 text-red-700 dark:text-red-400'
+                                  }`}
+                                >
+                                  {tx.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right text-xs text-muted-foreground">
+                                {new Date(tx.createdAt).toLocaleString()}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          </motion.div>
         </TabsContent>
       </Tabs>
 
