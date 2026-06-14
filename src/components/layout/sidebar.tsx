@@ -317,13 +317,18 @@ export function Sidebar() {
                     <Settings className="mr-2 h-4 w-4" />
                     Settings
                   </DropdownMenuItem>
-                  {currentUser.role === 'super_admin' && (
+                  {(currentUser.role === 'super_admin' || 
+                    currentUser.role === 'tenant_admin' || 
+                    currentUser.role === 'instructor' || 
+                    currentUser.role === 'content_creator') && (
                     <>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={enterSuperAdminMode} className={cn(appMode === 'super-admin' && "bg-muted font-bold")}>
-                        <Shield className="mr-2 h-4 w-4 text-emerald-600" />
-                        Super Admin Mode
-                      </DropdownMenuItem>
+                      {currentUser.role === 'super_admin' && (
+                        <DropdownMenuItem onClick={enterSuperAdminMode} className={cn(appMode === 'super-admin' && "bg-muted font-bold")}>
+                          <Shield className="mr-2 h-4 w-4 text-emerald-600" />
+                          Super Admin Mode
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={enterAdminMode} className={cn(appMode === 'admin' && "bg-muted font-bold")}>
                         <GraduationCap className="mr-2 h-4 w-4 text-emerald-600" />
                         Admin Mode
@@ -360,65 +365,67 @@ export function Sidebar() {
         {/* Bottom Actions */}
         <div className="p-2 space-y-1">
           {/* Switch Role */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size={sidebarCollapsed ? 'icon' : 'default'}
-                className={cn(
-                  'w-full',
-                  !sidebarCollapsed && 'justify-start gap-3 px-3'
-                )}
-                onClick={() => {
-                  if (currentUser?.role === 'super_admin') {
-                    if (appMode === 'super-admin') enterAdminMode();
-                    else if (appMode === 'admin') enterLearnerMode();
-                    else enterSuperAdminMode();
-                  } else {
-                    if (appMode === 'admin') enterLearnerMode();
-                    else enterAdminMode();
-                  }
-                }}
-              >
-                <Repeat className="h-4 w-4 shrink-0" />
-                {!sidebarCollapsed && (
-                  <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.15 }}
-                    className="text-sm"
-                  >
-                    Switch to {
-                      currentUser?.role === 'super_admin'
-                        ? appMode === 'super-admin'
-                          ? 'Admin'
+          {currentUser && currentUser.role !== 'learner' && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size={sidebarCollapsed ? 'icon' : 'default'}
+                  className={cn(
+                    'w-full',
+                    !sidebarCollapsed && 'justify-start gap-3 px-3'
+                  )}
+                  onClick={() => {
+                    if (currentUser.role === 'super_admin') {
+                      if (appMode === 'super-admin') enterAdminMode();
+                      else if (appMode === 'admin') enterLearnerMode();
+                      else enterSuperAdminMode();
+                    } else if (currentUser.role === 'tenant_admin' || currentUser.role === 'instructor' || currentUser.role === 'content_creator') {
+                      if (appMode === 'admin') enterLearnerMode();
+                      else enterAdminMode();
+                    }
+                  }}
+                >
+                  <Repeat className="h-4 w-4 shrink-0" />
+                  {!sidebarCollapsed && (
+                    <motion.span
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.15 }}
+                      className="text-sm"
+                    >
+                      Switch to {
+                        currentUser.role === 'super_admin'
+                          ? appMode === 'super-admin'
+                            ? 'Admin'
+                            : appMode === 'admin'
+                              ? 'Learner'
+                              : 'Super Admin'
                           : appMode === 'admin'
                             ? 'Learner'
-                            : 'Super Admin'
+                            : 'Admin'
+                      }
+                    </motion.span>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              {sidebarCollapsed && (
+                <TooltipContent side="right">
+                  Switch to {
+                    currentUser.role === 'super_admin'
+                      ? appMode === 'super-admin'
+                        ? 'Admin'
                         : appMode === 'admin'
                           ? 'Learner'
-                          : 'Admin'
-                    }
-                  </motion.span>
-                )}
-              </Button>
-            </TooltipTrigger>
-            {sidebarCollapsed && (
-              <TooltipContent side="right">
-                Switch to {
-                  currentUser?.role === 'super_admin'
-                    ? appMode === 'super-admin'
-                      ? 'Admin'
+                          : 'Super Admin'
                       : appMode === 'admin'
                         ? 'Learner'
-                        : 'Super Admin'
-                    : appMode === 'admin'
-                      ? 'Learner'
-                      : 'Admin'
-                }
-              </TooltipContent>
-            )}
-          </Tooltip>
+                        : 'Admin'
+                  }
+                </TooltipContent>
+              )}
+            </Tooltip>
+          )}
 
           {/* Back to Home */}
           <Tooltip>

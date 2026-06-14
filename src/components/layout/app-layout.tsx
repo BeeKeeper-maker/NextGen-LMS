@@ -79,7 +79,24 @@ const viewLabels: Record<string, string> = {
 };
 
 function MainContent() {
-  const { currentView } = useAppStore();
+  const { currentView, currentUser, setView } = useAppStore();
+
+  const isSuperAdminView = currentView === 'super-admin-dashboard';
+  const isAdminView = currentView.startsWith('admin-') || currentView === 'ai-content-gen';
+
+  useEffect(() => {
+    if (currentUser) {
+      if (isSuperAdminView && currentUser.role !== 'super_admin') {
+        setView('learner-dashboard');
+      } else if (isAdminView && 
+                 currentUser.role !== 'super_admin' && 
+                 currentUser.role !== 'tenant_admin' && 
+                 currentUser.role !== 'instructor' && 
+                 currentUser.role !== 'content_creator') {
+        setView('learner-dashboard');
+      }
+    }
+  }, [currentView, currentUser, isSuperAdminView, isAdminView, setView]);
 
   const viewMap: Record<string, React.ReactNode> = {
     'admin-dashboard': <AdminDashboard />,
