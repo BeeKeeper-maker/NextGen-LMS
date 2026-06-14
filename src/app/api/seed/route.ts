@@ -28,13 +28,15 @@ export async function POST() {
     // Create admin user
     const admin = await db.user.upsert({
       where: { id: 'demo-admin-1' },
-      update: {},
+      update: {
+        role: 'super_admin',
+      },
       create: {
         id: 'demo-admin-1',
         tenantId: tenant.id,
         email: 'admin@nextgen-lms.com',
         name: 'Sarah Mitchell',
-        role: 'tenant_admin',
+        role: 'super_admin',
         timezone: 'America/New_York',
         streakDays: 14,
         totalPoints: 2850,
