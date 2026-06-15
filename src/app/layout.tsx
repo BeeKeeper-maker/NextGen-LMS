@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   keywords: ["LMS", "Learning Management System", "AI Education", "Online Courses", "Community Platform", "Course Builder", "Zero Transaction Fees", "Multi-tenant LMS"],
   authors: [{ name: "NextGen LMS Team" }],
   icons: {
-    icon: "/logo.svg",
+    icon: "/logo.svg?v=2",
   },
   openGraph: {
     title: "NextGen Global LMS — AI-Powered Learning Platform",

@@ -76,6 +76,10 @@ import {
   Rocket,
   Crown,
   Minus,
+  Calendar,
+  ThumbsUp,
+  Tv,
+  Lock,
 } from 'lucide-react';
 import { motion, AnimatePresence, useInView, useScroll, useTransform } from 'framer-motion';
 
@@ -243,7 +247,7 @@ function ShimmerText({ children, className = '' }: { children: React.ReactNode; 
         className="absolute inset-0 z-0 bg-gradient-to-r from-transparent via-white/30 to-transparent dark:via-white/10 animate-shimmer bg-[length:200%_100%]"
         aria-hidden="true"
       />
-      <style jsx>{`
+      <style>{`
         @keyframes shimmer {
           0% { background-position: -200% 0; }
           100% { background-position: 200% 0; }
@@ -320,12 +324,9 @@ function RotatingText({ phrases, interval = 3000 }: { phrases: string[]; interva
   );
 }
 
-// ============================================================
-// Animated Grid Background
-// ============================================================
 function GridBackground() {
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-[0.03]">
+    <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-[0.05]">
       <svg width="100%" height="100%">
         <defs>
           <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -334,6 +335,49 @@ function GridBackground() {
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" className="text-foreground" />
       </svg>
+    </div>
+  );
+}
+
+// ============================================================
+// Animated Glowing Grid Beams (Cyber Rays)
+// ============================================================
+function GridRays() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-40">
+      {/* Vertical lines and beams */}
+      {[15, 35, 55, 75, 90].map((left, idx) => (
+        <div key={`v-${idx}`} className="absolute top-0 bottom-0 left-[var(--x)] w-px bg-white/[0.02]" style={{ '--x': `${left}%` } as any}>
+          <motion.div
+            className="absolute w-px bg-gradient-to-b from-transparent via-emerald-500/25 to-transparent top-0"
+            style={{ height: '30vh' }}
+            animate={{ y: ['-100vh', '150vh'] }}
+            transition={{
+              duration: 8 + idx * 2,
+              repeat: Infinity,
+              ease: 'linear',
+              delay: idx * 1.5,
+            }}
+          />
+        </div>
+      ))}
+      
+      {/* Horizontal lines and beams */}
+      {[20, 45, 70, 85].map((top, idx) => (
+        <div key={`h-${idx}`} className="absolute left-0 right-0 top-[var(--y)] h-px bg-white/[0.02]" style={{ '--y': `${top}%` } as any}>
+          <motion.div
+            className="absolute h-px bg-gradient-to-r from-transparent via-violet-500/20 to-transparent left-0"
+            style={{ width: '30vw' }}
+            animate={{ x: ['-100vw', '150vw'] }}
+            transition={{
+              duration: 9 + idx * 3,
+              repeat: Infinity,
+              ease: 'linear',
+              delay: idx * 2.2,
+            }}
+          />
+        </div>
+      ))}
     </div>
   );
 }
@@ -482,15 +526,34 @@ function ParallaxOrbs() {
   return (
     <div ref={ref} className="absolute inset-0 overflow-hidden pointer-events-none">
       <motion.div
-        className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl"
+        className="absolute -top-40 -right-40 h-[480px] w-[480px] rounded-full bg-emerald-500/10 blur-[110px]"
         style={{ y: y1 }}
+        animate={{
+          scale: [1, 1.15, 0.9, 1],
+          opacity: [0.08, 0.14, 0.08, 0.08],
+        }}
+        transition={{
+          duration: 15,
+          repeat: Infinity,
+          ease: 'easeInOut',
+        }}
       />
       <motion.div
-        className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-violet-500/10 blur-3xl"
+        className="absolute -bottom-40 -left-40 h-[480px] w-[480px] rounded-full bg-violet-500/10 blur-[110px]"
         style={{ y: y2 }}
+        animate={{
+          scale: [1, 0.9, 1.15, 1],
+          opacity: [0.08, 0.12, 0.08, 0.08],
+        }}
+        transition={{
+          duration: 18,
+          repeat: Infinity,
+          ease: 'easeInOut',
+          delay: 1,
+        }}
       />
       <motion.div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[600px] w-[600px] rounded-full bg-slate-500/5 blur-3xl"
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[750px] w-[750px] rounded-full bg-slate-500/5 blur-[130px]"
         style={{ y: y3 }}
       />
     </div>
@@ -500,9 +563,482 @@ function ParallaxOrbs() {
 // ============================================================
 // Floating Dashboard Mockup (Hero) — with 3D perspective tilt on mouse move
 // ============================================================
+// ============================================================
+// Live Interactive Sandbox Mockup Views
+// ============================================================
+
+function AIBuilderView() {
+  const [outline, setOutline] = useState<string[]>([]);
+  const [status, setStatus] = useState<'idle' | 'generating' | 'done'>('generating');
+  const [topic, setTopic] = useState('React Server Components (RSC)');
+
+  const mockSteps = [
+    'Analyzing course topic and setting target audience...',
+    'Module 1: Introduction to React Server Components (RSC)',
+    'Module 2: Server vs. Client Components (Hydration & Architecture)',
+    'Module 3: Data Fetching Patterns & Suspense Integration',
+    'Module 4: Server Actions & Mutating Data with Zero Client JS',
+    'Module 5: Security & Secret Key Leak Prevention in Server Code',
+    'AI Outlining Completed successfully!'
+  ];
+
+  useEffect(() => {
+    if (status !== 'generating') return;
+    setOutline([]);
+    let timerIds: NodeJS.Timeout[] = [];
+    
+    mockSteps.forEach((step, index) => {
+      const id = setTimeout(() => {
+        setOutline(prev => [...prev, step]);
+        if (index === mockSteps.length - 1) {
+          setStatus('done');
+        }
+      }, (index + 1) * 850);
+      timerIds.push(id);
+    });
+
+    return () => {
+      timerIds.forEach(id => clearTimeout(id));
+    };
+  }, [status]);
+
+  return (
+    <div className="p-5 flex flex-col md:flex-row gap-6 min-h-[340px] bg-slate-950/40 text-left">
+      {/* Left panel - Inputs */}
+      <div className="flex-1 space-y-4">
+        <div>
+          <label className="text-[10px] font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest font-mono">Target Topic</label>
+          <input
+            type="text"
+            value={topic}
+            onChange={(e) => {
+              setTopic(e.target.value);
+              setStatus('idle');
+            }}
+            className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-foreground focus:outline-none focus:border-emerald-500"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest font-mono">Skill Level</label>
+          <div className="grid grid-cols-3 gap-2 mt-1.5">
+            {['Beginner', 'Intermediate', 'Advanced'].map(lvl => (
+              <div key={lvl} className={`px-2 py-1.5 text-center text-[10px] rounded-lg border font-semibold ${lvl === 'Advanced' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-900 border-white/5 text-muted-foreground'}`}>
+                {lvl}
+              </div>
+            ))}
+          </div>
+        </div>
+        <button
+          onClick={() => setStatus('generating')}
+          disabled={status === 'generating'}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all mt-4 cursor-pointer"
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          {status === 'generating' ? 'AI Outlining...' : 'Re-Generate Outline'}
+        </button>
+      </div>
+
+      {/* Right panel - Generated Outline Terminal */}
+      <div className="flex-1 rounded-xl bg-slate-900/90 border border-white/10 p-4 font-mono text-[11px] flex flex-col">
+        <div className="flex items-center justify-between pb-2 border-b border-white/5 mb-3 select-none">
+          <span className="text-[9px] text-muted-foreground">AI OUTLINE GENERATOR</span>
+          {status === 'generating' && (
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+          )}
+        </div>
+        <div className="flex-1 space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-2">
+          {outline.map((line, i) => {
+            const isBanner = i === 0;
+            const isOutro = i === mockSteps.length - 1;
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className={`${isOutro ? 'text-emerald-400 font-bold' : isBanner ? 'text-violet-400 font-semibold' : 'text-slate-300'}`}
+              >
+                {!isOutro && !isBanner && <span className="text-emerald-500 mr-2">✓</span>}
+                {isOutro && <span className="text-emerald-400 mr-2">✦</span>}
+                {line}
+              </motion.div>
+            );
+          })}
+          {status === 'generating' && (
+            <div className="text-muted-foreground animate-pulse mt-2 flex items-center gap-1">
+              <span>typing</span>
+              <span className="h-3 w-1.5 bg-emerald-500 animate-pulse shrink-0" />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CohortsView() {
+  const [rsvpd, setRsvpd] = useState<Record<string, boolean>>({});
+
+  const events = [
+    { id: '1', title: 'React Server Components Masterclass', type: 'Workshop', time: 'LIVE NOW', duration: '2h', isLive: true, instructor: 'Sharif (CTO)' },
+    { id: '2', title: 'Weekly Q&A Office Hours', type: 'Office Hours', time: 'Today, 4:00 PM', duration: '1.5h', instructor: 'Tasnim (Lead)' },
+    { id: '3', title: 'Building SaaS with Next.js & Coolify', type: 'Webinar', time: 'Wednesday, 7:00 PM', duration: '1h', instructor: 'Sharif (CTO)' },
+  ];
+
+  const handleRsvp = (id: string) => {
+    setRsvpd(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  return (
+    <div className="p-5 min-h-[340px] bg-slate-950/40 text-left flex flex-col justify-between">
+      <div className="flex items-center justify-between mb-4 select-none">
+        <div>
+          <label className="text-[10px] font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest font-mono">Cohort Calendar</label>
+          <h3 className="text-sm font-bold text-white mt-0.5">Upcoming Live Interactive Events</h3>
+        </div>
+        <div className="text-[10px] text-muted-foreground flex items-center gap-1.5 bg-slate-900 border border-white/5 px-2.5 py-1 rounded-lg">
+          <Calendar className="h-3.5 w-3.5 text-emerald-500" />
+          <span>June 2026</span>
+        </div>
+      </div>
+
+      <div className="space-y-3 flex-1 flex flex-col justify-center">
+        {events.map(ev => (
+          <div key={ev.id} className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-3.5 rounded-xl border transition-all ${ev.isLive ? 'bg-gradient-to-r from-emerald-500/5 to-slate-900 border-emerald-500/20' : 'bg-slate-900 border-white/5'}`}>
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 ${ev.isLive ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-muted-foreground'}`}>
+                {ev.type[0]}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-white truncate">{ev.title}</span>
+                  {ev.isLive ? (
+                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 uppercase tracking-wider animate-pulse">
+                      <span className="h-1 w-1 rounded-full bg-rose-500 shrink-0" />
+                      Live Now
+                    </span>
+                  ) : (
+                    <span className="px-1.5 py-0.5 rounded-full text-[8px] bg-slate-800 text-muted-foreground">{ev.type}</span>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-2">
+                  <span>Instructor: <strong className="text-slate-300">{ev.instructor}</strong></span>
+                  <span>•</span>
+                  <span>Time: <strong className="text-emerald-400">{ev.time}</strong></span>
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => handleRsvp(ev.id)}
+              className={`mt-3 sm:mt-0 px-3 py-1.5 text-[10px] font-bold rounded-lg border transition-all shrink-0 cursor-pointer ${
+                ev.isLive
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-transparent shadow-lg shadow-emerald-500/20'
+                  : rsvpd[ev.id]
+                  ? 'bg-slate-800 text-emerald-400 border-emerald-500/20'
+                  : 'bg-transparent text-slate-300 hover:bg-slate-800 border-white/10'
+              }`}
+            >
+              {ev.isLive ? 'Join Live Room' : rsvpd[ev.id] ? '✓ RSVP Confirmed' : 'RSVP Event'}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StudentStudioView() {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(35);
+  const [unlocked, setUnlocked] = useState(false);
+
+  const lessons = [
+    { title: '1. What are Server Components?', completed: true },
+    { title: '2. Working with Server Actions', active: true },
+    { title: '3. Hydration Optimization & CSS', locked: !unlocked },
+  ];
+
+  const handleComplete = () => {
+    setProgress(100);
+    setUnlocked(true);
+  };
+
+  const handleReset = () => {
+    setProgress(35);
+    setUnlocked(false);
+    setIsPlaying(false);
+  };
+
+  return (
+    <div className="p-5 min-h-[340px] bg-slate-950/40 text-left flex flex-col md:flex-row gap-5">
+      {/* Sidebar - Course Outline */}
+      <div className="w-full md:w-56 space-y-2 shrink-0">
+        <label className="text-[10px] font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest font-mono">Course Outline</label>
+        <div className="space-y-1.5 mt-2">
+          {lessons.map((less, idx) => (
+            <div
+              key={idx}
+              className={`flex items-center gap-2 p-2 rounded-lg border text-[11px] font-semibold select-none ${
+                less.active
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                  : less.completed
+                  ? 'bg-slate-900 border-white/5 text-muted-foreground line-through'
+                  : less.locked
+                  ? 'bg-slate-950/60 border-transparent text-slate-600 opacity-60'
+                  : 'bg-slate-900 border-white/5 text-slate-300'
+              }`}
+            >
+              {less.completed ? (
+                <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+              ) : less.locked ? (
+                <Lock className="h-3.5 w-3.5 text-slate-700 shrink-0" />
+              ) : (
+                <div className={`h-3 w-3 rounded-full border border-current shrink-0 flex items-center justify-center`}>
+                  <div className={`h-1.5 w-1.5 rounded-full ${less.active ? 'bg-emerald-400' : 'bg-transparent'}`} />
+                </div>
+              )}
+              <span className="truncate">{less.title}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Main panel - Sleek Video Player Mockup */}
+      <div className="flex-1 flex flex-col">
+        <div className="relative flex-1 rounded-xl bg-slate-950 border border-white/10 overflow-hidden flex items-center justify-center min-h-[170px]">
+          {/* Simulated Video Content */}
+          {isPlaying ? (
+            <video
+              src="/promo.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover"
+              ref={(el) => {
+                if (el) {
+                  el.muted = true;
+                  el.play().catch(() => {});
+                }
+              }}
+            />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/10 via-slate-950 to-slate-950 flex flex-col items-center justify-center p-4">
+              <Video className="h-8 w-8 text-emerald-500/20 mb-1" />
+              <span className="text-[9px] font-mono text-emerald-400/80 uppercase tracking-wider">Lesson Video Stream</span>
+              <span className="text-[10px] text-muted-foreground mt-1 text-center font-medium">NextGen LMS custom media player v2.4</span>
+            </div>
+          )}
+
+          {/* Central Play Overlay */}
+          <button
+            onClick={() => setIsPlaying(!isPlaying)}
+            className="relative z-10 size-11 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20 transition-all hover:scale-105 cursor-pointer"
+          >
+            {isPlaying ? (
+              <span className="flex gap-1 items-end justify-center h-3.5 select-none">
+                {[1, 2, 3].map((b) => (
+                  <motion.span
+                    key={b}
+                    className="h-full w-1 bg-white rounded-full"
+                    animate={{ height: [4, 12, 4] }}
+                    transition={{
+                      duration: 0.6,
+                      repeat: Infinity,
+                      delay: b * 0.15,
+                      ease: 'easeInOut'
+                    }}
+                  />
+                ))}
+              </span>
+            ) : (
+              <Play className="h-4 w-4 ml-0.5 fill-current" />
+            )}
+          </button>
+
+          {/* Progress bar inside video */}
+          <div className="absolute bottom-0 inset-x-0 h-1.5 bg-slate-800">
+            <motion.div className="h-full bg-emerald-500" animate={{ width: `${progress}%` }} transition={{ duration: 0.8 }} />
+          </div>
+        </div>
+
+        {/* Video Player Controls */}
+        <div className="flex items-center justify-between mt-3 gap-3 select-none">
+          <span className="text-[9px] font-mono text-muted-foreground">Progress: {progress}%</span>
+          <div className="flex gap-2">
+            {progress === 100 ? (
+              <button onClick={handleReset} className="h-7 px-3 text-[10px] border border-white/10 rounded-lg hover:bg-slate-800 text-white font-semibold cursor-pointer">
+                Reset Demo
+              </button>
+            ) : (
+              <button onClick={handleComplete} className="h-7 px-3 text-[10px] bg-emerald-600 hover:bg-emerald-750 text-white rounded-lg font-bold cursor-pointer">
+                Complete Lesson
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CommunityHubView() {
+  const [likes, setLikes] = useState(24);
+  const [loves, setLoves] = useState(15);
+  const [comments, setComments] = useState([
+    { id: '1', author: 'Farhan', text: 'This is brilliant! Implementing server guards saves a ton of client js payload.' },
+    { id: '2', author: 'Nishat', text: 'Clean and readable. Thanks Sharif!' },
+  ]);
+  const [commentInput, setCommentInput] = useState('');
+
+  const handleAddComment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!commentInput.trim()) return;
+    setComments(prev => [...prev, { id: Date.now().toString(), author: 'Learner (You)', text: commentInput }]);
+    setCommentInput('');
+  };
+
+  return (
+    <div className="p-5 min-h-[340px] bg-slate-950/40 text-left flex flex-col md:flex-row gap-5">
+      {/* Left Column - Active Post */}
+      <div className="flex-1 space-y-3 flex flex-col">
+        <label className="text-[10px] font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest font-mono">Active Post</label>
+        <div className="p-4 rounded-xl bg-slate-900 border border-white/5 space-y-3 flex-1 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-2 select-none">
+              <div className="size-6 rounded-full bg-emerald-600 flex items-center justify-center text-[10px] font-bold text-white">S</div>
+              <div>
+                <p className="text-[10px] font-bold text-white leading-none">Sharif (Instructor)</p>
+                <p className="text-[8px] text-muted-foreground mt-0.5">2 hours ago</p>
+              </div>
+            </div>
+            <h4 className="text-[11px] font-bold text-slate-100">💡 Quick tip: Use Next.js Middleware for server-side role protection!</h4>
+            <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">
+              Don&apos;t wait for components to render on the client side to restrict routes. Intercept requests at the edge in middleware for secure, instant redirects.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 mt-4 select-none">
+            <button onClick={() => setLikes(likes + 1)} className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-semibold text-muted-foreground hover:text-emerald-400 transition-colors cursor-pointer">
+              <ThumbsUp className="h-3 w-3 text-emerald-500" />
+              <span>{likes}</span>
+            </button>
+            <button onClick={() => setLoves(loves + 1)} className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-semibold text-muted-foreground hover:text-rose-400 transition-colors cursor-pointer">
+              <Heart className="h-3 w-3 text-rose-500 fill-current" />
+              <span>{loves}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Column - Comments Thread */}
+      <div className="flex-1 flex flex-col space-y-3">
+        <label className="text-[10px] font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest font-mono">Discussion Thread</label>
+        <div className="flex-1 flex flex-col justify-between rounded-xl bg-slate-900/50 border border-white/5 p-3 max-h-[220px]">
+          <div className="space-y-2.5 overflow-y-auto custom-scrollbar flex-1 pr-1.5 mb-2.5">
+            {comments.map(c => (
+              <div key={c.id} className="text-[10px] space-y-0.5">
+                <p className="font-bold text-slate-300">{c.author}</p>
+                <p className="text-muted-foreground leading-normal">{c.text}</p>
+              </div>
+            ))}
+          </div>
+
+          <form onSubmit={handleAddComment} className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Join the discussion..."
+              value={commentInput}
+              onChange={e => setCommentInput(e.target.value)}
+              className="flex-1 px-3 py-1.5 bg-slate-900 border border-white/5 rounded-lg text-[10px] text-foreground focus:outline-none focus:border-emerald-500"
+            />
+            <button type="submit" className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold cursor-pointer">
+              Send
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnalyticsView() {
+  const [revenue, setRevenue] = useState(0);
+  const [students, setStudents] = useState(0);
+
+  useEffect(() => {
+    setRevenue(0);
+    setStudents(0);
+    const revTimer = setTimeout(() => setRevenue(47820), 50);
+    const stuTimer = setTimeout(() => setStudents(3847), 150);
+    return () => {
+      clearTimeout(revTimer);
+      clearTimeout(stuTimer);
+    };
+  }, []);
+
+  return (
+    <div className="p-5 min-h-[340px] bg-slate-950/40 text-left flex flex-col justify-center select-none">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        {[
+          { label: 'Total Earnings', value: `$${revenue.toLocaleString()}` },
+          { label: 'Active Students', value: students.toLocaleString() },
+          { label: 'Completion Rate', value: '72.4%' },
+          { label: 'Instructor Rating', value: '★ 4.95/5' },
+        ].map((stat, i) => (
+          <div key={i} className="p-3 bg-slate-900 border border-white/5 rounded-xl text-center">
+            <p className="text-[9px] text-muted-foreground tracking-wider uppercase font-mono">{stat.label}</p>
+            <p className="text-sm font-extrabold text-white mt-1">
+              {stat.value}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* SVG Sparkline Graph */}
+      <div className="relative h-24 rounded-xl bg-slate-900/60 border border-white/5 p-4 flex flex-col justify-between overflow-hidden">
+        <div className="flex items-center justify-between text-[9px] font-mono text-muted-foreground z-10">
+          <span>REVENUE GROWTH (LAST 30 DAYS)</span>
+          <span className="text-emerald-400 font-bold">+40% MRR</span>
+        </div>
+        <div className="relative w-full h-12 mt-2">
+          {/* Animated SVG Path */}
+          <svg className="w-full h-full" viewBox="0 0 100 10" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="chart-glow" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#10b981" stopOpacity="0.4" />
+                <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            {/* Sparkline area */}
+            <path
+              d="M0,10 L5,9 L10,8 L15,8.5 L20,7 L25,6.5 L30,5 L35,5.5 L40,4 L45,3 L50,4.5 L55,2.5 L60,3.5 L65,1.5 L70,2 L75,1 M75,10 L0,10 Z"
+              fill="url(#chart-glow)"
+            />
+            {/* Sparkline stroke */}
+            <motion.path
+              d="M0,9 L5,9 L10,8 L15,8.5 L20,7 L25,6.5 L30,5 L35,5.5 L40,4 L45,3 L50,4.5 L55,2.5 L60,3.5 L65,1.5 L70,2 L75,1"
+              fill="none"
+              stroke="#10b981"
+              strokeWidth="0.8"
+              strokeLinecap="round"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: 1.5, ease: 'easeInOut' }}
+            />
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DashboardMockup() {
   const mockupRef = useRef<HTMLDivElement>(null);
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
+  const [activeTab, setActiveTab] = useState<'ai' | 'timeline' | 'studio' | 'community' | 'analytics'>('ai');
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!mockupRef.current) return;
@@ -518,14 +1054,12 @@ function DashboardMockup() {
 
   return (
     <motion.div
-      className="relative mx-auto mt-12 max-w-4xl"
+      className="relative mx-auto mt-16 max-w-5xl"
       initial={{ opacity: 0, y: 40 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 1, delay: 0.6, ease: 'easeOut' }}
     >
       <motion.div
-        animate={{ y: [0, -8, 0] }}
-        transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
         className="relative"
       >
         <div
@@ -545,65 +1079,60 @@ function DashboardMockup() {
             style={{ transformStyle: 'preserve-3d' }}
           >
             {/* Glow effect behind mockup */}
-            <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/20 via-violet-500/20 to-emerald-500/20 rounded-2xl blur-2xl" />
+            <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/20 via-violet-500/20 to-emerald-500/20 rounded-2xl blur-2xl opacity-60" />
 
             {/* Mockup Card */}
-            <div className="relative rounded-xl border border-border/60 bg-card/90 backdrop-blur-sm shadow-2xl overflow-hidden">
-              {/* Window chrome */}
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-border/40 bg-muted/30">
-                <div className="flex gap-1.5">
-                  <div className="h-3 w-3 rounded-full bg-red-400" />
-                  <div className="h-3 w-3 rounded-full bg-yellow-400" />
-                  <div className="h-3 w-3 rounded-full bg-green-400" />
-                </div>
-                <div className="flex-1 flex justify-center">
-                  <div className="h-6 w-64 rounded-md bg-muted/60 flex items-center justify-center">
-                    <span className="text-[10px] text-muted-foreground">academy.nextgen-lms.com/dashboard</span>
+            <div className="relative rounded-2xl border border-white/10 bg-slate-900/60 backdrop-blur-xl shadow-[0_0_50px_rgba(16,185,129,0.1)] overflow-hidden">
+              
+              {/* Window chrome / Topbar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/5 bg-slate-950/40 px-4 py-3 gap-2 select-none">
+                <div className="flex items-center justify-between sm:justify-start gap-4">
+                  <div className="flex gap-1.5 shrink-0">
+                    <div className="h-3 w-3 rounded-full bg-rose-500/80" />
+                    <div className="h-3 w-3 rounded-full bg-amber-500/80" />
+                    <div className="h-3 w-3 rounded-full bg-emerald-500/80" />
                   </div>
+                  <div className="hidden md:flex h-5 w-48 rounded bg-white/5 items-center justify-center border border-white/5 text-[9px] text-muted-foreground font-mono">
+                    academy.nextgen-lms.com
+                  </div>
+                </div>
+                
+                {/* Tabs navigation */}
+                <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 custom-scrollbar-horizontal max-w-full">
+                  {[
+                    { id: 'ai' as const, label: 'AI Builder', icon: Sparkles },
+                    { id: 'timeline' as const, label: 'Live Cohorts', icon: Calendar },
+                    { id: 'studio' as const, label: 'Student Studio', icon: Tv },
+                    { id: 'community' as const, label: 'Community', icon: MessageSquare },
+                    { id: 'analytics' as const, label: 'Earnings', icon: BarChart3 },
+                  ].map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all shrink-0 cursor-pointer ${
+                          isActive
+                            ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                        }`}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        <span>{tab.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Dashboard content mockup */}
-              <div className="p-4 space-y-3">
-                {/* Sidebar + main */}
-                <div className="flex gap-3">
-                  {/* Mini sidebar */}
-                  <div className="w-12 shrink-0 space-y-2">
-                    <div className="h-8 w-8 rounded-lg bg-emerald-500/20 mx-auto" />
-                    {[1, 2, 3, 4].map((n) => (
-                      <div key={n} className="h-6 w-8 rounded bg-muted/60 mx-auto" />
-                    ))}
-                  </div>
-                  {/* Main area */}
-                  <div className="flex-1 space-y-3">
-                    {/* KPI row */}
-                    <div className="grid grid-cols-4 gap-2">
-                      {[
-                        { label: 'Revenue', value: '$47.8K', color: 'bg-emerald-500/10' },
-                        { label: 'Learners', value: '3,847', color: 'bg-violet-500/10' },
-                        { label: 'Completion', value: '72.4%', color: 'bg-amber-500/10' },
-                        { label: 'Engagement', value: '89.3%', color: 'bg-sky-500/10' },
-                      ].map((kpi) => (
-                        <div key={kpi.label} className={`rounded-lg ${kpi.color} p-2.5`}>
-                          <p className="text-[9px] text-muted-foreground">{kpi.label}</p>
-                          <p className="text-sm font-bold text-foreground">{kpi.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                    {/* Chart area */}
-                    <div className="h-20 rounded-lg bg-muted/30 border border-border/30 flex items-end p-2 gap-0.5">
-                      {[40, 65, 45, 80, 55, 90, 70, 85, 60, 95, 75, 88].map((h, i) => (
-                        <motion.div
-                          key={i}
-                          className="flex-1 rounded-t bg-gradient-to-t from-emerald-500 to-emerald-400"
-                          initial={{ height: 0 }}
-                          animate={{ height: `${h}%` }}
-                          transition={{ duration: 0.6, delay: 1 + i * 0.05, ease: 'easeOut' }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </div>
+              {/* Sandbox viewport content */}
+              <div className="relative overflow-hidden min-h-[340px]">
+                {activeTab === 'ai' && <AIBuilderView />}
+                {activeTab === 'timeline' && <CohortsView />}
+                {activeTab === 'studio' && <StudentStudioView />}
+                {activeTab === 'community' && <CommunityHubView />}
+                {activeTab === 'analytics' && <AnalyticsView />}
               </div>
             </div>
           </motion.div>
@@ -977,7 +1506,7 @@ function MediaLogosMarquee() {
         <AnimatedGradientDivider />
       </div>
 
-      <style jsx>{`
+      <style>{`
         @keyframes marquee-smooth {
           0% { transform: translateX(0); }
           100% { transform: translateX(-12.5%); }
@@ -2114,6 +2643,19 @@ export function LandingPage() {
   const { setView, setAppMode } = useAppStore();
   const router = useRouter();
 
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [isHoveringHero, setIsHoveringHero] = useState(false);
+  const heroRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseMoveHero = useCallback((e: React.MouseEvent) => {
+    if (!heroRef.current) return;
+    const rect = heroRef.current.getBoundingClientRect();
+    setMousePosition({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+  }, []);
+
   const goToLogin = (mode?: string) => {
     const url = mode ? `/login?mode=${mode}` : '/login';
     router.push(url);
@@ -2151,42 +2693,42 @@ export function LandingPage() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-background dark text-foreground">
       {/* ============ NAVBAR ============ */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <header className="fixed top-5 left-4 right-4 z-50 rounded-2xl border border-white/10 bg-slate-950/80 backdrop-blur-xl shadow-2xl shadow-black/40 max-w-7xl mx-auto transition-all duration-300 hover:border-white/20">
+        <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             {/* Logo */}
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white">
-                <GraduationCap className="h-4 w-4" />
+            <div className="flex items-center gap-2.5 group cursor-pointer">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20 group-hover:scale-105 transition-transform duration-300">
+                <GraduationCap className="h-5 w-5" />
               </div>
-              <span className="text-lg font-bold bg-gradient-to-r from-slate-900 via-slate-700 to-emerald-600 bg-clip-text text-transparent">
+              <span className="text-base font-bold bg-gradient-to-r from-white via-slate-100 to-emerald-450 bg-clip-text text-transparent group-hover:text-white transition-colors duration-300">
                 NextGen LMS
               </span>
             </div>
 
             {/* Desktop Nav */}
-            <nav className="hidden md:flex items-center gap-6">
-              <button onClick={() => scrollTo('about')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</button>
-              <button onClick={() => scrollTo('pricing')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</button>
-              <button onClick={() => scrollTo('comparison')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Comparison</button>
-              <button onClick={() => scrollTo('testimonials')} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Community</button>
+            <nav className="hidden md:flex items-center gap-7 bg-white/5 border border-white/10 px-6 py-2 rounded-full backdrop-blur-md hover:border-emerald-500/20 transition-all duration-300 shadow-inner">
+              <button onClick={() => scrollTo('about')} className="text-xs font-semibold text-slate-300 hover:text-emerald-400 hover:drop-shadow-[0_0_6px_rgba(52,211,153,0.4)] transition-all duration-200 cursor-pointer">Features</button>
+              <button onClick={() => scrollTo('pricing')} className="text-xs font-semibold text-slate-300 hover:text-emerald-400 hover:drop-shadow-[0_0_6px_rgba(52,211,153,0.4)] transition-all duration-200 cursor-pointer">Pricing</button>
+              <button onClick={() => scrollTo('comparison')} className="text-xs font-semibold text-slate-300 hover:text-emerald-400 hover:drop-shadow-[0_0_6px_rgba(52,211,153,0.4)] transition-all duration-200 cursor-pointer">Comparison</button>
+              <button onClick={() => scrollTo('testimonials')} className="text-xs font-semibold text-slate-300 hover:text-emerald-400 hover:drop-shadow-[0_0_6px_rgba(52,211,153,0.4)] transition-all duration-200 cursor-pointer">Community</button>
             </nav>
 
             {/* Desktop CTAs */}
             <div className="hidden md:flex items-center gap-3">
-              <Button variant="outline" size="sm" onClick={() => goToLogin('learner')}>
+              <Button variant="ghost" size="sm" onClick={() => goToLogin('learner')} className="text-slate-300 hover:text-white border border-white/10 hover:border-white/20 hover:bg-white/5 text-xs h-9 px-4 rounded-xl transition-all duration-300">
                 Learner View
               </Button>
-              <Button size="sm" onClick={() => goToLogin('admin')} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              <Button size="sm" onClick={() => goToLogin('admin')} className="bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs h-9 px-4 font-bold tracking-wide shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 hover:scale-[1.03] active:scale-[0.98] transition-all duration-300 rounded-xl">
                 Enter Admin Dashboard
               </Button>
             </div>
 
             {/* Mobile Hamburger */}
             <button
-              className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors"
+              className="md:hidden p-2 rounded-xl text-slate-300 hover:bg-white/5 border border-transparent hover:border-white/10 transition-all duration-200"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label="Toggle menu"
             >
@@ -2199,19 +2741,19 @@ export function LandingPage() {
         <AnimatePresence>
           {mobileMenuOpen && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="md:hidden border-t border-border bg-background"
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              className="md:hidden border-t border-white/5 bg-slate-950/95 rounded-b-2xl overflow-hidden backdrop-blur-2xl"
             >
-              <div className="px-4 py-4 space-y-3">
-                <button onClick={() => scrollTo('about')} className="block w-full text-left text-sm text-muted-foreground hover:text-foreground py-2">Features</button>
-                <button onClick={() => scrollTo('pricing')} className="block w-full text-left text-sm text-muted-foreground hover:text-foreground py-2">Pricing</button>
-                <button onClick={() => scrollTo('comparison')} className="block w-full text-left text-sm text-muted-foreground hover:text-foreground py-2">Comparison</button>
-                <button onClick={() => scrollTo('testimonials')} className="block w-full text-left text-sm text-muted-foreground hover:text-foreground py-2">Community</button>
-                <div className="pt-2 space-y-2">
-                  <Button variant="outline" size="sm" className="w-full" onClick={() => goToLogin('learner')}>Learner View</Button>
-                  <Button size="sm" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => goToLogin('admin')}>Enter Admin Dashboard</Button>
+              <div className="px-5 py-5 space-y-3">
+                <button onClick={() => scrollTo('about')} className="block w-full text-left text-sm text-slate-300 hover:text-emerald-400 py-2 border-b border-white/5">Features</button>
+                <button onClick={() => scrollTo('pricing')} className="block w-full text-left text-sm text-slate-300 hover:text-emerald-400 py-2 border-b border-white/5">Pricing</button>
+                <button onClick={() => scrollTo('comparison')} className="block w-full text-left text-sm text-slate-300 hover:text-emerald-400 py-2 border-b border-white/5">Comparison</button>
+                <button onClick={() => scrollTo('testimonials')} className="block w-full text-left text-sm text-slate-300 hover:text-emerald-400 py-2">Community</button>
+                <div className="pt-4 space-y-2 border-t border-white/5">
+                  <Button variant="outline" size="sm" className="w-full border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white rounded-xl" onClick={() => goToLogin('learner')}>Learner View</Button>
+                  <Button size="sm" className="w-full bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white rounded-xl font-bold" onClick={() => goToLogin('admin')}>Enter Admin Dashboard</Button>
                 </div>
               </div>
             </motion.div>
@@ -2221,12 +2763,36 @@ export function LandingPage() {
 
       <main className="flex-1">
         {/* ============ HERO SECTION ============ */}
-        <section id="hero-section" className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
+        <section
+          id="hero-section"
+          ref={heroRef}
+          onMouseMove={handleMouseMoveHero}
+          onMouseEnter={() => setIsHoveringHero(true)}
+          onMouseLeave={() => setIsHoveringHero(false)}
+          className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16"
+        >
           {/* Parallax Orbs */}
           <ParallaxOrbs />
 
           {/* Grid background */}
           <GridBackground />
+
+          {/* Interactive spotlight follow cursor */}
+          {isHoveringHero && (
+            <motion.div
+              className="absolute inset-0 pointer-events-none z-10"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              style={{
+                background: `radial-gradient(600px circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(16, 185, 129, 0.07), rgba(139, 92, 246, 0.03) 50%, transparent 80%)`,
+              }}
+            />
+          )}
+
+          {/* Animated Glowing Grid Beams */}
+          <GridRays />
 
           {/* Constellation particles (dots + lines) */}
           <ConstellationParticles />
@@ -2529,14 +3095,13 @@ export function LandingPage() {
                 </motion.div>
               </motion.div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
+              <div className="space-y-16 max-w-6xl mx-auto">
                 {/* Pricing Cards */}
                 <motion.div
                   initial="hidden"
                   whileInView="visible"
                   viewport={{ once: true, margin: '-100px' }}
                   variants={staggerContainer}
-                  className="grid grid-cols-1 md:grid-cols-3 gap-6"
                 >
                   <AnimatePresence mode="wait">
                     <motion.div
@@ -2545,7 +3110,7 @@ export function LandingPage() {
                       animate={{ rotateY: 0, opacity: 1 }}
                       exit={{ rotateY: isAnnual ? -90 : 90, opacity: 0 }}
                       transition={{ duration: 0.4, ease: 'easeInOut' }}
-                      className="grid grid-cols-1 md:grid-cols-3 gap-6"
+                      className="grid grid-cols-1 md:grid-cols-3 gap-8"
                       style={{ perspective: 1200 }}
                     >
                       {pricingPlans.map((plan) => {
@@ -2616,11 +3181,11 @@ export function LandingPage() {
 
                 {/* Savings Calculator */}
                 <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  whileInView={{ opacity: 1, x: 0 }}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, margin: '-100px' }}
-                  transition={{ duration: 0.6, delay: 0.3 }}
-                  className="flex items-start"
+                  transition={{ duration: 0.6, delay: 0.2 }}
+                  className="max-w-xl mx-auto"
                 >
                   <SavingsCalculator />
                 </motion.div>
@@ -2990,95 +3555,69 @@ export function LandingPage() {
       </main>
 
       {/* ============ FOOTER ============ */}
-      <footer className="border-t border-border bg-card mt-auto relative">
-        {/* Gradient top border */}
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+      <footer className="relative border-t border-white/5 bg-[#020617] mt-auto overflow-hidden">
+        {/* Ambient Glow behind footer content */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[600px] w-[600px] rounded-full bg-emerald-500/10 blur-3xl pointer-events-none animate-pulse" style={{ animationDuration: '8s' }} />
+        
+        {/* Glowing border top */}
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent" />
 
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 z-10">
           {/* Trusted by teams */}
-          <div className="mb-10 text-center">
-            <p className="text-xs text-muted-foreground mb-4 uppercase tracking-wider font-medium">Trusted by teams at</p>
-            <div className="flex flex-wrap items-center justify-center gap-8 opacity-50">
+          <div className="mb-14 text-center">
+            <p className="text-[10px] text-emerald-400 mb-6 uppercase tracking-widest font-bold font-mono">Trusted by teams at</p>
+            <div className="flex flex-wrap items-center justify-center gap-12 opacity-80">
               {['Acme Corp', 'Globex', 'Initech', 'Umbrella', 'Stark Industries'].map((company) => (
-                <div key={company} className="flex items-center gap-2 text-muted-foreground">
-                  <div className="h-6 w-6 rounded bg-muted flex items-center justify-center">
-                    <GraduationCap className="h-3 w-3" />
+                <div key={company} className="flex items-center gap-2 text-slate-400 hover:text-white transition-all duration-300 hover:scale-[1.04]">
+                  <div className="h-8 w-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shadow-md">
+                    <GraduationCap className="h-4 w-4 text-emerald-400" />
                   </div>
-                  <span className="text-sm font-semibold">{company}</span>
+                  <span className="text-xs font-semibold tracking-wide">{company}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            {/* Brand + Newsletter */}
-            <div className="md:col-span-2">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white">
-                  <GraduationCap className="h-4 w-4" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-12 border-t border-white/5 pt-12">
+            {/* Brand details */}
+            <div className="flex flex-col space-y-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/25">
+                  <GraduationCap className="h-5 w-5" />
                 </div>
-                <span className="text-lg font-bold bg-gradient-to-r from-slate-900 via-slate-700 to-emerald-600 bg-clip-text text-transparent">
+                <span className="text-lg font-bold bg-gradient-to-r from-white via-slate-100 to-emerald-450 bg-clip-text text-transparent">
                   NextGen LMS
                 </span>
               </div>
-              <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
+              <p className="text-xs text-slate-400 leading-relaxed">
                 The next-generation learning management system for creators, educators, and organizations. AI-powered, community-integrated, and zero transaction fees.
               </p>
               {/* Social media icons with hover animations */}
-              <div className="flex gap-3 mt-4">
+              <div className="flex gap-3 pt-2">
                 {[
-                  { Icon: Twitter, hoverColor: 'hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/40', href: 'https://twitter.com' },
-                  { Icon: Linkedin, hoverColor: 'hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40', href: 'https://linkedin.com' },
-                  { Icon: Github, hoverColor: 'hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800', href: 'https://github.com' },
-                  { Icon: Youtube, hoverColor: 'hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40', href: 'https://youtube.com' },
+                  { Icon: Twitter, hoverColor: 'hover:text-emerald-400 hover:border-emerald-500/30 hover:bg-emerald-950/20', href: 'https://twitter.com' },
+                  { Icon: Linkedin, hoverColor: 'hover:text-emerald-400 hover:border-emerald-500/30 hover:bg-emerald-950/20', href: 'https://linkedin.com' },
+                  { Icon: Github, hoverColor: 'hover:text-emerald-400 hover:border-emerald-500/30 hover:bg-emerald-950/20', href: 'https://github.com' },
+                  { Icon: Youtube, hoverColor: 'hover:text-emerald-400 hover:border-emerald-500/30 hover:bg-emerald-950/20', href: 'https://youtube.com' },
                 ].map(({ Icon, hoverColor, href }, i) => (
                   <a
                     key={i}
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`h-9 w-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground transition-colors ${hoverColor}`}
+                    className={`h-9 w-9 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-slate-400 transition-all duration-300 ${hoverColor}`}
                     aria-label="Social media"
                   >
                     <Icon className="h-4 w-4" />
                   </a>
                 ))}
               </div>
-
-              {/* Newsletter Signup */}
-              <div className="mt-6">
-                <p className="text-sm font-medium text-foreground mb-2">Stay updated</p>
-                {subscribed ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400"
-                  >
-                    <Check className="h-4 w-4" />
-                    <span>Thanks for subscribing!</span>
-                  </motion.div>
-                ) : (
-                  <div className="flex gap-2 max-w-sm">
-                    <Input
-                      type="email"
-                      placeholder="Enter your email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="h-9 text-sm"
-                    />
-                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 gap-1.5" onClick={async () => { if (email) { try { await fetch('/api/newsletter', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); setSubscribed(true); } catch { setSubscribed(true); } } }}>
-                      <Mail className="h-3.5 w-3.5" />
-                      Subscribe
-                    </Button>
-                  </div>
-                )}
-              </div>
             </div>
 
-            {/* Links */}
+            {/* Links - Product */}
             <div>
-              <h4 className="text-sm font-semibold text-foreground mb-4">Product</h4>
-              <ul className="space-y-2">
+              <h4 className="text-xs font-bold font-mono text-white uppercase tracking-widest mb-5">Product</h4>
+              <ul className="space-y-3.5">
                 {[
                   { label: 'About', id: 'about' },
                   { label: 'Features', id: 'features' },
@@ -3088,7 +3627,7 @@ export function LandingPage() {
                   <li key={label}>
                     <button
                       onClick={() => scrollTo(id)}
-                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      className="text-xs text-slate-400 hover:text-emerald-400 hover:translate-x-1 transition-all cursor-pointer font-medium"
                     >
                       {label}
                     </button>
@@ -3097,9 +3636,10 @@ export function LandingPage() {
               </ul>
             </div>
 
+            {/* Links - Resources */}
             <div>
-              <h4 className="text-sm font-semibold text-foreground mb-4">Resources</h4>
-              <ul className="space-y-2">
+              <h4 className="text-xs font-bold font-mono text-white uppercase tracking-widest mb-5">Resources</h4>
+              <ul className="space-y-3.5">
                 {[
                   { label: 'Documentation', href: '#' },
                   { label: 'API Reference', href: '#' },
@@ -3111,7 +3651,7 @@ export function LandingPage() {
                       href={href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      className="text-xs text-slate-400 hover:text-emerald-400 hover:translate-x-1 transition-all font-medium"
                     >
                       {label}
                     </a>
@@ -3119,10 +3659,42 @@ export function LandingPage() {
                 ))}
               </ul>
             </div>
+
+            {/* Newsletter wrapped in a premium card */}
+            <div className="bg-slate-900/50 border border-white/10 p-5 rounded-2xl backdrop-blur-xl hover:border-emerald-500/20 transition-all duration-300 shadow-lg shadow-black/20">
+              <h4 className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-widest mb-2">Stay Updated</h4>
+              <p className="text-[11px] text-slate-400 leading-relaxed mb-4">
+                Join our newsletter to receive feature releases, AI learning tips, and early creator updates.
+              </p>
+              {subscribed ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center gap-2 text-xs text-emerald-450 font-bold py-2"
+                >
+                  <Check className="h-4 w-4 shrink-0" />
+                  <span>Thanks for subscribing!</span>
+                </motion.div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <Input
+                    type="email"
+                    placeholder="Enter your email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="h-9 text-xs bg-slate-950/80 border-white/10 text-white placeholder-slate-500 rounded-xl focus:border-emerald-500 focus:ring-emerald-500/20 focus-visible:ring-emerald-500/20"
+                  />
+                  <Button size="sm" className="bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shrink-0 gap-1.5 rounded-xl h-9 font-bold shadow-md shadow-emerald-500/10 hover:shadow-emerald-500/20 transition-all active:scale-98" onClick={async () => { if (email) { try { await fetch('/api/newsletter', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); setSubscribed(true); } catch { setSubscribed(true); } } }}>
+                    <Mail className="h-3.5 w-3.5" />
+                    Subscribe
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="mt-10 pt-6 border-t border-border flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p className="text-xs text-muted-foreground">
+          <div className="mt-12 pt-8 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <p className="text-xs text-slate-500">
               &copy; {new Date().getFullYear()} NextGen LMS. All rights reserved.
             </p>
             <div className="flex gap-6">

@@ -1,1 +1,0 @@
-Task ID: 4 - full-stack-developer - Built Marketing Landing Page and Core App Layout

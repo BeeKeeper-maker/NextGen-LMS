@@ -15,7 +15,9 @@ export default auth((req) => {
   const isPublicAsset =
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
-    pathname.startsWith('/logo');
+    pathname.startsWith('/logo') ||
+    pathname.startsWith('/promo') ||
+    pathname.endsWith('.mp4');
 
   // Allow public routes, auth API, seed API, tenants API, and static assets
   if (isPublicRoute || isApiAuthRoute || isApiSeedRoute || isApiTenantsRoute || isPublicAsset || isApiRoute) {
@@ -64,6 +66,6 @@ export const config = {
      * - favicon.ico, logo.svg (favicon/logo files)
      * - public folder assets
      */
-    '/((?!_next/static|_next/image|favicon\\.ico|logo\\.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon\\.ico|logo\\.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4)$).*)',
   ],
 };
