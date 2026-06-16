@@ -333,7 +333,7 @@ function GridBackground() {
             <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="1" />
           </pattern>
         </defs>
-        <rect width="100%" height="100%" fill="url(#grid)" className="text-foreground" />
+        <rect width="100%" height="100%" fill="url(#grid)" className="text-slate-50" />
       </svg>
     </div>
   );
@@ -615,14 +615,14 @@ function AIBuilderView() {
               setTopic(e.target.value);
               setStatus('idle');
             }}
-            className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-foreground focus:outline-none focus:border-emerald-500"
+            className="w-full mt-1.5 px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-slate-50 focus:outline-none focus:border-emerald-500"
           />
         </div>
         <div>
           <label className="text-[10px] font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest font-mono">Skill Level</label>
           <div className="grid grid-cols-3 gap-2 mt-1.5">
             {['Beginner', 'Intermediate', 'Advanced'].map(lvl => (
-              <div key={lvl} className={`px-2 py-1.5 text-center text-[10px] rounded-lg border font-semibold ${lvl === 'Advanced' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-900 border-white/5 text-muted-foreground'}`}>
+              <div key={lvl} className={`px-2 py-1.5 text-center text-[10px] rounded-lg border font-semibold ${lvl === 'Advanced' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-900 border-white/5 text-slate-400'}`}>
                 {lvl}
               </div>
             ))}
@@ -641,7 +641,7 @@ function AIBuilderView() {
       {/* Right panel - Generated Outline Terminal */}
       <div className="flex-1 rounded-xl bg-slate-900/90 border border-white/10 p-4 font-mono text-[11px] flex flex-col">
         <div className="flex items-center justify-between pb-2 border-b border-white/5 mb-3 select-none">
-          <span className="text-[9px] text-muted-foreground">AI OUTLINE GENERATOR</span>
+          <span className="text-[9px] text-slate-400">AI OUTLINE GENERATOR</span>
           {status === 'generating' && (
             <span className="flex h-2 w-2 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -667,7 +667,7 @@ function AIBuilderView() {
             );
           })}
           {status === 'generating' && (
-            <div className="text-muted-foreground animate-pulse mt-2 flex items-center gap-1">
+            <div className="text-slate-400 animate-pulse mt-2 flex items-center gap-1">
               <span>typing</span>
               <span className="h-3 w-1.5 bg-emerald-500 animate-pulse shrink-0" />
             </div>
@@ -698,7 +698,7 @@ function CohortsView() {
           <label className="text-[10px] font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest font-mono">Cohort Calendar</label>
           <h3 className="text-sm font-bold text-white mt-0.5">Upcoming Live Interactive Events</h3>
         </div>
-        <div className="text-[10px] text-muted-foreground flex items-center gap-1.5 bg-slate-900 border border-white/5 px-2.5 py-1 rounded-lg">
+        <div className="text-[10px] text-slate-400 flex items-center gap-1.5 bg-slate-900 border border-white/5 px-2.5 py-1 rounded-lg">
           <Calendar className="h-3.5 w-3.5 text-emerald-500" />
           <span>June 2026</span>
         </div>
@@ -708,7 +708,7 @@ function CohortsView() {
         {events.map(ev => (
           <div key={ev.id} className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-3.5 rounded-xl border transition-all ${ev.isLive ? 'bg-gradient-to-r from-emerald-500/5 to-slate-900 border-emerald-500/20' : 'bg-slate-900 border-white/5'}`}>
             <div className="flex items-start gap-3 flex-1 min-w-0">
-              <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 ${ev.isLive ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-muted-foreground'}`}>
+              <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 ${ev.isLive ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
                 {ev.type[0]}
               </div>
               <div className="min-w-0">
@@ -720,10 +720,10 @@ function CohortsView() {
                       Live Now
                     </span>
                   ) : (
-                    <span className="px-1.5 py-0.5 rounded-full text-[8px] bg-slate-800 text-muted-foreground">{ev.type}</span>
+                    <span className="px-1.5 py-0.5 rounded-full text-[8px] bg-slate-800 text-slate-400">{ev.type}</span>
                   )}
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-2">
+                <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
                   <span>Instructor: <strong className="text-slate-300">{ev.instructor}</strong></span>
                   <span>•</span>
                   <span>Time: <strong className="text-emerald-400">{ev.time}</strong></span>
@@ -784,7 +784,7 @@ function StudentStudioView() {
                 less.active
                   ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                   : less.completed
-                  ? 'bg-slate-900 border-white/5 text-muted-foreground line-through'
+                  ? 'bg-slate-900 border-white/5 text-slate-400 line-through'
                   : less.locked
                   ? 'bg-slate-950/60 border-transparent text-slate-600 opacity-60'
                   : 'bg-slate-900 border-white/5 text-slate-300'
@@ -828,7 +828,7 @@ function StudentStudioView() {
             <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/10 via-slate-950 to-slate-950 flex flex-col items-center justify-center p-4">
               <Video className="h-8 w-8 text-emerald-500/20 mb-1" />
               <span className="text-[9px] font-mono text-emerald-400/80 uppercase tracking-wider">Lesson Video Stream</span>
-              <span className="text-[10px] text-muted-foreground mt-1 text-center font-medium">NextGen LMS custom media player v2.4</span>
+              <span className="text-[10px] text-slate-400 mt-1 text-center font-medium">NextGen LMS custom media player v2.4</span>
             </div>
           )}
 
@@ -866,7 +866,7 @@ function StudentStudioView() {
 
         {/* Video Player Controls */}
         <div className="flex items-center justify-between mt-3 gap-3 select-none">
-          <span className="text-[9px] font-mono text-muted-foreground">Progress: {progress}%</span>
+          <span className="text-[9px] font-mono text-slate-400">Progress: {progress}%</span>
           <div className="flex gap-2">
             {progress === 100 ? (
               <button onClick={handleReset} className="h-7 px-3 text-[10px] border border-white/10 rounded-lg hover:bg-slate-800 text-white font-semibold cursor-pointer">
@@ -911,21 +911,21 @@ function CommunityHubView() {
               <div className="size-6 rounded-full bg-emerald-600 flex items-center justify-center text-[10px] font-bold text-white">S</div>
               <div>
                 <p className="text-[10px] font-bold text-white leading-none">Sharif (Instructor)</p>
-                <p className="text-[8px] text-muted-foreground mt-0.5">2 hours ago</p>
+                <p className="text-[8px] text-slate-400 mt-0.5">2 hours ago</p>
               </div>
             </div>
             <h4 className="text-[11px] font-bold text-slate-100">💡 Quick tip: Use Next.js Middleware for server-side role protection!</h4>
-            <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">
+            <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
               Don&apos;t wait for components to render on the client side to restrict routes. Intercept requests at the edge in middleware for secure, instant redirects.
             </p>
           </div>
 
           <div className="flex items-center gap-2 mt-4 select-none">
-            <button onClick={() => setLikes(likes + 1)} className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-semibold text-muted-foreground hover:text-emerald-400 transition-colors cursor-pointer">
+            <button onClick={() => setLikes(likes + 1)} className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-semibold text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer">
               <ThumbsUp className="h-3 w-3 text-emerald-500" />
               <span>{likes}</span>
             </button>
-            <button onClick={() => setLoves(loves + 1)} className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-semibold text-muted-foreground hover:text-rose-400 transition-colors cursor-pointer">
+            <button onClick={() => setLoves(loves + 1)} className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-semibold text-slate-400 hover:text-rose-400 transition-colors cursor-pointer">
               <Heart className="h-3 w-3 text-rose-500 fill-current" />
               <span>{loves}</span>
             </button>
@@ -941,7 +941,7 @@ function CommunityHubView() {
             {comments.map(c => (
               <div key={c.id} className="text-[10px] space-y-0.5">
                 <p className="font-bold text-slate-300">{c.author}</p>
-                <p className="text-muted-foreground leading-normal">{c.text}</p>
+                <p className="text-slate-400 leading-normal">{c.text}</p>
               </div>
             ))}
           </div>
@@ -952,7 +952,7 @@ function CommunityHubView() {
               placeholder="Join the discussion..."
               value={commentInput}
               onChange={e => setCommentInput(e.target.value)}
-              className="flex-1 px-3 py-1.5 bg-slate-900 border border-white/5 rounded-lg text-[10px] text-foreground focus:outline-none focus:border-emerald-500"
+              className="flex-1 px-3 py-1.5 bg-slate-900 border border-white/5 rounded-lg text-[10px] text-slate-50 focus:outline-none focus:border-emerald-500"
             />
             <button type="submit" className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold cursor-pointer">
               Send
@@ -989,7 +989,7 @@ function AnalyticsView() {
           { label: 'Instructor Rating', value: '★ 4.95/5' },
         ].map((stat, i) => (
           <div key={i} className="p-3 bg-slate-900 border border-white/5 rounded-xl text-center">
-            <p className="text-[9px] text-muted-foreground tracking-wider uppercase font-mono">{stat.label}</p>
+            <p className="text-[9px] text-slate-400 tracking-wider uppercase font-mono">{stat.label}</p>
             <p className="text-sm font-extrabold text-white mt-1">
               {stat.value}
             </p>
@@ -999,7 +999,7 @@ function AnalyticsView() {
 
       {/* SVG Sparkline Graph */}
       <div className="relative h-24 rounded-xl bg-slate-900/60 border border-white/5 p-4 flex flex-col justify-between overflow-hidden">
-        <div className="flex items-center justify-between text-[9px] font-mono text-muted-foreground z-10">
+        <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 z-10">
           <span>REVENUE GROWTH (LAST 30 DAYS)</span>
           <span className="text-emerald-400 font-bold">+40% MRR</span>
         </div>
@@ -1092,7 +1092,7 @@ function DashboardMockup() {
                     <div className="h-3 w-3 rounded-full bg-amber-500/80" />
                     <div className="h-3 w-3 rounded-full bg-emerald-500/80" />
                   </div>
-                  <div className="hidden md:flex h-5 w-48 rounded bg-white/5 items-center justify-center border border-white/5 text-[9px] text-muted-foreground font-mono">
+                  <div className="hidden md:flex h-5 w-48 rounded bg-white/5 items-center justify-center border border-white/5 text-[9px] text-slate-400 font-mono">
                     academy.nextgen-lms.com
                   </div>
                 </div>
@@ -1115,7 +1115,7 @@ function DashboardMockup() {
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all shrink-0 cursor-pointer ${
                           isActive
                             ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                            : 'text-slate-400 hover:text-slate-50 hover:bg-white/5'
                         }`}
                       >
                         <Icon className="h-3.5 w-3.5" />
@@ -1196,7 +1196,7 @@ function AILiveDemo() {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="rounded-lg bg-card/80 border border-border/40 p-3 font-mono text-xs space-y-1.5">
+        <div className="rounded-lg bg-slate-900/80 border border-white/10/40 p-3 font-mono text-xs space-y-1.5">
           {lines.slice(0, currentLine).map((line, i) => (
             <motion.div
               key={i}
@@ -1209,7 +1209,7 @@ function AILiveDemo() {
             </motion.div>
           ))}
           {currentLine < lines.length && (
-            <div className="flex items-center gap-2 text-foreground">
+            <div className="flex items-center gap-2 text-slate-50">
               <span className="text-violet-500 shrink-0">{'>'}</span>
               <span>
                 {displayText}
@@ -1286,8 +1286,8 @@ function SavingsCalculator() {
       <CardContent className="space-y-4">
         <div>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-muted-foreground">Monthly Revenue</span>
-            <span className="text-lg font-bold text-foreground">${revenue.toLocaleString()}</span>
+            <span className="text-sm text-slate-400">Monthly Revenue</span>
+            <span className="text-lg font-bold text-slate-50">${revenue.toLocaleString()}</span>
           </div>
           <input
             type="range"
@@ -1301,7 +1301,7 @@ function SavingsCalculator() {
               background: `linear-gradient(to right, #10b981 0%, #8b5cf6 ${((revenue - 500) / (50000 - 500)) * 100}%, hsl(var(--muted)) ${((revenue - 500) / (50000 - 500)) * 100}%, hsl(var(--muted)) 100%)`,
             }}
           />
-          <div className="flex justify-between text-xs text-muted-foreground mt-1">
+          <div className="flex justify-between text-xs text-slate-400 mt-1">
             <span>$500</span>
             <span>$50,000</span>
           </div>
@@ -1463,7 +1463,7 @@ function MediaLogosMarquee() {
   const logos = ['TechCrunch', 'Forbes', 'Wired', 'EdTech', 'The Verge', 'VentureBeat'];
 
   return (
-    <section className="py-10 bg-muted/20 overflow-hidden">
+    <section className="py-10 bg-slate-800/20 overflow-hidden">
       {/* Animated gradient divider - top */}
       <AnimatedGradientDivider />
 
@@ -1472,7 +1472,7 @@ function MediaLogosMarquee() {
           initial={{ opacity: 0, y: 10 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center text-xs text-muted-foreground uppercase tracking-[0.2em] font-medium mb-6"
+          className="text-center text-xs text-slate-400 uppercase tracking-[0.2em] font-medium mb-6"
         >
           As Seen In
         </motion.p>
@@ -1489,7 +1489,7 @@ function MediaLogosMarquee() {
               className="flex items-center justify-center mx-8 sm:mx-12 shrink-0 group"
             >
               <motion.span
-                className="text-xl sm:text-2xl font-bold text-muted-foreground/40 whitespace-nowrap tracking-tight select-none transition-all duration-500 group-hover:text-muted-foreground/70 group-hover:drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]"
+                className="text-xl sm:text-2xl font-bold text-slate-400/40 whitespace-nowrap tracking-tight select-none transition-all duration-500 group-hover:text-slate-400/70 group-hover:drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]"
                 initial={{ opacity: 0.3 }}
                 animate={{ opacity: [0.3, 0.55, 0.3] }}
                 transition={{ duration: 4, repeat: Infinity, delay: (i * 0.5) % 4, ease: 'easeInOut' }}
@@ -1581,15 +1581,15 @@ function AnimatedStatsSection() {
                 <circle cx="8" cy="8" r="1.2" fill="currentColor" />
               </pattern>
             </defs>
-            <rect width="100%" height="100%" fill={`url(#stat-dots-${label})`} className="text-foreground" />
+            <rect width="100%" height="100%" fill={`url(#stat-dots-${label})`} className="text-slate-50" />
           </svg>
         </div>
 
-        <div className="relative rounded-2xl border border-border/30 bg-white/50 dark:bg-white/5 backdrop-blur-md p-6 sm:p-8 text-center transition-all duration-300 group-hover:border-border/60 group-hover:shadow-lg group-hover:scale-[1.02]">
+        <div className="relative rounded-2xl border border-white/10/30 bg-white/50 dark:bg-white/5 backdrop-blur-md p-6 sm:p-8 text-center transition-all duration-300 group-hover:border-white/10/60 group-hover:shadow-lg group-hover:scale-[1.02]">
           <p className={`text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r ${gradient} bg-clip-text text-transparent`}>
             {displayValue}{suffix}
           </p>
-          <p className="mt-2 text-sm sm:text-base text-muted-foreground font-medium">{label}</p>
+          <p className="mt-2 text-sm sm:text-base text-slate-400 font-medium">{label}</p>
         </div>
       </motion.div>
     );
@@ -1681,11 +1681,11 @@ function LiveDashboardPreview() {
           variants={staggerContainer}
           className="text-center mb-16"
         >
-          <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+          <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-slate-50">
             See Your{' '}
             <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Dashboard</span> in Action
           </motion.h2>
-          <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+          <motion.p variants={fadeInUp} className="mt-4 text-lg text-slate-400 max-w-2xl mx-auto">
             Real-time insights, beautiful charts, and actionable data — all at your fingertips.
           </motion.p>
         </motion.div>
@@ -1705,17 +1705,17 @@ function LiveDashboardPreview() {
             animate={{ y: [0, -6, 0] }}
             transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
           >
-            <div className="relative rounded-2xl border border-border/60 bg-card shadow-2xl overflow-hidden">
+            <div className="relative rounded-2xl border border-white/10/60 bg-slate-900 shadow-2xl overflow-hidden">
               {/* Browser chrome */}
-              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border/40 bg-muted/30">
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-white/10/40 bg-slate-800/30">
                 <div className="flex gap-1.5">
                   <div className="h-3 w-3 rounded-full bg-red-400 shadow-sm shadow-red-400/50" />
                   <div className="h-3 w-3 rounded-full bg-yellow-400 shadow-sm shadow-yellow-400/50" />
                   <div className="h-3 w-3 rounded-full bg-green-400 shadow-sm shadow-green-400/50" />
                 </div>
                 <div className="flex-1 flex justify-center">
-                  <div className="h-7 w-72 rounded-md bg-muted/60 flex items-center justify-center px-3">
-                    <span className="text-[11px] text-muted-foreground truncate">
+                  <div className="h-7 w-72 rounded-md bg-slate-800/60 flex items-center justify-center px-3">
+                    <span className="text-[11px] text-slate-400 truncate">
                       {urlText}
                       {urlText.length < fullUrl.length && (
                         <span className="inline-block w-0.5 h-3 bg-emerald-500 ml-0.5 animate-pulse align-middle" />
@@ -1730,9 +1730,9 @@ function LiveDashboardPreview() {
                 {/* KPI Cards Row */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {kpiData.map((kpi) => (
-                    <div key={kpi.label} className="rounded-xl border border-border/40 bg-gradient-to-br from-muted/30 to-muted/10 p-4 hover:shadow-md transition-shadow">
-                      <p className="text-xs text-muted-foreground mb-1">{kpi.label}</p>
-                      <p className="text-xl sm:text-2xl font-bold text-foreground">
+                    <div key={kpi.label} className="rounded-xl border border-white/10/40 bg-gradient-to-br from-muted/30 to-muted/10 p-4 hover:shadow-md transition-shadow">
+                      <p className="text-xs text-slate-400 mb-1">{kpi.label}</p>
+                      <p className="text-xl sm:text-2xl font-bold text-slate-50">
                         {kpi.prefix}
                         {inView ? formatNumber(kpi.value, kpi.format) : '0'}
                         {kpi.suffix}
@@ -1748,10 +1748,10 @@ function LiveDashboardPreview() {
                 {/* Chart + Table row */}
                 <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
                   {/* Bar chart */}
-                  <div className="sm:col-span-3 rounded-xl border border-border/40 bg-muted/10 p-4">
+                  <div className="sm:col-span-3 rounded-xl border border-white/10/40 bg-slate-800/10 p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-semibold text-foreground">Revenue Overview</span>
-                      <span className="text-[10px] text-muted-foreground">Last 12 months</span>
+                      <span className="text-sm font-semibold text-slate-50">Revenue Overview</span>
+                      <span className="text-[10px] text-slate-400">Last 12 months</span>
                     </div>
                     <div className="h-28 flex items-end gap-1">
                       {chartBars.map((h, i) => (
@@ -1766,23 +1766,23 @@ function LiveDashboardPreview() {
                     </div>
                     <div className="flex justify-between mt-2">
                       {['Jan', 'Mar', 'Jun', 'Sep', 'Dec'].map((m) => (
-                        <span key={m} className="text-[9px] text-muted-foreground">{m}</span>
+                        <span key={m} className="text-[9px] text-slate-400">{m}</span>
                       ))}
                     </div>
                   </div>
 
                   {/* Mini table */}
-                  <div className="sm:col-span-2 rounded-xl border border-border/40 bg-muted/10 p-4">
-                    <span className="text-sm font-semibold text-foreground mb-3 block">Top Courses</span>
+                  <div className="sm:col-span-2 rounded-xl border border-white/10/40 bg-slate-800/10 p-4">
+                    <span className="text-sm font-semibold text-slate-50 mb-3 block">Top Courses</span>
                     <div className="space-y-2">
                       {tableData.map((row) => (
-                        <div key={row.course} className="flex items-center justify-between py-1.5 border-b border-border/20 last:border-0">
+                        <div key={row.course} className="flex items-center justify-between py-1.5 border-b border-white/10/20 last:border-0">
                           <div>
-                            <p className="text-xs font-medium text-foreground truncate max-w-[120px]">{row.course}</p>
-                            <p className="text-[10px] text-muted-foreground">{row.learners} learners</p>
+                            <p className="text-xs font-medium text-slate-50 truncate max-w-[120px]">{row.course}</p>
+                            <p className="text-[10px] text-slate-400">{row.learners} learners</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-xs font-semibold text-foreground">{row.revenue}</p>
+                            <p className="text-xs font-semibold text-slate-50">{row.revenue}</p>
                             <Badge variant="secondary" className={`text-[9px] px-1.5 py-0 ${row.status === 'Active' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
                               {row.status}
                             </Badge>
@@ -1828,7 +1828,7 @@ function LiveDashboardPreview() {
 // ============================================================
 function CommunityPreview() {
   return (
-    <section className="py-20 sm:py-28 bg-muted/30">
+    <section className="py-20 sm:py-28 bg-slate-800/30">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <motion.div
           initial="hidden"
@@ -1837,11 +1837,11 @@ function CommunityPreview() {
           variants={staggerContainer}
           className="text-center mb-16"
         >
-          <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+          <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-slate-50">
             A Thriving{' '}
             <span className="bg-gradient-to-r from-violet-600 to-violet-400 bg-clip-text text-transparent">Learning Community</span>
           </motion.h2>
-          <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+          <motion.p variants={fadeInUp} className="mt-4 text-lg text-slate-400 max-w-2xl mx-auto">
             Built-in discussions, peer support, and knowledge sharing — no need for Slack or Discord.
           </motion.p>
         </motion.div>
@@ -1855,7 +1855,7 @@ function CommunityPreview() {
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: i * 0.15 }}
             >
-              <Card className="hover:shadow-lg transition-all duration-300 border-border/60 group">
+              <Card className="hover:shadow-lg transition-all duration-300 border-white/10/60 group">
                 <CardContent className="p-5">
                   <div className="flex items-start gap-3">
                     <div className={`h-10 w-10 rounded-full ${post.color} flex items-center justify-center text-white text-sm font-bold shrink-0`}>
@@ -1863,21 +1863,21 @@ function CommunityPreview() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-foreground">{post.name}</span>
+                        <span className="text-sm font-semibold text-slate-50">{post.name}</span>
                         {post.pinned && (
                           <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 text-[10px] px-1.5 py-0 gap-1">
                             <Pin className="h-2.5 w-2.5" /> Pinned
                           </Badge>
                         )}
-                        <span className="text-xs text-muted-foreground">{post.timestamp}</span>
+                        <span className="text-xs text-slate-400">{post.timestamp}</span>
                       </div>
-                      <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">{post.content}</p>
+                      <p className="text-sm text-slate-400 mt-1.5 leading-relaxed">{post.content}</p>
                       <div className="flex items-center gap-4 mt-3">
-                        <button onClick={() => goToLogin('learner')} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-rose-500 transition-colors group/btn">
+                        <button onClick={() => goToLogin('learner')} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-500 transition-colors group/btn">
                           <Heart className="h-3.5 w-3.5 group-hover/btn:scale-110 transition-transform" />
                           {post.likes}
                         </button>
-                        <button onClick={() => goToLogin('learner')} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-emerald-500 transition-colors">
+                        <button onClick={() => goToLogin('learner')} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-emerald-500 transition-colors">
                           <MessageSquare className="h-3.5 w-3.5" />
                           {post.comments}
                         </button>
@@ -1924,7 +1924,7 @@ function AnimatedStars({ delay = 0, rating = 5 }: { delay?: number; rating?: num
           animate={isInView ? { opacity: 1, scale: 1, rotate: 0 } : {}}
           transition={{ duration: 0.3, delay: delay + j * 0.08, ease: 'backOut' }}
         >
-          <Star className={`h-3.5 w-3.5 ${j < rating ? 'fill-amber-400 text-amber-400' : 'fill-none text-muted-foreground/30'}`} />
+          <Star className={`h-3.5 w-3.5 ${j < rating ? 'fill-amber-400 text-amber-400' : 'fill-none text-slate-400/30'}`} />
         </motion.div>
       ))}
     </div>
@@ -1943,7 +1943,7 @@ function DotPatternBackground() {
             <circle cx="10" cy="10" r="1.5" fill="currentColor" />
           </pattern>
         </defs>
-        <rect width="100%" height="100%" fill="url(#dots)" className="text-foreground" />
+        <rect width="100%" height="100%" fill="url(#dots)" className="text-slate-50" />
       </svg>
     </div>
   );
@@ -2013,15 +2013,15 @@ function TestimonialCarousel() {
             transition={{ delay: i * 0.1 }}
             whileHover={{ y: -4, transition: { duration: 0.2 } }}
           >
-            <Card className="h-full border-border/60 hover:shadow-lg transition-shadow bg-gradient-to-br from-white/80 to-emerald-50/30 dark:from-card dark:to-emerald-950/10">
+            <Card className="h-full border-white/10/60 hover:shadow-lg transition-shadow bg-gradient-to-br from-white/80 to-emerald-50/30 dark:from-card dark:to-emerald-950/10">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 text-sm font-bold">
                     {testimonial.avatar}
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-foreground">{testimonial.name}</p>
-                    <p className="text-xs text-muted-foreground">{testimonial.role}</p>
+                    <p className="text-sm font-semibold text-slate-50">{testimonial.name}</p>
+                    <p className="text-xs text-slate-400">{testimonial.role}</p>
                   </div>
                   <Badge className={`text-[9px] px-1.5 py-0 ${
                     testimonial.badge === 'Enterprise'
@@ -2043,7 +2043,7 @@ function TestimonialCarousel() {
                 >
                   &ldquo;
                 </motion.span>
-                <p className="text-sm text-muted-foreground leading-relaxed relative z-10">&ldquo;{testimonial.quote}&rdquo;</p>
+                <p className="text-sm text-slate-400 leading-relaxed relative z-10">&ldquo;{testimonial.quote}&rdquo;</p>
               </CardContent>
             </Card>
           </motion.div>
@@ -2063,15 +2063,15 @@ function TestimonialCarousel() {
               exit="exit"
               transition={{ duration: 0.4, ease: 'easeInOut' }}
             >
-              <Card className="border-border/60 bg-gradient-to-br from-white/80 to-emerald-50/30 dark:from-card dark:to-emerald-950/10">
+              <Card className="border-white/10/60 bg-gradient-to-br from-white/80 to-emerald-50/30 dark:from-card dark:to-emerald-950/10">
                 <CardHeader className="pb-3">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 text-sm font-bold">
                       {testimonials[current].avatar}
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-semibold text-foreground">{testimonials[current].name}</p>
-                      <p className="text-xs text-muted-foreground">{testimonials[current].role}</p>
+                      <p className="text-sm font-semibold text-slate-50">{testimonials[current].name}</p>
+                      <p className="text-xs text-slate-400">{testimonials[current].role}</p>
                     </div>
                     <Badge className={`text-[9px] px-1.5 py-0 ${
                       testimonials[current].badge === 'Enterprise'
@@ -2085,7 +2085,7 @@ function TestimonialCarousel() {
                 <CardContent className="relative">
                   <AnimatedStars delay={0.1} rating={testimonials[current].rating} />
                   <span className="absolute top-0 right-4 text-4xl font-serif text-emerald-200 dark:text-emerald-800/40 select-none">&ldquo;</span>
-                  <p className="text-sm text-muted-foreground leading-relaxed relative z-10">&ldquo;{testimonials[current].quote}&rdquo;</p>
+                  <p className="text-sm text-slate-400 leading-relaxed relative z-10">&ldquo;{testimonials[current].quote}&rdquo;</p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -2096,7 +2096,7 @@ function TestimonialCarousel() {
         <div className="flex items-center justify-center gap-4 mt-6">
           <button
             onClick={prev}
-            className="h-8 w-8 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
+            className="h-8 w-8 rounded-full border border-white/10 flex items-center justify-center hover:bg-slate-800 transition-colors"
             aria-label="Previous testimonial"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -2107,7 +2107,7 @@ function TestimonialCarousel() {
                 key={i}
                 onClick={() => goTo(i)}
                 className={`h-2 rounded-full transition-all duration-300 ${
-                  i === current ? 'w-6 bg-emerald-500' : 'w-2 bg-muted-foreground/30'
+                  i === current ? 'w-6 bg-emerald-500' : 'w-2 bg-slate-800-foreground/30'
                 }`}
                 aria-label={`Go to testimonial ${i + 1}`}
               />
@@ -2115,7 +2115,7 @@ function TestimonialCarousel() {
           </div>
           <button
             onClick={next}
-            className="h-8 w-8 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
+            className="h-8 w-8 rounded-full border border-white/10 flex items-center justify-center hover:bg-slate-800 transition-colors"
             aria-label="Next testimonial"
           >
             <ChevronRight className="h-4 w-4" />
@@ -2174,16 +2174,16 @@ function FloatingStatsCounter() {
       <motion.div
         animate={{ y: [0, -3, 0] }}
         transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-        className="rounded-xl border border-border/40 bg-background/80 backdrop-blur-xl shadow-xl px-4 py-3 flex items-center gap-3"
+        className="rounded-xl border border-white/10/40 bg-slate-950/80 backdrop-blur-xl shadow-xl px-4 py-3 flex items-center gap-3"
       >
         <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
         <div>
-          <p className="text-sm font-semibold text-foreground">{onlineCount.toLocaleString()} learners online</p>
-          <p className="text-[10px] text-muted-foreground">across 30+ countries</p>
+          <p className="text-sm font-semibold text-slate-50">{onlineCount.toLocaleString()} learners online</p>
+          <p className="text-[10px] text-slate-400">across 30+ countries</p>
         </div>
         <button
           onClick={() => setDismissed(true)}
-          className="ml-2 h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+          className="ml-2 h-5 w-5 rounded-full hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-50 transition-colors"
           aria-label="Dismiss"
         >
           <X className="h-3 w-3" />
@@ -2313,7 +2313,7 @@ function FeatureTooltip({ text }: { text: string }) {
       <button
         onMouseEnter={() => setShow(true)}
         onMouseLeave={() => setShow(false)}
-        className="h-4 w-4 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-[8px] ml-1 hover:bg-muted-foreground/20 transition-colors"
+        className="h-4 w-4 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[8px] ml-1 hover:bg-slate-800-foreground/20 transition-colors"
         aria-label="More info"
       >
         ?
@@ -2325,7 +2325,7 @@ function FeatureTooltip({ text }: { text: string }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 5, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-56 px-3 py-2 rounded-lg bg-popover border border-border shadow-lg text-xs text-popover-foreground"
+            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-56 px-3 py-2 rounded-lg bg-popover border border-white/10 shadow-lg text-xs text-popover-foreground"
           >
             {text}
             <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-border" />
@@ -2449,7 +2449,7 @@ function ComparisonCell({ value, isNextgen = false, isInView = false, rowIndex =
       className={`text-xs font-medium ${
         isNextgen ? 'text-emerald-700 dark:text-emerald-300' :
         isAmber ? 'text-amber-600 dark:text-amber-400' :
-        'text-muted-foreground'
+        'text-slate-400'
       }`}
     >
       {value}
@@ -2467,7 +2467,7 @@ function ComparisonFeatureTooltip({ text }: { text: string }) {
       <button
         onMouseEnter={() => setShow(true)}
         onMouseLeave={() => setShow(false)}
-        className="h-3.5 w-3.5 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-[7px] hover:bg-muted-foreground/20 transition-colors"
+        className="h-3.5 w-3.5 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-[7px] hover:bg-slate-800-foreground/20 transition-colors"
         aria-label={`Info about ${text}`}
       >
         i
@@ -2479,7 +2479,7 @@ function ComparisonFeatureTooltip({ text }: { text: string }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 5, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute bottom-full left-0 mb-2 z-50 w-52 px-3 py-2 rounded-lg bg-popover border border-border shadow-lg text-xs text-popover-foreground"
+            className="absolute bottom-full left-0 mb-2 z-50 w-52 px-3 py-2 rounded-lg bg-popover border border-white/10 shadow-lg text-xs text-popover-foreground"
           >
             {text}
           </motion.div>
@@ -2693,7 +2693,7 @@ export function LandingPage() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-background dark text-foreground">
+    <div className="min-h-screen flex flex-col bg-slate-950 dark text-slate-50">
       {/* ============ NAVBAR ============ */}
       <header className="fixed top-5 left-4 right-4 z-50 rounded-2xl border border-white/10 bg-slate-950/80 backdrop-blur-xl shadow-2xl shadow-black/40 max-w-7xl mx-auto transition-all duration-300 hover:border-white/20">
         <div className="px-4 sm:px-6 lg:px-8">
@@ -2847,7 +2847,7 @@ export function LandingPage() {
 
                 <motion.h1
                   variants={fadeInUp}
-                  className="relative text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-foreground max-w-5xl mx-auto leading-[1.1]"
+                  className="relative text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-slate-50 max-w-5xl mx-auto leading-[1.1]"
                 >
                   <RotatingText phrases={['AI-Powered Architecture', 'Integrated Communities', 'Zero Transaction Fees']} />{' '}
                   <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">for Modern Learning.</span>
@@ -2856,7 +2856,7 @@ export function LandingPage() {
 
               <motion.div
                 variants={fadeInUp}
-                className="mt-6 text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed"
+                className="mt-6 text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed"
               >
                 <ShimmerText>
                   <TypingText
@@ -2899,8 +2899,8 @@ export function LandingPage() {
                     </motion.div>
                   ))}
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Trusted by <span className="font-semibold text-foreground">10,000+</span> creators worldwide
+                <p className="text-sm text-slate-400">
+                  Trusted by <span className="font-semibold text-slate-50">10,000+</span> creators worldwide
                 </p>
               </motion.div>
 
@@ -2916,8 +2916,8 @@ export function LandingPage() {
                   { value: '99.99%', label: 'Uptime' },
                 ].map((stat) => (
                   <div key={stat.label} className="text-center">
-                    <p className="text-3xl sm:text-4xl font-bold text-foreground">{stat.value}</p>
-                    <p className="text-sm text-muted-foreground mt-1">{stat.label}</p>
+                    <p className="text-3xl sm:text-4xl font-bold text-slate-50">{stat.value}</p>
+                    <p className="text-sm text-slate-400 mt-1">{stat.label}</p>
                   </div>
                 ))}
               </motion.div>
@@ -2935,7 +2935,7 @@ export function LandingPage() {
         <AnimatedStatsSection />
 
         {/* ============ FEATURES SECTION ============ */}
-        <section id="about" className="py-20 sm:py-28 bg-muted/30 relative">
+        <section id="about" className="py-20 sm:py-28 bg-slate-800/30 relative">
           {/* Mesh gradient background */}
           <MeshGradientBackground />
 
@@ -2956,11 +2956,11 @@ export function LandingPage() {
                 variants={staggerContainer}
                 className="text-center mb-16"
               >
-                <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+                <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-slate-50">
                   Everything You Need to{' '}
                   <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Teach & Scale</span>
                 </motion.h2>
-                <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+                <motion.p variants={fadeInUp} className="mt-4 text-lg text-slate-400 max-w-2xl mx-auto">
                   A complete ecosystem of tools designed for modern educators and creators.
                 </motion.p>
               </motion.div>
@@ -2980,14 +2980,14 @@ export function LandingPage() {
                       return (
                         <motion.div key={feature.title} variants={fadeInUp} custom={idx}>
                           <GlowFeatureCard>
-                            <Card className="h-full transition-all duration-300 border-border/40 bg-white/70 dark:bg-white/5 backdrop-blur-md group relative overflow-hidden hover:shadow-xl hover:border-border/60">
+                            <Card className="h-full transition-all duration-300 border-white/10/40 bg-white/70 dark:bg-white/5 backdrop-blur-md group relative overflow-hidden hover:shadow-xl hover:border-white/10/60">
                               {/* Gradient overlay on hover */}
                               <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-r from-emerald-500/5 via-transparent to-violet-500/5 pointer-events-none" />
                               <CardHeader className="pb-3 relative">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <PulsingIconContainer icon={Icon} index={idx} />
                                   {/* Category badge */}
-                                  <Badge className={`text-[9px] px-1.5 py-0 ${categoryColors[feature.category] || 'bg-muted text-muted-foreground'}`}>
+                                  <Badge className={`text-[9px] px-1.5 py-0 ${categoryColors[feature.category] || 'bg-slate-800 text-slate-400'}`}>
                                     {feature.category}
                                   </Badge>
                                   {/* Featured badge */}
@@ -3003,7 +3003,7 @@ export function LandingPage() {
                                 </CardTitle>
                               </CardHeader>
                               <CardContent className="relative">
-                                <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+                                <p className="text-sm text-slate-400 leading-relaxed">{feature.description}</p>
                               </CardContent>
                             </Card>
                           </GlowFeatureCard>
@@ -3063,20 +3063,20 @@ export function LandingPage() {
                 variants={staggerContainer}
                 className="text-center mb-16"
               >
-                <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+                <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-slate-50">
                   Simple, Transparent{' '}
                   <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Pricing</span>
                 </motion.h2>
-                <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+                <motion.p variants={fadeInUp} className="mt-4 text-lg text-slate-400 max-w-2xl mx-auto">
                   No hidden fees. No transaction taxes. Start free and scale as you grow.
                 </motion.p>
 
                 {/* Monthly/Annual Toggle */}
                 <motion.div variants={fadeInUp} className="mt-8 flex items-center justify-center gap-3">
-                  <span className={`text-sm font-medium ${!isAnnual ? 'text-foreground' : 'text-muted-foreground'}`}>Monthly</span>
+                  <span className={`text-sm font-medium ${!isAnnual ? 'text-slate-50' : 'text-slate-400'}`}>Monthly</span>
                   <button
                     onClick={() => setIsAnnual(!isAnnual)}
-                    className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${isAnnual ? 'bg-emerald-600' : 'bg-muted'}`}
+                    className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${isAnnual ? 'bg-emerald-600' : 'bg-slate-800'}`}
                     aria-label="Toggle annual pricing"
                   >
                     <motion.span
@@ -3085,7 +3085,7 @@ export function LandingPage() {
                       transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                     />
                   </button>
-                  <span className={`text-sm font-medium ${isAnnual ? 'text-foreground' : 'text-muted-foreground'}`}>
+                  <span className={`text-sm font-medium ${isAnnual ? 'text-slate-50' : 'text-slate-400'}`}>
                     Annual
                     <Badge className="ml-1.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-[10px] px-1.5 py-0 relative">
                       Save 17%
@@ -3119,7 +3119,7 @@ export function LandingPage() {
                         return (
                           <motion.div key={plan.id} variants={fadeInUp} whileHover={{ scale: 1.03, y: -4 }} transition={{ duration: 0.2 }}>
                             <GlowBorderCard highlighted={plan.highlighted}>
-                              <Card className={`h-full relative ${plan.highlighted ? 'border-emerald-500 border-2 shadow-xl z-10 bg-card' : 'border-border/60'}`}>
+                              <Card className={`h-full relative ${plan.highlighted ? 'border-emerald-500 border-2 shadow-xl z-10 bg-slate-900' : 'border-white/10/60'}`}>
                                 {plan.highlighted && (
                                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
                                     {/* Floating ribbon */}
@@ -3145,10 +3145,10 @@ export function LandingPage() {
                                   <CardTitle className="text-lg">{plan.name}</CardTitle>
                                   <CardDescription className="text-sm min-h-[40px]">{plan.description}</CardDescription>
                                   <div className="mt-4">
-                                    <span className="text-4xl font-bold text-foreground">
+                                    <span className="text-4xl font-bold text-slate-50">
                                       ${pricingInView ? <AnimatedPrice target={annualPrice} isInView={pricingInView} /> : annualPrice}
                                     </span>
-                                    <span className="text-muted-foreground">{isAnnual ? '/mo (billed annually)' : plan.period}</span>
+                                    <span className="text-slate-400">{isAnnual ? '/mo (billed annually)' : plan.period}</span>
                                   </div>
                                 </CardHeader>
                                 <CardContent className="pb-2">
@@ -3156,7 +3156,7 @@ export function LandingPage() {
                                     {plan.features.map((feature) => (
                                       <li key={feature} className="flex items-start gap-2.5 group/feature">
                                         <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
-                                        <span className="text-sm text-muted-foreground">{feature}</span>
+                                        <span className="text-sm text-slate-400">{feature}</span>
                                       </li>
                                     ))}
                                   </ul>
@@ -3213,11 +3213,11 @@ export function LandingPage() {
                 variants={staggerContainer}
                 className="text-center mb-16"
               >
-                <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+                <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-slate-50">
                   How We{' '}
                   <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Compare</span>
                 </motion.h2>
-                <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+                <motion.p variants={fadeInUp} className="mt-4 text-lg text-slate-400 max-w-2xl mx-auto">
                   See why thousands of creators choose NextGen LMS over the competition.
                 </motion.p>
               </motion.div>
@@ -3227,12 +3227,12 @@ export function LandingPage() {
                 initial="hidden"
                 whileInView="visible"
                 viewport={{ once: true, margin: '-100px' }}
-                className="overflow-x-auto rounded-xl border border-border bg-card"
+                className="overflow-x-auto rounded-xl border border-white/10 bg-slate-900"
               >
                 <table className="w-full min-w-[700px]">
                   <thead>
-                    <tr className="border-b border-border bg-muted/50">
-                      <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Feature</th>
+                    <tr className="border-b border-white/10 bg-slate-800/50">
+                      <th className="text-left py-4 px-4 text-sm font-semibold text-slate-50">Feature</th>
                       <th className="text-center py-4 px-4 text-sm font-semibold bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 relative">
                         NextGen
                         {/* Winner badge */}
@@ -3242,22 +3242,22 @@ export function LandingPage() {
                           </Badge>
                         </div>
                       </th>
-                      <th className="text-center py-4 px-4 text-sm font-semibold text-muted-foreground">Kajabi</th>
-                      <th className="text-center py-4 px-4 text-sm font-semibold text-muted-foreground">Teachable</th>
-                      <th className="text-center py-4 px-4 text-sm font-semibold text-muted-foreground">Skool</th>
-                      <th className="text-center py-4 px-4 text-sm font-semibold text-muted-foreground">Mighty Networks</th>
+                      <th className="text-center py-4 px-4 text-sm font-semibold text-slate-400">Kajabi</th>
+                      <th className="text-center py-4 px-4 text-sm font-semibold text-slate-400">Teachable</th>
+                      <th className="text-center py-4 px-4 text-sm font-semibold text-slate-400">Skool</th>
+                      <th className="text-center py-4 px-4 text-sm font-semibold text-slate-400">Mighty Networks</th>
                     </tr>
                   </thead>
                   <tbody>
                     {competitorComparison.map((row, i) => (
                       <motion.tr
                         key={row.feature}
-                        className={`${i % 2 === 0 ? 'bg-card' : 'bg-muted/20'} hover:bg-muted/40 transition-colors`}
+                        className={`${i % 2 === 0 ? 'bg-slate-900' : 'bg-slate-800/20'} hover:bg-slate-800/40 transition-colors`}
                         initial={{ opacity: 0, x: -10 }}
                         animate={comparisonInView ? { opacity: 1, x: 0 } : {}}
                         transition={{ duration: 0.3, delay: i * 0.05 }}
                       >
-                        <td className="py-3 px-4 text-sm font-medium text-foreground flex items-center">
+                        <td className="py-3 px-4 text-sm font-medium text-slate-50 flex items-center">
                           {row.feature}
                           <ComparisonFeatureTooltip text={`Compare ${row.feature} across platforms`} />
                         </td>
@@ -3278,7 +3278,7 @@ export function LandingPage() {
         </section>
 
         {/* ============ TESTIMONIALS SECTION ============ */}
-        <section id="testimonials" className="py-20 sm:py-28 bg-muted/30 relative">
+        <section id="testimonials" className="py-20 sm:py-28 bg-slate-800/30 relative">
           {/* Dot pattern background */}
           <DotPatternBackground />
 
@@ -3296,11 +3296,11 @@ export function LandingPage() {
                 variants={staggerContainer}
                 className="text-center mb-16"
               >
-                <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+                <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-slate-50">
                   Loved by{' '}
                   <span className="bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">Creators Worldwide</span>
                 </motion.h2>
-                <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+                <motion.p variants={fadeInUp} className="mt-4 text-lg text-slate-400 max-w-2xl mx-auto">
                   Join thousands of educators who are building thriving learning businesses.
                 </motion.p>
               </motion.div>
@@ -3326,11 +3326,11 @@ export function LandingPage() {
                 variants={staggerContainer}
                 className="text-center mb-16"
               >
-                <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-foreground">
+                <motion.h2 variants={fadeInUp} className="text-3xl sm:text-4xl font-bold text-slate-50">
                   Seamless{' '}
                   <span className="bg-gradient-to-r from-violet-600 to-violet-400 bg-clip-text text-transparent">Integrations</span>
                 </motion.h2>
-                <motion.p variants={fadeInUp} className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+                <motion.p variants={fadeInUp} className="mt-4 text-lg text-slate-400 max-w-2xl mx-auto">
                   Connect your favorite tools and automate workflows with our growing integration ecosystem.
                 </motion.p>
               </motion.div>
@@ -3351,12 +3351,12 @@ export function LandingPage() {
                       whileHover={{ scale: 1.05, y: -2 }}
                       className="cursor-pointer"
                     >
-                      <Card className="border-border/40 hover:border-border hover:shadow-md transition-all">
+                      <Card className="border-white/10/40 hover:border-white/10 hover:shadow-md transition-all">
                         <CardContent className="p-4 flex flex-col items-center gap-3 text-center">
                           <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${integration.color}`}>
                             <Icon className="h-6 w-6" />
                           </div>
-                          <span className="text-sm font-medium text-foreground">{integration.name}</span>
+                          <span className="text-sm font-medium text-slate-50">{integration.name}</span>
                         </CardContent>
                       </Card>
                     </motion.div>
@@ -3381,14 +3381,14 @@ export function LandingPage() {
         </section>
 
         {/* ============ CONTACT SECTION ============ */}
-        <section id="contact" className="py-12 bg-muted/20">
+        <section id="contact" className="py-12 bg-slate-800/20">
           <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 text-center">
-            <h3 className="text-xl font-bold text-foreground mb-2">Get in Touch</h3>
-            <p className="text-sm text-muted-foreground mb-4">Have questions? We&apos;d love to hear from you.</p>
+            <h3 className="text-xl font-bold text-slate-50 mb-2">Get in Touch</h3>
+            <p className="text-sm text-slate-400 mb-4">Have questions? We&apos;d love to hear from you.</p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <a href="mailto:hello@nextgen-lms.com" className="text-sm text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors">hello@nextgen-lms.com</a>
-              <span className="hidden sm:inline text-muted-foreground">•</span>
-              <span className="text-sm text-muted-foreground">Response within 24 hours</span>
+              <span className="hidden sm:inline text-slate-400">•</span>
+              <span className="text-sm text-slate-400">Response within 24 hours</span>
             </div>
           </div>
         </section>
